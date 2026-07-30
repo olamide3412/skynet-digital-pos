@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: skynet-pos:latest
+    container_name: skynet_pos_app
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www
+      - ./storage:/var/www/storage
+    depends_on:
+      - db
+      - redis
+    networks:
+      - skynet-network
+
+  db:
+    image: mysql:8.0
+    container_name: skynet_pos_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-skynet_pos}
+      MYSQL_USER: ${DB_USERNAME:-skynet}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-skynet123}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-skynet123}
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - skynet-network
+
+  redis:
+    image: redis:alpine
+    container_name: skynet_pos_redis
+    restart: unless-stopped
+    networks:
+      - skynet-network
+    volumes:
+      - redis-data:/data
+
+networks:
+  skynet-network:
+    driver: bridge
+
+volumes:
+  db-data:
+  redis-data:
