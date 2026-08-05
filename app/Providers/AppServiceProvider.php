@@ -29,6 +29,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \Illuminate\Support\Facades\Schema::defaultStringLength(191);
+
         try {
             if (\Illuminate\Support\Facades\Schema::hasTable('store_settings')) {
                 $settings = \App\Models\StoreSetting::pluck('value', 'key')->toArray();
