@@ -25,6 +25,7 @@ return new class extends Migration
 
         Schema::create('held_sales', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->string('hold_name', 255)->nullable();
             $table->enum('status', ['In-Progress', 'Held', 'Cancelled', 'Completed'])->default('Held');
@@ -38,6 +39,7 @@ return new class extends Migration
             $table->foreignId('item_id')->constrained('items')->cascadeOnDelete();
             $table->integer('qty')->default(1);
             $table->decimal('price', 10, 2)->default(0);
+            $table->string('unit_used', 50)->default('unit');
             $table->string('item_name', 255)->nullable();
             $table->enum('purchase_type', ['Wholesale', 'Consumer'])->default('Consumer');
             $table->timestamps();

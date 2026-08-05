@@ -2,15 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-
-class Role extends Model
+/**
+ * This model now delegates to Spatie's Role model.
+ * It's kept as an alias/reference for backward compatibility in code
+ * that still type-hints App\Models\Role.
+ *
+ * For new code, use Spatie\Permission\Models\Role directly or via `Role::` facade.
+ */
+class Role extends \Spatie\Permission\Models\Role
 {
-    protected $fillable = ['name', 'description'];
-
-    public function users(): BelongsToMany
-    {
-        return $this->belongsToMany(User::class, 'users_roles', 'role_id', 'user_id');
-    }
+    // Spatie's role model handles everything.
+    // Branch-scoped roles use team_id = branch_id (configured in permission.php).
 }

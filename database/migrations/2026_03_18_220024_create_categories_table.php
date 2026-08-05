@@ -10,14 +10,13 @@ return new class extends Migration
     {
         Schema::create('categories', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('parent_id')->nullable()->constrained('categories')->nullOnDelete();
+            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->string('name');
-            $table->string('slug')->unique();
-            $table->text('description')->nullable();
+            $table->string('slug')->nullable();
             $table->string('image')->nullable();
-            // Menu visibility & ordering
+            $table->foreignId('parent_id')->nullable()->constrained('categories')->nullOnDelete();
             $table->boolean('visible_in_menu')->default(true);
-            $table->unsignedSmallInteger('menu_position')->default(0);
+            $table->integer('menu_position')->default(0);
             $table->timestamps();
         });
     }

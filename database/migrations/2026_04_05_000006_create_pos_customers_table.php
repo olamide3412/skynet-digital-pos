@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('pos_customers', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->string('name');
             $table->string('phone');
             $table->string('address')->default('NA');
@@ -22,7 +23,7 @@ return new class extends Migration
             $table->string('contact_address')->default('NA');
             $table->boolean('watch_list')->default(false);
             $table->timestamps();
-            $table->fullText('phone');
+            $table->index(['branch_id', 'phone']);
         });
     }
 

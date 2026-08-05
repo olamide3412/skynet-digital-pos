@@ -2,42 +2,31 @@
 
 namespace App\Http\Middleware;
 
-use App\Enums\RoleEnums;
-use App\Enums\StatusEnums;
 use Closure;
-use Illuminate\Http\JsonResponse;
-use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 
 class SuperAdminMiddleware
 {
-    /**
-     * Handle an incoming request.
-     *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
-     */
-    public function handle(Request $request, Closure $next): Response | RedirectResponse | JsonResponse
+    public function handle(Request $request, Closure $next): mixed
     {
-        if(Auth::user()?->status === StatusEnums::Disable->value){
-            Auth::logout();
+        $user = Auth::guard('web')->user();
 
-            return redirect(route('login'))->with('error','Profile Disable');
+        if (!$user) {
+            return redirect()->route('superadmin.login');
         }
 
-        if(Auth::user()?->status === StatusEnums::Suspendened->value){
-            Auth::logout();
-
-            return redirect(route('login'))->with('error','Profile Supended');
+        if (!$user->is_active) {
+            Auth::guard('web')->logout();
+            return redirect()->route('superadmin.login')->withErrors([
+                'login' => 'Your account has been disabled.',
+            ]);
         }
 
-        if(Auth::check() && Auth::user()?->role === RoleEnums::SuperAdministrator->value){
-
-            return $next($request);
+        if (!$user->isSuperAdmin()) {
+            abort(403, 'You do not have Super Admin access.');
         }
 
-        return redirect()->route('dashboard')->with('error', 'You do not have admin access');
-
+        return $next($request);
     }
 }

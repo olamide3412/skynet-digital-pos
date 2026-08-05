@@ -7,7 +7,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class GroupAddress extends Model
 {
-    protected $fillable = ['name'];
+    protected $fillable = ['branch_id', 'name'];
+
+    public function branch(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
+    }
 
     public function items(): HasMany
     {

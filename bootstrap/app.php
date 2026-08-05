@@ -19,10 +19,16 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
         ]);
         $middleware->alias([
-            'admin'    => AdminMiddleware::class,
-            'auth'     => Authenticate::class,
-            'guest'    => RedirectIfAuthenticated::class,
-            'pos.role' => \App\Http\Middleware\PosRoleMiddleware::class,
+            'admin'          => AdminMiddleware::class,
+            'auth'           => Authenticate::class,
+            'guest'          => RedirectIfAuthenticated::class,
+            'pos.role'       => \App\Http\Middleware\PosRoleMiddleware::class,
+            'superadmin'     => \App\Http\Middleware\SuperAdminMiddleware::class,
+            'resolve.branch' => \App\Http\Middleware\ResolveBranchMiddleware::class,
+            'branch.scope'   => \App\Http\Middleware\BranchScopeMiddleware::class,
+            'role'           => \Spatie\Permission\Middleware\RoleMiddleware::class,
+            'permission'     => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
         $middleware->validateCsrfTokens(except:[
             'flw-webhook',

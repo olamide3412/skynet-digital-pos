@@ -2,6 +2,7 @@
 import { Link, usePage } from '@inertiajs/vue3'
 import { ref, computed, onMounted } from 'vue'
 import FlashMessages from '@/Components/FlashMessages.vue'
+import ThemeToggle from '@/Components/ThemeToggle.vue'
 
 const isMobileOpen = ref(false)
 const isCollapsed  = ref(false)
@@ -15,18 +16,19 @@ const allNavLinks = [
         route: 'pos.index',
         match: 'Pos/Index',
         icon:  'M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M16 5h3m0 0v3m0-3l-5 5',
-        color: 'text-emerald-400',
-        always: true,
+        color: 'text-emerald-500',
+        perm:  'canAccessPos',
     },
     {
         label: 'Items',
         icon:  'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10',
         perm: 'canManageItems',
         children: [
-            { label: 'All Items',        route: 'pos.items.index',      match: 'Items/Index' },
-            { label: 'Categories',       route: 'pos.categories.index', match: 'Categories/Index' },
-            { label: 'Item Grid Config', route: 'pos.item-grids.index', match: 'Items/Grid' },
-            { label: 'Active Discounts', route: 'pos.discounts.index',  match: 'Discounts/Index', perm: 'canApplyDiscount' },
+            { label: 'All Items',        route: 'pos.items.index',           match: 'Items/Index' },
+            { label: 'Categories',       route: 'pos.categories.index',      match: 'Categories/Index' },
+            { label: 'Group / Address',  route: 'pos.group-addresses.index', match: 'GroupAddresses/Index' },
+            { label: 'Item Grid Config', route: 'pos.item-grids.index',      match: 'Items/Grid' },
+            { label: 'Active Discounts', route: 'pos.discounts.index',       match: 'Discounts/Index', perm: 'canApplyDiscount' },
         ],
     },
     {
@@ -41,7 +43,7 @@ const allNavLinks = [
         route: 'pos.sales.index',
         match: 'Sales/Index',
         icon:  'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
-        always: true,
+        perm:  'canViewSales',
     },
     {
         label: 'Purchasing',
@@ -55,10 +57,10 @@ const allNavLinks = [
     {
         label: 'Inventory',
         icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
-        perm: 'canAdjustStock',
         children: [
-            { label: 'Inventory Logs', route: 'pos.inventory.index',  match: 'Inventory/Index' },
-            { label: 'Adjust Stock',   route: 'pos.inventory.adjust', match: 'Inventory/Adjust' },
+            { label: 'Inventory Logs', route: 'pos.inventory.index',           match: 'Inventory/Index',         perm: 'canAdjustStock' },
+            { label: 'Adjust Stock',   route: 'pos.inventory.adjust',          match: 'Inventory/Adjust',        perm: 'canAdjustStock' },
+            { label: 'Stock Transfer', route: 'pos.inventory.transfers.index', match: 'Inventory/StockTransfer', perm: 'canTransferStock' },
         ],
     },
     {
@@ -75,9 +77,9 @@ const allNavLinks = [
         children: [
             { label: 'Dashboard',     route: 'pos.reports.index',        match: 'Reports/Index' },
             { label: 'Daily Sales',   route: 'pos.reports.daily-sales',  match: 'Reports/DailySales' },
-            { label: 'Profit & Loss', route: 'pos.reports.profit-loss',  match: 'Reports/ProfitLoss' },
+            { label: 'Profit & Loss', route: 'pos.reports.profit-loss',  match: 'Reports/ProfitLoss', perm: 'canViewProfitLoss' },
             { label: 'Low Stock',     route: 'pos.reports.low-stock',    match: 'Reports/LowStock' },
-            { label: 'Customer Debt', route: 'pos.reports.customer-debt',match: 'Reports/CustomerDebt' },
+            { label: 'Customer Debt', route: 'pos.reports.customer-debt',match: 'Reports/CustomerDebt', perm: 'canManageDebt' },
         ],
     },
     {
@@ -149,22 +151,22 @@ onMounted(() => {
 </script>
 
 <template>
-    <div class="flex h-screen bg-slate-900 overflow-hidden font-sans text-slate-100">
+    <div class="flex h-screen bg-slate-100 dark:bg-slate-900 overflow-hidden font-sans text-slate-800 dark:text-slate-100 transition-colors duration-300">
 
         <!-- Sidebar -->
         <aside :class="[
-            'flex-shrink-0 flex flex-col bg-slate-800 border-r border-slate-700 transition-all duration-300',
+            'flex-shrink-0 flex flex-col bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transition-all duration-300',
             isCollapsed ? 'w-14' : 'w-56',
         ]">
             <!-- Brand -->
-            <div class="h-12 flex items-center border-b border-slate-700 px-3 gap-2 overflow-hidden">
+            <div class="h-12 flex items-center border-b border-slate-200 dark:border-slate-700 px-3 gap-2 overflow-hidden">
                 <div class="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">
                     <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M16 5h3m0 0v3m0-3l-5 5"/>
                     </svg>
                 </div>
-                <span v-show="!isCollapsed" class="font-bold text-emerald-400 text-sm whitespace-nowrap overflow-hidden">SkyNet POS</span>
-                <button @click="toggleCollapse" class="ml-auto text-slate-500 hover:text-white transition flex-shrink-0">
+                <span v-show="!isCollapsed" class="font-bold text-emerald-600 dark:text-emerald-400 text-sm whitespace-nowrap overflow-hidden">SkyNet POS</span>
+                <button @click="toggleCollapse" class="ml-auto text-slate-400 hover:text-slate-600 dark:hover:text-white transition flex-shrink-0">
                     <svg class="w-4 h-4" :class="isCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
                     </svg>
@@ -182,7 +184,7 @@ onMounted(() => {
                             :class="[
                                 'flex items-center rounded-lg py-2 text-xs font-medium transition',
                                 isCollapsed ? 'justify-center px-2' : 'px-3 gap-2.5',
-                                isActive(link) ? 'bg-emerald-600/20 text-emerald-400' : 'text-slate-400 hover:bg-slate-700 hover:text-white',
+                                isActive(link) ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-600/20 dark:text-emerald-400' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white',
                             ]">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="link.icon"/>
@@ -195,7 +197,7 @@ onMounted(() => {
                             :class="[
                                 'w-full flex items-center rounded-lg py-2 text-xs font-medium transition',
                                 isCollapsed ? 'justify-center px-2' : 'px-3 gap-2.5',
-                                isActive(link) ? 'bg-emerald-600/20 text-emerald-400' : 'text-slate-400 hover:bg-slate-700 hover:text-white',
+                                isActive(link) ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-600/20 dark:text-emerald-400' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white',
                             ]">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="link.icon"/>
@@ -212,17 +214,21 @@ onMounted(() => {
                                 :href="route(child.route)"
                                 :class="[
                                     'block px-3 py-1.5 rounded-lg text-xs transition',
-                                    isChildActive(child) ? 'text-emerald-400 bg-emerald-600/10 font-medium' : 'text-slate-500 hover:text-white hover:bg-slate-700',
+                                    isChildActive(child) ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-600/10 font-medium' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700',
                                 ]">{{ child.label }}</Link>
                         </div>
                     </div>
                 </template>
             </nav>
 
-            <!-- Logout -->
-            <div class="p-2 border-t border-slate-700">
+            <!-- Theme Toggle & Logout Footer -->
+            <div class="p-2 border-t border-slate-200 dark:border-slate-700 space-y-1">
+                <div :class="['flex items-center', isCollapsed ? 'justify-center px-1 py-1' : 'px-2 py-1 justify-between']">
+                    <span v-show="!isCollapsed" class="text-xs text-slate-500 dark:text-slate-400 font-medium">Theme</span>
+                    <ThemeToggle />
+                </div>
                 <Link :href="route('pos.logout')" method="post" as="button"
-                    :class="['flex items-center rounded-lg py-2 text-xs text-red-400 hover:bg-red-400/10 transition w-full', isCollapsed ? 'justify-center px-2' : 'px-3 gap-2.5']">
+                    :class="['flex items-center rounded-lg py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition w-full', isCollapsed ? 'justify-center px-2' : 'px-3 gap-2.5']">
                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                     </svg>

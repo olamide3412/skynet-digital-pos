@@ -33,7 +33,7 @@ class SaleDiscountController extends Controller
         return back()->with('success', 'Discount rule created successfully.');
     }
 
-    public function update(Request $request, SaleDiscount $discount)
+    public function update(Request $request, $branchParam, SaleDiscount $discount)
     {
         $data = $request->validate([
             'discount_type'   => 'required|in:percentage,fixed',
@@ -48,7 +48,7 @@ class SaleDiscountController extends Controller
         return back()->with('success', 'Discount rule updated successfully.');
     }
 
-    public function destroy(SaleDiscount $discount)
+    public function destroy($branchParam, SaleDiscount $discount)
     {
         $discount->delete();
 

@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('sale_discounts', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->enum('discount_type', ['percentage', 'fixed']);
             $table->decimal('discount_value', 10, 2);
             $table->dateTime('start_date_time');
@@ -23,6 +24,7 @@ return new class extends Migration
 
         Schema::create('sales', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('branch_id')->constrained('branches')->cascadeOnDelete();
             $table->foreignId('customer_id')->nullable()->constrained('pos_customers')->nullOnDelete();
             $table->string('receipt_id', 50)->unique();
             $table->integer('items_order_count')->default(0);
@@ -51,6 +53,7 @@ return new class extends Migration
             $table->decimal('selling_price', 10, 2);
             $table->decimal('total_selling_price', 10, 2);
             $table->integer('qty')->default(1);
+            $table->string('unit_used', 20)->default('unit'); // unit, pack, carton
             $table->enum('purchase_type', ['Wholesale', 'Consumer'])->default('Consumer');
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
             $table->dateTime('sort_date')->useCurrent();

@@ -10,7 +10,7 @@ class DebtPayment extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'customer_id', 'user_id', 'sale_id',
+        'branch_id', 'customer_id', 'user_id', 'sale_id',
         'reference', 'amount', 'type', 'narration',
         'balance_before', 'balance_after',
     ];

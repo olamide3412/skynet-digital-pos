@@ -18,6 +18,7 @@ class StoreSaleRequest extends FormRequest
             'items.*.item_id'          => ['required', 'integer', 'exists:items,id'],
             'items.*.qty'              => ['required', 'integer', 'min:1'],
             'items.*.price'            => ['required', 'numeric', 'min:0'],
+            'items.*.unit_used'        => ['nullable', 'string', 'in:unit,pack,carton'],
             'payment_method'           => ['required', 'string'],
             'amount_paid'              => ['required', 'numeric', 'min:0'],
             'purchase_type'            => ['nullable', 'in:Wholesale,Consumer'],

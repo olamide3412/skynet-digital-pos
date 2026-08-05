@@ -5,18 +5,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasRoles;
 
     protected $fillable = [
         'name', 'full_name', 'username', 'email', 'password',
-        'phone', 'address', 'role', 'status',
-        'is_active', 'is_admin', 'acct_tier', 'staff_id',
+        'is_active', 'is_super_admin', 'branch_id', 'staff_id',
     ];
 
     protected $hidden = [
@@ -30,36 +29,19 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password'          => 'hashed',
             'is_active'         => 'boolean',
-            'is_admin'          => 'boolean',
-            'acct_tier'         => 'integer',
+            'is_super_admin'    => 'boolean',
         ];
     }
 
-    // ── E-commerce relations (keep) ───────────────────────────────────
-    public function orders(): HasMany
+    // ── Relations ─────────────────────────────────────────────────────────────
+    public function branch(): BelongsTo
     {
-        return $this->hasMany(Order::class);
+        return $this->belongsTo(Branch::class);
     }
 
-    public function addresses(): HasMany
-    {
-        return $this->hasMany(Address::class);
-    }
-
-    public function cart(): HasOne
-    {
-        return $this->hasOne(Cart::class);
-    }
-
-    // ── POS relations ────────────────────────────────────────────────
     public function staff(): BelongsTo
     {
         return $this->belongsTo(Staff::class);
-    }
-
-    public function roles(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
-    {
-        return $this->belongsToMany(Role::class, 'users_roles', 'user_id', 'role_id');
     }
 
     public function sales(): HasMany
@@ -77,15 +59,41 @@ class User extends Authenticatable
         return $this->hasMany(PosLog::class);
     }
 
-    // ── Role helpers ─────────────────────────────────────────────────
-    public function hasRole(string $role): bool
+    // ── E-commerce relations (kept for storefront) ────────────────────────────
+    public function orders(): HasMany
     {
-        if ($this->is_admin) return true;
-        return $this->roles()->where('role', $role)->exists();
+        return $this->hasMany(Order::class);
     }
 
-    public function isTier(int $min): bool
+    public function addresses(): HasMany
     {
-        return $this->acct_tier >= $min;
+        return $this->hasMany(Address::class);
+    }
+
+    public function cart(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Cart::class);
+    }
+
+    // ── Role/Auth helpers ──────────────────────────────────────────────────────
+    public function isSuperAdmin(): bool
+    {
+        return (bool) $this->is_super_admin;
+    }
+
+    public function isBranchAdmin(): bool
+    {
+        return $this->hasRole('branch-admin');
+    }
+
+    public function isCashier(): bool
+    {
+        return $this->hasRole('cashier');
+    }
+
+    public function belongsToBranch(int|Branch $branch): bool
+    {
+        $branchId = $branch instanceof Branch ? $branch->id : $branch;
+        return $this->branch_id === $branchId;
     }
 }

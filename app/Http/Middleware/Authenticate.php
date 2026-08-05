@@ -12,14 +12,23 @@ class Authenticate extends Middleware
      */
     protected function redirectTo(Request $request): ?string
     {
-        if (! $request->expectsJson()) {
-            // If trying to access admin routes, redirect to admin login
-            if ($request->is('admin/*') || $request->is('admin')) {
-                return route('admin.login');
-            }
-            // Otherwise redirect to customer login
-            return route('pos.login');
+        if ($request->expectsJson()) {
+            return null;
         }
-        return null;
+
+        // Super Admin panel → super admin login
+        if ($request->is('superadmin') || $request->is('superadmin/*')) {
+            return route('superadmin.login');
+        }
+
+        // Branch POS routes → branch-specific login
+        // The first URL segment is the branch slug: /{branch}/...
+        $slug = $request->segment(1);
+        if ($slug && \App\Models\Branch::where('slug', $slug)->exists()) {
+            return route('pos.login', ['branch' => $slug]);
+        }
+
+        // Storefront / everything else → generic login
+        return route('login');
     }
 }

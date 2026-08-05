@@ -17,6 +17,9 @@ const form = useForm({
     out_of_stock:             props.settings.out_of_stock ?? 25,
     is_check_expiration:      !!props.settings.is_check_expiration,
     is_show_buy_price:        !!props.settings.is_show_buy_price,
+    is_use_profit_percentage: !!props.settings.is_use_profit_percentage,
+    is_tax_enabled:           !!props.settings.is_tax_enabled,
+    tax_percentage:           props.settings.tax_percentage ?? 7.5,
     wholesale_profit_percent: props.settings.wholesale_profit_percent ?? 10,
     consumer_profit_percent:  props.settings.consumer_profit_percent ?? 15,
     business_sector:          props.settings.business_sector ?? 'commerce',
@@ -62,7 +65,7 @@ function submit() { form.put(route('pos.settings.update')) }
 
                 <!-- POS Behaviour -->
                 <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-4">
-                    <h2 class="text-sm font-semibold text-emerald-400 border-b border-slate-700 pb-2">POS Behaviour</h2>
+                    <h2 class="text-sm font-semibold text-emerald-400 border-b border-slate-700 pb-2">POS Behaviour & Pricing Automation</h2>
 
                     <div class="grid grid-cols-2 gap-4">
                         <div>
@@ -87,18 +90,31 @@ function submit() { form.put(route('pos.settings.update')) }
                                 class="w-full bg-slate-700 text-white px-3 py-2 rounded-lg border border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
                         </div>
                         <div>
-                            <label class="block text-xs text-slate-400 mb-1">Wholesale Profit % Target</label>
+                            <label class="block text-xs text-slate-400 mb-1">Wholesale Profit Target (%)</label>
                             <input v-model.number="form.wholesale_profit_percent" type="number" min="0" step="0.01"
                                 class="w-full bg-slate-700 text-white px-3 py-2 rounded-lg border border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
                         </div>
                         <div>
-                            <label class="block text-xs text-slate-400 mb-1">Consumer Profit % Target</label>
+                            <label class="block text-xs text-slate-400 mb-1">Retail / Consumer Profit Target (%)</label>
                             <input v-model.number="form.consumer_profit_percent" type="number" min="0" step="0.01"
                                 class="w-full bg-slate-700 text-white px-3 py-2 rounded-lg border border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
                         </div>
                     </div>
 
                     <div class="space-y-3 pt-1">
+                        <!-- Auto Profit Percentage Pricing Toggle -->
+                        <label class="flex items-start justify-between cursor-pointer group bg-slate-900/60 p-3 rounded-lg border border-slate-700">
+                            <div>
+                                <span class="text-sm font-semibold text-emerald-400 group-hover:text-emerald-300 transition">Enable Profit Percentage Pricing & Auto-Update</span>
+                                <p class="text-xs text-slate-400 mt-0.5">Automatically calculate selling prices from Cost Price when creating items. Updating profit % recalculates all non-locked items.</p>
+                            </div>
+                            <div class="relative flex-shrink-0 mt-0.5">
+                                <input v-model="form.is_use_profit_percentage" type="checkbox" class="sr-only peer" />
+                                <div class="w-10 h-5 bg-slate-600 peer-checked:bg-emerald-600 rounded-full transition-colors"></div>
+                                <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition peer-checked:translate-x-5"></div>
+                            </div>
+                        </label>
+
                         <label class="flex items-center justify-between cursor-pointer group">
                             <span class="text-sm text-slate-300 group-hover:text-white transition">Allow cashiers to edit item prices</span>
                             <div class="relative">
@@ -131,6 +147,33 @@ function submit() { form.put(route('pos.settings.update')) }
                                 <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition peer-checked:translate-x-5"></div>
                             </div>
                         </label>
+                    </div>
+                </div>
+
+                <!-- Tax Settings -->
+                <div class="bg-slate-800 rounded-xl border border-slate-700 p-5 space-y-4">
+                    <h2 class="text-sm font-semibold text-emerald-400 border-b border-slate-700 pb-2">Tax Settings</h2>
+                    
+                    <label class="flex items-center justify-between cursor-pointer group">
+                        <div>
+                            <span class="text-sm text-slate-300 group-hover:text-white transition font-medium">Enable Tax Calculation</span>
+                            <p class="text-xs text-slate-400">Automatically calculate and itemize tax on checkout</p>
+                        </div>
+                        <div class="relative">
+                            <input v-model="form.is_tax_enabled" type="checkbox" class="sr-only peer" />
+                            <div class="w-10 h-5 bg-slate-600 peer-checked:bg-emerald-600 rounded-full transition-colors"></div>
+                            <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition peer-checked:translate-x-5"></div>
+                        </div>
+                    </label>
+
+                    <div v-if="form.is_tax_enabled" class="pt-2 border-t border-slate-700/50">
+                        <label class="block text-xs text-slate-400 mb-1">Tax Percentage (%) *</label>
+                        <div class="relative max-w-xs">
+                            <input v-model.number="form.tax_percentage" type="number" min="0" max="100" step="0.01" required
+                                class="w-full bg-slate-700 text-white px-3 py-2 pr-8 rounded-lg border border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
+                            <span class="absolute right-3 top-2 text-slate-400 text-sm font-bold">%</span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">Tax will be calculated on the post-discount subtotal at checkout.</p>
                     </div>
                 </div>
 

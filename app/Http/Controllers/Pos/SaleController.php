@@ -15,15 +15,41 @@ class SaleController extends Controller
 {
     public function index(Request $request)
     {
-        $salesQuery = Sale::with(['user', 'customer'])
-            ->when($request->from, fn ($q) => $q->whereDate('created_at', '>=', $request->from))
-            ->when($request->to,   fn ($q) => $q->whereDate('created_at', '<=', $request->to))
-            ->when($request->user_id, fn ($q) => $q->where('user_id', $request->user_id))
+        $branch    = current_branch();
+        $canSeeAll = RoleService::canViewAllReports();
+
+        $selectedUserId = $canSeeAll ? ($request->user_id ?: null) : auth()->id();
+
+        $salesQuery = Sale::where('branch_id', $branch->id)
+            ->with(['user', 'customer'])
+            ->when($request->from,      fn ($q) => $q->whereDate('created_at', '>=', $request->from))
+            ->when($request->to,        fn ($q) => $q->whereDate('created_at', '<=', $request->to))
+            ->when($selectedUserId,     fn ($q) => $q->where('user_id', $selectedUserId))
             ->latest();
 
+        $allSales = (clone $salesQuery)->get(['final_total', 'discount_amount', 'profit_made']);
+        $summary = [
+            'total_sales'    => $allSales->count(),
+            'total_revenue'  => $allSales->sum('final_total'),
+            'total_discount' => $allSales->sum('discount_amount'),
+            'total_profit'   => $allSales->sum('profit_made'),
+        ];
+
+        $users = $canSeeAll
+            ? \App\Models\User::where('branch_id', $branch->id)
+                ->get(['id', 'name', 'full_name', 'username'])
+            : [];
+
         return Inertia::render('Sales/Index', [
-            'sales'   => $salesQuery->paginate(20)->withQueryString(),
-            'filters' => $request->only('from', 'to', 'user_id'),
+            'sales'     => $salesQuery->paginate(20)->withQueryString(),
+            'summary'   => $summary,
+            'users'     => $users,
+            'canSeeAll' => $canSeeAll,
+            'filters'   => [
+                'from'    => $request->from ?? '',
+                'to'      => $request->to ?? '',
+                'user_id' => $selectedUserId ?? '',
+            ],
         ]);
     }
 

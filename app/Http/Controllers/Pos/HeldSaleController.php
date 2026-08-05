@@ -24,7 +24,7 @@ class HeldSaleController extends Controller
     }
 
     /** API: save (hold) cart */
-    public function apiStore(Request $request)
+    public function apiStore(Request $request, $branchParam = null)
     {
         $data = $request->validate([
             'hold_name'   => 'nullable|string|max:255',
@@ -33,12 +33,16 @@ class HeldSaleController extends Controller
             'items.*.item_id'      => 'required|integer|exists:items,id',
             'items.*.qty'          => 'required|integer|min:1',
             'items.*.price'        => 'required|numeric|min:0',
+            'items.*.unit_used'    => 'nullable|string|in:unit,pack,carton',
             'items.*.item_name'    => 'nullable|string',
             'items.*.purchase_type'=> 'nullable|in:Wholesale,Consumer',
         ]);
 
-        $held = DB::transaction(function () use ($data) {
+        $branch = current_branch();
+
+        $held = DB::transaction(function () use ($data, $branch) {
             $heldSale = HeldSale::create([
+                'branch_id'   => $branch?->id,
                 'user_id'     => Auth::id(),
                 'hold_name'   => $data['hold_name'] ?? null,
                 'status'      => 'Held',
@@ -51,6 +55,7 @@ class HeldSaleController extends Controller
                     'item_id'       => $item['item_id'],
                     'qty'           => $item['qty'],
                     'price'         => $item['price'],
+                    'unit_used'     => $item['unit_used'] ?? 'unit',
                     'item_name'     => $item['item_name'] ?? null,
                     'purchase_type' => $item['purchase_type'] ?? 'Consumer',
                 ]);
@@ -63,9 +68,11 @@ class HeldSaleController extends Controller
     }
 
     /** API: delete (discard) a held cart */
-    public function apiDestroy(int $id)
+    public function apiDestroy($branchParam, $id = null)
     {
-        $held = HeldSale::where('id', $id)
+        $targetId = $id ?? $branchParam;
+
+        $held = HeldSale::where('id', $targetId)
             ->where('user_id', Auth::id())
             ->firstOrFail();
         $held->delete();

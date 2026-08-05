@@ -12,8 +12,18 @@ class ItemGridController extends Controller
 {
     public function index()
     {
-        $grids = ItemGrid::with('item.category')->orderBy('menu_index')->get();
-        $items = Item::select('id', 'item_name', 'barcode_number')->orderBy('item_name')->get();
+        $branch = current_branch();
+
+        $grids = ItemGrid::whereHas('item', fn ($q) => $q->where('branch_id', $branch->id))
+            ->with('item.category')
+            ->orderBy('menu_index')
+            ->get();
+
+        $items = Item::where('branch_id', $branch->id)
+            ->select('id', 'item_name', 'barcode_number')
+            ->orderBy('item_name')
+            ->limit(25)
+            ->get();
 
         return Inertia::render('Items/Grid', [
             'grids' => $grids,
@@ -36,7 +46,7 @@ class ItemGridController extends Controller
         return back()->with('success', 'Grid item added successfully.');
     }
 
-    public function update(Request $request, ItemGrid $item_grid)
+    public function update(Request $request, $branchParam, ItemGrid $item_grid)
     {
         $data = $request->validate([
             'item_id'    => 'required|exists:items,id',
@@ -51,7 +61,7 @@ class ItemGridController extends Controller
         return back()->with('success', 'Grid item updated successfully.');
     }
 
-    public function destroy(ItemGrid $item_grid)
+    public function destroy($branchParam, ItemGrid $item_grid)
     {
         $item_grid->delete();
 

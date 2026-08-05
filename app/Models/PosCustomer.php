@@ -11,7 +11,7 @@ class PosCustomer extends Model
     protected $table = 'pos_customers';
 
     protected $fillable = [
-        'name', 'phone', 'address', 'gender', 'dob', 'note',
+        'branch_id', 'name', 'phone', 'address', 'gender', 'dob', 'note',
         'debt_bal', 'contact_name', 'contact_phone', 'contact_address', 'watch_list',
     ];
 
@@ -22,6 +22,11 @@ class PosCustomer extends Model
             'debt_bal'   => 'decimal:2',
             'dob'        => 'date',
         ];
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function sales(): HasMany

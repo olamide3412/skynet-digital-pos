@@ -2,29 +2,44 @@
 
 namespace App\Http\Middleware;
 
-use App\Services\RoleService;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 /**
- * Middleware to guard a route based on a RoleService capability.
+ * Guard a route based on a Spatie permission name.
  *
  * Usage in route: ->middleware('pos.role:canManageUsers')
- * Supported abilities (map to RoleService::method names):
- *   canEditPrice, canDeleteSale, canApplyDiscount, canViewBuyPrice,
- *   canManageUsers, canEditSettings, canManagePurchases,
- *   canAdjustStock, canProcessReturn, canViewReports
+ *
+ * The ability must match a Spatie permission that exists in the database.
+ * Super Admins bypass all permission checks.
  */
 class PosRoleMiddleware
 {
     public function handle(Request $request, Closure $next, string $ability): mixed
     {
-        if (! method_exists(RoleService::class, $ability)) {
-            abort(500, "Unknown POS role ability: {$ability}");
+        $user = Auth::guard('web')->user();
+
+        if (!$user) {
+            abort(401, 'Unauthenticated.');
         }
 
-        if (! RoleService::{$ability}()) {
-            abort(403, 'You do not have permission to access this page.');
+        // Super Admin bypasses all permission checks
+        if ($user->isSuperAdmin()) {
+            return $next($request);
+        }
+
+        // Branch Admins have all branch-level permissions
+        if ($user->isBranchAdmin()) {
+            return $next($request);
+        }
+
+        // Check Spatie permission (branch-scoped via team_id)
+        if (!$user->hasPermissionTo($ability)) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Permission denied.'], 403);
+            }
+            abort(403, 'You do not have permission to access this area.');
         }
 
         return $next($request);

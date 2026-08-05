@@ -9,17 +9,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class PurchaseOrder extends Model
 {
     protected $fillable = [
-        'vendor_id',
-        'user_id',
-        'po_number',
-        'status',
-        'order_date',
-        'expected_date',
-        'subtotal',
-        'shipping_cost',
-        'discount',
-        'total_amount',
-        'notes',
+        'branch_id', 'vendor_id', 'user_id',
+        'po_number', 'status', 'order_date', 'expected_date',
+        'subtotal', 'shipping_cost', 'discount', 'total_amount', 'notes',
     ];
 
     protected function casts(): array
@@ -32,6 +24,11 @@ class PurchaseOrder extends Model
             'discount'      => 'decimal:2',
             'total_amount'  => 'decimal:2',
         ];
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public function vendor(): BelongsTo

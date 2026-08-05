@@ -14,10 +14,10 @@ class StoreItemRequest extends FormRequest
         $itemId = $this->route('item')?->id;
 
         return [
-            'category_id'      => ['required', 'integer', 'exists:categories,id'],
+            'category_id'      => ['nullable', 'integer', 'exists:categories,id'],
             'group_address_id' => ['nullable', 'integer', 'exists:group_addresses,id'],
             'item_name'        => ['required', 'string', 'max:255'],
-            'barcode_number'   => ['required', 'string', Rule::unique('items','barcode_number')->ignore($itemId)],
+            'barcode_number'   => ['nullable', 'string', 'max:100', Rule::unique('items','barcode_number')->ignore($itemId)],
             'qty'              => ['required', 'integer', 'min:0'],
             'buy_price'        => ['required', 'numeric', 'min:0'],
             'price'            => ['required', 'numeric', 'min:0'],

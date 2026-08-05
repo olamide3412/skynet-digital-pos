@@ -1,8 +1,9 @@
 <script setup>
-import { useCurrency } from '@/Composables/useCurrency'
-import { usePrint } from '@/Composables/usePrint'
-import { computed } from 'vue'
-import dayjs from 'dayjs'
+import { useCurrency }  from '@/Composables/useCurrency'
+import { usePrint }     from '@/Composables/usePrint'
+import { computed, ref, onMounted, watch, nextTick } from 'vue'
+import dayjs            from 'dayjs'
+import JsBarcode        from 'jsbarcode'
 
 const props = defineProps({
     sale:     { type: Object, required: true },
@@ -10,96 +11,235 @@ const props = defineProps({
 })
 const emit = defineEmits(['close'])
 
-const { format }     = useCurrency()
+const { format }       = useCurrency()
 const { printElement } = usePrint()
+const barcodeSvg       = ref(null)
 
 const saleDate = computed(() =>
-    dayjs(props.sale.created_at || new Date()).format('DD-MMM-YYYY HH:mm')
+    dayjs(props.sale.created_at || new Date()).format('DD MMM YYYY  HH:mm')
 )
+
+function renderBarcode() {
+    if (!barcodeSvg.value || !props.sale.receipt_id) return
+    try {
+        JsBarcode(barcodeSvg.value, props.sale.receipt_id, {
+            format:      'CODE128',
+            width:       1.4,
+            height:      45,
+            displayValue: true,
+            fontSize:    10,
+            margin:      4,
+            background:  '#ffffff',
+            lineColor:   '#000000',
+            textAlign:   'center',
+            textMargin:  3,
+        })
+    } catch (e) {
+        console.warn('Barcode render failed:', e)
+    }
+}
+
+onMounted(() => nextTick(renderBarcode))
+watch(() => props.sale.receipt_id, () => nextTick(renderBarcode))
+
+const items = computed(() => props.sale.sale_orders || props.sale.items || [])
+
+const subtotal     = computed(() => items.value.reduce((s, i) => s + parseFloat(i.total_selling_price || 0), 0))
+const amountPaid   = computed(() => parseFloat(props.sale.amount_paid  || 0))
+const finalTotal   = computed(() => parseFloat(props.sale.final_total  || 0))
+const discountAmt  = computed(() => parseFloat(props.sale.discount_amount || 0))
+const taxAmt       = computed(() => parseFloat(props.sale.tax_amount   || 0))
+const changeBal    = computed(() => parseFloat(props.sale.change_bal   || 0))
+const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.value - amountPaid.value) : 0)
 </script>
 
 <template>
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-        <div class="bg-white text-gray-900 rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
-            <!-- Actions (not printed) -->
-            <div class="flex items-center justify-between px-4 py-3 border-b bg-gray-50 no-print">
-                <h3 class="font-bold text-gray-800">Receipt</h3>
-                <div class="flex gap-2">
-                    <button @click="printElement()" class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-500 transition flex items-center gap-1">
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+        <!-- Modal shell -->
+        <div class="bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
+
+            <!-- ── Action bar (not printed) ────────────────────────────────── -->
+            <div class="no-print flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
+                        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                    </div>
+                    <span class="font-semibold text-sm text-slate-800">Sales Receipt</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button @click="printElement()"
+                        class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
                         </svg>
                         Print
                     </button>
-                    <button @click="emit('close')" class="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs rounded-lg hover:bg-gray-300 transition">Close</button>
+                    <button @click="emit('close')"
+                        class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition">
+                        Close
+                    </button>
                 </div>
             </div>
 
-            <!-- Receipt Content -->
-            <div class="receipt-print-area p-4 font-mono text-xs overflow-y-auto max-h-[70vh]">
-                <!-- Header -->
-                <div class="text-center mb-3">
-                    <p class="font-bold text-base uppercase">{{ settings.business_name }}</p>
-                    <p v-if="settings.business_address" class="text-gray-600">{{ settings.business_address }}</p>
-                    <p v-if="settings.business_contact_number" class="text-gray-600">{{ settings.business_contact_number }}</p>
-                    <div class="border-t border-dashed border-gray-400 mt-2 pt-2">
-                        <p>Receipt: <strong>{{ sale.receipt_id }}</strong></p>
-                        <p>Date: {{ saleDate }}</p>
-                        <p v-if="sale.customer">Customer: {{ sale.customer.name }}</p>
-                        <p>Cashier: {{ sale.user?.full_name || sale.user?.name || 'N/A' }}</p>
+            <!-- ── Receipt printable area ───────────────────────────────────── -->
+            <div class="receipt-print-area overflow-y-auto max-h-[75vh] px-5 py-4"
+                 style="font-family: 'Courier New', Courier, monospace; font-size: 11px; line-height: 1.5; color: #111;">
+
+                <!-- ══ BUSINESS HEADER ══════════════════════════════════════ -->
+                <div style="text-align:center; margin-bottom: 10px;">
+                    <!-- Logo placeholder / business name -->
+                    <div style="font-size:16px; font-weight:900; letter-spacing:1px; text-transform:uppercase; margin-bottom:2px;">
+                        {{ settings.business_name || 'Business Name' }}
+                    </div>
+                    <div v-if="settings.business_address"
+                         style="font-size:10px; color:#555; margin-bottom:1px;">
+                        📍 {{ settings.business_address }}
+                    </div>
+                    <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap; font-size:10px; color:#555; margin-top:2px;">
+                        <span v-if="settings.business_contact_number">📞 {{ settings.business_contact_number }}</span>
+                        <span v-if="settings.business_email">✉ {{ settings.business_email }}</span>
                     </div>
                 </div>
 
-                <!-- Items -->
-                <div class="border-t border-dashed border-gray-400 pt-2 mb-2">
-                    <div v-for="item in (sale.sale_orders || sale.items || [])" :key="item.id"
-                        class="flex justify-between mb-1">
-                        <div class="flex-1">
-                            <p class="font-medium">{{ item.item_name }}</p>
-                            <p class="text-gray-500">{{ item.qty }} × {{ format(item.selling_price) }}</p>
-                        </div>
-                        <p class="font-medium">{{ format(item.total_selling_price) }}</p>
-                    </div>
+                <!-- Divider -->
+                <div style="border-top: 1.5px dashed #aaa; margin: 8px 0;"></div>
+
+                <!-- ══ RECEIPT META ══════════════════════════════════════════ -->
+                <table style="width:100%; font-size:10.5px; border-collapse:collapse;">
+                    <tr>
+                        <td style="color:#555;">Receipt #</td>
+                        <td style="text-align:right; font-weight:700;">{{ sale.receipt_id }}</td>
+                    </tr>
+                    <tr>
+                        <td style="color:#555;">Date</td>
+                        <td style="text-align:right;">{{ saleDate }}</td>
+                    </tr>
+                    <tr v-if="sale.customer">
+                        <td style="color:#555;">Customer</td>
+                        <td style="text-align:right;">{{ sale.customer.name }}</td>
+                    </tr>
+                    <tr>
+                        <td style="color:#555;">Cashier</td>
+                        <td style="text-align:right;">{{ sale.user?.full_name || sale.user?.name || '—' }}</td>
+                    </tr>
+                    <tr>
+                        <td style="color:#555;">Payment</td>
+                        <td style="text-align:right; text-transform:capitalize; font-weight:600;">
+                            {{ sale.payment_method || '—' }}
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Divider -->
+                <div style="border-top: 1.5px dashed #aaa; margin: 8px 0;"></div>
+
+                <!-- ══ ITEMS TABLE ═══════════════════════════════════════════ -->
+                <table style="width:100%; border-collapse:collapse; font-size:10.5px;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid #ccc;">
+                            <th style="text-align:left; padding-bottom:4px; font-weight:700; color:#333;">Item</th>
+                            <th style="text-align:center; padding-bottom:4px; font-weight:700; color:#333; white-space:nowrap;">Qty</th>
+                            <th style="text-align:right; padding-bottom:4px; font-weight:700; color:#333; white-space:nowrap;">Unit</th>
+                            <th style="text-align:right; padding-bottom:4px; font-weight:700; color:#333; white-space:nowrap;">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="item in items" :key="item.id"
+                            style="border-bottom: 1px dotted #e0e0e0;">
+                            <td style="padding: 3px 0; word-break:break-word; max-width:100px;">
+                                {{ item.item_name }}
+                                <div v-if="item.unit_used && item.unit_used !== 'unit'"
+                                     style="font-size:9px; color:#777; text-transform:capitalize;">
+                                    ({{ item.unit_used }})
+                                </div>
+                            </td>
+                            <td style="text-align:center; padding: 3px 4px;">{{ item.qty }}</td>
+                            <td style="text-align:right; padding: 3px 0; white-space:nowrap;">{{ format(item.selling_price) }}</td>
+                            <td style="text-align:right; padding: 3px 0; white-space:nowrap; font-weight:600;">{{ format(item.total_selling_price) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- Divider -->
+                <div style="border-top: 1.5px dashed #aaa; margin: 8px 0;"></div>
+
+                <!-- ══ TOTALS ════════════════════════════════════════════════ -->
+                <table style="width:100%; border-collapse:collapse; font-size:10.5px;">
+                    <tr>
+                        <td style="color:#555;">Subtotal</td>
+                        <td style="text-align:right;">{{ format(subtotal) }}</td>
+                    </tr>
+                    <tr v-if="discountAmt > 0">
+                        <td style="color:#d00;">Discount</td>
+                        <td style="text-align:right; color:#d00;">- {{ format(discountAmt) }}</td>
+                    </tr>
+                    <tr v-if="taxAmt > 0">
+                        <td style="color:#555;">Tax ({{ sale.tax_percentage }}%)</td>
+                        <td style="text-align:right;">+ {{ format(taxAmt) }}</td>
+                    </tr>
+                    <tr v-if="(sale.consultation_fee || 0) > 0">
+                        <td style="color:#555;">Consult Fee</td>
+                        <td style="text-align:right;">{{ format(sale.consultation_fee) }}</td>
+                    </tr>
+                    <!-- TOTAL row -->
+                    <tr style="border-top: 1.5px solid #222; margin-top:4px;">
+                        <td style="font-size:13px; font-weight:900; padding-top:5px;">TOTAL</td>
+                        <td style="text-align:right; font-size:13px; font-weight:900; padding-top:5px;">{{ format(finalTotal) }}</td>
+                    </tr>
+                </table>
+
+                <!-- Divider -->
+                <div style="border-top: 1px dashed #aaa; margin: 8px 0;"></div>
+
+                <!-- ══ PAYMENT SUMMARY ═══════════════════════════════════════ -->
+                <table style="width:100%; border-collapse:collapse; font-size:10.5px;">
+                    <tr>
+                        <td style="color:#555; text-transform:capitalize;">
+                            Paid ({{ sale.payment_method }})
+                        </td>
+                        <td style="text-align:right; font-weight:600;">{{ format(amountPaid) }}</td>
+                    </tr>
+                    <tr v-if="changeBal > 0">
+                        <td style="color:#555;">Change</td>
+                        <td style="text-align:right; color:#007700; font-weight:600;">{{ format(changeBal) }}</td>
+                    </tr>
+                    <tr v-if="sale.is_debt && debtAmt > 0"
+                        style="background:#fff0f0; border-radius:4px;">
+                        <td style="color:#cc0000; font-weight:800; padding: 3px 0;">⚠ DEBT BALANCE</td>
+                        <td style="text-align:right; color:#cc0000; font-weight:800;">{{ format(debtAmt) }}</td>
+                    </tr>
+                </table>
+
+                <!-- ══ BARCODE ═══════════════════════════════════════════════ -->
+                <div style="display:flex; justify-content:center; align-items:center; margin: 10px 0 2px;">
+                    <svg ref="barcodeSvg" style="display:block; margin:0 auto; max-width:100%; height:auto;"></svg>
                 </div>
 
-                <!-- Totals -->
-                <div class="border-t border-dashed border-gray-400 pt-2 space-y-0.5">
-                    <div class="flex justify-between">
-                        <span>Subtotal</span>
-                        <span>{{ format(sale.amount_cost) }}</span>
-                    </div>
-                    <div v-if="sale.discount_amount > 0" class="flex justify-between text-red-600">
-                        <span>Discount</span>
-                        <span>-{{ format(sale.discount_amount) }}</span>
-                    </div>
-                    <div v-if="sale.consultation_fee > 0" class="flex justify-between">
-                        <span>Consult Fee</span>
-                        <span>{{ format(sale.consultation_fee) }}</span>
-                    </div>
-                    <div class="flex justify-between font-bold text-sm border-t border-dashed border-gray-400 mt-1 pt-1">
-                        <span>TOTAL</span>
-                        <span>{{ format(sale.final_total) }}</span>
-                    </div>
-                    <div class="flex justify-between text-gray-600">
-                        <span>{{ sale.payment_method }}</span>
-                        <span>{{ format(sale.amount_paid) }}</span>
-                    </div>
-                    <div v-if="sale.change_bal > 0" class="flex justify-between">
-                        <span>Change</span>
-                        <span>{{ format(sale.change_bal) }}</span>
-                    </div>
-                    <div v-if="sale.is_debt" class="flex justify-between text-red-600 font-bold">
-                        <span>DEBT</span>
-                        <span>{{ format(sale.final_total - sale.amount_paid) }}</span>
-                    </div>
+                <!-- ══ FOOTER ════════════════════════════════════════════════ -->
+                <div style="border-top: 1.5px dashed #aaa; margin: 8px 0 4px; text-align:center;">
+                    <p style="font-size:11px; font-weight:700; margin: 6px 0 2px; letter-spacing:0.5px;">
+                        ★ Thank you for your patronage! ★
+                    </p>
+                    <p style="font-size:9.5px; color:#666; margin: 0 0 4px;">
+                        Please keep this receipt for reference.
+                    </p>
+                    <p v-if="settings.business_contact_number || settings.business_email"
+                       style="font-size:9px; color:#888; margin-top:3px;">
+                        For enquiries:
+                        <span v-if="settings.business_contact_number">{{ settings.business_contact_number }}</span>
+                        <span v-if="settings.business_contact_number && settings.business_email"> · </span>
+                        <span v-if="settings.business_email">{{ settings.business_email }}</span>
+                    </p>
+                    <p style="font-size:8.5px; color:#bbb; margin-top:6px; letter-spacing:0.3px;">
+                        Powered by SkyNet POS
+                    </p>
                 </div>
 
-                <!-- Footer -->
-                <div class="text-center mt-3 border-t border-dashed border-gray-400 pt-2 text-gray-500">
-                    <p>Thank you for your purchase!</p>
-                    <p>Please keep this receipt.</p>
-                </div>
-            </div>
+            </div><!-- end receipt-print-area -->
         </div>
     </div>
 </template>

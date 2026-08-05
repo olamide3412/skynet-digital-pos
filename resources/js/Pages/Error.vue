@@ -1,10 +1,23 @@
 <script setup>
 import { computed } from 'vue'
-import { Link } from '@inertiajs/vue3'
+import { Link, usePage } from '@inertiajs/vue3'
 
 const props = defineProps({
     status:  { type: Number, default: 403 },
     message: { type: String, default: 'An error occurred.' },
+})
+
+const page = usePage()
+
+const homeHref = computed(() => {
+    const branchSlug = page.props.current_branch?.slug
+    if (branchSlug) {
+        return route('pos.index', { branch: branchSlug })
+    }
+    if (page.props.auth?.user?.is_super_admin) {
+        return route('superadmin.dashboard')
+    }
+    return route('home')
 })
 
 const config = computed(() => {
@@ -104,10 +117,10 @@ const config = computed(() => {
                 <!-- Actions -->
                 <div class="flex flex-col gap-3">
                     <Link
-                        :href="route('pos.index')"
+                        :href="homeHref"
                         class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold text-sm transition-colors"
                     >
-                        Go to POS Dashboard
+                        Go to Home / Dashboard
                     </Link>
 
                     <button

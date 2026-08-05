@@ -41,7 +41,7 @@ class VendorController extends Controller
         return back()->with('success', 'Vendor added successfully.');
     }
 
-    public function update(Request $request, Vendor $vendor)
+    public function update(Request $request, $branchParam, Vendor $vendor)
     {
         $data = $request->validate([
             'name'         => 'required|string|max:100',
@@ -57,7 +57,7 @@ class VendorController extends Controller
         return back()->with('success', 'Vendor updated successfully.');
     }
 
-    public function destroy(Vendor $vendor)
+    public function destroy($branchParam, Vendor $vendor)
     {
         if ($vendor->purchaseOrders()->exists()) {
             return back()->withErrors(['vendor' => 'Cannot delete a vendor with existing purchase orders.']);

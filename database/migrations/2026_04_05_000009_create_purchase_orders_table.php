@@ -10,6 +10,7 @@ return new class extends Migration
     {
         Schema::create('purchase_orders', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->string('po_number')->unique();
             $table->foreignId('vendor_id')->nullable()->constrained('vendors')->nullOnDelete();
             $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
@@ -30,6 +31,7 @@ return new class extends Migration
             $table->foreignId('item_id')->constrained('items')->cascadeOnDelete();
             $table->string('item_name')->nullable();
             $table->integer('qty')->default(1);
+            $table->string('unit_used', 20)->default('unit'); // unit, pack, carton
             $table->decimal('cost', 10, 2)->default(0);
             $table->decimal('total', 10, 2)->default(0);
             $table->integer('received_qty')->default(0);
@@ -41,6 +43,7 @@ return new class extends Migration
             $table->foreignId('item_id')->constrained('items')->cascadeOnDelete();
             $table->foreignId('user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->integer('qty')->default(0);
+            $table->string('location', 20)->default('back_store'); // back_store | front_store
             $table->decimal('cost', 10, 2)->default(0);
             $table->date('received_date')->nullable();
             $table->date('expiry_date')->nullable();

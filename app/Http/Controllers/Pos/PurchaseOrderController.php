@@ -16,7 +16,10 @@ class PurchaseOrderController extends Controller
 {
     public function index(Request $request)
     {
+        $branch = current_branch();
+
         $orders = PurchaseOrder::with(['vendor', 'user'])
+            ->where('branch_id', $branch->id)
             ->when($request->search, fn ($q) => $q->where('po_number', 'like', '%' . $request->search . '%'))
             ->when($request->status, fn ($q) => $q->where('status', $request->status))
             ->latest()
@@ -31,8 +34,9 @@ class PurchaseOrderController extends Controller
 
     public function create()
     {
+        $branch = current_branch();
         return Inertia::render('Purchases/Create', [
-            'vendors' => Vendor::where('status', 'Active')->orderBy('name')->get(['id', 'name', 'company_name']),
+            'vendors' => Vendor::where('branch_id', $branch->id)->where('status', 'Active')->orderBy('name')->get(['id', 'name', 'company_name']),
         ]);
     }
 
@@ -51,10 +55,12 @@ class PurchaseOrderController extends Controller
         ]);
 
         $po = DB::transaction(function () use ($data) {
+            $branch   = current_branch();
             $subtotal = collect($data['items'])->sum(fn ($i) => $i['qty'] * $i['cost']);
             $total    = $subtotal + ($data['shipping_cost'] ?? 0) - ($data['discount'] ?? 0);
 
             $po = PurchaseOrder::create([
+                'branch_id'     => $branch->id,
                 'vendor_id'     => $data['vendor_id'],
                 'user_id'       => Auth::id(),
                 'po_number'     => 'PO-' . date('Ymd') . '-' . rand(1000, 9999),
@@ -84,13 +90,13 @@ class PurchaseOrderController extends Controller
         return redirect()->route('pos.purchases.index')->with('success', 'Purchase order created: ' . $po->po_number);
     }
 
-    public function show(PurchaseOrder $purchase)
+    public function show($branchParam, PurchaseOrder $purchase)
     {
         $purchase->load(['vendor', 'user', 'items.item', 'receivedItems.user']);
         return Inertia::render('Purchases/Show', ['order' => $purchase]);
     }
 
-    public function receiveForm(PurchaseOrder $purchase)
+    public function receiveForm($branchParam, PurchaseOrder $purchase)
     {
         if ($purchase->status === 'Received') {
             return redirect()->route('pos.purchases.show', $purchase)->with('error', 'Order already fully received.');
@@ -100,7 +106,7 @@ class PurchaseOrderController extends Controller
         return Inertia::render('Purchases/Receive', ['order' => $purchase]);
     }
 
-    public function processReceive(Request $request, PurchaseOrder $purchase)
+    public function processReceive(Request $request, $branchParam, PurchaseOrder $purchase)
     {
         if ($purchase->status === 'Received') {
             return back()->with('error', 'Order already fully received.');
@@ -167,7 +173,7 @@ class PurchaseOrderController extends Controller
         return redirect()->route('pos.purchases.show', $purchase)->with('success', 'Order reception processed.');
     }
 
-    public function destroy(PurchaseOrder $purchase)
+    public function destroy($branchParam, PurchaseOrder $purchase)
     {
         if ($purchase->status !== 'Pending') {
             return back()->withErrors(['order' => 'Only pending orders can be deleted.']);

@@ -10,15 +10,12 @@ return new class extends Migration
     {
         Schema::create('pos_settings', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('branch_id')->unique()->constrained('branches')->cascadeOnDelete();
             $table->boolean('is_price_editable')->default(false);
             $table->boolean('is_qty_deduction')->default(true);
             $table->integer('out_of_stock')->default(25);
             $table->boolean('is_check_expiration')->default(true);
             $table->boolean('is_show_buy_price')->default(false);
-            $table->string('business_name', 50)->default('My Business');
-            $table->string('business_address', 100)->nullable();
-            $table->string('business_contact_number', 50)->nullable();
-            $table->string('business_email', 50)->nullable();
             $table->boolean('item_icon_preview')->default(false);
             $table->decimal('wholesale_profit_percent', 10, 2)->default(10.00);
             $table->decimal('consumer_profit_percent', 10, 2)->default(15.00);

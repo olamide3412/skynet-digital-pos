@@ -1,19 +1,23 @@
 <script setup>
+import { usePage } from '@inertiajs/vue3';
+import { computed } from 'vue';
 
 defineEmits(['close']);
+const page = usePage();
+const branchSlug = computed(() => page.props.current_branch?.slug || 'felix-enterprise');
 const liClasses = 'block px-2 py-0 text-gray-700 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-700';
 </script>
 
 <template>
   <li>
-    <Link :href="route('pos.index')" :class="liClasses" @click="$emit('close')">
+    <Link :href="route('pos.index', { branch: branchSlug })" :class="liClasses" @click="$emit('close')">
       Dashboard
     </Link>
   </li>
 
   <li>
     <Link
-      :href="route('pos.logout')"
+      :href="route('pos.logout', { branch: branchSlug })"
       as="button"
       method="post"
       class="block px-4 py-2 text-red-500 hover:bg-gray-100 w-full dark:hover:bg-gray-700"

@@ -39,24 +39,24 @@ class CustomerController extends Controller
         return redirect()->route('pos.customers.index')->with('success', 'Customer created.');
     }
 
-    public function show(PosCustomer $customer)
+    public function show($branchParam, PosCustomer $customer)
     {
         $customer->load(['sales.saleOrders', 'debtPayments.user']);
         return Inertia::render('Customers/Show', ['customer' => $customer]);
     }
 
-    public function edit(PosCustomer $customer)
+    public function edit($branchParam, PosCustomer $customer)
     {
         return Inertia::render('Customers/Edit', ['customer' => $customer]);
     }
 
-    public function update(StoreCustomerRequest $request, PosCustomer $customer)
+    public function update(StoreCustomerRequest $request, $branchParam, PosCustomer $customer)
     {
         $customer->update($request->validated());
         return redirect()->route('pos.customers.index')->with('success', 'Customer updated.');
     }
 
-    public function destroy(PosCustomer $customer)
+    public function destroy($branchParam, PosCustomer $customer)
     {
         $customer->delete();
         return redirect()->route('pos.customers.index')->with('success', 'Customer deleted.');
@@ -75,7 +75,7 @@ class CustomerController extends Controller
     /**
      * Full debt ledger page for a customer — shows all transactions + running balance.
      */
-    public function debtLedger(PosCustomer $customer)
+    public function debtLedger($branchParam, PosCustomer $customer)
     {
         $transactions = DebtPayment::with('user')
             ->where('customer_id', $customer->id)
@@ -102,7 +102,7 @@ class CustomerController extends Controller
     /**
      * Record a debt payment (credit) or charge (debit) — full audit trail.
      */
-    public function recordDebt(Request $request, PosCustomer $customer)
+    public function recordDebt(Request $request, $branchParam, PosCustomer $customer)
     {
         $data = $request->validate([
             'amount'    => 'required|numeric|min:0.01',
@@ -119,6 +119,7 @@ class CustomerController extends Controller
         }
 
         DB::transaction(function () use ($data, $customer) {
+            $branch        = current_branch();
             $balanceBefore = (float) $customer->debt_bal;
 
             $balanceAfter = $data['type'] === 'credit'
@@ -126,6 +127,7 @@ class CustomerController extends Controller
                 : $balanceBefore + $data['amount'];
 
             DebtPayment::create([
+                'branch_id'      => $branch?->id,
                 'customer_id'    => $customer->id,
                 'user_id'        => Auth::id(),
                 'amount'         => $data['amount'],

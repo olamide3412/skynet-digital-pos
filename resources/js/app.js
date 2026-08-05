@@ -1,7 +1,7 @@
 import './bootstrap';
 import '../css/app.css';
 import { createApp, h } from 'vue';
-import { createInertiaApp, Head, Link } from '@inertiajs/vue3'
+import { createInertiaApp, Head, Link, router } from '@inertiajs/vue3'
 import Layout from './Layouts/Layout.vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import Toast from 'vue-toastification';
@@ -12,15 +12,20 @@ import { createPinia } from 'pinia';
 import { useThemeStore } from './Stores/themeStore';
 import FlashMessages from './Components/FlashMessages.vue';
 
-
-// AOS is now dynamically imported in setup
-// AOS.init moved to setup
-
-
-
 const pinia = createPinia();
 
 import { FontAwesomeIcon } from './fontawesome';
+
+// Listen to Inertia navigation events to update Ziggy defaults for branch slug
+router.on('navigate', (event) => {
+    const branchSlug = event.detail.page.props.current_branch?.slug;
+    if (typeof window !== 'undefined' && window.Ziggy) {
+        window.Ziggy.defaults = {
+            ...(window.Ziggy.defaults || {}),
+            branch: branchSlug || window.Ziggy.defaults?.branch || 'felix-enterprise',
+        };
+    }
+});
 
 createInertiaApp({
     title: (title) => `${title}`,
@@ -29,13 +34,28 @@ createInertiaApp({
         const page = pages[`./Pages/${name}.vue`]();
 
         return page.then((module) => {
-            if (!name.startsWith('Admin/') && !name.startsWith('Auth/') && name !== 'Error') {
+            if (!name.startsWith('Admin/')
+                && !name.startsWith('Auth/')
+                && !name.startsWith('SuperAdmin/')
+                && !name.startsWith('Pos/')
+                && name !== 'Error'
+                && name !== 'BranchUnavailable'
+            ) {
                 module.default.layout = module.default.layout || Layout;
             }
             return module;
         });
     },
     setup({ el, App, props, plugin }) {
+        // Initialize Ziggy defaults for branch slug
+        if (typeof window !== 'undefined' && window.Ziggy) {
+            const initialSlug = props.initialPage.props.current_branch?.slug;
+            window.Ziggy.defaults = {
+                ...(window.Ziggy.defaults || {}),
+                branch: initialSlug || 'felix-enterprise',
+            };
+        }
+
         const app = createApp({ render: () => h(App, props) });
         app.use(plugin)
             .use(ZiggyVue)
@@ -71,4 +91,4 @@ createInertiaApp({
         includeCSS: true,
         showSpinner: false,
     },
-})
+});

@@ -16,6 +16,7 @@ class PosController extends Controller
 {
     public function index()
     {
+        $branch       = current_branch();
         $settings     = PosSettings::current();
         $user         = Auth::user();
         $activeDiscount = SaleDiscount::where('is_apply', true)
@@ -33,14 +34,23 @@ class PosController extends Controller
             ->latest()
             ->get();
 
+        // Merge branch business details into settings for receipt/UI use
+        $settingsData = $settings->toArray();
+        if ($branch) {
+            $settingsData['business_name']           = $branch->name;
+            $settingsData['business_address']        = $branch->address;
+            $settingsData['business_contact_number'] = $branch->phone;
+            $settingsData['business_email']          = $branch->email;
+        }
+
         return Inertia::render('Pos/Index', [
-            'settings'       => $settings,
-            'itemGrids'      => $itemGrids,
-            'heldSales'      => $heldSales,
-            'activeDiscount' => $activeDiscount,
-            'canEditPrice'   => \App\Services\RoleService::canEditPrice(),
+            'settings'         => $settingsData,
+            'itemGrids'        => $itemGrids,
+            'heldSales'        => $heldSales,
+            'activeDiscount'   => $activeDiscount,
+            'canEditPrice'     => \App\Services\RoleService::canEditPrice(),
             'canApplyDiscount' => \App\Services\RoleService::canApplyDiscount(),
-            'now'            => now()->toISOString(),
+            'now'              => now()->toISOString(),
         ]);
     }
 }

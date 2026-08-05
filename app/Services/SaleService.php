@@ -19,10 +19,16 @@ class SaleService
      */
     public static function generateReceiptId(): string
     {
+        $branch = current_branch();
         $date   = now()->format('Ymd');
         $prefix = 'RC' . $date;
 
-        $lastSale = Sale::where('receipt_id', 'like', $prefix . '%')
+        $query = Sale::where('receipt_id', 'like', $prefix . '%');
+        if ($branch) {
+            $query->where('branch_id', $branch->id);
+        }
+
+        $lastSale = $query
             ->orderByDesc('receipt_id')
             ->lockForUpdate()
             ->first();
@@ -44,6 +50,7 @@ class SaleService
     public static function process(array $data, User $user): Sale
     {
         $settings = PosSettings::current();
+        $branch = current_branch();
 
         $cartItems    = $data['items'];
         $purchaseType = $data['purchase_type'] ?? 'Consumer';
@@ -53,9 +60,11 @@ class SaleService
             throw new \InvalidArgumentException('Cart is empty.');
         }
 
-        // Pre-load items
-        $itemIds   = array_column($cartItems, 'item_id');
-        $itemsMap  = Item::whereIn('id', $itemIds)->lockForUpdate()->get()->keyBy('id');
+        // Pre-load items (scoped to current branch for safety)
+        $itemIds  = array_column($cartItems, 'item_id');
+        $itemsMap = Item::whereIn('id', $itemIds)
+            ->when($branch, fn($q) => $q->where('branch_id', $branch->id))
+            ->lockForUpdate()->get()->keyBy('id');
 
         // Validate stock & expiry
         foreach ($cartItems as $cartItem) {
@@ -64,23 +73,20 @@ class SaleService
                 throw new \InvalidArgumentException("Item ID {$cartItem['item_id']} not found.");
             }
 
-            if ($settings->is_qty_deduction && $item->qty < $cartItem['qty']) {
-                throw new \InvalidArgumentException("Insufficient stock for '{$item->item_name}'. Available: {$item->qty}.");
+            $unitUsed = $cartItem['unit_used'] ?? 'unit';
+            $baseQty  = $item->toBaseUnits((int) $cartItem['qty'], $unitUsed);
+
+            if ($settings->is_qty_deduction && $item->front_store_qty < $baseQty) {
+                $stockFormatted = $item->formatBaseUnits($item->front_store_qty);
+                throw new \InvalidArgumentException("Insufficient stock for '{$item->item_name}'. Available: {$stockFormatted}.");
             }
 
             if ($settings->is_check_expiration && $item->isExpired()) {
                 throw new \InvalidArgumentException("Item '{$item->item_name}' is expired.");
             }
-
-            if ($item->price_locked && isset($cartItem['price'])) {
-                $expectedPrice = $purchaseType === 'Wholesale' ? $item->wholesale_price : $item->price;
-                if ((float) $cartItem['price'] !== (float) $expectedPrice && !RoleService::canEditPrice()) {
-                    throw new \InvalidArgumentException("Price for '{$item->item_name}' is locked.");
-                }
-            }
         }
 
-        // Calculate totals
+        // Calculate totals & tax
         $amountCost      = 0;
         $finalTotal      = 0;
         $profitMade      = 0;
@@ -89,20 +95,33 @@ class SaleService
 
         foreach ($cartItems as $cartItem) {
             $item     = $itemsMap->get($cartItem['item_id']);
+            $unitUsed = $cartItem['unit_used'] ?? 'unit';
             $price    = (float) $cartItem['price'];
             $qty      = (int) $cartItem['qty'];
+            $baseQty  = $item->toBaseUnits($qty, $unitUsed);
             $buyPrice = (float) $item->buy_price;
 
-            $amountCost += $price * $qty;
-            $profitMade += ($price - $buyPrice) * $qty;
+            $lineTotal   = $price * $qty;
+            $lineCost    = $buyPrice * $baseQty;
+            $amountCost += $lineTotal;
+            $profitMade += ($lineTotal - $lineCost);
         }
 
-        $finalTotal = $amountCost + $consultFee - $discountAmount;
+        // Tax calculation on post-discount subtotal
+        $taxAmount     = 0;
+        $taxPercentage = 0;
+        if ($settings->is_tax_enabled && (float) $settings->tax_percentage > 0) {
+            $taxPercentage   = (float) $settings->tax_percentage;
+            $taxableSubtotal = max(0, $amountCost + $consultFee - $discountAmount);
+            $taxAmount       = round(($taxableSubtotal * $taxPercentage) / 100, 2);
+        }
+
+        $finalTotal = $amountCost + $consultFee - $discountAmount + $taxAmount;
 
         return DB::transaction(function () use (
-            $data, $user, $settings, $cartItems, $itemsMap,
+            $data, $user, $branch, $settings, $cartItems, $itemsMap,
             $purchaseType, $customerId, $amountCost, $finalTotal,
-            $profitMade, $discountAmount, $consultFee
+            $profitMade, $discountAmount, $consultFee, $taxAmount, $taxPercentage
         ) {
             $receiptId  = static::generateReceiptId();
             $isDebt     = (bool) ($data['is_debt'] ?? false);
@@ -111,6 +130,7 @@ class SaleService
 
             // Create Sale
             $sale = Sale::create([
+                'branch_id'          => $branch?->id,
                 'customer_id'        => $customerId,
                 'receipt_id'         => $receiptId,
                 'items_order_count'  => count($cartItems),
@@ -125,6 +145,8 @@ class SaleService
                 'profit_made'        => $profitMade,
                 'sale_discount_id'   => $data['sale_discount_id'] ?? null,
                 'discount_amount'    => $discountAmount,
+                'tax_amount'         => $taxAmount,
+                'tax_percentage'     => $taxPercentage,
                 'final_total'        => $finalTotal,
                 'is_debt'            => $isDebt,
                 'user_id'            => $user->id,
@@ -133,9 +155,11 @@ class SaleService
             // Insert line items & deduct stock
             $today = now()->toDateString();
             foreach ($cartItems as $cartItem) {
-                $item  = $itemsMap->get($cartItem['item_id']);
-                $qty   = (int) $cartItem['qty'];
-                $price = (float) $cartItem['price'];
+                $item     = $itemsMap->get($cartItem['item_id']);
+                $qty      = (int) $cartItem['qty'];
+                $unitUsed = $cartItem['unit_used'] ?? 'unit';
+                $price    = (float) $cartItem['price'];
+                $baseQty  = $item->toBaseUnits($qty, $unitUsed);
 
                 SaleOrder::create([
                     'sale_id'             => $sale->id,
@@ -144,18 +168,20 @@ class SaleService
                     'selling_price'       => $price,
                     'total_selling_price' => $price * $qty,
                     'qty'                 => $qty,
+                    'unit_used'           => $unitUsed,
                     'purchase_type'       => $purchaseType,
                     'user_id'             => $user->id,
                     'sort_date'           => now(),
                 ]);
 
-                // Deduct stock
+                // Deduct stock in base units
                 if ($settings->is_qty_deduction) {
-                    InventoryService::deduct($item->id, $qty, $receiptId, $user);
+                    InventoryService::deduct($item->id, $baseQty, $receiptId, $user);
                 }
 
                 // Track most-sold items
                 $mostSale = \App\Models\MostSaleItem::firstOrNew([
+                    'branch_id'       => $branch?->id,
                     'user_id'         => $user->id,
                     'item_id'         => $item->id,
                     'date_created_at' => $today,
@@ -169,6 +195,7 @@ class SaleService
                 $debtAmt = $finalTotal - $amountPaid;
                 if ($debtAmt > 0) {
                     DebtPayment::create([
+                        'branch_id'   => $branch?->id,
                         'customer_id' => $customerId,
                         'user_id'     => $user->id,
                         'amount'      => $debtAmt,

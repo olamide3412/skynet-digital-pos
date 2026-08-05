@@ -107,31 +107,32 @@
 
 @layer base {
     /* Default (light) theme */
-    html[data-theme="light"] {
-        --bg: #ffffff;
-        --text: #000000;
+    html[data-theme="light"], html:not(.dark) {
+        --bg: #f8fafc;
+        --text: #0f172a;
+        color-scheme: light;
     }
 
     /* Dark theme */
-    html[data-theme="dark"] {
-        --bg: #0a0a0a;
-        --text: #f9fafb;
+    html[data-theme="dark"], html.dark {
+        --bg: #0f172a;
+        --text: #f8fafc;
+        color-scheme: dark;
     }
 
-    /* Optional: System theme (you can auto-detect later) */
+    /* Optional: System theme */
     html[data-theme="system"] {
-        --bg: #ffffff;
-        --text: #000000;
+        --bg: #f8fafc;
+        --text: #0f172a;
     }
 
     /* Apply variables globally */
-    html {
+    html, body {
         background-color: var(--bg);
         color: var(--text);
         font-family: "Poppins", sans-serif;
-        transition: background-color 0.3s, color 0.3s;
+        transition: background-color 0.25s ease, color 0.25s ease;
     }
-
 }
 
 

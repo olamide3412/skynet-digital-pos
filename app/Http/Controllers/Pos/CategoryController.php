@@ -11,7 +11,12 @@ class CategoryController extends Controller
 {
     public function index()
     {
-        $categories = Category::orderBy('name')->paginate(20);
+        $branch = current_branch();
+
+        $categories = Category::when($branch, function ($query) use ($branch) {
+            $query->where('branch_id', $branch->id)
+                  ->orWhereNull('branch_id');
+        })->orderBy('name')->paginate(20);
 
         return Inertia::render('Categories/Index', [
             'categories' => $categories
@@ -20,36 +25,38 @@ class CategoryController extends Controller
 
     public function store(Request $request)
     {
+        $branch = current_branch();
+
         $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:categories,slug',
+            'slug' => 'nullable|string|max:255',
         ]);
 
         Category::create([
-            'name' => $request->name,
-            'slug' => $request->slug ?? \Str::slug($request->name),
-            'status' => 1
+            'branch_id' => $branch?->id,
+            'name'      => $request->name,
+            'slug'      => $request->slug ? \Str::slug($request->slug) : \Str::slug($request->name),
         ]);
 
         return back()->with('success', 'Category created successfully');
     }
 
-    public function update(Request $request, Category $category)
+    public function update(Request $request, $branchParam, Category $category)
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:categories,slug,' . $category->id,
+            'slug' => 'nullable|string|max:255',
         ]);
 
         $category->update([
             'name' => $request->name,
-            'slug' => $request->slug ?? \Str::slug($request->name),
+            'slug' => $request->slug ? \Str::slug($request->slug) : \Str::slug($request->name),
         ]);
 
         return back()->with('success', 'Category updated successfully');
     }
 
-    public function destroy(Category $category)
+    public function destroy($branchParam, Category $category)
     {
         $category->delete();
         return back()->with('success', 'Category deleted successfully');

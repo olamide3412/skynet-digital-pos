@@ -10,12 +10,15 @@ return new class extends Migration
     {
         Schema::create('group_addresses', function (Blueprint $table) {
             $table->id();
-            $table->string('name')->unique();
+            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
+            $table->string('name');
+            $table->unique(['branch_id', 'name']);
             $table->timestamps();
         });
 
         Schema::create('vendors', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('branch_id')->nullable()->constrained('branches')->nullOnDelete();
             $table->string('name');
             $table->string('company_name')->nullable();
             $table->string('phone')->nullable();
