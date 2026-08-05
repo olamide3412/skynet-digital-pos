@@ -286,6 +286,7 @@ Route::prefix('{branch}')
             ->middleware('pos.role:canManageItems');
 
         // Items
+        Route::post('items/import', [PosItemController::class, 'importCsv'])->name('items.import')->middleware('pos.role:canManageItems');
         Route::resource('items', PosItemController::class)
             ->names([
                 'index'   => 'items.index',

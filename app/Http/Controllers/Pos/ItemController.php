@@ -198,6 +198,116 @@ class ItemController extends Controller
         return response()->json($items);
     }
 
+    public function importCsv(Request $request)
+    {
+        $request->validate([
+            'csv_file' => 'required|file|mimes:csv,txt|max:10240',
+        ]);
+
+        $branch = current_branch();
+        $file   = $request->file('csv_file');
+        $handle = fopen($file->getRealPath(), 'r');
+
+        if (!$handle) {
+            return back()->with('error', 'Could not open the uploaded CSV file.');
+        }
+
+        $rawHeader = fgetcsv($handle);
+        if (!$rawHeader) {
+            fclose($handle);
+            return back()->with('error', 'CSV file appears to be empty.');
+        }
+
+        $header = array_map(fn($col) => strtolower(trim($col)), $rawHeader);
+
+        $getColIndex = function (array $possibleNames) use ($header): ?int {
+            foreach ($possibleNames as $name) {
+                $idx = array_search(strtolower($name), $header, true);
+                if ($idx !== false) return $idx;
+            }
+            return null;
+        };
+
+        $idIdx          = $getColIndex(['id']);
+        $barcodeIdx     = $getColIndex(['barcode_number', 'barcode', 'code']);
+        $nameIdx        = $getColIndex(['item_name', 'name', 'title']);
+        $catIdx         = $getColIndex(['category_name', 'category']);
+        $qtyIdx         = $getColIndex(['qty', 'quantity', 'stock']);
+        $buyPriceIdx    = $getColIndex(['buy_price', 'buying_price', 'cost']);
+        $priceIdx       = $getColIndex(['price', 'selling_price']);
+        $wholesaleIdx   = $getColIndex(['wholesale', 'wholesale_price']);
+        $expiryIdx      = $getColIndex(['expiry_date', 'expiry']);
+
+        $importedCount = 0;
+        $categoryCache = [];
+
+        while (($row = fgetcsv($handle)) !== false) {
+            if (empty(array_filter($row))) continue;
+
+            $oldId    = $idIdx !== null ? trim($row[$idIdx] ?? '') : '';
+            $itemName = $nameIdx !== null ? trim($row[$nameIdx] ?? '') : '';
+            if (!$itemName) continue;
+
+            $barcode      = $barcodeIdx !== null ? trim($row[$barcodeIdx] ?? '') : '';
+            $categoryName = $catIdx !== null ? trim($row[$catIdx] ?? '') : '';
+            $qty          = $qtyIdx !== null ? (int) ($row[$qtyIdx] ?? 0) : 0;
+            $buyPrice     = $buyPriceIdx !== null ? (float) ($row[$buyPriceIdx] ?? 0) : 0.0;
+            $price        = $priceIdx !== null ? (float) ($row[$priceIdx] ?? 0) : 0.0;
+            $wholesale    = $wholesaleIdx !== null ? (float) ($row[$wholesaleIdx] ?? 0) : $price;
+            $expiryDate   = $expiryIdx !== null ? trim($row[$expiryIdx] ?? '') : null;
+
+            if (strtoupper($barcode) === 'NO_BARCODE' || empty($barcode)) {
+                $barcode = 'BAR-' . ($oldId ? str_pad($oldId, 6, '0', STR_PAD_LEFT) : strtoupper(\Illuminate\Support\Str::random(6)));
+            }
+
+            $categoryId = null;
+            if ($categoryName) {
+                $catKey = strtolower($categoryName);
+                if (!isset($categoryCache[$catKey])) {
+                    $category = \App\Models\Category::firstOrCreate(
+                        ['name' => $categoryName, 'branch_id' => $branch->id],
+                        ['slug' => \Illuminate\Support\Str::slug($categoryName)]
+                    );
+                    $categoryCache[$catKey] = $category->id;
+                }
+                $categoryId = $categoryCache[$catKey];
+            }
+
+            $item = Item::where('branch_id', $branch->id)
+                ->where(function($q) use ($barcode, $itemName) {
+                    $q->where('barcode_number', $barcode)
+                      ->orWhere('item_name', $itemName);
+                })
+                ->first();
+
+            if (!$item) {
+                $item = new Item();
+                $item->branch_id      = $branch->id;
+                $item->barcode_number = $barcode;
+            }
+
+            $item->item_name       = $itemName;
+            $item->category_id     = $categoryId;
+            $item->buy_price       = $buyPrice;
+            $item->price           = $price;
+            $item->wholesale_price = $wholesale > 0 ? $wholesale : $price;
+            $item->front_store_qty = $qty;
+            $item->back_store_qty  = 0;
+            $item->price_locked    = true;
+
+            if ($expiryDate && strtotime($expiryDate)) {
+                $item->expiry_date = date('Y-m-d', strtotime($expiryDate));
+            }
+
+            $item->save();
+            $importedCount++;
+        }
+
+        fclose($handle);
+
+        return back()->with('success', "Successfully imported {$importedCount} item(s) to {$branch->name}.");
+    }
+
     protected function authorizeBranch(Item $item, $branch): void
     {
         if ($item->branch_id !== $branch?->id) {

@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { Link, router } from '@inertiajs/vue3'
+import { Link, router, useForm } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import { useCurrency } from '@/Composables/useCurrency'
 import dayjs from 'dayjs'
@@ -16,6 +16,9 @@ const props = defineProps({
 const { format } = useCurrency()
 const search    = ref(props.filters?.search ?? '')
 const showWorth = ref(false)
+
+const showImportModal = ref(false)
+const importForm      = useForm({ csv_file: null })
 
 function doSearch() {
     router.get(route('pos.items.index'), { search: search.value }, { preserveState: true, replace: true })
@@ -34,6 +37,16 @@ function expiryClass(date) {
     if (diff < 30) return 'text-amber-400'
     return 'text-emerald-400'
 }
+
+function submitImport() {
+    if (!importForm.csv_file) return
+    importForm.post(route('pos.items.import'), {
+        onSuccess: () => {
+            showImportModal.value = false
+            importForm.reset()
+        },
+    })
+}
 </script>
 
 <template>
@@ -41,13 +54,24 @@ function expiryClass(date) {
         <!-- Header -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
             <h1 class="text-lg font-bold text-slate-900 dark:text-white">Items</h1>
-            <Link :href="route('pos.items.create')"
-                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition font-medium flex items-center gap-1.5 shadow-xs">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-                New Item
-            </Link>
+            <div class="flex items-center gap-2">
+                <button
+                    @click="showImportModal = true"
+                    class="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-white text-sm rounded-lg transition font-medium flex items-center gap-1.5 shadow-xs"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                    </svg>
+                    Import CSV
+                </button>
+                <Link :href="route('pos.items.create')"
+                    class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition font-medium flex items-center gap-1.5 shadow-xs">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    New Item
+                </Link>
+            </div>
         </div>
 
         <!-- Search + Worth Banner -->
@@ -168,6 +192,40 @@ function expiryClass(date) {
                             class="px-3 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 text-xs transition">Next</Link>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- CSV Import Modal -->
+        <div v-if="showImportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+            <div class="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700 transition-colors">
+                <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <h3 class="font-bold text-slate-900 dark:text-white text-base">Import Items CSV</h3>
+                    <button @click="showImportModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white transition">✕</button>
+                </div>
+                <form @submit.prevent="submitImport" class="px-5 py-4 space-y-4">
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Upload your CSV file containing columns: <code class="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-emerald-600 dark:text-emerald-400">item_name</code>, <code class="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-emerald-600 dark:text-emerald-400">barcode_number</code>, <code class="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-emerald-600 dark:text-emerald-400">category_name</code>, <code class="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-emerald-600 dark:text-emerald-400">qty</code>, <code class="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-emerald-600 dark:text-emerald-400">Buy_price</code>, <code class="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-emerald-600 dark:text-emerald-400">price</code>, <code class="bg-slate-100 dark:bg-slate-700 px-1 py-0.5 rounded text-emerald-600 dark:text-emerald-400">wholesale</code>.
+                    </p>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">Select CSV File</label>
+                        <input
+                            type="file"
+                            accept=".csv, .txt"
+                            @change="importForm.csv_file = $event.target.files[0]"
+                            class="w-full bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-600 outline-none file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-emerald-600 file:text-white"
+                            required
+                        />
+                        <p v-if="importForm.errors.csv_file" class="text-red-500 text-xs mt-1">{{ importForm.errors.csv_file }}</p>
+                    </div>
+
+                    <div class="flex gap-2 pt-2">
+                        <button type="button" @click="showImportModal = false" class="flex-1 py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition">Cancel</button>
+                        <button type="submit" :disabled="importForm.processing || !importForm.csv_file" class="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition disabled:opacity-40 shadow-xs">
+                            {{ importForm.processing ? 'Importing…' : 'Upload & Import' }}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
