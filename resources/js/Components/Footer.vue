@@ -42,7 +42,7 @@ import { Link } from '@inertiajs/vue3'
           </div>
           <div class="flex items-center">
             <font-awesome-icon :icon="['fas', 'envelope']" class="mr-2 text-primary" />
-            <a :href="'mailto:' + ($page.props.store_settings.company_email || 'support@skynetdigitalhub.com.ng')" class="hover:underline">{{ $page.props.store_settings.company_email || 'support@skynetdigitalhub.com.ng' }}</a>
+            <a :href="'mailto:' + ($page.props.store_settings.company_email || 'support@skynetdigitalltd.com')" class="hover:underline">{{ $page.props.store_settings.company_email || 'support@skynetdigitalltd.com' }}</a>
           </div>
         </address>
       </div>

@@ -76,7 +76,7 @@ const allNavLinks = [
         perm: 'canViewReports',
         children: [
             { label: 'Dashboard',     route: 'pos.reports.index',        match: 'Reports/Index' },
-            { label: 'Daily Sales',   route: 'pos.reports.daily-sales',  match: 'Reports/DailySales' },
+            { label: 'Sales Report',  route: 'pos.reports.daily-sales',  match: 'Reports/DailySales' },
             { label: 'Profit & Loss', route: 'pos.reports.profit-loss',  match: 'Reports/ProfitLoss', perm: 'canViewProfitLoss' },
             { label: 'Low Stock',     route: 'pos.reports.low-stock',    match: 'Reports/LowStock' },
             { label: 'Customer Debt', route: 'pos.reports.customer-debt',match: 'Reports/CustomerDebt', perm: 'canManageDebt' },

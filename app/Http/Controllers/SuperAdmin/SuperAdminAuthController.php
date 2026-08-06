@@ -18,14 +18,17 @@ class SuperAdminAuthController extends Controller
         if (Auth::guard('web')->check() && Auth::guard('web')->user()->isSuperAdmin()) {
             return redirect()->route('superadmin.dashboard');
         }
-        return inertia('SuperAdmin/Auth/Login');
+        return inertia('SuperAdmin/Auth/Login', [
+            'turnstileSiteKey' => config('services.turnstile.site_key'),
+        ]);
     }
 
     public function login(Request $request)
     {
         $data = $request->validate([
-            'login'    => ['required', 'string'],
-            'password' => ['required'],
+            'login'                 => ['required', 'string'],
+            'password'              => ['required'],
+            'cf_turnstile_response' => [new Turnstile()],
         ]);
 
         $login = $data['login'];

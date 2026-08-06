@@ -134,7 +134,7 @@ const statusBadgeClass = (status) => ({
 
             <!-- Footer -->
             <div class="mt-12 pt-6 border-t border-gray-200 text-center text-xs text-gray-400">
-                <p>Thank you for shopping with {{ $page.props.store_settings.company_name || 'Skynet Digital' }}. For inquiries, contact {{ $page.props.store_settings.company_email || 'support@skynetdigitalhub.com.ng' }} or call {{ $page.props.store_settings.company_phone || '+234 803 207 2831' }}.</p>
+                <p>Thank you for shopping with {{ $page.props.store_settings.company_name || 'Skynet Digital' }}. For inquiries, contact {{ $page.props.store_settings.company_email || 'support@skynetdigitalltd.com' }} or call {{ $page.props.store_settings.company_phone || '+234 803 207 2831' }}.</p>
                 <p class="mt-1">This is a computer-generated invoice and requires no signature.</p>
             </div>
         </div>

@@ -12,7 +12,7 @@ const form = useForm({
     // Company Branding
     company_name:           props.settings.company_name || 'Skynet',
     company_tagline:        props.settings.company_tagline || '',
-    company_email:          props.settings.company_email || 'support@skynetdigitalhub.com.ng',
+    company_email:          props.settings.company_email || 'support@skynetdigitalltd.com',
     company_phone:          props.settings.company_phone || '+2348032072831',
     company_address:        props.settings.company_address || 'Delta State, Nigeria',
     company_logo:           null,

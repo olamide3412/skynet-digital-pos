@@ -7,7 +7,7 @@ import JsBarcode        from 'jsbarcode'
 
 const props = defineProps({
     sale:     { type: Object, required: true },
-    settings: { type: Object, required: true },
+    settings: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(['close'])
 
@@ -52,15 +52,23 @@ const discountAmt  = computed(() => parseFloat(props.sale.discount_amount || 0))
 const taxAmt       = computed(() => parseFloat(props.sale.tax_amount   || 0))
 const changeBal    = computed(() => parseFloat(props.sale.change_bal   || 0))
 const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.value - amountPaid.value) : 0)
+
+function printThermal() {
+    printElement('.receipt-print-area', { paperSize: '80mm' })
+}
+
+function printA4() {
+    printElement('.receipt-print-area', { paperSize: 'A4' })
+}
 </script>
 
 <template>
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
         <!-- Modal shell -->
-        <div class="bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-sm flex flex-col overflow-hidden">
+        <div class="bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
 
             <!-- ── Action bar (not printed) ────────────────────────────────── -->
-            <div class="no-print flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200">
+            <div class="no-print flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
                 <div class="flex items-center gap-2">
                     <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
                         <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,19 +76,33 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
                                 d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                         </svg>
                     </div>
-                    <span class="font-semibold text-sm text-slate-800">Sales Receipt</span>
+                    <span class="font-bold text-sm text-slate-800">Sales Receipt</span>
                 </div>
-                <div class="flex items-center gap-2">
-                    <button @click="printElement()"
-                        class="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium rounded-lg transition">
+                <div class="flex items-center gap-1.5">
+                    <!-- Print 80mm Thermal -->
+                    <button @click="printThermal"
+                        title="Print 80mm Thermal Receipt"
+                        class="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition shadow-xs">
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                                 d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
                         </svg>
-                        Print
+                        80mm Thermal
                     </button>
+
+                    <!-- Print A4 Invoice -->
+                    <button @click="printA4"
+                        title="Print A4 Invoice Paper"
+                        class="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition shadow-xs">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        A4 Paper
+                    </button>
+
                     <button @click="emit('close')"
-                        class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium rounded-lg transition">
+                        class="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition">
                         Close
                     </button>
                 </div>

@@ -31,7 +31,7 @@ defineProps({
             <!-- Notice -->
             <div class="bg-slate-900/60 border border-slate-700/50 rounded-xl p-4 text-xs text-slate-400 text-left space-y-1">
                 <div class="font-semibold text-slate-300">Need assistance?</div>
-                <div>Contact your IT Administrator or support@skynetdigitalhub.com.ng</div>
+                <div>Contact your IT Administrator or support@skynetdigitalltd.com</div>
             </div>
 
             <!-- Action -->

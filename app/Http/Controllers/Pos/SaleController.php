@@ -88,7 +88,8 @@ class SaleController extends Controller
         $sale->load(['saleOrders.item', 'customer', 'user', 'saleDiscount']);
 
         return Inertia::render('Sales/Show', [
-            'sale' => $sale,
+            'sale'     => $sale,
+            'settings' => \App\Models\PosSettings::current(),
         ]);
     }
 
