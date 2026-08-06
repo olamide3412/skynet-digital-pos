@@ -21,6 +21,7 @@ class SettingsController extends Controller
             $settingsData['business_address']        = $branch->address;
             $settingsData['business_contact_number'] = $branch->phone;
             $settingsData['business_email']          = $branch->email;
+            $settingsData['logo_url']                = $branch->logo_path ? asset('storage/' . $branch->logo_path) : null;
         }
 
         return Inertia::render('Settings/Index', [
@@ -35,10 +36,11 @@ class SettingsController extends Controller
         }
 
         $data = $request->validate([
-            'business_name'            => 'required|string|max:50',
-            'business_address'         => 'nullable|string|max:100',
+            'business_name'            => 'required|string|max:100',
+            'business_address'         => 'nullable|string|max:255',
             'business_contact_number'  => 'nullable|string|max:50',
-            'business_email'           => 'nullable|email|max:50',
+            'business_email'           => 'nullable|email|max:100',
+            'logo'                     => 'nullable|image|max:2048',
             'sell_interface'           => 'required|in:classic,gallery',
             'is_price_editable'        => 'nullable|boolean',
             'is_qty_deduction'         => 'nullable|boolean',
@@ -53,20 +55,29 @@ class SettingsController extends Controller
             'business_sector'          => 'required|in:health,commerce',
         ]);
 
-        // ── 1. Update branch business details ─────────────────────────────────
+        // ── 1. Update branch business details & logo ───────────────────────────
         $branch = current_branch();
         if ($branch) {
-            $branch->update([
+            $branchData = [
                 'name'    => $data['business_name'],
                 'address' => $data['business_address'] ?? $branch->address,
                 'phone'   => $data['business_contact_number'] ?? $branch->phone,
                 'email'   => $data['business_email'] ?? $branch->email,
-            ]);
+            ];
+
+            if ($request->hasFile('logo')) {
+                if ($branch->logo_path) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($branch->logo_path);
+                }
+                $branchData['logo_path'] = $request->file('logo')->store('branch_logos', 'public');
+            }
+
+            $branch->update($branchData);
         }
 
         // ── 2. Update POS operational settings ────────────────────────────────
         $settingsData = array_diff_key($data, array_flip([
-            'business_name', 'business_address', 'business_contact_number', 'business_email',
+            'business_name', 'business_address', 'business_contact_number', 'business_email', 'logo', '_method',
         ]));
 
         $settings = PosSettings::current();

@@ -31,20 +31,6 @@ class AppServiceProvider extends ServiceProvider
     {
         \Illuminate\Support\Facades\Schema::defaultStringLength(191);
 
-        try {
-            if (\Illuminate\Support\Facades\Schema::hasTable('store_settings')) {
-                $settings = \App\Models\StoreSetting::pluck('value', 'key')->toArray();
-                config([
-                    'services.google.client_id'     => $settings['google_client_id'] ?? env('GOOGLE_CLIENT_ID'),
-                    'services.google.client_secret' => $settings['google_client_secret'] ?? env('GOOGLE_CLIENT_SECRET'),
-                    'services.facebook.client_id'     => $settings['facebook_client_id'] ?? env('FACEBOOK_CLIENT_ID'),
-                    'services.facebook.client_secret' => $settings['facebook_client_secret'] ?? env('FACEBOOK_CLIENT_SECRET'),
-                ]);
-            }
-        } catch (\Exception $e) {
-            // Ignore if DB not ready
-        }
-
         Model::preventLazyLoading();
         //
         Model::unguard();

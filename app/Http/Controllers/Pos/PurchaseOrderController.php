@@ -36,7 +36,13 @@ class PurchaseOrderController extends Controller
     {
         $branch = current_branch();
         return Inertia::render('Purchases/Create', [
-            'vendors' => Vendor::where('branch_id', $branch->id)->where('status', 'Active')->orderBy('name')->get(['id', 'name', 'company_name']),
+            'vendors' => Vendor::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
+                ->where('status', 'Active')
+                ->orderBy('name')
+                ->get(['id', 'name', 'company_name']),
+            'availableItems' => Item::where('branch_id', $branch->id)
+                ->orderBy('item_name')
+                ->get(['id', 'item_name', 'barcode_number', 'buy_price', 'front_store_qty', 'back_store_qty']),
         ]);
     }
 
@@ -63,10 +69,10 @@ class PurchaseOrderController extends Controller
                 'branch_id'     => $branch->id,
                 'vendor_id'     => $data['vendor_id'],
                 'user_id'       => Auth::id(),
-                'po_number'     => 'PO-' . date('Ymd') . '-' . rand(1000, 9999),
+                'po_number'     => 'PO-' . date('Ymd') . '-' . strtoupper(\Illuminate\Support\Str::random(5)),
                 'order_date'    => now()->toDateString(),
                 'status'        => 'Pending',
-                'expected_date' => $data['expected_date'],
+                'expected_date' => $data['expected_date'] ?? null,
                 'shipping_cost' => $data['shipping_cost'] ?? 0,
                 'discount'      => $data['discount'] ?? 0,
                 'total_amount'  => $total,
@@ -75,13 +81,15 @@ class PurchaseOrderController extends Controller
 
             foreach ($data['items'] as $itemData) {
                 $item = Item::find($itemData['item_id']);
-                $po->items()->create([
-                    'item_id'   => $item->id,
-                    'item_name' => $item->item_name,
-                    'qty'       => $itemData['qty'],
-                    'cost'      => $itemData['cost'],
-                    'total'     => $itemData['qty'] * $itemData['cost'],
-                ]);
+                if ($item) {
+                    $po->items()->create([
+                        'item_id'   => $item->id,
+                        'item_name' => $item->item_name,
+                        'qty'       => $itemData['qty'],
+                        'cost'      => $itemData['cost'],
+                        'total'     => $itemData['qty'] * $itemData['cost'],
+                    ]);
+                }
             }
 
             return $po;

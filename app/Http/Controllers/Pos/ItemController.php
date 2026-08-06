@@ -53,7 +53,7 @@ class ItemController extends Controller
         $data = $request->validate([
             'item_name'              => 'required|string|max:255',
             'barcode_number'         => 'nullable|string|max:100',
-            'category_id'            => 'nullable|exists:categories,id',
+            'category_id'            => 'required|exists:categories,id',
             'group_address_id'       => 'nullable|exists:group_addresses,id',
             'buy_price'              => 'required|numeric|min:0',
             'price'                  => 'required|numeric|min:0',
@@ -75,7 +75,27 @@ class ItemController extends Controller
             'image'                  => 'nullable|image|max:2048',
         ]);
 
+        // Auto-generate barcode if blank or 'NO_BARCODE'
+        $barcode = trim($data['barcode_number'] ?? '');
+        if (!$barcode || strtoupper($barcode) === 'NO_BARCODE') {
+            $barcode = 'BAR-' . strtoupper(\Illuminate\Support\Str::random(6));
+        } else {
+            // Check barcode uniqueness in active branch
+            $exists = Item::where('branch_id', $branch->id)
+                ->where('barcode_number', $barcode)
+                ->exists();
+            if ($exists) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'barcode_number' => 'This barcode number is already assigned to another item in your branch.',
+                ]);
+            }
+        }
+        $data['barcode_number'] = $barcode;
+
         $data['branch_id']        = $branch->id;
+        $data['wholesale_price']  = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? $data['wholesale_price'] : $data['price'];
+        $data['front_store_qty']  = $data['front_store_qty'] ?? 0;
+        $data['back_store_qty']   = $data['back_store_qty'] ?? 0;
         $data['unit_label']       = $data['unit_label'] ?: 'Unit';
         $data['pack_label']       = $data['pack_label'] ?: 'Pack';
         $data['carton_label']     = $data['carton_label'] ?: 'Carton';
@@ -115,7 +135,7 @@ class ItemController extends Controller
         $data = $request->validate([
             'item_name'              => 'required|string|max:255',
             'barcode_number'         => 'nullable|string|max:100',
-            'category_id'            => 'nullable|exists:categories,id',
+            'category_id'            => 'required|exists:categories,id',
             'group_address_id'       => 'nullable|exists:group_addresses,id',
             'buy_price'              => 'required|numeric|min:0',
             'price'                  => 'required|numeric|min:0',
@@ -137,6 +157,26 @@ class ItemController extends Controller
             'image'                  => 'nullable|image|max:2048',
         ]);
 
+        $barcode = trim($data['barcode_number'] ?? '');
+        if (!$barcode || strtoupper($barcode) === 'NO_BARCODE') {
+            $barcode = $item->barcode_number ?: ('BAR-' . strtoupper(\Illuminate\Support\Str::random(6)));
+        } else {
+            // Check barcode uniqueness in active branch excluding current item
+            $exists = Item::where('branch_id', $branch->id)
+                ->where('barcode_number', $barcode)
+                ->where('id', '!=', $item->id)
+                ->exists();
+            if ($exists) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'barcode_number' => 'This barcode number is already assigned to another item in your branch.',
+                ]);
+            }
+        }
+        $data['barcode_number'] = $barcode;
+
+        $data['wholesale_price']  = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? $data['wholesale_price'] : $data['price'];
+        $data['front_store_qty']  = $data['front_store_qty'] ?? 0;
+        $data['back_store_qty']   = $data['back_store_qty'] ?? 0;
         $data['unit_label']       = $data['unit_label'] ?: 'Unit';
         $data['pack_label']       = $data['pack_label'] ?: 'Pack';
         $data['carton_label']     = $data['carton_label'] ?: 'Carton';
@@ -198,7 +238,100 @@ class ItemController extends Controller
         return response()->json($items);
     }
 
-    public function importCsv(Request $request)
+    /** Export sample CSV template matching current items table schema */
+    public function exportTemplate()
+    {
+        $headers = [
+            'Content-Type'        => 'text/csv; charset=utf-8',
+            'Content-Disposition' => 'attachment; filename=items_import_template.csv',
+        ];
+
+        $columns = [
+            'item_name', 'barcode_number', 'category_name', 'group_address_name',
+            'buy_price', 'price', 'wholesale_price', 'pack_price', 'carton_price',
+            'front_store_qty', 'back_store_qty', 'unit_label', 'units_per_pack',
+            'packs_per_carton', 'expiry_date', 'item_description'
+        ];
+
+        $callback = function () use ($columns) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $columns);
+
+            fputcsv($file, [
+                'Paracetamol 500mg', 'BAR-100201', 'Analgesics', 'Shelf A1',
+                '250.00', '350.00', '320.00', '3200.00', '30000.00',
+                '50', '200', 'Tablet', '10', '10',
+                '2027-12-31', 'Pain relief tablets'
+            ]);
+            fputcsv($file, [
+                'Amoxicillin 250mg', 'BAR-100202', 'Antibiotics', 'Shelf B2',
+                '1200.00', '1500.00', '1400.00', '14000.00', '130000.00',
+                '30', '100', 'Capsule', '10', '10',
+                '2026-10-15', 'Broad spectrum antibiotic'
+            ]);
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /** Export all current branch items into CSV using native schema */
+    public function exportCsv()
+    {
+        $branch = current_branch();
+        $fileName = 'skynet_items_' . \Illuminate\Support\Str::slug($branch->name) . '_' . date('Ymd_His') . '.csv';
+
+        $headers = [
+            'Content-Type'        => 'text/csv; charset=utf-8',
+            'Content-Disposition' => "attachment; filename={$fileName}",
+        ];
+
+        $items = Item::where('branch_id', $branch->id)
+            ->with(['category', 'groupAddress'])
+            ->latest()
+            ->get();
+
+        $columns = [
+            'item_name', 'barcode_number', 'category_name', 'group_address_name',
+            'buy_price', 'price', 'wholesale_price', 'pack_price', 'carton_price',
+            'front_store_qty', 'back_store_qty', 'unit_label', 'units_per_pack',
+            'packs_per_carton', 'expiry_date', 'item_description'
+        ];
+
+        $callback = function () use ($items, $columns) {
+            $file = fopen('php://output', 'w');
+            fputcsv($file, $columns);
+
+            foreach ($items as $item) {
+                fputcsv($file, [
+                    $item->item_name,
+                    $item->barcode_number,
+                    $item->category?->name ?? '',
+                    $item->groupAddress?->name ?? '',
+                    $item->buy_price,
+                    $item->price,
+                    $item->wholesale_price,
+                    $item->pack_price,
+                    $item->carton_price,
+                    $item->front_store_qty,
+                    $item->back_store_qty,
+                    $item->unit_label,
+                    $item->units_per_pack,
+                    $item->packs_per_carton,
+                    $item->expiry_date ? $item->expiry_date->format('Y-m-d') : '',
+                    $item->item_description,
+                ]);
+            }
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    /** Import items using current schema & return detailed success / fail report */
+    public function importNativeCsv(Request $request)
     {
         $request->validate([
             'csv_file' => 'required|file|mimes:csv,txt|max:10240',
@@ -228,84 +361,147 @@ class ItemController extends Controller
             return null;
         };
 
-        $idIdx          = $getColIndex(['id']);
-        $barcodeIdx     = $getColIndex(['barcode_number', 'barcode', 'code']);
         $nameIdx        = $getColIndex(['item_name', 'name', 'title']);
+        $barcodeIdx     = $getColIndex(['barcode_number', 'barcode', 'code']);
         $catIdx         = $getColIndex(['category_name', 'category']);
-        $qtyIdx         = $getColIndex(['qty', 'quantity', 'stock']);
+        $groupIdx       = $getColIndex(['group_address_name', 'storage_location', 'group_address']);
         $buyPriceIdx    = $getColIndex(['buy_price', 'buying_price', 'cost']);
         $priceIdx       = $getColIndex(['price', 'selling_price']);
-        $wholesaleIdx   = $getColIndex(['wholesale', 'wholesale_price']);
+        $wholesaleIdx   = $getColIndex(['wholesale_price', 'wholesale']);
+        $packPriceIdx   = $getColIndex(['pack_price']);
+        $cartonPriceIdx = $getColIndex(['carton_price']);
+        $frontQtyIdx    = $getColIndex(['front_store_qty', 'qty', 'front_qty']);
+        $backQtyIdx     = $getColIndex(['back_store_qty', 'back_qty']);
+        $unitLabelIdx   = $getColIndex(['unit_label']);
+        $unitsPackIdx   = $getColIndex(['units_per_pack']);
+        $packsCartonIdx = $getColIndex(['packs_per_carton']);
         $expiryIdx      = $getColIndex(['expiry_date', 'expiry']);
+        $descIdx        = $getColIndex(['item_description', 'description']);
 
-        $importedCount = 0;
+        $rowNumber    = 1;
+        $successCount = 0;
+        $failedItems  = [];
         $categoryCache = [];
+        $groupCache    = [];
 
         while (($row = fgetcsv($handle)) !== false) {
+            $rowNumber++;
             if (empty(array_filter($row))) continue;
 
-            $oldId    = $idIdx !== null ? trim($row[$idIdx] ?? '') : '';
             $itemName = $nameIdx !== null ? trim($row[$nameIdx] ?? '') : '';
-            if (!$itemName) continue;
+            if (!$itemName) {
+                $failedItems[] = [
+                    'line'      => $rowNumber,
+                    'item_name' => 'Row ' . $rowNumber,
+                    'reason'    => 'Item name is missing or empty',
+                ];
+                continue;
+            }
 
             $barcode      = $barcodeIdx !== null ? trim($row[$barcodeIdx] ?? '') : '';
             $categoryName = $catIdx !== null ? trim($row[$catIdx] ?? '') : '';
-            $qty          = $qtyIdx !== null ? (int) ($row[$qtyIdx] ?? 0) : 0;
+            $groupName    = $groupIdx !== null ? trim($row[$groupIdx] ?? '') : '';
             $buyPrice     = $buyPriceIdx !== null ? (float) ($row[$buyPriceIdx] ?? 0) : 0.0;
             $price        = $priceIdx !== null ? (float) ($row[$priceIdx] ?? 0) : 0.0;
             $wholesale    = $wholesaleIdx !== null ? (float) ($row[$wholesaleIdx] ?? 0) : $price;
+            $packPrice    = $packPriceIdx !== null && ($row[$packPriceIdx] ?? '') !== '' ? (float) $row[$packPriceIdx] : null;
+            $cartonPrice  = $cartonPriceIdx !== null && ($row[$cartonPriceIdx] ?? '') !== '' ? (float) $row[$cartonPriceIdx] : null;
+            $frontQty     = $frontQtyIdx !== null ? (int) ($row[$frontQtyIdx] ?? 0) : 0;
+            $backQty      = $backQtyIdx !== null ? (int) ($row[$backQtyIdx] ?? 0) : 0;
+            $unitLabel    = $unitLabelIdx !== null ? trim($row[$unitLabelIdx] ?? '') : 'Unit';
+            $unitsPerPack = $unitsPackIdx !== null ? max(1, (int) ($row[$unitsPackIdx] ?? 1)) : 1;
+            $packsCarton  = $packsCartonIdx !== null ? max(1, (int) ($row[$packsCartonIdx] ?? 1)) : 1;
             $expiryDate   = $expiryIdx !== null ? trim($row[$expiryIdx] ?? '') : null;
+            $desc         = $descIdx !== null ? trim($row[$descIdx] ?? '') : null;
 
-            if (strtoupper($barcode) === 'NO_BARCODE' || empty($barcode)) {
-                $barcode = 'BAR-' . ($oldId ? str_pad($oldId, 6, '0', STR_PAD_LEFT) : strtoupper(\Illuminate\Support\Str::random(6)));
+            if (!$barcode || strtoupper($barcode) === 'NO_BARCODE') {
+                $barcode = 'BAR-' . strtoupper(\Illuminate\Support\Str::random(6));
             }
 
-            $categoryId = null;
-            if ($categoryName) {
-                $catKey = strtolower($categoryName);
-                if (!isset($categoryCache[$catKey])) {
-                    $category = \App\Models\Category::firstOrCreate(
-                        ['name' => $categoryName, 'branch_id' => $branch->id],
-                        ['slug' => \Illuminate\Support\Str::slug($categoryName)]
-                    );
-                    $categoryCache[$catKey] = $category->id;
+            try {
+                $categoryId = null;
+                if ($categoryName) {
+                    $catKey = strtolower($categoryName);
+                    if (!isset($categoryCache[$catKey])) {
+                        $category = \App\Models\Category::firstOrCreate(
+                            ['name' => $categoryName, 'branch_id' => $branch->id],
+                            ['slug' => \Illuminate\Support\Str::slug($categoryName)]
+                        );
+                        $categoryCache[$catKey] = $category->id;
+                    }
+                    $categoryId = $categoryCache[$catKey];
                 }
-                $categoryId = $categoryCache[$catKey];
+
+                $groupId = null;
+                if ($groupName) {
+                    $grpKey = strtolower($groupName);
+                    if (!isset($groupCache[$grpKey])) {
+                        $group = \App\Models\GroupAddress::firstOrCreate(
+                            ['name' => $groupName, 'branch_id' => $branch->id]
+                        );
+                        $groupCache[$grpKey] = $group->id;
+                    }
+                    $groupId = $groupCache[$grpKey];
+                }
+
+                $item = Item::where('branch_id', $branch->id)
+                    ->where(fn($q) => $q->where('barcode_number', $barcode)->orWhere('item_name', $itemName))
+                    ->first();
+
+                if (!$item) {
+                    $item = new Item();
+                    $item->branch_id      = $branch->id;
+                    $item->barcode_number = $barcode;
+                }
+
+                $item->item_name        = $itemName;
+                $item->category_id      = $categoryId;
+                $item->group_address_id = $groupId;
+                $item->buy_price        = $buyPrice;
+                $item->price            = $price;
+                $item->wholesale_price  = $wholesale;
+                $item->pack_price       = $packPrice;
+                $item->carton_price     = $cartonPrice;
+                $item->front_store_qty  = $frontQty;
+                $item->back_store_qty   = $backQty;
+                $item->unit_label       = $unitLabel ?: 'Unit';
+                $item->units_per_pack   = $unitsPerPack;
+                $item->packs_per_carton = $packsCarton;
+                $item->item_description = $desc;
+                $item->price_locked     = true;
+
+                if ($expiryDate && strtotime($expiryDate)) {
+                    $item->expiry_date = date('Y-m-d', strtotime($expiryDate));
+                }
+
+                $item->save();
+                $successCount++;
+            } catch (\Throwable $e) {
+                $failedItems[] = [
+                    'line'      => $rowNumber,
+                    'item_name' => $itemName ?: 'Row ' . $rowNumber,
+                    'reason'    => $e->getMessage(),
+                ];
             }
-
-            $item = Item::where('branch_id', $branch->id)
-                ->where(function($q) use ($barcode, $itemName) {
-                    $q->where('barcode_number', $barcode)
-                      ->orWhere('item_name', $itemName);
-                })
-                ->first();
-
-            if (!$item) {
-                $item = new Item();
-                $item->branch_id      = $branch->id;
-                $item->barcode_number = $barcode;
-            }
-
-            $item->item_name       = $itemName;
-            $item->category_id     = $categoryId;
-            $item->buy_price       = $buyPrice;
-            $item->price           = $price;
-            $item->wholesale_price = $wholesale > 0 ? $wholesale : $price;
-            $item->front_store_qty = $qty;
-            $item->back_store_qty  = 0;
-            $item->price_locked    = true;
-
-            if ($expiryDate && strtotime($expiryDate)) {
-                $item->expiry_date = date('Y-m-d', strtotime($expiryDate));
-            }
-
-            $item->save();
-            $importedCount++;
         }
 
         fclose($handle);
 
-        return back()->with('success', "Successfully imported {$importedCount} item(s) to {$branch->name}.");
+        $totalProcessed = $successCount + count($failedItems);
+
+        return back()->with([
+            'success'      => "CSV Import finished: {$successCount} item(s) uploaded successfully.",
+            'importReport' => [
+                'total'   => $totalProcessed,
+                'success' => $successCount,
+                'failed'  => $failedItems,
+            ]
+        ]);
+    }
+
+    public function importMedfusionCsv(Request $request)
+    {
+        return $this->importNativeCsv($request);
     }
 
     protected function authorizeBranch(Item $item, $branch): void

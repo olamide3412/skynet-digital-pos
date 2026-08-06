@@ -24,15 +24,16 @@ function renderBarcode() {
     try {
         JsBarcode(barcodeSvg.value, props.sale.receipt_id, {
             format:      'CODE128',
-            width:       1.4,
-            height:      45,
+            width:       1.6,
+            height:      48,
             displayValue: true,
-            fontSize:    10,
+            fontSize:    11,
+            fontOptions: 'bold',
             margin:      4,
             background:  '#ffffff',
             lineColor:   '#000000',
             textAlign:   'center',
-            textMargin:  3,
+            textMargin:  4,
         })
     } catch (e) {
         console.warn('Barcode render failed:', e)
@@ -87,130 +88,129 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
 
             <!-- ── Receipt printable area ───────────────────────────────────── -->
             <div class="receipt-print-area overflow-y-auto max-h-[75vh] px-5 py-4"
-                 style="font-family: 'Courier New', Courier, monospace; font-size: 11px; line-height: 1.5; color: #111;">
+                 style="font-family: 'Consolas', 'Lucida Console', 'Segoe UI', Arial, 'Courier New', monospace, sans-serif; font-size: 12px; font-weight: 600; line-height: 1.4; color: #000000;">
 
                 <!-- ══ BUSINESS HEADER ══════════════════════════════════════ -->
-                <div style="text-align:center; margin-bottom: 10px;">
-                    <!-- Logo placeholder / business name -->
-                    <div style="font-size:16px; font-weight:900; letter-spacing:1px; text-transform:uppercase; margin-bottom:2px;">
+                <div style="text-align:center; margin-bottom: 8px;">
+                    <div style="font-size:16px; font-weight:900; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:3px; color:#000000;">
                         {{ settings.business_name || 'Business Name' }}
                     </div>
                     <div v-if="settings.business_address"
-                         style="font-size:10px; color:#555; margin-bottom:1px;">
+                         style="font-size:11px; font-weight:600; color:#000000; margin-bottom:2px;">
                         📍 {{ settings.business_address }}
                     </div>
-                    <div style="display:flex; justify-content:center; gap:10px; flex-wrap:wrap; font-size:10px; color:#555; margin-top:2px;">
+                    <div style="display:flex; justify-content:center; gap:8px; flex-wrap:wrap; font-size:10.5px; font-weight:600; color:#000000; margin-top:2px;">
                         <span v-if="settings.business_contact_number">📞 {{ settings.business_contact_number }}</span>
                         <span v-if="settings.business_email">✉ {{ settings.business_email }}</span>
                     </div>
                 </div>
 
                 <!-- Divider -->
-                <div style="border-top: 1.5px dashed #aaa; margin: 8px 0;"></div>
+                <div style="border-top: 1.5px solid #000000; margin: 6px 0;"></div>
 
                 <!-- ══ RECEIPT META ══════════════════════════════════════════ -->
-                <table style="width:100%; font-size:10.5px; border-collapse:collapse;">
+                <table style="width:100%; font-size:11.5px; font-weight:600; border-collapse:collapse;">
                     <tr>
-                        <td style="color:#555;">Receipt #</td>
-                        <td style="text-align:right; font-weight:700;">{{ sale.receipt_id }}</td>
+                        <td style="color:#000000;">Receipt #</td>
+                        <td style="text-align:right; font-weight:800; color:#000000;">{{ sale.receipt_id }}</td>
                     </tr>
                     <tr>
-                        <td style="color:#555;">Date</td>
-                        <td style="text-align:right;">{{ saleDate }}</td>
+                        <td style="color:#000000;">Date</td>
+                        <td style="text-align:right; color:#000000;">{{ saleDate }}</td>
                     </tr>
                     <tr v-if="sale.customer">
-                        <td style="color:#555;">Customer</td>
-                        <td style="text-align:right;">{{ sale.customer.name }}</td>
+                        <td style="color:#000000;">Customer</td>
+                        <td style="text-align:right; color:#000000;">{{ sale.customer.name }}</td>
                     </tr>
                     <tr>
-                        <td style="color:#555;">Cashier</td>
-                        <td style="text-align:right;">{{ sale.user?.full_name || sale.user?.name || '—' }}</td>
+                        <td style="color:#000000;">Cashier</td>
+                        <td style="text-align:right; color:#000000;">{{ sale.user?.full_name || sale.user?.name || '—' }}</td>
                     </tr>
                     <tr>
-                        <td style="color:#555;">Payment</td>
-                        <td style="text-align:right; text-transform:capitalize; font-weight:600;">
+                        <td style="color:#000000;">Payment</td>
+                        <td style="text-align:right; text-transform:capitalize; font-weight:700; color:#000000;">
                             {{ sale.payment_method || '—' }}
                         </td>
                     </tr>
                 </table>
 
                 <!-- Divider -->
-                <div style="border-top: 1.5px dashed #aaa; margin: 8px 0;"></div>
+                <div style="border-top: 1.5px solid #000000; margin: 6px 0;"></div>
 
                 <!-- ══ ITEMS TABLE ═══════════════════════════════════════════ -->
-                <table style="width:100%; border-collapse:collapse; font-size:10.5px;">
+                <table style="width:100%; border-collapse:collapse; font-size:11.5px;">
                     <thead>
-                        <tr style="border-bottom: 1px solid #ccc;">
-                            <th style="text-align:left; padding-bottom:4px; font-weight:700; color:#333;">Item</th>
-                            <th style="text-align:center; padding-bottom:4px; font-weight:700; color:#333; white-space:nowrap;">Qty</th>
-                            <th style="text-align:right; padding-bottom:4px; font-weight:700; color:#333; white-space:nowrap;">Unit</th>
-                            <th style="text-align:right; padding-bottom:4px; font-weight:700; color:#333; white-space:nowrap;">Amount</th>
+                        <tr style="border-bottom: 1.5px solid #000000;">
+                            <th style="text-align:left; padding-bottom:4px; font-weight:800; color:#000000;">Item</th>
+                            <th style="text-align:center; padding-bottom:4px; font-weight:800; color:#000000; white-space:nowrap;">Qty</th>
+                            <th style="text-align:right; padding-bottom:4px; font-weight:800; color:#000000; white-space:nowrap;">Unit</th>
+                            <th style="text-align:right; padding-bottom:4px; font-weight:800; color:#000000; white-space:nowrap;">Amount</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr v-for="item in items" :key="item.id"
-                            style="border-bottom: 1px dotted #e0e0e0;">
-                            <td style="padding: 3px 0; word-break:break-word; max-width:100px;">
+                            style="border-bottom: 1px dashed #000000;">
+                            <td style="padding: 4px 0; font-weight:600; color:#000000; word-break:break-word; max-width:100px;">
                                 {{ item.item_name }}
                                 <div v-if="item.unit_used && item.unit_used !== 'unit'"
-                                     style="font-size:9px; color:#777; text-transform:capitalize;">
+                                     style="font-size:10px; font-weight:600; color:#000000; text-transform:capitalize;">
                                     ({{ item.unit_used }})
                                 </div>
                             </td>
-                            <td style="text-align:center; padding: 3px 4px;">{{ item.qty }}</td>
-                            <td style="text-align:right; padding: 3px 0; white-space:nowrap;">{{ format(item.selling_price) }}</td>
-                            <td style="text-align:right; padding: 3px 0; white-space:nowrap; font-weight:600;">{{ format(item.total_selling_price) }}</td>
+                            <td style="text-align:center; padding: 4px; font-weight:700; color:#000000;">{{ item.qty }}</td>
+                            <td style="text-align:right; padding: 4px 0; font-weight:600; color:#000000; white-space:nowrap;">{{ format(item.selling_price) }}</td>
+                            <td style="text-align:right; padding: 4px 0; font-weight:800; color:#000000; white-space:nowrap;">{{ format(item.total_selling_price) }}</td>
                         </tr>
                     </tbody>
                 </table>
 
                 <!-- Divider -->
-                <div style="border-top: 1.5px dashed #aaa; margin: 8px 0;"></div>
+                <div style="border-top: 1.5px solid #000000; margin: 6px 0;"></div>
 
                 <!-- ══ TOTALS ════════════════════════════════════════════════ -->
-                <table style="width:100%; border-collapse:collapse; font-size:10.5px;">
+                <table style="width:100%; border-collapse:collapse; font-size:11.5px; font-weight:600;">
                     <tr>
-                        <td style="color:#555;">Subtotal</td>
-                        <td style="text-align:right;">{{ format(subtotal) }}</td>
+                        <td style="color:#000000;">Subtotal</td>
+                        <td style="text-align:right; color:#000000;">{{ format(subtotal) }}</td>
                     </tr>
                     <tr v-if="discountAmt > 0">
-                        <td style="color:#d00;">Discount</td>
-                        <td style="text-align:right; color:#d00;">- {{ format(discountAmt) }}</td>
+                        <td style="color:#000000;">Discount</td>
+                        <td style="text-align:right; color:#000000;">- {{ format(discountAmt) }}</td>
                     </tr>
                     <tr v-if="taxAmt > 0">
-                        <td style="color:#555;">Tax ({{ sale.tax_percentage }}%)</td>
-                        <td style="text-align:right;">+ {{ format(taxAmt) }}</td>
+                        <td style="color:#000000;">Tax ({{ sale.tax_percentage }}%)</td>
+                        <td style="text-align:right; color:#000000;">+ {{ format(taxAmt) }}</td>
                     </tr>
                     <tr v-if="(sale.consultation_fee || 0) > 0">
-                        <td style="color:#555;">Consult Fee</td>
-                        <td style="text-align:right;">{{ format(sale.consultation_fee) }}</td>
+                        <td style="color:#000000;">Consult Fee</td>
+                        <td style="text-align:right; color:#000000;">{{ format(sale.consultation_fee) }}</td>
                     </tr>
                     <!-- TOTAL row -->
-                    <tr style="border-top: 1.5px solid #222; margin-top:4px;">
-                        <td style="font-size:13px; font-weight:900; padding-top:5px;">TOTAL</td>
-                        <td style="text-align:right; font-size:13px; font-weight:900; padding-top:5px;">{{ format(finalTotal) }}</td>
+                    <tr style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">
+                        <td style="font-size:14px; font-weight:900; color:#000000; padding: 5px 0;">TOTAL</td>
+                        <td style="text-align:right; font-size:14px; font-weight:900; color:#000000; padding: 5px 0;">{{ format(finalTotal) }}</td>
                     </tr>
                 </table>
 
                 <!-- Divider -->
-                <div style="border-top: 1px dashed #aaa; margin: 8px 0;"></div>
+                <div style="margin: 6px 0;"></div>
 
                 <!-- ══ PAYMENT SUMMARY ═══════════════════════════════════════ -->
-                <table style="width:100%; border-collapse:collapse; font-size:10.5px;">
+                <table style="width:100%; border-collapse:collapse; font-size:11.5px; font-weight:600;">
                     <tr>
-                        <td style="color:#555; text-transform:capitalize;">
+                        <td style="color:#000000; text-transform:capitalize;">
                             Paid ({{ sale.payment_method }})
                         </td>
-                        <td style="text-align:right; font-weight:600;">{{ format(amountPaid) }}</td>
+                        <td style="text-align:right; font-weight:800; color:#000000;">{{ format(amountPaid) }}</td>
                     </tr>
                     <tr v-if="changeBal > 0">
-                        <td style="color:#555;">Change</td>
-                        <td style="text-align:right; color:#007700; font-weight:600;">{{ format(changeBal) }}</td>
+                        <td style="color:#000000;">Change</td>
+                        <td style="text-align:right; color:#000000; font-weight:800;">{{ format(changeBal) }}</td>
                     </tr>
                     <tr v-if="sale.is_debt && debtAmt > 0"
-                        style="background:#fff0f0; border-radius:4px;">
-                        <td style="color:#cc0000; font-weight:800; padding: 3px 0;">⚠ DEBT BALANCE</td>
-                        <td style="text-align:right; color:#cc0000; font-weight:800;">{{ format(debtAmt) }}</td>
+                        style="border: 1.5px solid #000000; padding: 4px;">
+                        <td style="color:#000000; font-weight:900; padding: 3px;">⚠ DEBT BALANCE</td>
+                        <td style="text-align:right; color:#000000; font-weight:900; padding: 3px;">{{ format(debtAmt) }}</td>
                     </tr>
                 </table>
 
@@ -220,21 +220,21 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
                 </div>
 
                 <!-- ══ FOOTER ════════════════════════════════════════════════ -->
-                <div style="border-top: 1.5px dashed #aaa; margin: 8px 0 4px; text-align:center;">
-                    <p style="font-size:11px; font-weight:700; margin: 6px 0 2px; letter-spacing:0.5px;">
+                <div style="border-top: 1.5px solid #000000; margin: 8px 0 4px; text-align:center;">
+                    <p style="font-size:11.5px; font-weight:800; color:#000000; margin: 6px 0 2px; letter-spacing:0.5px;">
                         ★ Thank you for your patronage! ★
                     </p>
-                    <p style="font-size:9.5px; color:#666; margin: 0 0 4px;">
+                    <p style="font-size:10px; font-weight:600; color:#000000; margin: 0 0 4px;">
                         Please keep this receipt for reference.
                     </p>
                     <p v-if="settings.business_contact_number || settings.business_email"
-                       style="font-size:9px; color:#888; margin-top:3px;">
+                       style="font-size:9.5px; font-weight:600; color:#000000; margin-top:3px;">
                         For enquiries:
                         <span v-if="settings.business_contact_number">{{ settings.business_contact_number }}</span>
                         <span v-if="settings.business_contact_number && settings.business_email"> · </span>
                         <span v-if="settings.business_email">{{ settings.business_email }}</span>
                     </p>
-                    <p style="font-size:8.5px; color:#bbb; margin-top:6px; letter-spacing:0.3px;">
+                    <p style="font-size:9px; font-weight:700; color:#000000; margin-top:6px; letter-spacing:0.3px;">
                         Powered by SkyNet POS
                     </p>
                 </div>

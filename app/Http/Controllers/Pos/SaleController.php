@@ -9,6 +9,7 @@ use App\Services\RoleService;
 use App\Services\SaleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class SaleController extends Controller
@@ -82,7 +83,7 @@ class SaleController extends Controller
         }
     }
 
-    public function show(Sale $sale)
+    public function show($branchParam, Sale $sale)
     {
         $sale->load(['saleOrders.item', 'customer', 'user', 'saleDiscount']);
 
@@ -91,13 +92,16 @@ class SaleController extends Controller
         ]);
     }
 
-    public function destroy(Sale $sale)
+    public function destroy($branchParam, Sale $sale)
     {
         if (!RoleService::canDeleteSale()) {
             abort(403, 'Insufficient permissions to delete a sale.');
         }
 
-        $sale->delete();
+        DB::transaction(function () use ($sale) {
+            $sale->saleOrders()->delete();
+            $sale->delete();
+        });
 
         return redirect()->route('pos.sales.index')
             ->with('success', "Sale #{$sale->receipt_id} deleted.");

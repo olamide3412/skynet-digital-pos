@@ -35,7 +35,15 @@ class CustomerController extends Controller
 
     public function store(StoreCustomerRequest $request)
     {
-        PosCustomer::create($request->validated());
+        $data = $request->validated();
+        $data['branch_id']       = current_branch()?->id;
+        $data['address']         = $data['address'] ?? 'NA';
+        $data['note']            = $data['note'] ?? 'No Note';
+        $data['contact_name']    = $data['contact_name'] ?? 'NA';
+        $data['contact_phone']   = $data['contact_phone'] ?? 'NA';
+        $data['contact_address'] = $data['contact_address'] ?? 'NA';
+
+        PosCustomer::create($data);
         return redirect()->route('pos.customers.index')->with('success', 'Customer created.');
     }
 
@@ -52,7 +60,14 @@ class CustomerController extends Controller
 
     public function update(StoreCustomerRequest $request, $branchParam, PosCustomer $customer)
     {
-        $customer->update($request->validated());
+        $data = $request->validated();
+        $data['address']         = $data['address'] ?? 'NA';
+        $data['note']            = $data['note'] ?? 'No Note';
+        $data['contact_name']    = $data['contact_name'] ?? 'NA';
+        $data['contact_phone']   = $data['contact_phone'] ?? 'NA';
+        $data['contact_address'] = $data['contact_address'] ?? 'NA';
+
+        $customer->update($data);
         return redirect()->route('pos.customers.index')->with('success', 'Customer updated.');
     }
 

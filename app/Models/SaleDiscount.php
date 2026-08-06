@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SaleDiscount extends Model
 {
     protected $fillable = [
-        'discount_type', 'discount_value', 'start_date_time', 'end_date_time',
+        'branch_id', 'discount_type', 'discount_value', 'start_date_time', 'end_date_time',
         'applies_to', 'description', 'is_apply', 'user_id',
     ];
 

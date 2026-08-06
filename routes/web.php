@@ -19,68 +19,25 @@ use App\Http\Controllers\SuperAdmin\GlobalItemController;
 
 // Storefront Controllers
 use App\Http\Controllers\Frontend\HomeController;
-use App\Http\Controllers\Frontend\ProductController as StorefrontProductController;
-use App\Http\Controllers\Frontend\CartController;
-use App\Http\Controllers\Frontend\CheckoutController;
-use App\Http\Controllers\Frontend\CompareController;
-use App\Http\Controllers\Frontend\WishlistController;
-use App\Http\Controllers\Frontend\OrderTrackingController;
-use App\Http\Controllers\Frontend\CustomerAuthController;
 
 use Illuminate\Support\Facades\Route;
 
 /* ══════════════════════════════════════════════════════════════════════════════
- *  STOREFRONT / PUBLIC E-COMMERCE ROUTES
+ *  PUBLIC & AUTH FALLBACK ROUTES
  * ══════════════════════════════════════════════════════════════════════════════ */
 Route::get('/', [HomeController::class, 'index'])->name('home');
 
-// Shop / Products
-Route::get('/shop',                [StorefrontProductController::class, 'index'])->name('shop.index');
-Route::get('/product/{url_key}',   [StorefrontProductController::class, 'show'])->name('shop.show');
+// Global Auth Fallbacks — Redirects /login to current or default branch login
+Route::get('/login', function () {
+    $branchSlug = current_branch()?->slug
+        ?? \App\Models\Branch::first()?->slug
+        ?? 'skynet-digital-enterprise';
+    return redirect()->route('pos.login', ['branch' => $branchSlug]);
+})->name('login');
 
-// Cart
-Route::get('/cart',                [CartController::class, 'index'])->name('cart.index');
-Route::post('/cart',               [CartController::class, 'store'])->name('cart.store');
-Route::put('/cart/{cartItem}',     [CartController::class, 'update'])->name('cart.update');
-Route::delete('/cart/{cartItem}',  [CartController::class, 'destroy'])->name('cart.destroy');
+Route::post('/logout',     [AuthController::class, 'destroy'])->name('logout');
+Route::post('/pos/logout', [AuthController::class, 'destroy'])->name('pos.logout');
 
-// Checkout
-Route::get('/checkout',            [CheckoutController::class, 'index'])->name('checkout.index');
-Route::post('/checkout',           [CheckoutController::class, 'process'])->name('checkout.process');
-Route::get('/checkout/callback',   [CheckoutController::class, 'callback'])->name('checkout.callback');
-Route::get('/checkout/success/{tracking}', [CheckoutController::class, 'success'])->name('checkout.success');
-Route::post('/webhook/paystack',   [CheckoutController::class, 'paystackWebhook'])->name('webhook.paystack');
-Route::post('/webhook/flutterwave',[CheckoutController::class, 'flutterwaveWebhook'])->name('webhook.flutterwave');
-
-// Compare
-Route::get('/compare',             [CompareController::class, 'index'])->name('compare.index');
-Route::post('/compare',            [CompareController::class, 'store'])->name('compare.store');
-Route::delete('/compare/{compareItem}', [CompareController::class, 'destroy'])->name('compare.destroy');
-
-// Wishlist
-Route::middleware('auth:customer')->group(function () {
-    Route::get('/wishlist',        [WishlistController::class, 'index'])->name('wishlist.index');
-    Route::post('/wishlist/toggle',[WishlistController::class, 'toggle'])->name('wishlist.toggle');
-});
-
-// Order Tracking & Customer Profile
-Route::get('/order-tracking',        [OrderTrackingController::class, 'index'])->name('order.track');
-Route::post('/order-tracking',       [OrderTrackingController::class, 'track'])->name('order.track.post');
-Route::get('/track/{tracking}',      [OrderTrackingController::class, 'trackDirect'])->name('order.track.direct');
-Route::get('/customer/orders',       [OrderTrackingController::class, 'myOrders'])->name('customer.orders')->middleware('auth:customer');
-Route::get('/customer/orders/{order}',[OrderTrackingController::class, 'myOrderDetail'])->name('customer.order.detail')->middleware('auth:customer');
-
-// Customer Auth
-Route::get('/customer/login',       [CustomerAuthController::class, 'showLogin'])->name('customer.login');
-Route::post('/customer/login',      [CustomerAuthController::class, 'login'])->name('customer.login.submit');
-Route::get('/customer/register',    [CustomerAuthController::class, 'showRegister'])->name('register');
-Route::post('/customer/register',   [CustomerAuthController::class, 'register'])->name('register.submit');
-Route::post('/customer/logout',     [CustomerAuthController::class, 'destroy'])->name('customer.logout');
-
-// Global Auth Fallbacks
-Route::get('/login',                [CustomerAuthController::class, 'showLogin'])->name('login');
-Route::post('/logout',              [AuthController::class, 'destroy'])->name('logout');
-Route::post('/pos/logout',          [AuthController::class, 'destroy'])->name('pos.logout');
 
 /* ══════════════════════════════════════════════════════════════════════════════
  *  SUPER ADMIN PANEL — /superadmin/...
@@ -286,7 +243,10 @@ Route::prefix('{branch}')
             ->middleware('pos.role:canManageItems');
 
         // Items
-        Route::post('items/import', [PosItemController::class, 'importCsv'])->name('items.import')->middleware('pos.role:canManageItems');
+        Route::get('items/export-template', [PosItemController::class, 'exportTemplate'])->name('items.export-template')->middleware('pos.role:canManageItems');
+        Route::get('items/export',          [PosItemController::class, 'exportCsv'])->name('items.export')->middleware('pos.role:canManageItems');
+        Route::post('items/import',          [PosItemController::class, 'importNativeCsv'])->name('items.import')->middleware('pos.role:canManageItems');
+        Route::post('items/import-medfusion',[PosItemController::class, 'importMedfusionCsv'])->name('items.import-medfusion')->middleware('pos.role:canManageItems');
         Route::resource('items', PosItemController::class)
             ->names([
                 'index'   => 'items.index',
@@ -330,11 +290,35 @@ Route::prefix('{branch}')
             ->name('customers.debt-ledger')
             ->middleware('pos.role:canManageDebt');
 
+        // Vendors
+        Route::resource('vendors', \App\Http\Controllers\Pos\VendorController::class)
+            ->except(['create', 'show', 'edit'])
+            ->names([
+                'index'   => 'vendors.index',
+                'store'   => 'vendors.store',
+                'update'  => 'vendors.update',
+                'destroy' => 'vendors.destroy',
+            ]);
+
+        // Purchase Orders
+        Route::resource('purchases', \App\Http\Controllers\Pos\PurchaseOrderController::class)
+            ->names([
+                'index'   => 'purchases.index',
+                'create'  => 'purchases.create',
+                'store'   => 'purchases.store',
+                'show'    => 'purchases.show',
+                'destroy' => 'purchases.destroy',
+            ]);
+        Route::get('/purchases/{purchase}/receive', [\App\Http\Controllers\Pos\PurchaseOrderController::class, 'receiveForm'])
+            ->name('purchases.receive');
+        Route::post('/purchases/{purchase}/receive', [\App\Http\Controllers\Pos\PurchaseOrderController::class, 'processReceive'])
+            ->name('purchases.process-receive');
+
         // Settings
         Route::get('/settings',  [PosSettingsController::class, 'index'])
             ->name('settings.index')
             ->middleware('pos.role:canEditSettings');
-        Route::put('/settings',  [PosSettingsController::class, 'update'])
+        Route::match(['put', 'post'], '/settings', [PosSettingsController::class, 'update'])
             ->name('settings.update')
             ->middleware('pos.role:canEditSettings');
 

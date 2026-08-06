@@ -11,7 +11,10 @@ class VendorController extends Controller
 {
     public function index(Request $request)
     {
-        $vendors = Vendor::withCount('purchaseOrders')
+        $branch = current_branch();
+
+        $vendors = Vendor::where(fn($q) => $q->where('branch_id', $branch?->id)->orWhereNull('branch_id'))
+            ->withCount('purchaseOrders')
             ->when($request->search, fn ($q) => $q
                 ->where('name', 'like', '%' . $request->search . '%')
                 ->orWhere('company_name', 'like', '%' . $request->search . '%'))
@@ -35,6 +38,8 @@ class VendorController extends Controller
             'address'      => 'nullable|string|max:255',
             'status'       => 'required|in:Active,Inactive',
         ]);
+
+        $data['branch_id'] = current_branch()?->id;
 
         Vendor::create($data);
 

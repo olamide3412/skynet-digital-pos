@@ -25,28 +25,42 @@ export function usePrint() {
     <meta charset="utf-8">
     <title>Receipt</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
         body {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 11px;
-            line-height: 1.55;
-            color: #111;
-            background: #fff;
+            font-family: 'Consolas', 'Lucida Console', 'Segoe UI', Arial, 'Courier New', monospace, sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+            line-height: 1.4;
+            color: #000000 !important;
+            background: #ffffff !important;
             width: 72mm;
             margin: 0 auto;
-            padding: 6px 8px 16px;
+            padding: 4mm 2mm 10mm;
         }
         table { width: 100%; border-collapse: collapse; }
-        td, th { vertical-align: top; }
+        td, th { vertical-align: top; color: #000000 !important; }
         svg { display: block; margin: 0 auto; max-width: 100%; }
         div { box-sizing: border-box; }
         div[style*="display:flex"] { display: flex !important; justify-content: center !important; align-items: center !important; }
         @media print {
             @page {
-                margin: 4mm 6mm;
+                margin: 0mm;
                 size: 80mm auto;
             }
-            body { width: 100%; }
+            html, body {
+                width: 100%;
+                margin: 0;
+                padding: 2mm 3mm;
+                background: #fff;
+            }
+            .no-print { display: none !important; }
         }
     </style>
 </head>

@@ -11,7 +11,10 @@ class SaleDiscountController extends Controller
 {
     public function index()
     {
-        $discounts = SaleDiscount::latest()->get();
+        $branch = current_branch();
+        $discounts = SaleDiscount::where(fn($q) => $q->where('branch_id', $branch?->id)->orWhereNull('branch_id'))
+            ->latest()
+            ->get();
 
         return Inertia::render('Discounts/Index', [
             'discounts' => $discounts,
@@ -27,6 +30,9 @@ class SaleDiscountController extends Controller
             'end_date_time'   => 'required|date|after_or_equal:start_date_time',
             'is_apply'        => 'boolean',
         ]);
+
+        $data['user_id']   = \Illuminate\Support\Facades\Auth::id();
+        $data['branch_id'] = current_branch()?->id;
 
         SaleDiscount::create($data);
 
