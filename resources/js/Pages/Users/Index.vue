@@ -16,6 +16,10 @@ const search = ref(props.filters?.search ?? '')
 const isEditing = ref(false)
 const currentUser = ref(null)
 
+const showUserPass = ref(false)
+const showResetPass = ref(false)
+const showResetConfirmPass = ref(false)
+
 const form = useForm({
     name: '',
     username: '',
@@ -253,7 +257,13 @@ function submitResetPassword() {
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Password <span v-if="isEditing" class="text-slate-500">(Leave blank to keep)</span><span v-else>*</span></label>
-                                <input v-model="form.password" type="password" :required="!isEditing" minlength="8" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-emerald-500 transition" />
+                                <div class="relative flex items-center">
+                                    <input v-model="form.password" :type="showUserPass ? 'text' : 'password'" :required="!isEditing" minlength="8" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 pr-9 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-emerald-500 transition" />
+                                    <button type="button" @click="showUserPass = !showUserPass" class="absolute right-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition focus:outline-none" :title="showUserPass ? 'Hide password' : 'Show password'">
+                                        <svg v-if="!showUserPass" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                        <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.05 10.05 0 014.122-.863c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21M3 3l18 18"/></svg>
+                                    </button>
+                                </div>
                                 <p v-if="form.errors.password" class="text-red-500 text-xs mt-1">{{ form.errors.password }}</p>
                             </div>
                         </div>
@@ -333,12 +343,24 @@ function submitResetPassword() {
                 <form @submit.prevent="submitResetPassword" class="p-6 space-y-4">
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">New Password *</label>
-                        <input v-model="resetForm.password" type="password" required minlength="8" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-purple-500 transition" />
+                        <div class="relative flex items-center">
+                            <input v-model="resetForm.password" :type="showResetPass ? 'text' : 'password'" required minlength="8" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 pr-9 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-purple-500 transition" />
+                            <button type="button" @click="showResetPass = !showResetPass" class="absolute right-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition focus:outline-none" :title="showResetPass ? 'Hide password' : 'Show password'">
+                                <svg v-if="!showResetPass" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.05 10.05 0 014.122-.863c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21M3 3l18 18"/></svg>
+                            </button>
+                        </div>
                         <p v-if="resetForm.errors.password" class="text-red-500 text-xs mt-1">{{ resetForm.errors.password }}</p>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Confirm New Password *</label>
-                        <input v-model="resetForm.password_confirmation" type="password" required minlength="8" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-purple-500 transition" />
+                        <div class="relative flex items-center">
+                            <input v-model="resetForm.password_confirmation" :type="showResetConfirmPass ? 'text' : 'password'" required minlength="8" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 pr-9 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-purple-500 transition" />
+                            <button type="button" @click="showResetConfirmPass = !showResetConfirmPass" class="absolute right-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition focus:outline-none" :title="showResetConfirmPass ? 'Hide password' : 'Show password'">
+                                <svg v-if="!showResetConfirmPass" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.05 10.05 0 014.122-.863c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21M3 3l18 18"/></svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="pt-2 flex gap-3">
                         <form method="dialog" class="flex-1">

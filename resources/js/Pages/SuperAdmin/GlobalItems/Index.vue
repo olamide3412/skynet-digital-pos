@@ -1,6 +1,9 @@
 <script setup>
 import { ref } from 'vue'
 import { Head, Link, useForm, router } from '@inertiajs/vue3'
+import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
+
+defineOptions({ layout: SuperAdminLayout })
 
 const props = defineProps({
     items: Object,
@@ -81,23 +84,20 @@ const deleteItem = (item) => {
 
 <template>
     <Head title="Global Item Pool - Super Admin" />
-    <div class="min-h-screen bg-slate-950 text-slate-100 font-sans p-6">
-        <div class="max-w-7xl mx-auto space-y-6">
-
-            <!-- Header -->
-            <div class="flex items-center justify-between">
-                <div>
-                    <Link :href="route('superadmin.dashboard')" class="text-xs text-indigo-400 hover:text-indigo-300 mb-1 inline-block">&larr; Back to Dashboard</Link>
-                    <h1 class="text-2xl font-bold text-slate-100">Global Master Item Pool</h1>
-                    <p class="text-xs text-slate-400">Master product catalog. Select items and push directly into branch catalogs below.</p>
-                </div>
-                <button
-                    @click="showCreateModal = true"
-                    class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-xs transition-colors shadow-lg shadow-indigo-600/20"
-                >
-                    + Add Master Item
-                </button>
+    <div class="max-w-7xl mx-auto space-y-6">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+            <div>
+                <h1 class="text-xl font-bold text-slate-900 dark:text-white">Global Master Item Pool</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Master product catalog. Select items and push directly into branch catalogs below.</p>
             </div>
+            <button
+                @click="showCreateModal = true"
+                class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-indigo-600/20"
+            >
+                + Add Master Item
+            </button>
+        </div>
 
             <!-- Flash -->
             <div v-if="$page.props.flash?.success" class="bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 rounded-xl px-4 py-3 text-sm">
@@ -301,5 +301,4 @@ const deleteItem = (item) => {
                 </form>
             </div>
         </div>
-    </div>
 </template>

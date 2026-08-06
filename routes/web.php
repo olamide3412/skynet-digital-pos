@@ -16,6 +16,7 @@ use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboard;
 use App\Http\Controllers\SuperAdmin\BranchController;
 use App\Http\Controllers\SuperAdmin\BranchUserController;
 use App\Http\Controllers\SuperAdmin\GlobalItemController;
+use App\Http\Controllers\SuperAdmin\ProfileController as SuperAdminProfileController;
 
 // Storefront Controllers
 use App\Http\Controllers\Frontend\HomeController;
@@ -38,10 +39,8 @@ Route::get('/login', function () {
 Route::post('/logout',     [AuthController::class, 'destroy'])->name('logout');
 Route::post('/pos/logout', [AuthController::class, 'destroy'])->name('pos.logout');
 
-
 /* ══════════════════════════════════════════════════════════════════════════════
  *  SUPER ADMIN PANEL — /superadmin/...
- *  No branch context here. Separate auth, no ResolveBranch middleware.
  * ══════════════════════════════════════════════════════════════════════════════ */
 Route::prefix('superadmin')->name('superadmin.')->group(function () {
 
@@ -52,6 +51,11 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
 
     Route::middleware(['auth:web', 'superadmin'])->group(function () {
         Route::get('/dashboard', [SuperAdminDashboard::class, 'index'])->name('dashboard');
+
+        // SuperAdmin Profile Management
+        Route::get('/profile',          [SuperAdminProfileController::class, 'index'])->name('profile.index');
+        Route::put('/profile',          [SuperAdminProfileController::class, 'updateProfile'])->name('profile.update');
+        Route::put('/profile/password', [SuperAdminProfileController::class, 'updatePassword'])->name('profile.password');
 
         Route::resource('branches', BranchController::class)
             ->except(['show'])

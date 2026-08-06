@@ -12,6 +12,10 @@ const props = defineProps({
 // ── Add User ──────────────────────────────────────────────────────────────────
 const showCreateModal = ref(false)
 
+const showCreatePass       = ref(false)
+const showResetPass        = ref(false)
+const showResetConfirmPass = ref(false)
+
 const form = useForm({
     name: '',
     username: '',
@@ -316,8 +320,14 @@ const togglePermInForm = (targetForm, permName) => {
                         </div>
                         <div>
                             <label class="block text-xs text-slate-400 mb-1">Password *</label>
-                            <input v-model="form.password" type="password" required
-                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500" />
+                            <div class="relative flex items-center">
+                                <input v-model="form.password" :type="showCreatePass ? 'text' : 'password'" required
+                                    class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 pr-9 text-sm text-slate-100 focus:outline-none focus:border-indigo-500" />
+                                <button type="button" @click="showCreatePass = !showCreatePass" class="absolute right-2.5 text-slate-400 hover:text-slate-200 transition focus:outline-none" :title="showCreatePass ? 'Hide password' : 'Show password'">
+                                    <svg v-if="!showCreatePass" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                    <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.05 10.05 0 014.122-.863c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21M3 3l18 18"/></svg>
+                                </button>
+                            </div>
                             <div v-if="form.errors.password" class="text-rose-400 text-xs mt-1">{{ form.errors.password }}</div>
                         </div>
                     </div>
@@ -500,14 +510,26 @@ const togglePermInForm = (targetForm, permName) => {
                 <form @submit.prevent="submitReset" class="space-y-3">
                     <div>
                         <label class="block text-xs text-slate-400 mb-1">New Password *</label>
-                        <input v-model="resetForm.password" type="password" required
-                            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500" />
+                        <div class="relative flex items-center">
+                            <input v-model="resetForm.password" :type="showResetPass ? 'text' : 'password'" required
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 pr-9 text-sm text-slate-100 focus:outline-none focus:border-indigo-500" />
+                            <button type="button" @click="showResetPass = !showResetPass" class="absolute right-2.5 text-slate-400 hover:text-slate-200 transition focus:outline-none" :title="showResetPass ? 'Hide password' : 'Show password'">
+                                <svg v-if="!showResetPass" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.05 10.05 0 014.122-.863c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21M3 3l18 18"/></svg>
+                            </button>
+                        </div>
                         <div v-if="resetForm.errors.password" class="text-rose-400 text-xs mt-1">{{ resetForm.errors.password }}</div>
                     </div>
                     <div>
                         <label class="block text-xs text-slate-400 mb-1">Confirm Password *</label>
-                        <input v-model="resetForm.password_confirmation" type="password" required
-                            class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-indigo-500" />
+                        <div class="relative flex items-center">
+                            <input v-model="resetForm.password_confirmation" :type="showResetConfirmPass ? 'text' : 'password'" required
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 pr-9 text-sm text-slate-100 focus:outline-none focus:border-indigo-500" />
+                            <button type="button" @click="showResetConfirmPass = !showResetConfirmPass" class="absolute right-2.5 text-slate-400 hover:text-slate-200 transition focus:outline-none" :title="showResetConfirmPass ? 'Hide password' : 'Show password'">
+                                <svg v-if="!showResetConfirmPass" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.05 10.05 0 014.122-.863c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21M3 3l18 18"/></svg>
+                            </button>
+                        </div>
                     </div>
                     <div class="pt-3 border-t border-slate-800 flex justify-end space-x-3">
                         <button type="button" @click="showResetModal = false"
