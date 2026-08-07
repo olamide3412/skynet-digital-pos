@@ -45,7 +45,7 @@ class ReportController extends Controller
         ];
 
         // Paginated rows (25 per page)
-        $sales = Sale::with(['customer', 'user'])
+        $sales = Sale::with(['customer', 'user', 'saleOrders'])
             ->where('branch_id', $branch->id)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))

@@ -43,7 +43,7 @@ function renderBarcode() {
 onMounted(() => nextTick(renderBarcode))
 watch(() => props.sale.receipt_id, () => nextTick(renderBarcode))
 
-const items = computed(() => props.sale.sale_orders || props.sale.items || [])
+const items = computed(() => props.sale.sale_orders || props.sale.saleOrders || props.sale.items || [])
 
 const subtotal     = computed(() => items.value.reduce((s, i) => s + parseFloat(i.total_selling_price || 0), 0))
 const amountPaid   = computed(() => parseFloat(props.sale.amount_paid  || 0))
@@ -132,28 +132,30 @@ function printA4() {
 
                 <!-- ══ RECEIPT META ══════════════════════════════════════════ -->
                 <table style="width:100%; font-size:11.5px; font-weight:600; border-collapse:collapse;">
-                    <tr>
-                        <td style="color:#000000;">Receipt #</td>
-                        <td style="text-align:right; font-weight:800; color:#000000;">{{ sale.receipt_id }}</td>
-                    </tr>
-                    <tr>
-                        <td style="color:#000000;">Date</td>
-                        <td style="text-align:right; color:#000000;">{{ saleDate }}</td>
-                    </tr>
-                    <tr v-if="sale.customer">
-                        <td style="color:#000000;">Customer</td>
-                        <td style="text-align:right; color:#000000;">{{ sale.customer.name }}</td>
-                    </tr>
-                    <tr>
-                        <td style="color:#000000;">Cashier</td>
-                        <td style="text-align:right; color:#000000;">{{ sale.user?.full_name || sale.user?.name || '—' }}</td>
-                    </tr>
-                    <tr>
-                        <td style="color:#000000;">Payment</td>
-                        <td style="text-align:right; text-transform:capitalize; font-weight:700; color:#000000;">
-                            {{ sale.payment_method || '—' }}
-                        </td>
-                    </tr>
+                    <tbody>
+                        <tr>
+                            <td style="color:#000000;">Receipt #</td>
+                            <td style="text-align:right; font-weight:800; color:#000000;">{{ sale.receipt_id }}</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#000000;">Date</td>
+                            <td style="text-align:right; color:#000000;">{{ saleDate }}</td>
+                        </tr>
+                        <tr v-if="sale.customer">
+                            <td style="color:#000000;">Customer</td>
+                            <td style="text-align:right; color:#000000;">{{ sale.customer.name }}</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#000000;">Cashier</td>
+                            <td style="text-align:right; color:#000000;">{{ sale.user?.full_name || sale.user?.name || '—' }}</td>
+                        </tr>
+                        <tr>
+                            <td style="color:#000000;">Payment</td>
+                            <td style="text-align:right; text-transform:capitalize; font-weight:700; color:#000000;">
+                                {{ sale.payment_method || '—' }}
+                            </td>
+                        </tr>
+                    </tbody>
                 </table>
 
                 <!-- Divider -->
@@ -191,27 +193,29 @@ function printA4() {
 
                 <!-- ══ TOTALS ════════════════════════════════════════════════ -->
                 <table style="width:100%; border-collapse:collapse; font-size:11.5px; font-weight:600;">
-                    <tr>
-                        <td style="color:#000000;">Subtotal</td>
-                        <td style="text-align:right; color:#000000;">{{ format(subtotal) }}</td>
-                    </tr>
-                    <tr v-if="discountAmt > 0">
-                        <td style="color:#000000;">Discount</td>
-                        <td style="text-align:right; color:#000000;">- {{ format(discountAmt) }}</td>
-                    </tr>
-                    <tr v-if="taxAmt > 0">
-                        <td style="color:#000000;">Tax ({{ sale.tax_percentage }}%)</td>
-                        <td style="text-align:right; color:#000000;">+ {{ format(taxAmt) }}</td>
-                    </tr>
-                    <tr v-if="(sale.consultation_fee || 0) > 0">
-                        <td style="color:#000000;">Consult Fee</td>
-                        <td style="text-align:right; color:#000000;">{{ format(sale.consultation_fee) }}</td>
-                    </tr>
-                    <!-- TOTAL row -->
-                    <tr style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">
-                        <td style="font-size:14px; font-weight:900; color:#000000; padding: 5px 0;">TOTAL</td>
-                        <td style="text-align:right; font-size:14px; font-weight:900; color:#000000; padding: 5px 0;">{{ format(finalTotal) }}</td>
-                    </tr>
+                    <tbody>
+                        <tr>
+                            <td style="color:#000000;">Subtotal</td>
+                            <td style="text-align:right; color:#000000;">{{ format(subtotal) }}</td>
+                        </tr>
+                        <tr v-if="discountAmt > 0">
+                            <td style="color:#000000;">Discount</td>
+                            <td style="text-align:right; color:#000000;">- {{ format(discountAmt) }}</td>
+                        </tr>
+                        <tr v-if="taxAmt > 0">
+                            <td style="color:#000000;">Tax ({{ sale.tax_percentage }}%)</td>
+                            <td style="text-align:right; color:#000000;">+ {{ format(taxAmt) }}</td>
+                        </tr>
+                        <tr v-if="(sale.consultation_fee || 0) > 0">
+                            <td style="color:#000000;">Consult Fee</td>
+                            <td style="text-align:right; color:#000000;">{{ format(sale.consultation_fee) }}</td>
+                        </tr>
+                        <!-- TOTAL row -->
+                        <tr style="border-top: 2px solid #000000; border-bottom: 2px solid #000000;">
+                            <td style="font-size:14px; font-weight:900; color:#000000; padding: 5px 0;">TOTAL</td>
+                            <td style="text-align:right; font-size:14px; font-weight:900; color:#000000; padding: 5px 0;">{{ format(finalTotal) }}</td>
+                        </tr>
+                    </tbody>
                 </table>
 
                 <!-- Divider -->
@@ -219,21 +223,23 @@ function printA4() {
 
                 <!-- ══ PAYMENT SUMMARY ═══════════════════════════════════════ -->
                 <table style="width:100%; border-collapse:collapse; font-size:11.5px; font-weight:600;">
-                    <tr>
-                        <td style="color:#000000; text-transform:capitalize;">
-                            Paid ({{ sale.payment_method }})
-                        </td>
-                        <td style="text-align:right; font-weight:800; color:#000000;">{{ format(amountPaid) }}</td>
-                    </tr>
-                    <tr v-if="changeBal > 0">
-                        <td style="color:#000000;">Change</td>
-                        <td style="text-align:right; color:#000000; font-weight:800;">{{ format(changeBal) }}</td>
-                    </tr>
-                    <tr v-if="sale.is_debt && debtAmt > 0"
-                        style="border: 1.5px solid #000000; padding: 4px;">
-                        <td style="color:#000000; font-weight:900; padding: 3px;">⚠ DEBT BALANCE</td>
-                        <td style="text-align:right; color:#000000; font-weight:900; padding: 3px;">{{ format(debtAmt) }}</td>
-                    </tr>
+                    <tbody>
+                        <tr>
+                            <td style="color:#000000; text-transform:capitalize;">
+                                Paid ({{ sale.payment_method }})
+                            </td>
+                            <td style="text-align:right; font-weight:800; color:#000000;">{{ format(amountPaid) }}</td>
+                        </tr>
+                        <tr v-if="changeBal > 0">
+                            <td style="color:#000000;">Change</td>
+                            <td style="text-align:right; color:#000000; font-weight:800;">{{ format(changeBal) }}</td>
+                        </tr>
+                        <tr v-if="sale.is_debt && debtAmt > 0"
+                            style="border: 1.5px solid #000000; padding: 4px;">
+                            <td style="color:#000000; font-weight:900; padding: 3px;">⚠ DEBT BALANCE</td>
+                            <td style="text-align:right; color:#000000; font-weight:900; padding: 3px;">{{ format(debtAmt) }}</td>
+                        </tr>
+                    </tbody>
                 </table>
 
                 <!-- ══ BARCODE ═══════════════════════════════════════════════ -->
@@ -257,7 +263,7 @@ function printA4() {
                         <span v-if="settings.business_email">{{ settings.business_email }}</span>
                     </p>
                     <p style="font-size:9px; font-weight:700; color:#000000; margin-top:6px; letter-spacing:0.3px;">
-                        Powered by SkyNet POS
+                        Powered by SkyNet Digital POS
                     </p>
                 </div>
 

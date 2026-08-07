@@ -22,7 +22,7 @@ class SaleController extends Controller
         $selectedUserId = $canSeeAll ? ($request->user_id ?: null) : auth()->id();
 
         $salesQuery = Sale::where('branch_id', $branch->id)
-            ->with(['user', 'customer'])
+            ->with(['user', 'customer', 'saleOrders'])
             ->when($request->from,      fn ($q) => $q->whereDate('created_at', '>=', $request->from))
             ->when($request->to,        fn ($q) => $q->whereDate('created_at', '<=', $request->to))
             ->when($selectedUserId,     fn ($q) => $q->where('user_id', $selectedUserId))
@@ -51,6 +51,7 @@ class SaleController extends Controller
                 'to'      => $request->to ?? '',
                 'user_id' => $selectedUserId ?? '',
             ],
+            'settings'  => \App\Models\PosSettings::current(),
         ]);
     }
 
