@@ -56,11 +56,12 @@ class AuthController extends Controller
             ]);
         }
 
-        // Try email first, then username
-        $credentials = ['email' => $login, 'password' => $attributes['password']];
-        $attempted   = Auth::guard('web')->attempt($credentials, false);
+        $field       = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+        $credentials = [$field => $login, 'password' => $attributes['password']];
 
-        if (!$attempted) {
+        $attempted = Auth::guard('web')->attempt($credentials, false);
+
+        if (!$attempted && $field === 'email') {
             $credentials = ['username' => $login, 'password' => $attributes['password']];
             $attempted   = Auth::guard('web')->attempt($credentials, false);
         }

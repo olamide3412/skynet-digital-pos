@@ -41,9 +41,17 @@ class SuperAdminAuthController extends Controller
             ]);
         }
 
-        $credentials = ['email' => $login, 'password' => $data['password']];
+        $field       = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+        $credentials = [$field => $login, 'password' => $data['password']];
 
-        if (Auth::guard('web')->attempt($credentials, false)) {
+        $attempted = Auth::guard('web')->attempt($credentials, false);
+
+        if (!$attempted && $field === 'email') {
+            $credentials = ['username' => $login, 'password' => $data['password']];
+            $attempted   = Auth::guard('web')->attempt($credentials, false);
+        }
+
+        if ($attempted) {
             $user = Auth::guard('web')->user();
 
             if (!$user->isSuperAdmin()) {
