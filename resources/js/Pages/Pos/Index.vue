@@ -15,6 +15,7 @@ import HeldCartsList from '@/Components/POS/HeldCartsList.vue'
 import ReturnModal from '@/Components/POS/ReturnModal.vue'
 import CustomerSelector from '@/Components/POS/CustomerSelector.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
+import { useBarcodeScanner } from '@/Composables/useBarcodeScanner'
 
 defineOptions({ layout: PosLayout })
 
@@ -41,6 +42,17 @@ const showHold       = ref(false)
 const showHeld       = ref(false)
 const showReturn     = ref(false)
 const completedSale  = ref(null)
+
+const isAnyModalOpen = computed(() => showPayment.value || showReceipt.value || showHold.value || showHeld.value || showReturn.value)
+
+useBarcodeScanner({
+    onScan: (item) => {
+        cart.addItem(item)
+        nextTick(() => productSearch.value?.focus())
+    },
+    getPurchaseType: () => cart.purchaseType,
+    isEnabled: () => !isAnyModalOpen.value,
+})
 
 // Current time display
 const currentTime = ref(new Date())

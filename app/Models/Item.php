@@ -64,7 +64,13 @@ class Item extends Model
     /** Combined total stock (back + front) for display/reporting. */
     public function getTotalQtyAttribute(): int
     {
-        return $this->back_store_qty + $this->front_store_qty;
+        return (int) (($this->attributes['back_store_qty'] ?? 0) + ($this->attributes['front_store_qty'] ?? 0));
+    }
+
+    /** Front store available stock quantity. */
+    public function getQtyAttribute(): int
+    {
+        return (int) ($this->attributes['front_store_qty'] ?? $this->front_store_qty ?? 0);
     }
 
     /**

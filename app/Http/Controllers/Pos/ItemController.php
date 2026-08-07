@@ -229,6 +229,8 @@ class ItemController extends Controller
             ->limit(20)
             ->get()
             ->map(fn($item) => array_merge($item->toArray(), [
+                'qty' => $item->front_store_qty,
+                'total_qty' => $item->total_qty,
                 'display_price' => $item->getPriceForUnitLevel('unit', $purchaseType),
                 'pack_display_price' => $item->getPriceForUnitLevel('pack', $purchaseType),
                 'carton_display_price' => $item->getPriceForUnitLevel('carton', $purchaseType),

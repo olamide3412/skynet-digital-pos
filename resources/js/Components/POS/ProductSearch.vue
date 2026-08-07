@@ -23,6 +23,15 @@ function refocusSearch() {
     })
 }
 
+function onBlur() {
+    setTimeout(() => {
+        const active = document.activeElement
+        if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA' && active.tagName !== 'SELECT' && active.tagName !== 'BUTTON')) {
+            refocusSearch()
+        }
+    }, 120)
+}
+
 function onInput(e) {
     const val = e.target.value
     query.value = val
@@ -85,6 +94,14 @@ function formatDate(date) {
     })
 }
 
+function getItemQty(item) {
+    if (!item) return 0
+    if (item.qty !== undefined && item.qty !== null) return Number(item.qty)
+    if (item.front_store_qty !== undefined && item.front_store_qty !== null) return Number(item.front_store_qty)
+    if (item.total_qty !== undefined && item.total_qty !== null) return Number(item.total_qty)
+    return 0
+}
+
 // Allow parent to programmatically focus the search bar
 defineExpose({ focus: refocusSearch })
 </script>
@@ -100,6 +117,7 @@ defineExpose({ focus: refocusSearch })
                 ref="searchInput"
                 v-model="query"
                 @input="onInput"
+                @blur="onBlur"
                 @keydown.enter="onEnter"
                 @keydown.escape="results = []; query = ''"
                 type="text"
@@ -139,13 +157,13 @@ defineExpose({ focus: refocusSearch })
                     </p>
                     <div class="flex items-center gap-1 justify-end mt-1">
                         <span
-                            v-if="item.qty <= (settings.out_of_stock ?? 25)"
-                            class="text-[10px] bg-red-500/20 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded"
-                        >Low Stock {{ item.qty }}</span>
+                            v-if="getItemQty(item) <= (settings.out_of_stock ?? 25)"
+                            class="text-[10px] bg-red-500/20 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded font-semibold"
+                        >Low Stock: {{ getItemQty(item) }}</span>
                         <span
                             v-else
-                            class="text-[10px] text-slate-400 dark:text-slate-500"
-                        >Qty: {{ item.qty }}</span>
+                            class="text-[10px] text-slate-500 dark:text-slate-400 font-medium"
+                        >Qty: {{ getItemQty(item) }}</span>
                         <span v-if="isExpired(item)"  class="text-[10px] bg-red-500 text-white px-1.5 py-0.5 rounded">EXPIRED</span>
                         <span v-else-if="isExpiringSoon(item)" class="text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded">Exp Soon</span>
                     </div>
