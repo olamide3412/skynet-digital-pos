@@ -62,22 +62,30 @@ function doFilter() {
 
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
             <!-- Summary -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Total Transactions</p>
-                    <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ summary.total_sales }}</p>
+            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Total Sales</p>
+                    <p class="text-xl font-bold text-slate-900 dark:text-white font-mono">{{ summary.total_sales }}</p>
                 </div>
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
                     <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Total Revenue</p>
-                    <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{{ format(summary.total_revenue) }}</p>
+                    <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{{ format(summary.total_revenue) }}</p>
                 </div>
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
                     <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Discounts Given</p>
-                    <p class="text-2xl font-bold text-red-600 dark:text-red-400 font-mono">{{ format(summary.total_discount) }}</p>
+                    <p class="text-xl font-bold text-amber-600 dark:text-amber-400 font-mono">{{ format(summary.total_discount) }}</p>
                 </div>
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs">
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
                     <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Gross Profit</p>
-                    <p class="text-2xl font-bold text-blue-600 dark:text-blue-400 font-mono">{{ format(summary.total_profit) }}</p>
+                    <p class="text-xl font-bold text-blue-600 dark:text-blue-400 font-mono">{{ format(summary.total_profit) }}</p>
+                </div>
+                <div class="bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-800/40 rounded-xl p-4 shadow-xs">
+                    <p class="text-xs text-purple-700 dark:text-purple-400 font-semibold mb-1">Returned Items</p>
+                    <p class="text-xl font-bold text-purple-600 dark:text-purple-400 font-mono">{{ summary.total_return_qty || 0 }} <span class="text-xs font-normal">({{ summary.total_return_count || 0 }} recs)</span></p>
+                </div>
+                <div class="bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800/40 rounded-xl p-4 shadow-xs">
+                    <p class="text-xs text-red-700 dark:text-red-400 font-semibold mb-1">Return Refund Worth</p>
+                    <p class="text-xl font-bold text-red-600 dark:text-red-400 font-mono">{{ format(summary.total_return_worth || 0) }}</p>
                 </div>
             </div>
 

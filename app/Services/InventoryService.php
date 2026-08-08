@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 class InventoryService
 {
     /**
-     * Restock an item into back_store (from purchase receipt) and log.
+     * Restock an item into back_store or front_store and log inventory transaction.
      */
     public static function restock(
         int $itemId,
@@ -19,9 +19,10 @@ class InventoryService
         string $ref,
         User $user,
         string $type = 'purchase',
-        string $location = 'back_store'
+        string $location = 'back_store',
+        ?string $notes = null
     ): void {
-        DB::transaction(function () use ($itemId, $qty, $ref, $user, $type, $location) {
+        DB::transaction(function () use ($itemId, $qty, $ref, $user, $type, $location, $notes) {
             $item = Item::lockForUpdate()->findOrFail($itemId);
             $col  = $location === 'back_store' ? 'back_store_qty' : 'front_store_qty';
 
@@ -39,7 +40,7 @@ class InventoryService
                 'new_qty'          => $newQty,
                 'location'         => $location,
                 'reference_id'     => $ref,
-                'notes'            => "Restocked via {$type} into {$location}",
+                'notes'            => $notes ?? "Restocked via {$type} into {$location}",
                 'user_id'          => $user->id,
             ]);
         });
@@ -113,14 +114,6 @@ class InventoryService
 
     /**
      * Transfer stock between back_store and front_store for the given item.
-     *
-     * @param Item   $item
-     * @param int    $qtyBaseUnits  Quantity in base units (already converted)
-     * @param string $from          'back_store'|'front_store'
-     * @param string $to            'back_store'|'front_store'
-     * @param User   $user
-     * @param string $unitUsed      Original unit entered by user (for display)
-     * @param string|null $notes
      */
     public static function transferStock(
         Item $item,

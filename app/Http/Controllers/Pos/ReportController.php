@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Sale;
 use App\Models\Item;
 use App\Models\SaleOrder;
+use App\Models\SaleReturnItem;
 use App\Models\PosCustomer;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -15,9 +16,150 @@ use Carbon\Carbon;
 
 class ReportController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return Inertia::render('Reports/Index');
+        $branch = current_branch();
+
+        // 1. Sales & Profit trend over the last 7 days
+        $sevenDaysAgo = Carbon::today()->subDays(6)->startOfDay();
+        $todayEnd     = Carbon::today()->endOfDay();
+
+        $dailyTrend = Sale::where('branch_id', $branch->id)
+            ->whereBetween('created_at', [$sevenDaysAgo, $todayEnd])
+            ->select(
+                DB::raw('DATE(created_at) as date'),
+                DB::raw('SUM(final_total) as revenue'),
+                DB::raw('SUM(profit_made) as profit'),
+                DB::raw('COUNT(id) as count')
+            )
+            ->groupBy(DB::raw('DATE(created_at)'))
+            ->orderBy('date', 'asc')
+            ->get();
+
+        $salesTrend = [];
+        for ($i = 6; $i >= 0; $i--) {
+            $d = Carbon::today()->subDays($i)->format('Y-m-d');
+            $match = $dailyTrend->firstWhere('date', $d);
+            $salesTrend[] = [
+                'day'     => Carbon::parse($d)->format('D, M j'),
+                'revenue' => (float) ($match->revenue ?? 0),
+                'profit'  => (float) ($match->profit ?? 0),
+                'count'   => (int) ($match->count ?? 0),
+            ];
+        }
+
+        // 2. Payment Method Breakdown (This month)
+        $monthStart = Carbon::now()->startOfMonth();
+        $monthEnd   = Carbon::now()->endOfMonth();
+
+        $monthSales = Sale::where('branch_id', $branch->id)
+            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->get(['cash', 'bank_transfer', 'is_debt', 'final_total']);
+
+        $cashSum = (float) $monthSales->sum('cash');
+        $bankSum = (float) $monthSales->sum('bank_transfer');
+        $debtSum = (float) $monthSales->where('is_debt', true)->sum('final_total');
+
+        $paymentDistribution = [
+            'Cash'          => $cashSum,
+            'Bank Transfer' => $bankSum,
+            'Customer Debt' => $debtSum,
+        ];
+
+        // 3. Top 5 Best Selling Items (This month)
+        $topItems = SaleOrder::with('item')
+            ->whereHas('sale', function ($q) use ($branch, $monthStart, $monthEnd) {
+                $q->where('branch_id', $branch->id)
+                  ->whereBetween('created_at', [$monthStart, $monthEnd]);
+            })
+            ->select('item_id', 'item_name', DB::raw('SUM(qty) as total_qty'), DB::raw('SUM(total_selling_price) as total_revenue'))
+            ->groupBy('item_id', 'item_name')
+            ->orderBy('total_revenue', 'desc')
+            ->take(5)
+            ->get();
+
+        // 4. Returns summary (This month)
+        $monthReturns = SaleReturnItem::whereHas('item', fn ($q) => $q->where('branch_id', $branch->id))
+            ->whereBetween('created_at', [$monthStart, $monthEnd])
+            ->get(['qty', 'refund_amount']);
+
+        $returnsSummary = [
+            'count'        => $monthReturns->count(),
+            'total_qty'    => (int) $monthReturns->sum('qty'),
+            'refund_worth' => (float) $monthReturns->sum('refund_amount'),
+        ];
+
+        // 5. Key Monthly Stats
+        $monthlyStats = [
+            'monthly_revenue'  => (float) $monthSales->sum('final_total'),
+            'monthly_profit'   => (float) Sale::where('branch_id', $branch->id)->whereBetween('created_at', [$monthStart, $monthEnd])->sum('profit_made'),
+            'monthly_discount' => (float) Sale::where('branch_id', $branch->id)->whereBetween('created_at', [$monthStart, $monthEnd])->sum('discount_amount'),
+            'outstanding_debt' => (float) PosCustomer::where('debt_bal', '>', 0)->sum('debt_bal'),
+        ];
+
+        return Inertia::render('Reports/Index', [
+            'salesTrend'          => $salesTrend,
+            'paymentDistribution' => $paymentDistribution,
+            'topItems'            => $topItems,
+            'returnsSummary'      => $returnsSummary,
+            'monthlyStats'        => $monthlyStats,
+        ]);
+    }
+
+    public function returns(Request $request)
+    {
+        $branch    = current_branch();
+        $canSeeAll = \App\Services\RoleService::canViewAllReports();
+
+        $startDate = $request->start_date ? Carbon::parse($request->start_date)->startOfDay() : Carbon::today()->startOfDay();
+        $endDate   = $request->end_date   ? Carbon::parse($request->end_date)->endOfDay()     : Carbon::today()->endOfDay();
+
+        $selectedUserId = $canSeeAll ? ($request->user_id ?: null) : auth()->id();
+
+        $baseQuery = SaleReturnItem::with(['sale', 'item', 'user'])
+            ->whereHas('item', fn ($q) => $q->where('branch_id', $branch->id))
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId));
+
+        $allItems = (clone $baseQuery)->get();
+
+        $totalBaseUnits = 0;
+        foreach ($allItems as $rItem) {
+            $u = strtolower($rItem->unit_used ?? 'unit');
+            if ($rItem->item) {
+                $totalBaseUnits += $rItem->item->toBaseUnits((int) $rItem->qty, $u);
+            } else {
+                $totalBaseUnits += (int) $rItem->qty;
+            }
+        }
+
+        $summary = [
+            'total_returns'      => $allItems->count(),
+            'total_items_qty'    => (int) $allItems->sum('qty'),
+            'total_base_units'   => $totalBaseUnits,
+            'total_refund_worth' => (float) $allItems->sum('refund_amount'),
+        ];
+
+        $returns = (clone $baseQuery)
+            ->orderBy('created_at', 'desc')
+            ->paginate(25)
+            ->withQueryString();
+
+        $users = $canSeeAll
+            ? User::where('branch_id', $branch->id)->get(['id', 'name', 'full_name', 'username'])
+            : [];
+
+        return Inertia::render('Reports/Returns', [
+            'returns'   => $returns,
+            'summary'   => $summary,
+            'users'     => $users,
+            'canSeeAll' => $canSeeAll,
+            'filters'   => [
+                'start_date' => $startDate->format('Y-m-d'),
+                'end_date'   => $endDate->format('Y-m-d'),
+                'user_id'    => $selectedUserId ?? '',
+            ]
+        ]);
     }
 
     public function dailySales(Request $request)
@@ -36,12 +178,20 @@ class ReportController extends Controller
             ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
             ->get(['final_total', 'discount_amount', 'profit_made']);
 
+        $allReturns = SaleReturnItem::whereHas('item', fn ($q) => $q->where('branch_id', $branch->id))
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
+            ->get(['qty', 'refund_amount']);
+
         $summary = [
-            'total_sales'    => $allSales->count(),
-            'total_revenue'  => (float) $allSales->sum('final_total'),
-            'total_discount' => (float) $allSales->sum('discount_amount'),
-            'total_profit'   => (float) $allSales->sum('profit_made'),
-            'total_tax'      => 0,
+            'total_sales'        => $allSales->count(),
+            'total_revenue'      => (float) $allSales->sum('final_total'),
+            'total_discount'     => (float) $allSales->sum('discount_amount'),
+            'total_profit'       => (float) $allSales->sum('profit_made'),
+            'total_tax'          => 0,
+            'total_return_count' => $allReturns->count(),
+            'total_return_qty'   => (int) $allReturns->sum('qty'),
+            'total_return_worth' => (float) $allReturns->sum('refund_amount'),
         ];
 
         // Paginated rows (25 per page)
@@ -194,14 +344,22 @@ class ReportController extends Controller
             ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
             ->sum('amount');
 
+        $allReturnsToday = SaleReturnItem::whereHas('item', fn ($q) => $q->where('branch_id', $branch->id))
+            ->whereBetween('created_at', [$startDate, $endDate])
+            ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
+            ->get(['qty', 'refund_amount']);
+
         $summary = [
-            'total_sales'    => $allSalesToday->count(),
-            'total_revenue'  => (float) $allSalesToday->sum('final_total'),
-            'total_discount' => (float) $allSalesToday->sum('discount_amount'),
-            'cash_collected' => (float) $allSalesToday->sum('cash'),
-            'bank_collected' => (float) $allSalesToday->sum('bank_transfer'),
-            'debt_recorded'  => (float) $allSalesToday->where('is_debt', true)->sum('final_total'),
-            'debt_recovered' => (float) $debtRecovered,
+            'total_sales'        => $allSalesToday->count(),
+            'total_revenue'      => (float) $allSalesToday->sum('final_total'),
+            'total_discount'     => (float) $allSalesToday->sum('discount_amount'),
+            'cash_collected'     => (float) $allSalesToday->sum('cash'),
+            'bank_collected'     => (float) $allSalesToday->sum('bank_transfer'),
+            'debt_recorded'      => (float) $allSalesToday->where('is_debt', true)->sum('final_total'),
+            'debt_recovered'     => (float) $debtRecovered,
+            'total_return_count' => $allReturnsToday->count(),
+            'total_return_qty'   => (int) $allReturnsToday->sum('qty'),
+            'total_return_worth' => (float) $allReturnsToday->sum('refund_amount'),
         ];
 
         // Item level sales breakdown for selected user / all users today

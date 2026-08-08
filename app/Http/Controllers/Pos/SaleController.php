@@ -108,4 +108,29 @@ class SaleController extends Controller
         return redirect()->route('pos.sales.index')
             ->with('success', "Sale #{$sale->receipt_id} deleted.");
     }
+
+    public function searchReceipt(Request $request)
+    {
+        $branch = current_branch();
+        $query  = trim($request->get('query', ''));
+
+        if (!$query) {
+            return response()->json(['message' => 'Please enter a receipt number.'], 422);
+        }
+
+        $sale = Sale::where('branch_id', $branch->id)
+            ->where(function ($q) use ($query) {
+                $q->where('receipt_id', $query)
+                  ->orWhere('receipt_id', 'like', '%' . $query)
+                  ->orWhere('id', $query);
+            })
+            ->with(['saleOrders.item', 'customer', 'user'])
+            ->first();
+
+        if (!$sale) {
+            return response()->json(['message' => 'Sale not found for receipt: ' . $query], 404);
+        }
+
+        return response()->json($sale);
+    }
 }

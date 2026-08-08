@@ -116,9 +116,12 @@ class Item extends Model
      */
     public function toBaseUnits(int $qty, string $unit = 'unit'): int
     {
+        $unitsPerPack   = max(1, (int) ($this->units_per_pack ?: 1));
+        $packsPerCarton = max(1, (int) ($this->packs_per_carton ?: 1));
+
         return match (strtolower($unit)) {
-            'carton' => $qty * $this->packs_per_carton * $this->units_per_pack,
-            'pack'   => $qty * $this->units_per_pack,
+            'carton' => $qty * $packsPerCarton * $unitsPerPack,
+            'pack'   => $qty * $unitsPerPack,
             default  => $qty,
         };
     }

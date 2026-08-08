@@ -135,6 +135,8 @@ Route::prefix('{branch}')
             ->middleware('pos.role:canAccessPos');
 
         // Sales
+        Route::get('/sales/search-receipt', [SaleController::class, 'searchReceipt'])->name('sales.search-receipt')
+            ->middleware('pos.role:canViewSales');
         Route::get('/sales',           [SaleController::class, 'index'])->name('sales.index')
             ->middleware('pos.role:canViewSales');
         Route::post('/sales',          [SaleController::class, 'store'])->name('sales.store')
@@ -212,6 +214,7 @@ Route::prefix('{branch}')
             ->group(function () {
                 Route::get('/',             [\App\Http\Controllers\Pos\ReportController::class, 'index'])->name('index');
                 Route::get('/daily-sales',  [\App\Http\Controllers\Pos\ReportController::class, 'dailySales'])->name('daily-sales');
+                Route::get('/returns',      [\App\Http\Controllers\Pos\ReportController::class, 'returns'])->name('returns');
                 Route::get('/profit-loss',  [\App\Http\Controllers\Pos\ReportController::class, 'profitLoss'])->name('profit-loss')
                     ->middleware('pos.role:canViewProfitLoss');
                 Route::get('/low-stock',    [\App\Http\Controllers\Pos\ReportController::class, 'lowStock'])->name('low-stock');

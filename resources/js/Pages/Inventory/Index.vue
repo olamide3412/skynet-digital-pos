@@ -16,6 +16,28 @@ const type = ref(props.filters?.type ?? '')
 function doFilter() {
     router.get(route('pos.inventory.index'), { type: type.value }, { preserveState: true, replace: true })
 }
+
+function isDeduction(log) {
+    if (!log) return false
+    if (log.previous_qty !== null && log.previous_qty !== undefined &&
+        log.new_qty !== null && log.new_qty !== undefined &&
+        Number(log.new_qty) < Number(log.previous_qty)) {
+        return true
+    }
+    if (Number(log.qty) < 0) {
+        return true
+    }
+    const t = String(log.type || log.transaction_type || log.notes || '').toLowerCase()
+    if (t.includes('deduct') || t.includes('subtr') || t.includes('sale') || t.includes('damage') || t.includes('loss') || t.includes('transfer out')) {
+        return true
+    }
+    return false
+}
+
+function formatQty(log) {
+    const absQty = Math.abs(Number(log.qty || 0))
+    return isDeduction(log) ? `-${absQty}` : `+${absQty}`
+}
 </script>
 
 <template>
@@ -61,11 +83,11 @@ function doFilter() {
                             <td class="px-4 py-3 text-slate-900 dark:text-white font-medium">{{ log.item?.item_name ?? '#'+log.item_id }}</td>
                             <td class="px-4 py-3">
                                 <span class="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-slate-100 dark:bg-slate-600/50 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                                    {{ log.type }}
+                                    {{ log.type || log.transaction_type }}
                                 </span>
                             </td>
-                            <td class="px-4 py-3 text-right font-mono font-bold" :class="log.qty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'">
-                                {{ log.qty > 0 ? '+' : '' }}{{ log.qty }}
+                            <td class="px-4 py-3 text-right font-mono font-bold" :class="isDeduction(log) ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'">
+                                {{ formatQty(log) }}
                             </td>
                             <td class="px-4 py-3 text-slate-600 dark:text-slate-400 text-xs">
                                 {{ log.notes }} 

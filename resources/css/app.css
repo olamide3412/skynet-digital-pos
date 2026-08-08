@@ -160,5 +160,17 @@ input[type="password"]::-ms-clear {
   display: none; /* Safari and Chrome */
 }
 
+/* Completely remove browser default up/down spin arrows on number inputs */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none !important;
+    margin: 0 !important;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield !important;
+    appearance: textfield !important;
+}
+
 
 

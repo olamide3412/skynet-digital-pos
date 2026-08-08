@@ -73,7 +73,7 @@ function fmtTime(val) {
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
 
             <!-- ── Summary Cards ─────────────────────────────────────────────── -->
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
                 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
                     <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Transactions</p>
                     <p class="text-xl font-bold text-slate-900 dark:text-white font-mono">{{ summary.total_sales }}</p>
@@ -94,14 +94,18 @@ function fmtTime(val) {
                     <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Debt Recorded</p>
                     <p class="text-xl font-bold text-red-600 dark:text-red-400 font-mono">{{ format(summary.debt_recorded) }}</p>
                 </div>
-                <div class="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/40 rounded-xl p-4 col-span-1 shadow-xs">
+                <div class="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/40 rounded-xl p-4 shadow-xs">
                     <p class="text-xs text-emerald-700 dark:text-emerald-400 mb-1 font-semibold">Debt Recovered</p>
                     <p class="text-xl font-bold text-emerald-600 dark:text-emerald-300 font-mono">{{ format(summary.debt_recovered) }}</p>
                     <p class="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5 font-medium">{{ debtPayments.total ?? 0 }} payment{{ (debtPayments.total ?? 0) !== 1 ? 's' : '' }}</p>
                 </div>
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Discounts Given</p>
-                    <p class="text-xl font-bold text-amber-600 dark:text-amber-400 font-mono">-{{ format(summary.total_discount) }}</p>
+                <div class="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700/40 rounded-xl p-4 shadow-xs">
+                    <p class="text-xs text-purple-700 dark:text-purple-400 mb-1 font-semibold">Returned Items</p>
+                    <p class="text-xl font-bold text-purple-600 dark:text-purple-300 font-mono">{{ summary.total_return_qty || 0 }}</p>
+                </div>
+                <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/40 rounded-xl p-4 shadow-xs">
+                    <p class="text-xs text-red-700 dark:text-red-400 mb-1 font-semibold">Return Worth</p>
+                    <p class="text-xl font-bold text-red-600 dark:text-red-400 font-mono">{{ format(summary.total_return_worth || 0) }}</p>
                 </div>
             </div>
 

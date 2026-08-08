@@ -25,6 +25,7 @@
         "@inertiajs/vue3": "^2.1.2",
         "@vueup/vue-quill": "^1.2.0",
         "aos": "^3.0.0-beta.6",
+        "chart.js": "^4.5.1",
         "dayjs": "^1.11.13",
         "html2pdf.js": "^0.14.0",
         "jsbarcode": "^3.12.3",

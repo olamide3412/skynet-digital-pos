@@ -13,15 +13,16 @@ class SaleReturnController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'sale_id' => 'required|integer|exists:sales,id',
-            'items'   => 'required|array|min:1',
-            'items.*.item_id' => 'required|integer|exists:items,id',
-            'items.*.qty'     => 'required|integer|min:1',
-            'items.*.reason'  => 'nullable|string|max:255',
+            'sale_id'           => 'nullable|integer|exists:sales,id',
+            'items'             => 'required|array|min:1',
+            'items.*.item_id'   => 'required|integer|exists:items,id',
+            'items.*.qty'       => 'required|integer|min:1',
+            'items.*.unit_used' => 'nullable|string',
+            'items.*.reason'    => 'nullable|string|max:255',
         ]);
 
         try {
-            ReturnService::process($data['sale_id'], $data['items'], Auth::user());
+            ReturnService::process($data['sale_id'] ?? null, $data['items'], Auth::user());
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json(['message' => 'Return processed and inventory restocked.']);
             }

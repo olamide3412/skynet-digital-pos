@@ -87,11 +87,10 @@ class SaleService
         }
 
         // Calculate totals & tax
-        $amountCost      = 0;
-        $finalTotal      = 0;
-        $profitMade      = 0;
-        $discountAmount  = (float) ($data['discount_amount'] ?? 0);
-        $consultFee      = (float) ($data['consultation_fee'] ?? 0);
+        $amountCost     = 0;
+        $totalCost      = 0;
+        $discountAmount = (float) ($data['discount_amount'] ?? 0);
+        $consultFee     = (float) ($data['consultation_fee'] ?? 0);
 
         foreach ($cartItems as $cartItem) {
             $item     = $itemsMap->get($cartItem['item_id']);
@@ -104,8 +103,10 @@ class SaleService
             $lineTotal   = $price * $qty;
             $lineCost    = $buyPrice * $baseQty;
             $amountCost += $lineTotal;
-            $profitMade += ($lineTotal - $lineCost);
+            $totalCost  += $lineCost;
         }
+
+        $profitMade = ($amountCost + $consultFee - $discountAmount) - $totalCost;
 
         // Tax calculation on post-discount subtotal
         $taxAmount     = 0;

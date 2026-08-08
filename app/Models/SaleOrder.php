@@ -11,7 +11,7 @@ class SaleOrder extends Model
 
     protected $fillable = [
         'sale_id', 'item_id', 'item_name', 'selling_price',
-        'total_selling_price', 'qty', 'purchase_type', 'user_id', 'sort_date',
+        'total_selling_price', 'qty', 'unit_used', 'purchase_type', 'user_id', 'sort_date',
     ];
 
     protected function casts(): array

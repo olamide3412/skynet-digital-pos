@@ -29,6 +29,14 @@ const props = defineProps({
     now:              String,
 })
 
+const page = usePage()
+const canProcessReturn = computed(() => {
+    const user = page.props.auth?.user
+    if (!user) return false
+    if (user.role === 'branch-admin' || user.role === 'superadmin' || user.is_branch_admin) return true
+    return Boolean(page.props.pos_permissions?.canProcessReturn)
+})
+
 const { format } = useCurrency()
 const cart          = useCartStore()
 const settStore     = usePosSettingsStore()
@@ -149,6 +157,7 @@ const viewMode = ref(props.settings?.sell_interface ?? 'classic')
                         @click="showHeld = true"
                     >Held ({{ heldSales.length }})</button>
                     <button
+                        v-if="canProcessReturn"
                         title="Process Return"
                         class="px-3 py-1 rounded bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-800 dark:text-white text-xs font-medium transition"
                         @click="showReturn = true"

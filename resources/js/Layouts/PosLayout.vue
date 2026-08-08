@@ -75,11 +75,12 @@ const allNavLinks = [
         icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
         perm: 'canViewReports',
         children: [
-            { label: 'Dashboard',     route: 'pos.reports.index',        match: 'Reports/Index' },
-            { label: 'Sales Report',  route: 'pos.reports.daily-sales',  match: 'Reports/DailySales' },
-            { label: 'Profit & Loss', route: 'pos.reports.profit-loss',  match: 'Reports/ProfitLoss', perm: 'canViewProfitLoss' },
-            { label: 'Low Stock',     route: 'pos.reports.low-stock',    match: 'Reports/LowStock' },
-            { label: 'Customer Debt', route: 'pos.reports.customer-debt',match: 'Reports/CustomerDebt', perm: 'canManageDebt' },
+            { label: 'Dashboard',      route: 'pos.reports.index',        match: 'Reports/Index' },
+            { label: 'Sales Report',   route: 'pos.reports.daily-sales',  match: 'Reports/DailySales' },
+            { label: 'Returned Items', route: 'pos.reports.returns',      match: 'Reports/Returns' },
+            { label: 'Profit & Loss',  route: 'pos.reports.profit-loss',  match: 'Reports/ProfitLoss', perm: 'canViewProfitLoss' },
+            { label: 'Low Stock',      route: 'pos.reports.low-stock',    match: 'Reports/LowStock' },
+            { label: 'Customer Debt',  route: 'pos.reports.customer-debt',match: 'Reports/CustomerDebt', perm: 'canManageDebt' },
         ],
     },
     {
