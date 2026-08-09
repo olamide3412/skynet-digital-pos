@@ -77,10 +77,11 @@ class SaleController extends Controller
             return back()->withErrors(['sale' => $e->getMessage()]);
         } catch (\Throwable $e) {
             report($e);
+            $msg = config('app.debug') ? $e->getMessage() : 'Sale processing failed. Please try again.';
             if ($request->wantsJson() || $request->ajax()) {
-                return response()->json(['message' => 'Sale processing failed. Please try again.'], 500);
+                return response()->json(['message' => $msg], 500);
             }
-            return back()->withErrors(['sale' => 'Sale processing failed. Please try again.']);
+            return back()->withErrors(['sale' => $msg]);
         }
     }
 

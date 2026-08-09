@@ -16,28 +16,33 @@ class SaleService
 {
     /**
      * Generate a unique receipt ID: RC + YYYYMMDD + 4-digit sequence.
+     * Note: receipt_id has a global unique index in database, so sequence
+     * must be evaluated globally across all branches with collision checks.
      */
     public static function generateReceiptId(): string
     {
-        $branch = current_branch();
-        $date = now()->format('Ymd');
+        $date   = now()->format('Ymd');
         $prefix = 'RC' . $date;
 
-        $query = Sale::where('receipt_id', 'like', $prefix . '%');
-        if ($branch) {
-            $query->where('branch_id', $branch->id);
-        }
-
-        $lastSale = $query
-            ->orderByDesc('receipt_id')
+        $lastSale = Sale::where('receipt_id', 'like', $prefix . '%')
+            ->orderByDesc('id')
             ->lockForUpdate()
             ->first();
 
-        $sequence = $lastSale
-            ? ((int) substr($lastSale->receipt_id, -4)) + 1
-            : 1;
+        $sequence = 1;
+        if ($lastSale && preg_match('/(\d+)$/', $lastSale->receipt_id, $matches)) {
+            $sequence = ((int) $matches[1]) + 1;
+        }
 
-        return $prefix . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+        do {
+            $candidate = $prefix . str_pad($sequence, 4, '0', STR_PAD_LEFT);
+            $exists    = Sale::where('receipt_id', $candidate)->exists();
+            if ($exists) {
+                $sequence++;
+            }
+        } while ($exists);
+
+        return $candidate;
     }
 
     /**
