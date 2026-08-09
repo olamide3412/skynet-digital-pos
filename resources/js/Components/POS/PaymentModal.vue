@@ -53,6 +53,7 @@ function isValid() {
 }
 
 async function submitSale() {
+    if (isSubmitting.value) return
     if (!isValid()) {
         errors.value = { sale: 'Amount paid must be greater than or equal to the total amount due.' }
         return
@@ -70,10 +71,12 @@ async function submitSale() {
     }
 
     try {
-        const res = await axios.post(route('pos.sales.store'), payload)
+        const res = await axios.post(route('pos.sales.store'), payload, { timeout: 15000 })
         emit('completed', res.data?.sale ?? { receipt_id: res.data?.receipt_id, ...payload })
     } catch (err) {
-        if (err.response?.status === 422) {
+        if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+            errors.value = { sale: 'Connection timed out. Please check network connection and try again.' }
+        } else if (err.response?.status === 422) {
             const resErrors = err.response.data?.errors
             if (resErrors && typeof resErrors === 'object' && Object.keys(resErrors).length > 0) {
                 const firstKey = Object.keys(resErrors)[0]

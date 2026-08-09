@@ -49,28 +49,26 @@ class InventoryService
     /**
      * Deduct qty from front_store (from sale) and log.
      */
-    public static function deduct(int $itemId, int $qty, string $ref, User $user): void
+    public static function deduct(int|Item $item, int $qty, string $ref, User $user): void
     {
-        DB::transaction(function () use ($itemId, $qty, $ref, $user) {
-            $item = Item::lockForUpdate()->findOrFail($itemId);
-            $previousQty = $item->front_store_qty;
-            $newQty      = max(0, $previousQty - $qty);
+        $itemModel   = $item instanceof Item ? $item : Item::lockForUpdate()->findOrFail($item);
+        $previousQty = $itemModel->front_store_qty;
+        $newQty      = max(0, $previousQty - $qty);
 
-            $item->decrement('front_store_qty', $qty);
+        $itemModel->decrement('front_store_qty', $qty);
 
-            InventoryTransaction::create([
-                'branch_id'        => $item->branch_id,
-                'item_id'          => $itemId,
-                'transaction_type' => 'sale',
-                'qty'              => $qty,
-                'previous_qty'     => $previousQty,
-                'new_qty'          => $newQty,
-                'location'         => 'front_store',
-                'reference_id'     => $ref,
-                'notes'            => 'Deducted via sale',
-                'user_id'          => $user->id,
-            ]);
-        });
+        InventoryTransaction::create([
+            'branch_id'        => $itemModel->branch_id,
+            'item_id'          => $itemModel->id,
+            'transaction_type' => 'sale',
+            'qty'              => $qty,
+            'previous_qty'     => $previousQty,
+            'new_qty'          => $newQty,
+            'location'         => 'front_store',
+            'reference_id'     => $ref,
+            'notes'            => 'Deducted via sale',
+            'user_id'          => $user->id,
+        ]);
     }
 
     /**

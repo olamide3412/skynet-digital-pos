@@ -16,23 +16,14 @@ class SaleService
 {
     /**
      * Generate a unique receipt ID: RC + YYYYMMDD + 4-digit sequence.
-     * Note: receipt_id has a global unique index in database, so sequence
-     * must be evaluated globally across all branches with collision checks.
+     * Lock-free and collision-safe.
      */
     public static function generateReceiptId(): string
     {
-        $date   = now()->format('Ymd');
-        $prefix = 'RC' . $date;
-
-        $lastSale = Sale::where('receipt_id', 'like', $prefix . '%')
-            ->orderByDesc('id')
-            ->lockForUpdate()
-            ->first();
-
-        $sequence = 1;
-        if ($lastSale && preg_match('/(\d+)$/', $lastSale->receipt_id, $matches)) {
-            $sequence = ((int) $matches[1]) + 1;
-        }
+        $date     = now()->format('Ymd');
+        $prefix   = 'RC' . $date;
+        $maxId    = Sale::max('id') ?? 0;
+        $sequence = $maxId + 1;
 
         do {
             $candidate = $prefix . str_pad($sequence, 4, '0', STR_PAD_LEFT);
@@ -178,7 +169,7 @@ class SaleService
 
                 // Deduct stock in base units
                 if ($settings->is_qty_deduction) {
-                    InventoryService::deduct($item->id, $baseQty, $receiptId, $user);
+                    InventoryService::deduct($item, $baseQty, $receiptId, $user);
                 }
 
                 // Track most-sold items
