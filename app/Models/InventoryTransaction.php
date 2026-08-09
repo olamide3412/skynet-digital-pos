@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class InventoryTransaction extends Model
 {
     protected $fillable = [
-        'item_id', 'transaction_type', 'qty', 'previous_qty',
-        'new_qty', 'reference_id', 'notes', 'user_id',
+        'branch_id', 'item_id', 'transaction_type', 'qty', 'previous_qty',
+        'new_qty', 'location', 'reference_id', 'notes', 'user_id',
     ];
 
     protected function casts(): array

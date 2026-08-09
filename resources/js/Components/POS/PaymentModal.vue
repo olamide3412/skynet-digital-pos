@@ -74,7 +74,14 @@ async function submitSale() {
         emit('completed', res.data?.sale ?? { receipt_id: res.data?.receipt_id, ...payload })
     } catch (err) {
         if (err.response?.status === 422) {
-            errors.value = err.response.data.errors ?? { sale: err.response.data.message }
+            const resErrors = err.response.data?.errors
+            if (resErrors && typeof resErrors === 'object' && Object.keys(resErrors).length > 0) {
+                const firstKey = Object.keys(resErrors)[0]
+                const firstVal = Array.isArray(resErrors[firstKey]) ? resErrors[firstKey][0] : resErrors[firstKey]
+                errors.value = { sale: firstVal }
+            } else {
+                errors.value = { sale: err.response.data?.message || 'Validation failed.' }
+            }
         } else {
             errors.value = { sale: err.response?.data?.message || 'Sale processing failed. Please try again.' }
         }

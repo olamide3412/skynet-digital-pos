@@ -11,6 +11,19 @@ class StoreSaleRequest extends FormRequest
         return true;
     }
 
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('items') && is_array($this->items)) {
+            $items = $this->items;
+            foreach ($items as &$item) {
+                if (isset($item['unit_used'])) {
+                    $item['unit_used'] = strtolower($item['unit_used']);
+                }
+            }
+            $this->merge(['items' => $items]);
+        }
+    }
+
     public function rules(): array
     {
         return [

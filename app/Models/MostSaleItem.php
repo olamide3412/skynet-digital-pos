@@ -12,7 +12,7 @@ class MostSaleItem extends Model
     const UPDATED_AT = 'updated_at';
     const CREATED_AT = null;
 
-    protected $fillable = ['user_id', 'item_id', 'qty', 'date_created_at'];
+    protected $fillable = ['branch_id', 'user_id', 'item_id', 'qty', 'date_created_at'];
 
     protected function casts(): array
     {
