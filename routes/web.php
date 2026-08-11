@@ -207,6 +207,14 @@ Route::prefix('{branch}')
             Route::post('/transfers',   [StockTransferController::class, 'store'])
                 ->name('transfers.store')
                 ->middleware('pos.role:canTransferStock');
+
+            // Reorder Points & Replenishment
+            Route::get('/reorder-points', [\App\Http\Controllers\Pos\ReorderPointController::class, 'index'])
+                ->name('reorder-points')
+                ->middleware('pos.role:canViewReorderPoints');
+            Route::post('/reorder-points/{item}', [\App\Http\Controllers\Pos\ReorderPointController::class, 'update'])
+                ->name('reorder-points.update')
+                ->middleware('pos.role:canViewReorderPoints');
         });
 
         // Reports

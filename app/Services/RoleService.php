@@ -200,8 +200,16 @@ class RoleService
             'canGiveDebt'        => static::canGiveDebt(),
             'canManageItems'     => static::canManageItems(),
             'canManageCustomers' => static::canManageCustomers(),
+            'canViewReorderPoints' => static::canViewReorderPoints(),
             'isBranchAdmin'      => $user?->isBranchAdmin() ?? false,
             'isSuperAdmin'       => $user?->isSuperAdmin() ?? false,
         ];
+    }
+
+    public static function canViewReorderPoints(): bool
+    {
+        return static::can('canViewReorderPoints')
+            || static::canManageItems()
+            || static::canAdjustStock();
     }
 }

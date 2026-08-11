@@ -35,13 +35,23 @@ class PosRoleMiddleware
         }
 
         // Check Spatie permission (branch-scoped via team_id)
-        if (!$user->hasPermissionTo($ability)) {
-            if ($request->expectsJson()) {
-                return response()->json(['message' => 'Permission denied.'], 403);
+        try {
+            if ($user->hasPermissionTo($ability)) {
+                return $next($request);
             }
-            abort(403, 'You do not have permission to access this area.');
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            // Auto-create permission record if missing
+            \Spatie\Permission\Models\Permission::findOrCreate($ability, 'web');
         }
 
-        return $next($request);
+        // Fallback to RoleService definition check
+        if (method_exists(\App\Services\RoleService::class, $ability) && \App\Services\RoleService::$ability()) {
+            return $next($request);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => 'Permission denied.'], 403);
+        }
+        abort(403, 'You do not have permission to access this area.');
     }
 }

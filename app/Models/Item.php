@@ -15,12 +15,13 @@ class Item extends Model
         'pack_price', 'carton_price', 'pack_wholesale_price', 'carton_wholesale_price',
         'price_locked',
         'back_store_qty', 'front_store_qty',
+        'reorder_point', 'reorder_unit',
         'unit_label', 'pack_label', 'carton_label',
         'units_per_pack', 'packs_per_carton',
         'expiry_date', 'item_description', 'image_path',
     ];
 
-    protected $appends = ['image_url', 'total_qty'];
+    protected $appends = ['image_url', 'total_qty', 'needs_reorder', 'reorder_deficit_base_units'];
 
     protected function casts(): array
     {
@@ -37,6 +38,7 @@ class Item extends Model
             'expiry_date'            => 'date',
             'back_store_qty'         => 'integer',
             'front_store_qty'        => 'integer',
+            'reorder_point'          => 'integer',
             'units_per_pack'         => 'integer',
             'packs_per_carton'       => 'integer',
         ];
@@ -198,6 +200,27 @@ class Item extends Model
         return $this->expiry_date
             && $this->expiry_date->diffInDays(now()) <= $days
             && !$this->isExpired();
+    }
+
+    // ── Reorder Point Accessors ───────────────────────────────────────────────
+    public function getReorderPointBaseUnitsAttribute(): int
+    {
+        $point = (int) ($this->reorder_point ?? 10);
+        $unit  = strtolower($this->reorder_unit ?? 'unit');
+        return $this->toBaseUnits($point, $unit);
+    }
+
+    public function getNeedsReorderAttribute(): bool
+    {
+        $totalStockBase = (int) ($this->front_store_qty ?? 0) + (int) ($this->back_store_qty ?? 0);
+        return $totalStockBase <= $this->reorder_point_base_units;
+    }
+
+    public function getReorderDeficitBaseUnitsAttribute(): int
+    {
+        $totalStockBase = (int) ($this->front_store_qty ?? 0) + (int) ($this->back_store_qty ?? 0);
+        $targetBase     = $this->reorder_point_base_units;
+        return max(0, $targetBase - $totalStockBase);
     }
 
     public function isLowStock(int $threshold = null): bool

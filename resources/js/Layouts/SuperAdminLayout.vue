@@ -211,10 +211,6 @@ function toggleCollapse() {
                 <slot/>
             </div>
 
-            <!-- SuperAdmin Footer Attribution -->
-            <footer class="py-2.5 px-6 text-center text-xs text-slate-400 dark:text-slate-500 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex-shrink-0">
-                Developed by <a href="https://skynetdigitalltd.com" target="_blank" rel="noopener noreferrer" class="font-bold text-slate-600 dark:text-slate-200 hover:text-theme transition">Skynet Digital Limited.</a>
-            </footer>
         </main>
 
         <FlashMessages/>

@@ -24,6 +24,10 @@ const branchName = computed(() => {
     return props.branch?.name || page.props.current_branch?.name || page.props.store_settings?.company_name || 'Skynet Digital POS'
 })
 
+const branchSlug = computed(() => {
+    return props.branch?.slug || page.props.current_branch?.slug || route().params?.branch || 'felix-enterprise'
+})
+
 const systemCompanyName = computed(() => {
     return page.props.system_config?.company_name || page.props.store_settings?.company_name || 'Skynet Digital'
 })
@@ -109,7 +113,7 @@ const handleLogin = () => {
         return
     }
 
-    form.post(route('pos.login.submit'), {
+    form.post(route('pos.login.submit', { branch: branchSlug.value }), {
         onFinish: () => {
             form.reset('password')
             resetTurnstile()

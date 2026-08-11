@@ -58,6 +58,7 @@ const allNavLinks = [
         label: 'Inventory',
         icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2',
         children: [
+            { label: 'Reorder Points', route: 'pos.inventory.reorder-points', match: 'Inventory/ReorderPoints', perm: 'canViewReorderPoints' },
             { label: 'Inventory Logs', route: 'pos.inventory.index',           match: 'Inventory/Index',         perm: 'canAdjustStock' },
             { label: 'Adjust Stock',   route: 'pos.inventory.adjust',          match: 'Inventory/Adjust',        perm: 'canAdjustStock' },
             { label: 'Stock Transfer', route: 'pos.inventory.transfers.index', match: 'Inventory/StockTransfer', perm: 'canTransferStock' },
@@ -79,6 +80,7 @@ const allNavLinks = [
             { label: 'Sales Report',   route: 'pos.reports.daily-sales',  match: 'Reports/DailySales' },
             { label: 'Returned Items', route: 'pos.reports.returns',      match: 'Reports/Returns' },
             { label: 'Profit & Loss',  route: 'pos.reports.profit-loss',  match: 'Reports/ProfitLoss', perm: 'canViewProfitLoss' },
+            { label: 'Reorder Points', route: 'pos.inventory.reorder-points', match: 'Inventory/ReorderPoints', perm: 'canViewReorderPoints' },
             { label: 'Low Stock',      route: 'pos.reports.low-stock',    match: 'Reports/LowStock' },
             { label: 'Customer Debt',  route: 'pos.reports.customer-debt',match: 'Reports/CustomerDebt', perm: 'canManageDebt' },
         ],
