@@ -27,7 +27,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'resolve.branch' => \App\Http\Middleware\ResolveBranchMiddleware::class,
             'branch.scope'   => \App\Http\Middleware\BranchScopeMiddleware::class,
             'role'           => \Spatie\Permission\Middleware\RoleMiddleware::class,
-            'permission'     => \Spatie\Permission\Middleware\PermissionMiddleware::class,
+            'permission'     => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
         ]);
         $middleware->validateCsrfTokens(except:[

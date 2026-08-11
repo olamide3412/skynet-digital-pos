@@ -71,6 +71,7 @@ class SuperAdminAuthController extends Controller
 
             RateLimiter::clear($key);
             $request->session()->regenerate();
+            \App\Services\ActivityLogger::auth("Super Admin {$user->name} signed into SuperAdmin portal", null, null, $user->id);
             return redirect()->route('superadmin.dashboard');
         }
 
@@ -80,6 +81,10 @@ class SuperAdminAuthController extends Controller
 
     public function destroy(Request $request)
     {
+        $user = Auth::guard('web')->user();
+        if ($user) {
+            \App\Services\ActivityLogger::auth("Super Admin {$user->name} signed out of SuperAdmin portal", null, null, $user->id);
+        }
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();

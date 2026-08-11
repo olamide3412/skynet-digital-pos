@@ -106,7 +106,7 @@ onMounted(() => {
             <div class="flex items-center h-16 border-b border-gray-200 dark:border-gray-700 px-3 overflow-hidden">
                 <Link href="/" class="flex items-center gap-2 min-w-0">
                     <img :src="$page.props.store_settings.company_logo ? '/storage/' + $page.props.store_settings.company_logo : Logo" class="w-8 h-8 object-contain flex-shrink-0" alt="Logo"/>
-                    <span v-show="!isCollapsed" class="text-base font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap overflow-hidden transition-all duration-300">
+                    <span v-show="!isCollapsed" class="text-base font-bold text-theme whitespace-nowrap overflow-hidden transition-all duration-300">
                         {{ $page.props.store_settings.company_name || 'Skynet' }} Admin
                     </span>
                 </Link>
@@ -135,7 +135,7 @@ onMounted(() => {
                                 'flex w-full items-center rounded-lg font-medium transition-colors cursor-pointer',
                                 isCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3 gap-0',
                                 isActive(link)
-                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                    ? 'bg-theme-light text-theme-dark font-bold'
                                     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                             ]"
                         >
@@ -159,7 +159,7 @@ onMounted(() => {
                                 'flex w-full items-center rounded-lg font-medium transition-colors cursor-pointer',
                                 isCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3 gap-0',
                                 isActive(link)
-                                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                    ? 'bg-theme-light text-theme-dark font-bold'
                                     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                             ]"
                         >
@@ -179,7 +179,7 @@ onMounted(() => {
                                 :class="[
                                     'flex items-center px-3 py-2 text-sm rounded-lg transition-colors',
                                     isChildActive(child)
-                                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 font-bold'
+                                        ? 'bg-theme-light text-theme font-bold'
                                         : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white'
                                 ]"
                             >
@@ -196,7 +196,7 @@ onMounted(() => {
                                 :class="[
                                     'block px-4 py-2 text-sm transition-colors',
                                     isChildActive(child)
-                                        ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 font-bold'
+                                        ? 'bg-theme-light text-theme font-bold'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'
                                 ]"
                             >

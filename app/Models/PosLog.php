@@ -14,17 +14,32 @@ class PosLog extends Model
     const CREATED_AT = 'created_at';
     const UPDATED_AT = null;
 
-    protected $fillable = ['log', 'user_id'];
+    protected $fillable = [
+        'branch_id',
+        'log',
+        'action_type',
+        'user_id',
+        'ip_address',
+        'user_agent',
+        'details',
+        'created_at',
+    ];
 
     protected function casts(): array
     {
         return [
             'created_at' => 'datetime',
+            'details'    => 'array',
         ];
     }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 }

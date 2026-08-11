@@ -11,15 +11,48 @@
 @source '../**/*.js';
 
 @theme {
-    --color-primary: #7e22ce;        /* Purple 700 */
-    --color-primary-dark: #581c87;   /* Purple 900 */
-    --color-secondary-100: #fff7ed;  /* Orange 50 */
-    --color-secondary-200: #fdba74;  /* Orange 300 */
-    --color-secondary-300: #fb923c;  /* Orange 400 */
-    --color-secondary-400: #f97316;  /* Orange 500 */
-    --color-secondary-500: #ea580c;  /* Orange 600 */
-    --color-secondary-600: #c2410c;  /* Orange 700 */
-    --color-secondary-700: #9a3412;  /* Orange 800 */
+    --color-primary: var(--color-theme, #7B00FF);
+    --color-primary-dark: var(--color-theme-hover, #6200cc);
+
+    /* Global dynamic override for sky & blue color classes */
+    --color-sky-50: var(--color-theme-light, #f2e6ff);
+    --color-sky-100: var(--color-theme-light, #f2e6ff);
+    --color-sky-500: var(--color-theme, #7B00FF);
+    --color-sky-600: var(--color-theme, #7B00FF);
+    --color-blue-50: var(--color-theme-light, #f2e6ff);
+    --color-blue-100: var(--color-theme-light, #f2e6ff);
+    --color-blue-500: var(--color-theme, #7B00FF);
+    --color-blue-600: var(--color-theme, #7B00FF);
+    --color-blue-700: var(--color-theme-hover, #6200cc);
+    --color-blue-800: var(--color-theme-text, #5900b3);
+    --color-blue-900: var(--color-theme-text, #5900b3);
+
+    /* Global dynamic override for emerald color classes across POS and Admin screens */
+    --color-emerald-50: var(--color-theme-light, #f2e6ff);
+    --color-emerald-100: var(--color-theme-light, #f2e6ff);
+    --color-emerald-200: var(--color-theme-light, #f2e6ff);
+    --color-emerald-400: var(--color-theme, #7B00FF);
+    --color-emerald-500: var(--color-theme, #7B00FF);
+    --color-emerald-600: var(--color-theme, #7B00FF);
+    --color-emerald-700: var(--color-theme-hover, #6200cc);
+    --color-emerald-800: var(--color-theme-text, #5900b3);
+    --color-emerald-900: var(--color-theme-text, #5900b3);
+    --color-emerald-950: var(--color-theme-text, #5900b3);
+
+    /* Global dynamic override for indigo color classes */
+    --color-indigo-50: var(--color-theme-light, #f2e6ff);
+    --color-indigo-100: var(--color-theme-light, #f2e6ff);
+    --color-indigo-500: var(--color-theme, #7B00FF);
+    --color-indigo-600: var(--color-theme, #7B00FF);
+    --color-indigo-700: var(--color-theme-hover, #6200cc);
+
+    --color-secondary-100: #fff7ed;
+    --color-secondary-200: #fdba74;
+    --color-secondary-300: #fb923c;
+    --color-secondary-400: #f97316;
+    --color-secondary-500: var(--color-theme-secondary, #FBA43D);
+    --color-secondary-600: var(--color-theme-secondary-hover, #e08b26);
+    --color-secondary-700: var(--color-theme-secondary, #FBA43D);
     --color-table: #cfd1cd;
     --color-dark: #0a0a0a;
     --color-light: #fcfafa;
@@ -39,9 +72,148 @@
 
     --background-size-200: 200% 200%;
 }
+
+/* ── Dynamic System Color Themes (Primary & Secondary Dual Colors) ─────────────── */
+:root, html[data-theme="skynet"] {
+    --color-theme: #7b00ff;
+    --color-theme-hover: #6200cc;
+    --color-theme-light: #f2e6ff;
+    --color-theme-rgb: 123, 0, 255;
+    --color-theme-text: #5900b3;
+
+    --color-theme-secondary: #fba43d;
+    --color-theme-secondary-hover: #e08b26;
+    --color-theme-secondary-light: #fef5e7;
+    --color-theme-secondary-rgb: 251, 164, 61;
+}
+
+html[data-theme="emerald"] {
+    --color-theme: #10b981;
+    --color-theme-hover: #059669;
+    --color-theme-light: #d1fae5;
+    --color-theme-rgb: 16, 185, 129;
+    --color-theme-text: #047857;
+
+    --color-theme-secondary: #f59e0b;
+    --color-theme-secondary-hover: #d97706;
+    --color-theme-secondary-light: #fef3c7;
+    --color-theme-secondary-rgb: 245, 158, 11;
+}
+
+html[data-theme="blue"] {
+    --color-theme: #3b82f6;
+    --color-theme-hover: #2563eb;
+    --color-theme-light: #dbeafe;
+    --color-theme-rgb: 59, 130, 246;
+    --color-theme-text: #1d4ed8;
+
+    --color-theme-secondary: #f59e0b;
+    --color-theme-secondary-hover: #d97706;
+    --color-theme-secondary-light: #fef3c7;
+    --color-theme-secondary-rgb: 245, 158, 11;
+}
+
+html[data-theme="indigo"] {
+    --color-theme: #6366f1;
+    --color-theme-hover: #4f46e5;
+    --color-theme-light: #e0e7ff;
+    --color-theme-rgb: 99, 102, 241;
+    --color-theme-text: #4338ca;
+
+    --color-theme-secondary: #ec4899;
+    --color-theme-secondary-hover: #db2777;
+    --color-theme-secondary-light: #fce7f3;
+    --color-theme-secondary-rgb: 236, 72, 153;
+}
+
+html[data-theme="violet"] {
+    --color-theme: #8b5cf6;
+    --color-theme-hover: #7c3aed;
+    --color-theme-light: #ede9fe;
+    --color-theme-rgb: 139, 92, 246;
+    --color-theme-text: #6d28d9;
+
+    --color-theme-secondary: #f59e0b;
+    --color-theme-secondary-hover: #d97706;
+    --color-theme-secondary-light: #fef3c7;
+    --color-theme-secondary-rgb: 245, 158, 11;
+}
+
+html[data-theme="teal"] {
+    --color-theme: #14b8a6;
+    --color-theme-hover: #0d9488;
+    --color-theme-light: #ccfbf1;
+    --color-theme-rgb: 20, 184, 166;
+    --color-theme-text: #0f766e;
+
+    --color-theme-secondary: #f97316;
+    --color-theme-secondary-hover: #ea580c;
+    --color-theme-secondary-light: #ffedd5;
+    --color-theme-secondary-rgb: 249, 115, 22;
+}
+
+html[data-theme="cyan"] {
+    --color-theme: #06b6d4;
+    --color-theme-hover: #0891b2;
+    --color-theme-light: #cffafe;
+    --color-theme-rgb: 6, 182, 212;
+    --color-theme-text: #0e7490;
+
+    --color-theme-secondary: #f59e0b;
+    --color-theme-secondary-hover: #d97706;
+    --color-theme-secondary-light: #fef3c7;
+    --color-theme-secondary-rgb: 245, 158, 11;
+}
+
+html[data-theme="amber"] {
+    --color-theme: #f59e0b;
+    --color-theme-hover: #d97706;
+    --color-theme-light: #fef3c7;
+    --color-theme-rgb: 245, 158, 11;
+    --color-theme-text: #b45309;
+
+    --color-theme-secondary: #6366f1;
+    --color-theme-secondary-hover: #4f46e5;
+    --color-theme-secondary-light: #e0e7ff;
+    --color-theme-secondary-rgb: 99, 102, 241;
+}
+
+html[data-theme="rose"] {
+    --color-theme: #f43f5e;
+    --color-theme-hover: #e11d48;
+    --color-theme-light: #ffe4e6;
+    --color-theme-rgb: 244, 63, 94;
+    --color-theme-text: #be123c;
+
+    --color-theme-secondary: #3b82f6;
+    --color-theme-secondary-hover: #2563eb;
+    --color-theme-secondary-light: #dbeafe;
+    --color-theme-secondary-rgb: 59, 130, 246;
+}
+
+/* Primary Theme Helper Classes */
+.bg-theme { background-color: var(--color-theme) !important; }
+.bg-theme-hover:hover { background-color: var(--color-theme-hover) !important; }
+.bg-theme-light { background-color: var(--color-theme-light) !important; }
+
+.text-theme { color: var(--color-theme) !important; }
+.text-theme-hover:hover { color: var(--color-theme-hover) !important; }
+.text-theme-dark { color: var(--color-theme-text) !important; }
+
+.border-theme { border-color: var(--color-theme) !important; }
+.ring-theme:focus { border-color: var(--color-theme) !important; box-shadow: 0 0 0 3px rgba(var(--color-theme-rgb), 0.25) !important; }
+
+/* Secondary Theme Helper Classes */
+.bg-theme-secondary { background-color: var(--color-theme-secondary) !important; }
+.bg-theme-secondary-hover:hover { background-color: var(--color-theme-secondary-hover) !important; }
+.bg-theme-secondary-light { background-color: var(--color-theme-secondary-light) !important; }
+
+.text-theme-secondary { color: var(--color-theme-secondary) !important; }
+.border-theme-secondary { border-color: var(--color-theme-secondary) !important; }
+
 @layer utilities {
     .bg-primary {
-      background-color: var(--color-primary);
+      background-color: var(--color-theme);
     }
 
     .text-2xs {
@@ -60,13 +232,23 @@
 
 @layer components {
     .btn-primary {
-      @apply px-6 py-2 rounded-lg text-white bg-primary hover:bg-primary-dark disabled:bg-slate-400 disabled:cursor-wait;
+      background-color: var(--color-theme);
+      color: #ffffff;
+      @apply px-6 py-2 rounded-lg disabled:bg-slate-400 disabled:cursor-wait;
+    }
+    .btn-primary:hover {
+      background-color: var(--color-theme-hover);
     }
     .btn-primary-red {
         @apply px-6 py-2 rounded-lg text-white bg-red-500 hover:bg-red-700 disabled:bg-slate-400 disabled:cursor-wait;
     }
-    .rounded-element{
-        @apply rounded-lg px-2 py-1 text-sm text-white bg-secondary-500 hover:bg-secondary-700
+    .rounded-element {
+        background-color: var(--color-theme);
+        color: #ffffff;
+        @apply rounded-lg px-2 py-1 text-sm;
+    }
+    .rounded-element:hover {
+        background-color: var(--color-theme-hover);
     }
     input[type="text"],
     input[type="email"],
@@ -76,17 +258,26 @@
     input[type="number"],
     input[type="date"],
     input[type="url"], textarea {
-        @apply block w-full rounded-md border border-gray-300 px-4 py-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm bg-white dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:ring-gray-600 dark:placeholder:text-gray-400;
+        @apply block w-full rounded-md border border-gray-300 px-4 py-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-emerald-500 sm:text-sm bg-white dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:ring-gray-600 dark:placeholder:text-gray-400;
     }
     label {
         @apply block text-sm font-medium leading-6 text-slate-900 dark:text-slate-200 first-letter:capitalize;
     }
 
     .primary-btn {
-        @apply flex w-full justify-center rounded-md bg-secondary-500 px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-700 disabled:bg-slate-400 disabled:cursor-wait;
+        background-color: var(--color-theme);
+        color: #ffffff;
+        @apply flex w-full justify-center rounded-md px-3 py-1.5 text-sm font-semibold leading-6 shadow-sm disabled:bg-slate-400 disabled:cursor-wait;
+    }
+    .primary-btn:hover {
+        background-color: var(--color-theme-hover);
     }
     .text-link {
-        @apply font-semibold text-secondary-500 hover:text-secondary-700;
+        color: var(--color-theme);
+        @apply font-semibold;
+    }
+    .text-link:hover {
+        color: var(--color-theme-text);
     }
     .title {
         @apply my-6 text-center text-3xl font-bold leading-9 text-slate-900;
@@ -106,35 +297,12 @@
 }
 
 @layer base {
-    /* Default (light) theme */
-    html[data-theme="light"], html:not(.dark) {
-        --bg: #f8fafc;
-        --text: #0f172a;
-        color-scheme: light;
-    }
-
-    /* Dark theme */
-    html[data-theme="dark"], html.dark {
-        --bg: #0f172a;
-        --text: #f8fafc;
-        color-scheme: dark;
-    }
-
-    /* Optional: System theme */
-    html[data-theme="system"] {
-        --bg: #f8fafc;
-        --text: #0f172a;
-    }
-
     /* Apply variables globally */
     html, body {
-        background-color: var(--bg);
-        color: var(--text);
         font-family: "Poppins", sans-serif;
         transition: background-color 0.25s ease, color 0.25s ease;
     }
 }
-
 
 body, html {
     margin: 0;
@@ -143,12 +311,9 @@ body, html {
     overflow-x: hidden;
 }
 
-
-
-
 input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
-    display: none; /* To remove  ms-edge  password toggle */
+    display: none; /* To remove ms-edge password toggle */
 }
 
 .scrollbar-hide {
@@ -171,6 +336,3 @@ input[type="number"] {
     -moz-appearance: textfield !important;
     appearance: textfield !important;
 }
-
-
-

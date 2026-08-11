@@ -16,9 +16,60 @@ const pinia = createPinia();
 
 import { FontAwesomeIcon } from './fontawesome';
 
-// Listen to Inertia navigation events to update Ziggy defaults for branch slug
+function applyTheme(themeColor, customPrimaryHex, customSecondaryHex) {
+    if (typeof document === 'undefined') return;
+
+    const rootStyle = document.documentElement.style;
+
+    if (themeColor === 'custom' && customPrimaryHex) {
+        document.documentElement.setAttribute('data-theme', 'custom');
+        
+        let hexP = customPrimaryHex.replace('#', '');
+        if (hexP.length === 3) hexP = hexP.split('').map(c => c + c).join('');
+        const pr = parseInt(hexP.substring(0, 2), 16) || 123;
+        const pg = parseInt(hexP.substring(2, 4), 16) || 0;
+        const pb = parseInt(hexP.substring(4, 6), 16) || 255;
+        const phoverHex = '#' + [Math.max(0, Math.floor(pr * 0.85)), Math.max(0, Math.floor(pg * 0.85)), Math.max(0, Math.floor(pb * 0.85))].map(x => x.toString(16).padStart(2, '0')).join('');
+
+        rootStyle.setProperty('--color-theme', customPrimaryHex);
+        rootStyle.setProperty('--color-theme-hover', phoverHex);
+        rootStyle.setProperty('--color-theme-light', `rgba(${pr}, ${pg}, ${pb}, 0.15)`);
+        rootStyle.setProperty('--color-theme-rgb', `${pr}, ${pg}, ${pb}`);
+        rootStyle.setProperty('--color-theme-text', phoverHex);
+
+        const secHex = customSecondaryHex || '#FBA43D';
+        let hexS = secHex.replace('#', '');
+        if (hexS.length === 3) hexS = hexS.split('').map(c => c + c).join('');
+        const sr = parseInt(hexS.substring(0, 2), 16) || 251;
+        const sg = parseInt(hexS.substring(2, 4), 16) || 164;
+        const sb = parseInt(hexS.substring(4, 6), 16) || 61;
+        const shoverHex = '#' + [Math.max(0, Math.floor(sr * 0.85)), Math.max(0, Math.floor(sg * 0.85)), Math.max(0, Math.floor(sb * 0.85))].map(x => x.toString(16).padStart(2, '0')).join('');
+
+        rootStyle.setProperty('--color-theme-secondary', secHex);
+        rootStyle.setProperty('--color-theme-secondary-hover', shoverHex);
+        rootStyle.setProperty('--color-theme-secondary-light', `rgba(${sr}, ${sg}, ${sb}, 0.15)`);
+        rootStyle.setProperty('--color-theme-secondary-rgb', `${sr}, ${sg}, ${sb}`);
+    } else {
+        document.documentElement.setAttribute('data-theme', themeColor || 'skynet');
+        rootStyle.removeProperty('--color-theme');
+        rootStyle.removeProperty('--color-theme-hover');
+        rootStyle.removeProperty('--color-theme-light');
+        rootStyle.removeProperty('--color-theme-rgb');
+        rootStyle.removeProperty('--color-theme-text');
+
+        rootStyle.removeProperty('--color-theme-secondary');
+        rootStyle.removeProperty('--color-theme-secondary-hover');
+        rootStyle.removeProperty('--color-theme-secondary-light');
+        rootStyle.removeProperty('--color-theme-secondary-rgb');
+    }
+}
+
+// Listen to Inertia navigation events to update Ziggy defaults & theme_color
 router.on('navigate', (event) => {
-    const branchSlug = event.detail.page.props.current_branch?.slug;
+    const props = event.detail.page.props;
+    const branchSlug = props.current_branch?.slug;
+    applyTheme(props.theme_color, props.custom_primary_hex, props.custom_secondary_hex);
+
     if (typeof window !== 'undefined' && window.Ziggy) {
         window.Ziggy.defaults = {
             ...(window.Ziggy.defaults || {}),
@@ -47,7 +98,9 @@ createInertiaApp({
         });
     },
     setup({ el, App, props, plugin }) {
-        // Initialize Ziggy defaults for branch slug
+        // Initialize theme color and Ziggy defaults
+        applyTheme(props.initialPage.props.theme_color, props.initialPage.props.custom_primary_hex, props.initialPage.props.custom_secondary_hex);
+
         if (typeof window !== 'undefined' && window.Ziggy) {
             const initialSlug = props.initialPage.props.current_branch?.slug;
             window.Ziggy.defaults = {

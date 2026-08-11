@@ -24,6 +24,10 @@ const branchName = computed(() => {
     return props.branch?.name || page.props.current_branch?.name || page.props.store_settings?.company_name || 'Skynet Digital POS'
 })
 
+const systemCompanyName = computed(() => {
+    return page.props.system_config?.company_name || page.props.store_settings?.company_name || 'Skynet Digital'
+})
+
 const branchLogo = computed(() => {
     if (props.branch?.logo_url) return props.branch.logo_url
     if (page.props.current_branch?.logo_url) return page.props.current_branch.logo_url
@@ -215,6 +219,11 @@ const handleLogin = () => {
                 >
                     {{ form.processing ? 'Signing in…' : 'Sign In to ' + branchName }}
                 </button>
+
+                <!-- Powered by Branding -->
+                <p class="text-center text-[11px] text-slate-400 dark:text-slate-500 font-medium tracking-wide pt-1">
+                    Powered by <span class="font-bold text-slate-600 dark:text-slate-400">{{ systemCompanyName }}</span>
+                </p>
             </form>
         </div>
     </div>

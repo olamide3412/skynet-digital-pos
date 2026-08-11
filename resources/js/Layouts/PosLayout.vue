@@ -161,12 +161,12 @@ onMounted(() => {
         ]">
             <!-- Brand -->
             <div class="h-12 flex items-center border-b border-slate-200 dark:border-slate-700 px-3 gap-2 overflow-hidden">
-                <div class="w-7 h-7 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">
+                <div class="w-7 h-7 rounded-lg bg-theme flex items-center justify-center flex-shrink-0 shadow-xs">
                     <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M16 5h3m0 0v3m0-3l-5 5"/>
                     </svg>
                 </div>
-                <span v-show="!isCollapsed" class="font-bold text-emerald-600 dark:text-emerald-400 text-sm whitespace-nowrap overflow-hidden">SkyNet POS</span>
+                <span v-show="!isCollapsed" class="font-bold text-theme text-sm whitespace-nowrap overflow-hidden truncate">{{ $page.props.system_config?.company_name || 'SkyNet POS' }}</span>
                 <button @click="toggleCollapse" class="ml-auto text-slate-400 hover:text-slate-600 dark:hover:text-white transition flex-shrink-0">
                     <svg class="w-4 h-4" :class="isCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
@@ -185,7 +185,7 @@ onMounted(() => {
                             :class="[
                                 'flex items-center rounded-lg py-2 text-xs font-medium transition',
                                 isCollapsed ? 'justify-center px-2' : 'px-3 gap-2.5',
-                                isActive(link) ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-600/20 dark:text-emerald-400' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white',
+                                isActive(link) ? 'bg-theme-light text-theme-dark font-semibold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white',
                             ]">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="link.icon"/>
@@ -198,7 +198,7 @@ onMounted(() => {
                             :class="[
                                 'w-full flex items-center rounded-lg py-2 text-xs font-medium transition',
                                 isCollapsed ? 'justify-center px-2' : 'px-3 gap-2.5',
-                                isActive(link) ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-600/20 dark:text-emerald-400' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white',
+                                isActive(link) ? 'bg-theme-light text-theme-dark font-semibold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white',
                             ]">
                             <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="link.icon"/>
@@ -215,7 +215,7 @@ onMounted(() => {
                                 :href="route(child.route)"
                                 :class="[
                                     'block px-3 py-1.5 rounded-lg text-xs transition',
-                                    isChildActive(child) ? 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-600/10 font-medium' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700',
+                                    isChildActive(child) ? 'bg-theme-light text-theme font-bold shadow-2xs' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700',
                                 ]">{{ child.label }}</Link>
                         </div>
                     </div>

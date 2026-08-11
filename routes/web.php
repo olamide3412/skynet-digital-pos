@@ -94,6 +94,12 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             Route::delete('/{item}',     [\App\Http\Controllers\SuperAdmin\BranchItemController::class, 'destroy'])->name('destroy');
         });
 
+        // System Settings & Dynamic Theme Configuration
+        Route::get('/settings',  [\App\Http\Controllers\SuperAdmin\SystemSettingController::class, 'index'])->name('settings.index');
+        Route::post('/settings', [\App\Http\Controllers\SuperAdmin\SystemSettingController::class, 'update'])->name('settings.update');
+
+        // System Activity & Error Logs
+        Route::get('/logs', [\App\Http\Controllers\SuperAdmin\ActivityLogController::class, 'index'])->name('logs.index');
 
         Route::resource('global-items', GlobalItemController::class)
             ->except(['show'])
@@ -328,6 +334,10 @@ Route::prefix('{branch}')
         Route::match(['put', 'post'], '/settings', [PosSettingsController::class, 'update'])
             ->name('settings.update')
             ->middleware('pos.role:canEditSettings');
+
+        // Branch Audit & Error Logs
+        Route::get('/reports/logs', [\App\Http\Controllers\Pos\BranchLogController::class, 'index'])
+            ->name('reports.logs');
 
         // JSON API
         Route::prefix('api')->name('api.')->group(function () {

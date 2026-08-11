@@ -50,13 +50,26 @@ class HandleInertiaRequests extends Middleware
                 'message' => fn() => $request->session()->get('message'),
             ],
 
+            // ── Dynamic Global System Configuration ───────────────────────────
+            'system_config' => fn() => [
+                'company_name'       => \App\Models\SystemSetting::get('company_name', 'Skynet POS'),
+                'company_short_name' => \App\Models\SystemSetting::get('company_short_name', 'Skynet'),
+                'app_tagline'        => \App\Models\SystemSetting::get('app_tagline', 'Digital POS & Inventory Terminal'),
+                'currency_symbol'    => \App\Models\SystemSetting::get('currency_symbol', '₦'),
+                'support_phone'      => \App\Models\SystemSetting::get('support_phone', '+234 803 207 2831'),
+                'support_email'      => \App\Models\SystemSetting::get('support_email', 'support@skynetdigitalltd.com'),
+                'company_logo_url'   => \App\Models\SystemSetting::get('company_logo_path')
+                    ? asset('storage/' . \App\Models\SystemSetting::get('company_logo_path'))
+                    : null,
+            ],
+
             // ── Support info ───────────────────────────────────────────────────
             'support' => [
-                'phone' => '+2348032072831',
-                'phone_whatsapp' => '2348032072831',
-                'phone_formatted' => '+234 803 207 2831',
-                'email' => 'support@skynetdigitalltd.com',
-                'location' => 'Delta State, Nigeria',
+                'phone'           => \App\Models\SystemSetting::get('support_phone', '+234 803 207 2831'),
+                'phone_whatsapp'   => '2348032072831',
+                'phone_formatted'  => \App\Models\SystemSetting::get('support_phone', '+234 803 207 2831'),
+                'email'            => \App\Models\SystemSetting::get('support_email', 'support@skynetdigitalltd.com'),
+                'location'         => 'Delta State, Nigeria',
             ],
 
             'csrf_token' => csrf_token(),
@@ -67,10 +80,19 @@ class HandleInertiaRequests extends Middleware
                 ? RoleService::allPermissions()
                 : [],
 
-            'cart_count' => fn() => 0,
-            'compare_count' => fn() => 0,
-            'store_settings' => fn() => [],
-            'categories' => fn() => [],
+            'theme_color'          => fn() => \App\Models\SystemSetting::get('primary_color_theme', 'skynet'),
+            'custom_primary_hex'   => fn() => \App\Models\SystemSetting::get('custom_primary_hex', '#7B00FF'),
+            'custom_secondary_hex' => fn() => \App\Models\SystemSetting::get('custom_secondary_hex', '#FBA43D'),
+
+            'cart_count'     => fn() => 0,
+            'compare_count'  => fn() => 0,
+            'store_settings' => fn() => [
+                'company_name'  => \App\Models\SystemSetting::get('company_name', 'Skynet POS'),
+                'company_email' => \App\Models\SystemSetting::get('support_email', 'support@skynetdigitalltd.com'),
+                'company_phone' => \App\Models\SystemSetting::get('support_phone', '+234 803 207 2831'),
+                'company_logo'  => \App\Models\SystemSetting::get('company_logo_path'),
+            ],
+            'categories'     => fn() => [],
         ];
     }
 }

@@ -107,15 +107,16 @@ const submit = () => {
 </script>
 
 <template>
-    <Head title="Super Admin Login" />
-    <div class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6 font-sans">
-        <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
+    <Head :title="($page.props.system_config?.company_name || 'SuperAdmin') + ' - System Portal Login'" />
+    <div class="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans">
+        <div class="my-auto max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
             <div class="text-center space-y-2">
-                <div class="w-12 h-12 bg-indigo-600 rounded-xl mx-auto flex items-center justify-center font-black text-xl text-white">
-                    S
+                <img v-if="$page.props.system_config?.company_logo_url" :src="$page.props.system_config.company_logo_url" class="w-14 h-14 rounded-2xl object-cover mx-auto shadow-lg" alt="Company Logo" />
+                <div v-else class="w-14 h-14 bg-theme rounded-2xl mx-auto flex items-center justify-center font-black text-2xl text-white shadow-lg">
+                    {{ ($page.props.system_config?.company_name || 'S').charAt(0).toUpperCase() }}
                 </div>
-                <h1 class="text-2xl font-bold text-slate-100 tracking-tight">Super Admin Portal</h1>
-                <p class="text-xs text-slate-400">Skynet POS Platform Management</p>
+                <h1 class="text-2xl font-bold text-slate-100 tracking-tight">{{ $page.props.system_config?.company_name || 'Skynet' }} SuperAdmin Portal</h1>
+                <p class="text-xs text-slate-400">{{ $page.props.system_config?.app_tagline || 'Platform Management Terminal' }}</p>
             </div>
 
             <form @submit.prevent="submit" class="space-y-4">
@@ -126,7 +127,7 @@ const submit = () => {
                         type="text"
                         required
                         autofocus
-                        class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                        class="w-full bg-slate-950 border border-slate-800 focus:border-theme rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-theme transition-all"
                         placeholder="superadmin@skynetpos.com"
                     />
                     <div v-if="form.errors.login" class="text-rose-400 text-xs mt-1">{{ form.errors.login }}</div>
@@ -139,7 +140,7 @@ const submit = () => {
                             v-model="form.password"
                             :type="showPassword ? 'text' : 'password'"
                             required
-                            class="w-full bg-slate-950 border border-slate-800 focus:border-indigo-500 rounded-xl px-4 py-3 pr-11 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                            class="w-full bg-slate-950 border border-slate-800 focus:border-theme rounded-xl px-4 py-3 pr-11 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-theme transition-all"
                             placeholder="••••••••"
                         />
                         <button
@@ -149,7 +150,7 @@ const submit = () => {
                             :title="showPassword ? 'Hide password' : 'Show password'"
                         >
                             <svg v-if="!showPassword" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 01-6 0z"/>
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                             </svg>
                             <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -174,11 +175,20 @@ const submit = () => {
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition-colors shadow-lg shadow-indigo-600/20"
+                    class="w-full py-3 bg-theme hover:opacity-90 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition-all shadow-lg"
                 >
                     {{ form.processing ? 'Authenticating...' : 'Sign In as Super Admin' }}
                 </button>
+
+                <!-- Powered by Branding -->
+                <p class="text-center text-[11px] text-slate-500 font-medium tracking-wide pt-1">
+                    Powered by <span class="font-bold text-slate-400">{{ $page.props.system_config?.company_name || 'Skynet Digital' }}</span>
+                </p>
             </form>
         </div>
+
+        <footer class="hidden py-2 text-center text-xs text-slate-500">
+            Developed by <a href="https://skynetdigitalltd.com" target="_blank" rel="noopener noreferrer" class="hover:text-slate-400 font-semibold transition">Skynet Digital Limited.</a>
+        </footer>
     </div>
 </template>

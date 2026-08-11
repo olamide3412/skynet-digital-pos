@@ -95,6 +95,7 @@ class AuthController extends Controller
             }
 
             log_new("Branch login: {$user->name} @ {$branch?->name}");
+            \App\Services\ActivityLogger::auth("User {$user->name} logged into branch '{$branch?->name}'", $branch?->id);
             RateLimiter::clear($key);
             $request->session()->regenerate();
 
@@ -111,6 +112,10 @@ class AuthController extends Controller
         $user       = Auth::guard('web')->user();
         $branchSlug = current_branch()?->slug
                       ?? ($user?->branch_id ? optional($user->branch)->slug : null);
+
+        if ($user) {
+            \App\Services\ActivityLogger::auth("User {$user->name} logged out", $user->branch_id);
+        }
 
         Auth::guard('web')->logout();
         $request->session()->invalidate();

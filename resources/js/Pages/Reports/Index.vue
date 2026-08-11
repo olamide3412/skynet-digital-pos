@@ -49,6 +49,20 @@ let trendChart   = null
 let paymentChart = null
 let topChart     = null
 
+function getThemeColors() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+        return { primary: '#7b00ff', secondary: '#fba43d', hover: '#6200cc', light: '#f2e6ff', text: '#5900b3' }
+    }
+    const computed   = getComputedStyle(document.documentElement)
+    const primary   = computed.getPropertyValue('--color-theme').trim() || '#7b00ff'
+    const secondary = computed.getPropertyValue('--color-theme-secondary').trim() || '#fba43d'
+    const hover     = computed.getPropertyValue('--color-theme-hover').trim() || '#6200cc'
+    const light     = computed.getPropertyValue('--color-theme-light').trim() || '#f2e6ff'
+    const text      = computed.getPropertyValue('--color-theme-text').trim() || '#5900b3'
+
+    return { primary, secondary, hover, light, text }
+}
+
 onMounted(async () => {
     await nextTick()
     renderSalesTrendChart()
@@ -61,6 +75,7 @@ function renderSalesTrendChart() {
     const labels  = (props.salesTrend || []).map(d => d.day)
     const revenue = (props.salesTrend || []).map(d => d.revenue)
     const profit  = (props.salesTrend || []).map(d => d.profit)
+    const theme   = getThemeColors()
 
     if (trendChart) trendChart.destroy()
 
@@ -72,13 +87,13 @@ function renderSalesTrendChart() {
                 {
                     label: 'Revenue (₦)',
                     data: revenue,
-                    backgroundColor: '#10b981',
+                    backgroundColor: theme.primary,
                     borderRadius: 6,
                 },
                 {
                     label: 'Gross Profit (₦)',
                     data: profit,
-                    backgroundColor: '#3b82f6',
+                    backgroundColor: theme.secondary,
                     borderRadius: 6,
                 }
             ]
@@ -108,9 +123,10 @@ function renderSalesTrendChart() {
 
 function renderPaymentDistributionChart() {
     if (!paymentCanvas.value) return
-    const dist = props.paymentDistribution || {}
+    const dist   = props.paymentDistribution || {}
     const labels = Object.keys(dist)
     const data   = Object.values(dist)
+    const theme  = getThemeColors()
 
     if (paymentChart) paymentChart.destroy()
 
@@ -120,7 +136,7 @@ function renderPaymentDistributionChart() {
             labels,
             datasets: [{
                 data,
-                backgroundColor: ['#10b981', '#3b82f6', '#ef4444'],
+                backgroundColor: [theme.primary, theme.secondary, '#ef4444'],
                 borderWidth: 2,
                 borderColor: '#ffffff',
             }]
@@ -142,9 +158,10 @@ function renderPaymentDistributionChart() {
 
 function renderTopItemsChart() {
     if (!topItemsCanvas.value) return
-    const items = props.topItems || []
+    const items  = props.topItems || []
     const labels = items.map(i => i.item_name)
     const data   = items.map(i => Number(i.total_revenue || 0))
+    const theme  = getThemeColors()
 
     if (topChart) topChart.destroy()
 
@@ -155,7 +172,7 @@ function renderTopItemsChart() {
             datasets: [{
                 label: 'Revenue (₦)',
                 data,
-                backgroundColor: '#8b5cf6',
+                backgroundColor: theme.primary,
                 borderRadius: 6,
             }]
         },
@@ -225,6 +242,13 @@ const reports = [
         route: 'pos.reports.customer-debt',
         iconClass: 'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400',
         icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+    },
+    {
+        title: 'Audit & Activity Logs',
+        description: 'Branch audit trail for sales, stock moves, staff actions, and errors.',
+        route: 'pos.reports.logs',
+        iconClass: 'bg-theme-light text-theme',
+        icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
     }
 ]
 </script>
@@ -246,17 +270,17 @@ const reports = [
                 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between">
                     <div>
                         <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Monthly Revenue</p>
-                        <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{{ format(monthlyStats?.monthly_revenue || 0) }}</p>
+                        <p class="text-2xl font-bold text-theme font-mono">{{ format(monthlyStats?.monthly_revenue || 0) }}</p>
                     </div>
-                    <div class="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-lg">₦</div>
+                    <div class="w-10 h-10 rounded-lg bg-theme-light text-theme flex items-center justify-center font-bold text-lg">₦</div>
                 </div>
 
                 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between">
                     <div>
                         <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Monthly Gross Profit</p>
-                        <p class="text-2xl font-bold text-blue-600 dark:text-blue-400 font-mono">{{ format(monthlyStats?.monthly_profit || 0) }}</p>
+                        <p class="text-2xl font-bold text-theme font-mono">{{ format(monthlyStats?.monthly_profit || 0) }}</p>
                     </div>
-                    <div class="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-lg">📈</div>
+                    <div class="w-10 h-10 rounded-lg bg-theme-light text-theme flex items-center justify-center font-bold text-lg">📈</div>
                 </div>
 
                 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between">

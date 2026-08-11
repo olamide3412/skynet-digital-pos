@@ -62,6 +62,19 @@ class StockTransferController extends Controller
                 unitUsed: $data['unit'],
                 notes: $data['notes'] ?? null,
             );
+
+            \App\Services\ActivityLogger::stock(
+                "Transferred {$data['qty']} {$data['unit']}(s) of '{$item->item_name}' from {$data['from_location']} to {$data['to_location']}",
+                $branch->id,
+                [
+                    'item_id'       => $item->id,
+                    'item_name'     => $item->item_name,
+                    'qty'           => $data['qty'],
+                    'unit'          => $data['unit'],
+                    'from_location' => $data['from_location'],
+                    'to_location'   => $data['to_location'],
+                ]
+            );
         } catch (\InvalidArgumentException $e) {
             return back()->withErrors(['qty' => $e->getMessage()]);
         }

@@ -22,7 +22,15 @@ class SaleReturnController extends Controller
         ]);
 
         try {
-            ReturnService::process($data['sale_id'] ?? null, $data['items'], Auth::user());
+            \App\Services\ActivityLogger::return(
+                "Processed sale return for " . count($data['items']) . " item(s)",
+                current_branch()?->id,
+                [
+                    'sale_id'    => $data['sale_id'] ?? null,
+                    'item_count' => count($data['items']),
+                ]
+            );
+
             if ($request->wantsJson() || $request->ajax()) {
                 return response()->json(['message' => 'Return processed and inventory restocked.']);
             }

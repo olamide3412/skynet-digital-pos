@@ -107,7 +107,8 @@ class ItemController extends Controller
         }
         unset($data['image']);
 
-        Item::create($data);
+        $newItem = Item::create($data);
+        \App\Services\ActivityLogger::item("Created item '{$newItem->item_name}' (Barcode: {$newItem->barcode_number})", $branch->id);
         return redirect()->route('pos.items.index')
             ->with('success', 'Item created successfully.');
     }
@@ -140,43 +141,32 @@ class ItemController extends Controller
             'buy_price'              => 'required|numeric|min:0',
             'price'                  => 'required|numeric|min:0',
             'wholesale_price'        => 'nullable|numeric|min:0',
-            'pack_price'             => 'nullable|numeric|min:0',
-            'carton_price'           => 'nullable|numeric|min:0',
-            'pack_wholesale_price'   => 'nullable|numeric|min:0',
-            'carton_wholesale_price' => 'nullable|numeric|min:0',
-            'price_locked'           => 'boolean',
-            'back_store_qty'         => 'nullable|integer|min:0',
-            'front_store_qty'        => 'nullable|integer|min:0',
+            'minimum_retail_price'   => 'nullable|numeric|min:0',
+            'minimum_wholesale_price' => 'nullable|numeric|min:0',
             'unit_label'             => 'nullable|string|max:50',
             'pack_label'             => 'nullable|string|max:50',
             'carton_label'           => 'nullable|string|max:50',
             'units_per_pack'         => 'nullable|integer|min:1',
             'packs_per_carton'       => 'nullable|integer|min:1',
-            'expiry_date'            => 'nullable|date',
-            'item_description'       => 'nullable|string|max:500',
+            'front_store_qty'        => 'nullable|integer|min:0',
+            'back_store_qty'         => 'nullable|integer|min:0',
+            'low_stock_threshold'    => 'nullable|integer|min:0',
+            'expire_date'            => 'nullable|date',
+            'shelf_location'         => 'nullable|string|max:100',
             'image'                  => 'nullable|image|max:2048',
         ]);
 
-        $barcode = trim($data['barcode_number'] ?? '');
-        if (!$barcode || strtoupper($barcode) === 'NO_BARCODE') {
-            $barcode = $item->barcode_number ?: ('BAR-' . strtoupper(\Illuminate\Support\Str::random(6)));
-        } else {
-            // Check barcode uniqueness in active branch excluding current item
-            $exists = Item::where('branch_id', $branch->id)
-                ->where('barcode_number', $barcode)
+        if (!empty($data['barcode_number'])) {
+            $existing = Item::where('branch_id', $branch->id)
+                ->where('barcode_number', $data['barcode_number'])
                 ->where('id', '!=', $item->id)
-                ->exists();
-            if ($exists) {
-                throw \Illuminate\Validation\ValidationException::withMessages([
-                    'barcode_number' => 'This barcode number is already assigned to another item in your branch.',
-                ]);
+                ->first();
+            if ($existing) {
+                return back()->withErrors(['barcode_number' => 'Barcode number already in use by another item.']);
             }
         }
-        $data['barcode_number'] = $barcode;
 
         $data['wholesale_price']  = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? $data['wholesale_price'] : $data['price'];
-        $data['front_store_qty']  = $data['front_store_qty'] ?? 0;
-        $data['back_store_qty']   = $data['back_store_qty'] ?? 0;
         $data['unit_label']       = $data['unit_label'] ?: 'Unit';
         $data['pack_label']       = $data['pack_label'] ?: 'Pack';
         $data['carton_label']     = $data['carton_label'] ?: 'Carton';
@@ -192,6 +182,7 @@ class ItemController extends Controller
         unset($data['image']);
 
         $item->update($data);
+        \App\Services\ActivityLogger::item("Updated details for item '{$item->item_name}'", $branch->id);
         return redirect()->route('pos.items.index')
             ->with('success', 'Item updated successfully.');
     }
@@ -204,7 +195,9 @@ class ItemController extends Controller
         if ($item->image_path) {
             Storage::disk('public')->delete($item->image_path);
         }
+        $itemName = $item->item_name;
         $item->delete();
+        \App\Services\ActivityLogger::item("Deleted item '{$itemName}'", $branch->id);
         return redirect()->route('pos.items.index')
             ->with('success', 'Item deleted.');
     }

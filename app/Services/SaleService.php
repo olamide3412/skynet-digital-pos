@@ -201,6 +201,18 @@ class SaleService
                 }
             }
 
+            \App\Services\ActivityLogger::sale(
+                "Completed sale #{$receiptId} totaling ₦" . number_format($finalTotal, 2) . " via " . ucfirst($paymentMethod),
+                $branch?->id,
+                [
+                    'receipt_id'     => $receiptId,
+                    'grand_total'    => $finalTotal,
+                    'payment_method' => $paymentMethod,
+                    'item_count'     => count($cartItems),
+                    'customer_id'    => $customerId,
+                ]
+            );
+
             return $sale->load('saleOrders');
         });
     }

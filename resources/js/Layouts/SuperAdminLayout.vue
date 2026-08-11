@@ -1,21 +1,13 @@
 <script setup>
+import { ref } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
-import { ref, onMounted } from 'vue'
-import FlashMessages from '@/Components/FlashMessages.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
-import Logo from '../../images/logo.png'
+import FlashMessages from '@/Components/FlashMessages.vue'
 
 const isMobileOpen = ref(false)
-const isCollapsed = ref(false)
+const isCollapsed  = ref(false)
 
-const toggleMobile = () => {
-    isMobileOpen.value = !isMobileOpen.value
-}
-
-const toggleCollapse = () => {
-    isCollapsed.value = !isCollapsed.value
-    localStorage.setItem('superadmin_sidebar_collapsed', isCollapsed.value)
-}
+const page = usePage()
 
 const navLinks = [
     {
@@ -37,6 +29,18 @@ const navLinks = [
         icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
     },
     {
+        label: 'Settings',
+        route: 'superadmin.settings.index',
+        match: 'SuperAdmin/Settings',
+        icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065zM15 12a3 3 0 11-6 0 3 3 0 016 0z',
+    },
+    {
+        label: 'System Activity & Logs',
+        route: 'superadmin.logs.index',
+        match: 'SuperAdmin/Logs',
+        icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+    },
+    {
         label: 'My Profile',
         route: 'superadmin.profile.index',
         match: 'SuperAdmin/Profile',
@@ -44,22 +48,27 @@ const navLinks = [
     },
 ]
 
-const isActive = (link) => {
-    const comp = usePage().component
-    return comp === link.match || comp.startsWith(link.match)
+function isActive(link) {
+    return page.component.startsWith(link.match)
 }
 
-onMounted(() => {
-    const saved = localStorage.getItem('superadmin_sidebar_collapsed')
-    if (saved !== null) isCollapsed.value = saved === 'true'
-})
+function toggleMobile() {
+    isMobileOpen.value = !isMobileOpen.value
+}
+
+function toggleCollapse() {
+    isCollapsed.value = !isCollapsed.value
+}
 </script>
 
 <template>
-    <div class="flex h-screen bg-slate-100 dark:bg-slate-950 overflow-hidden font-sans text-slate-900 dark:text-slate-100 transition-colors">
-
-        <!-- Mobile Backdrop Overlay -->
-        <div v-show="isMobileOpen" class="fixed inset-0 z-20 bg-black/60 backdrop-blur-xs lg:hidden" @click="toggleMobile"></div>
+    <div class="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 font-sans transition-colors">
+        <!-- Mobile Overlay Backdrop -->
+        <div
+            v-if="isMobileOpen"
+            @click="isMobileOpen = false"
+            class="fixed inset-0 z-20 bg-slate-900/60 backdrop-blur-xs lg:hidden"
+        ></div>
 
         <!-- ── Sidebar ──────────────────────────────────────────────── -->
         <aside
@@ -73,12 +82,15 @@ onMounted(() => {
             <!-- Brand Logo & Header -->
             <div class="flex items-center h-16 border-b border-slate-200 dark:border-slate-800 px-3 overflow-hidden flex-shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
                 <Link :href="route('superadmin.dashboard')" class="flex items-center gap-3 min-w-0">
-                    <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center font-black text-white text-base shadow-md shadow-indigo-600/30 flex-shrink-0">
-                        S
+                    <img v-if="$page.props.system_config?.company_logo_url" :src="$page.props.system_config.company_logo_url" class="w-9 h-9 rounded-xl object-cover shadow-md flex-shrink-0" alt="Logo" />
+                    <div v-else class="w-9 h-9 rounded-xl bg-theme flex items-center justify-center font-black text-white text-base shadow-md flex-shrink-0">
+                        {{ ($page.props.system_config?.company_name || 'S').charAt(0).toUpperCase() }}
                     </div>
                     <div v-show="!isCollapsed" class="whitespace-nowrap overflow-hidden transition-all duration-300">
-                        <span class="text-sm font-black text-slate-900 dark:text-white leading-tight block">Skynet POS</span>
-                        <span class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 tracking-wider uppercase block">Super Admin</span>
+                        <span class="text-sm font-black text-slate-900 dark:text-white leading-tight block truncate">
+                            {{ $page.props.system_config?.company_name || 'Skynet POS' }}
+                        </span>
+                        <span class="text-[11px] font-bold text-theme tracking-wider uppercase block">Super Admin</span>
                     </div>
                 </Link>
                 <!-- Desktop Sidebar Collapse Toggle -->
@@ -99,12 +111,13 @@ onMounted(() => {
                     <div class="relative group">
                         <Link
                             :href="route(link.route)"
+                            @click="isMobileOpen = false"
                             :title="isCollapsed ? link.label : ''"
                             :class="[
                                 'flex w-full items-center rounded-xl font-semibold transition-all cursor-pointer text-sm',
                                 isCollapsed ? 'justify-center px-0 py-3' : 'px-3.5 py-2.5 gap-3',
                                 isActive(link)
-                                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                                    ? 'bg-theme text-white shadow-md'
                                     : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-900 dark:hover:text-white'
                             ]"
                         >
@@ -127,14 +140,15 @@ onMounted(() => {
             <div class="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex-shrink-0">
                 <Link
                     :href="route('superadmin.profile.index')"
+                    @click="isMobileOpen = false"
                     v-show="!isCollapsed"
                     class="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-200/60 dark:hover:bg-slate-800/60 transition mb-2 group"
                 >
-                    <div class="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs border border-indigo-200 dark:border-indigo-500/30 flex-shrink-0">
+                    <div class="w-8 h-8 rounded-lg bg-theme-light text-theme flex items-center justify-center font-bold text-xs border border-theme flex-shrink-0">
                         {{ $page.props.auth.user?.name?.charAt(0)?.toUpperCase() || 'S' }}
                     </div>
                     <div class="min-w-0 flex-1">
-                        <p class="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">{{ $page.props.auth.user?.name || 'Super Admin' }}</p>
+                        <p class="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-theme transition">{{ $page.props.auth.user?.name || 'Super Admin' }}</p>
                         <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate">{{ $page.props.auth.user?.email }}</p>
                     </div>
                 </Link>
@@ -165,15 +179,15 @@ onMounted(() => {
         <main class="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
             <!-- Top Header -->
             <header class="h-16 flex-shrink-0 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6">
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 min-w-0">
                     <!-- Mobile Hamburger Toggle Button -->
-                    <button @click="toggleMobile" class="lg:hidden text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white focus:outline-none p-1">
+                    <button @click="toggleMobile" class="lg:hidden text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white focus:outline-none p-1 flex-shrink-0">
                         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                         </svg>
                     </button>
-                    <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 hidden sm:block">
-                        Skynet System Super Admin Panel
+                    <h2 class="text-xs sm:text-sm font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 truncate">
+                        {{ $page.props.system_config?.company_name || 'Skynet' }} Super Admin
                     </h2>
                 </div>
 
@@ -184,7 +198,7 @@ onMounted(() => {
 
                     <!-- User Quick Menu -->
                     <Link :href="route('superadmin.profile.index')" class="flex items-center gap-2 hover:opacity-80 transition cursor-pointer">
-                        <div class="h-8 w-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-md shadow-indigo-600/30">
+                        <div class="h-8 w-8 rounded-xl bg-theme flex items-center justify-center text-white font-bold text-xs shadow-md">
                             {{ $page.props.auth.user?.name?.charAt(0)?.toUpperCase() || 'S' }}
                         </div>
                         <span class="text-xs font-bold text-slate-800 dark:text-white hidden sm:block">{{ $page.props.auth.user?.name || 'Super Admin' }}</span>
@@ -196,6 +210,11 @@ onMounted(() => {
             <div class="flex-1 min-h-0 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 lg:p-8">
                 <slot/>
             </div>
+
+            <!-- SuperAdmin Footer Attribution -->
+            <footer class="py-2.5 px-6 text-center text-xs text-slate-400 dark:text-slate-500 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex-shrink-0">
+                Developed by <a href="https://skynetdigitalltd.com" target="_blank" rel="noopener noreferrer" class="font-bold text-slate-600 dark:text-slate-200 hover:text-theme transition">Skynet Digital Limited.</a>
+            </footer>
         </main>
 
         <FlashMessages/>

@@ -86,14 +86,14 @@ const deleteItem = (item) => {
     <Head title="Global Item Pool - Super Admin" />
     <div class="max-w-7xl mx-auto space-y-6">
         <!-- Header -->
-        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
             <div>
                 <h1 class="text-xl font-bold text-slate-900 dark:text-white">Global Master Item Pool</h1>
                 <p class="text-xs text-slate-500 dark:text-slate-400">Master product catalog. Select items and push directly into branch catalogs below.</p>
             </div>
             <button
                 @click="showCreateModal = true"
-                class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-indigo-600/20"
+                class="w-full sm:w-auto px-4 py-2.5 bg-theme hover:opacity-90 text-white font-bold rounded-xl text-xs transition shadow-md"
             >
                 + Add Master Item
             </button>
@@ -245,8 +245,8 @@ const deleteItem = (item) => {
         </div>
 
         <!-- Add Modal -->
-        <div v-if="showCreateModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl my-8">
+        <div v-if="showCreateModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl my-auto">
                 <div class="flex items-center justify-between border-b border-slate-800 pb-3">
                     <h2 class="font-bold text-slate-100">Add Master Item</h2>
                     <button @click="showCreateModal = false" class="text-slate-500 hover:text-slate-300 text-xl">&times;</button>

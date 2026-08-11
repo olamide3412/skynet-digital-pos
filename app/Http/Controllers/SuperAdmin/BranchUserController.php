@@ -95,6 +95,8 @@ class BranchUserController extends Controller
             $user->syncPermissions($data['permissions']);
         }
 
+        \App\Services\ActivityLogger::userAction("Created staff user '{$user->name}' (@{$user->username}) in branch '{$branch->name}'", $branch->id);
+
         return redirect()
             ->route('superadmin.branches.users.index', $branch->slug)
             ->with('success', 'User added to branch.');
@@ -128,6 +130,8 @@ class BranchUserController extends Controller
             $user->syncPermissions($data['permissions']);
         }
 
+        \App\Services\ActivityLogger::userAction("Updated staff profile for '{$user->name}'", $branch->id);
+
         return redirect()
             ->route('superadmin.branches.users.index', $branch->slug)
             ->with('success', 'User updated.');
@@ -136,7 +140,9 @@ class BranchUserController extends Controller
     public function destroy(Branch $branch, User $user)
     {
         $this->validateUserBelongsToBranch($user, $branch);
+        $userName = $user->name;
         $user->delete();
+        \App\Services\ActivityLogger::userAction("Removed user '{$userName}' from branch '{$branch->name}'", $branch->id);
         return redirect()
             ->route('superadmin.branches.users.index', $branch->slug)
             ->with('success', 'User removed from branch.');
@@ -147,6 +153,7 @@ class BranchUserController extends Controller
         $this->validateUserBelongsToBranch($user, $branch);
         $user->update(['is_active' => !$user->is_active]);
         $status = $user->is_active ? 'enabled' : 'disabled';
+        \App\Services\ActivityLogger::userAction("Toggled account status to '{$status}' for user '{$user->name}'", $branch->id);
         return redirect()
             ->route('superadmin.branches.users.index', $branch->slug)
             ->with('success', "User account {$status}.");
@@ -161,6 +168,7 @@ class BranchUserController extends Controller
         ]);
 
         $user->update(['password' => Hash::make($data['password'])]);
+        \App\Services\ActivityLogger::userAction("Reset password for user '{$user->name}'", $branch->id);
         return redirect()
             ->route('superadmin.branches.users.index', $branch->slug)
             ->with('success', 'Password reset successfully.');
