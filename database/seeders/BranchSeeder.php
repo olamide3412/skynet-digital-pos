@@ -18,12 +18,12 @@ class BranchSeeder extends Seeder
 
         // ── Sample branch: Felix Enterprise ──────────────────────────────────
         $branch = Branch::firstOrCreate(
-            ['slug' => 'skynet-digital-enterprise'],
+            ['slug' => 'eewtech-enterprise'],
             [
-                'name' => 'Skynet Digital Enterprise',
+                'name' => 'EEWTECH Enterprise',
                 'address' => '12 Commercial Road, Asaba, Delta State',
                 'phone' => '+2348012345678',
-                'email' => 'digital@skynetpos.com',
+                'email' => 'digital@eewtechpos.com',
                 'is_active' => true,
             ]
         );
@@ -53,12 +53,12 @@ class BranchSeeder extends Seeder
 
         // ── Branch Admin user ─────────────────────────────────────────────────
         $admin = User::updateOrCreate(
-            ['username' => 'skynet-admin'],
+            ['username' => 'eew-admin'],
             [
-                'name' => 'SD Admin',
-                'full_name' => 'Skynet Digital Enterprise Admin',
-                'username' => 'skynet-digital-admin',
-                'email' => 'admin@skynet.com',
+                'name' => 'EEW Admin',
+                'full_name' => 'EEW Enterprise Admin',
+                'username' => 'eew-digital-admin',
+                'email' => 'admin@eew.com',
                 'password' => Hash::make('admin123'),
                 'is_active' => true,
                 'is_super_admin' => false,
@@ -70,12 +70,12 @@ class BranchSeeder extends Seeder
 
         // ── Sample Cashier ────────────────────────────────────────────────────
         $cashier = User::updateOrCreate(
-            ['username' => 'skynet-cashier1'],
+            ['username' => 'eew-cashier1'],
             [
                 'name' => 'Jane Cashier',
                 'full_name' => 'Jane Cashier',
-                'username' => 'skynet-cashier1',
-                'email' => 'cashier@skynet.com',
+                'username' => 'eew-cashier1',
+                'email' => 'cashier@eew.com',
                 'password' => Hash::make('cashier123'),
                 'is_active' => true,
                 'is_super_admin' => false,

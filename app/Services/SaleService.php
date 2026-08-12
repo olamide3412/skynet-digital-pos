@@ -117,6 +117,7 @@ class SaleService
 
         return DB::transaction(function () use ($data, $user, $branch, $settings, $cartItems, $itemsMap, $purchaseType, $customerId, $amountCost, $finalTotal, $profitMade, $discountAmount, $consultFee, $taxAmount, $taxPercentage) {
             $receiptId = static::generateReceiptId();
+            $paymentMethod = $data['payment_method'] ?? 'Cash';
             $isDebt = (bool) ($data['is_debt'] ?? false);
             $amountPaid = (float) ($data['amount_paid'] ?? 0);
             $changeBal = max(0, $amountPaid - $finalTotal);
@@ -128,7 +129,7 @@ class SaleService
                 'receipt_id' => $receiptId,
                 'items_order_count' => count($cartItems),
                 'consultation_fee' => $consultFee,
-                'payment_method' => $data['payment_method'] ?? 'Cash',
+                'payment_method' => $paymentMethod,
                 'bank_transfer' => (float) ($data['bank_transfer'] ?? 0),
                 'cash' => (float) ($data['cash'] ?? 0),
                 'amount_cost' => $amountCost,
@@ -187,17 +188,25 @@ class SaleService
             if ($isDebt && $customerId) {
                 $debtAmt = $finalTotal - $amountPaid;
                 if ($debtAmt > 0) {
+                    $customer = PosCustomer::find($customerId);
+                    $balBefore = (float) ($customer?->debt_bal ?? 0);
+                    $balAfter = $balBefore + $debtAmt;
+
                     DebtPayment::create([
-                        'branch_id' => $branch?->id,
-                        'customer_id' => $customerId,
-                        'user_id' => $user->id,
-                        'amount' => $debtAmt,
-                        'type' => 'debit',
-                        'narration' => "Debt from sale #{$receiptId}",
+                        'branch_id'      => $branch?->id,
+                        'customer_id'    => $customerId,
+                        'user_id'        => $user->id,
+                        'sale_id'        => $sale->id,
+                        'amount'         => $debtAmt,
+                        'balance_before' => $balBefore,
+                        'balance_after'  => $balAfter,
+                        'type'           => 'debit',
+                        'narration'      => "Debt from sale #{$receiptId}",
                     ]);
 
-                    PosCustomer::where('id', $customerId)
-                        ->increment('debt_bal', $debtAmt);
+                    if ($customer) {
+                        $customer->increment('debt_bal', $debtAmt);
+                    }
                 }
             }
 

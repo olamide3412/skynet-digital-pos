@@ -13,7 +13,7 @@ export default defineConfig({
         tailwindcss(),
     ],
     build: {
-        chunkSizeWarningLimit: 1000,
+        chunkSizeWarningLimit: 2000,
         rollupOptions: {
             output: {
                 manualChunks(id) {
@@ -21,8 +21,14 @@ export default defineConfig({
                         if (id.includes('@fortawesome') || id.includes('fontawesome')) {
                             return 'fontawesome';
                         }
-                        if (id.includes('vue') || id.includes('@inertiajs')) {
+                        if (id.includes('vue') || id.includes('@inertiajs') || id.includes('pinia')) {
                             return 'vue-vendor';
+                        }
+                        if (id.includes('chart.js') || id.includes('chartjs')) {
+                            return 'chart-vendor';
+                        }
+                        if (id.includes('jspdf') || id.includes('html2canvas')) {
+                            return 'pdf-vendor';
                         }
                         return 'vendor';
                     }

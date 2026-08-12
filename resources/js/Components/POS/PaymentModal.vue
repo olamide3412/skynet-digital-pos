@@ -13,7 +13,7 @@ const emit = defineEmits(['close', 'completed'])
 const cart     = useCartStore()
 const { format } = useCurrency()
 const tab      = ref('Cash')  // Cash | Bank Transfer | Split | Debt
-const cashInput = ref(cart.grandTotal)
+const cashInput = ref(Math.round(cart.grandTotal * 100) / 100)
 const bankInput = ref(0)
 const isSubmitting = ref(false)
 const errors   = ref({})
@@ -22,11 +22,12 @@ const tabs = ['Cash', 'Bank Transfer', 'Split', 'Debt']
 
 function handleTabChange(t) {
     tab.value = t
+    const cleanTotal = Math.round(cart.grandTotal * 100) / 100
     if (t === 'Cash') {
-        cashInput.value = cart.grandTotal
+        cashInput.value = cleanTotal
         bankInput.value = 0
     } else if (t === 'Bank Transfer') {
-        bankInput.value = cart.grandTotal
+        bankInput.value = cleanTotal
         cashInput.value = 0
     } else {
         cashInput.value = 0
