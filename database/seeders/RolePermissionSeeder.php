@@ -30,6 +30,7 @@ class RolePermissionSeeder extends Seeder
         'canTransferStock',
         'canManagePurchases',
         'canManageItems',
+        'canManageBarcodes',
         'canManageCustomers',
         'canManageUsers',
         'canEditSettings',

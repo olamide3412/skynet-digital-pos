@@ -53,6 +53,13 @@ class SettingsController extends Controller
             'wholesale_profit_percent' => 'required|numeric|min:0',
             'consumer_profit_percent'  => 'required|numeric|min:0',
             'business_sector'          => 'required|in:health,commerce',
+            'receipt_paper_size'       => 'required|string|in:80mm,A4,a4',
+            'receipt_printer_name'     => 'nullable|string|max:100',
+            'printer_type'             => 'required|string|in:thermal_80mm,thermal_58mm,a4_standard',
+            'printer_connection'       => 'required|string|in:kiosk_direct,network_ip,local_agent',
+            'printer_ip_address'       => 'nullable|string|max:100',
+            'auto_print_receipt'       => 'nullable|boolean',
+            'show_receipt_preview'     => 'nullable|boolean',
         ]);
 
         // ── 1. Update branch business details & logo ───────────────────────────

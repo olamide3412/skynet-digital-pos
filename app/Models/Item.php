@@ -189,6 +189,11 @@ class Item extends Model
         return $this->hasMany(ItemGrid::class);
     }
 
+    public function barcodePrintLogs(): HasMany
+    {
+        return $this->hasMany(BarcodePrintLog::class);
+    }
+
     // ── Status helpers ─────────────────────────────────────────────────────────
     public function isExpired(): bool
     {

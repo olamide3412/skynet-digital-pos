@@ -25,6 +25,7 @@ const allNavLinks = [
         perm: 'canManageItems',
         children: [
             { label: 'All Items',        route: 'pos.items.index',           match: 'Items/Index' },
+            { label: 'Print Barcodes',   route: 'pos.items.barcodes',        match: 'Items/Barcodes', perm: 'canManageBarcodes' },
             { label: 'Categories',       route: 'pos.categories.index',      match: 'Categories/Index' },
             { label: 'Group / Address',  route: 'pos.group-addresses.index', match: 'GroupAddresses/Index' },
             { label: 'Item Grid Config', route: 'pos.item-grids.index',      match: 'Items/Grid' },
@@ -95,6 +96,13 @@ const allNavLinks = [
         ],
     },
     {
+        label: 'Printer Setup',
+        route: 'pos.printer-setup',
+        match: 'Printer/Index',
+        icon:  'M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z',
+        always: true,
+    },
+    {
         label: 'Settings',
         route: 'pos.settings.index',
         match: 'Settings/Index',
@@ -106,7 +114,12 @@ const allNavLinks = [
 // Filter nav links based on permissions
 const navLinks = computed(() => {
     return allNavLinks
-        .filter(link => link.always || !link.perm || perms.value[link.perm])
+        .filter(link => {
+            if (link.always) return true
+            if (!link.perm || perms.value[link.perm]) return true
+            if (link.children && link.children.some(c => !c.perm || perms.value[c.perm])) return true
+            return false
+        })
         .map(link => {
             if (!link.children) return link
             return {

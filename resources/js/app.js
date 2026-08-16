@@ -3,6 +3,7 @@ import '../css/app.css';
 import { createApp, h } from 'vue';
 import { createInertiaApp, Head, Link, router } from '@inertiajs/vue3'
 import Layout from './Layouts/Layout.vue';
+import PosLayout from './Layouts/PosLayout.vue';
 import { ZiggyVue } from '../../vendor/tightenco/ziggy';
 import Toast from 'vue-toastification';
 import 'vue-toastification/dist/index.css';
@@ -89,18 +90,34 @@ createInertiaApp({
 
         return pageResolver()
             .then((module) => {
-                if (!name.startsWith('Admin/')
-                    && !name.startsWith('Auth/')
-                    && !name.startsWith('SuperAdmin/')
-                    && !name.startsWith('Pos/')
-                    && name !== 'Error'
-                    && name !== 'BranchUnavailable'
+                if (module.default.layout !== undefined) {
+                    return module;
+                }
+
+                if (name.startsWith('Admin/') || name.startsWith('SuperAdmin/') || name.startsWith('Auth/') || name === 'Home' || name === 'Error' || name === 'BranchUnavailable') {
+                    // Handled inside page components with explicit layout or standalone
+                    return module;
+                }
+
+                if (
+                    name.startsWith('Pos/') ||
+                    name.startsWith('Items/') ||
+                    name.startsWith('Categories/') ||
+                    name.startsWith('Customers/') ||
+                    name.startsWith('Sales/') ||
+                    name.startsWith('Purchases/') ||
+                    name.startsWith('Vendors/') ||
+                    name.startsWith('Inventory/') ||
+                    name.startsWith('Reports/') ||
+                    name.startsWith('Settings/') ||
+                    name.startsWith('Discounts/') ||
+                    name.startsWith('GroupAddresses/') ||
+                    name.startsWith('Users/') ||
+                    name.startsWith('Roles/')
                 ) {
-                    // Only apply default Layout if the page hasn't explicitly declared a layout
-                    // (even layout: null or layout: false counts as an explicit opt-out)
-                    if (module.default.layout === undefined) {
-                        module.default.layout = Layout;
-                    }
+                    module.default.layout = PosLayout;
+                } else {
+                    module.default.layout = Layout;
                 }
                 return module;
             })

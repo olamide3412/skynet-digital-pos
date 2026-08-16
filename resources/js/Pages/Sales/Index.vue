@@ -169,6 +169,7 @@ function destroy(id, receiptId) {
             v-if="showReceiptModal && selectedSale"
             :sale="selectedSale"
             :settings="settings || {}"
+            :is-reprint="true"
             @close="showReceiptModal = false"
         />
     </div>

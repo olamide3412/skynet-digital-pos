@@ -137,6 +137,11 @@ class RoleService
         return static::can('canManageItems');
     }
 
+    public static function canManageBarcodes(): bool
+    {
+        return static::can('canManageBarcodes') || static::canManageItems();
+    }
+
     public static function canManageCustomers(): bool
     {
         return static::can('canManageCustomers');
@@ -199,6 +204,7 @@ class RoleService
             'canManageDebt'      => static::canManageDebt(),
             'canGiveDebt'        => static::canGiveDebt(),
             'canManageItems'     => static::canManageItems(),
+            'canManageBarcodes'  => static::canManageBarcodes(),
             'canManageCustomers' => static::canManageCustomers(),
             'canViewReorderPoints' => static::canViewReorderPoints(),
             'isBranchAdmin'      => $user?->isBranchAdmin() ?? false,

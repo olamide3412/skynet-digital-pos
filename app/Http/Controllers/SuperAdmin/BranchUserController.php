@@ -31,6 +31,7 @@ class BranchUserController extends Controller
         'canViewReorderPoints' => 'View Reorder Points & Stock Alerts',
         'canManagePurchases' => 'Manage Purchases & Vendors',
         'canManageItems'     => 'Manage Items, Categories & Grid',
+        'canManageBarcodes'  => 'Manage & Print Barcodes',
         'canManageCustomers' => 'Manage Customers Directory',
         'canManageUsers'     => 'Manage Staff Accounts & Roles',
         'canEditSettings'    => 'Edit Branch Settings & POS Config',

@@ -9,6 +9,7 @@ use App\Http\Controllers\Pos\ItemController as PosItemController;
 use App\Http\Controllers\Pos\CustomerController as PosCustomerController;
 use App\Http\Controllers\Pos\SettingsController as PosSettingsController;
 use App\Http\Controllers\Pos\ItemGridController;
+use App\Http\Controllers\Pos\BarcodeController;
 use App\Http\Controllers\Pos\SaleDiscountController;
 use App\Http\Controllers\Pos\StockTransferController;
 use App\Http\Controllers\SuperAdmin\SuperAdminAuthController;
@@ -268,6 +269,13 @@ Route::prefix('{branch}')
         Route::get('items/export',          [PosItemController::class, 'exportCsv'])->name('items.export')->middleware('pos.role:canManageItems');
         Route::post('items/import',          [PosItemController::class, 'importNativeCsv'])->name('items.import')->middleware('pos.role:canManageItems');
         Route::post('items/import-medfusion',[PosItemController::class, 'importMedfusionCsv'])->name('items.import-medfusion')->middleware('pos.role:canManageItems');
+        // Barcode Management & Studio
+        Route::get('items/barcodes',                      [BarcodeController::class, 'index'])->name('items.barcodes')->middleware('pos.role:canManageBarcodes');
+        Route::get('items/barcodes/search-items',         [BarcodeController::class, 'searchItems'])->name('items.barcodes.search-items')->middleware('pos.role:canManageBarcodes');
+        Route::post('items/{item}/barcodes/generate',     [BarcodeController::class, 'generate'])->name('items.barcodes.generate')->middleware('pos.role:canManageBarcodes');
+        Route::post('items/barcodes/generate-bulk',       [BarcodeController::class, 'generateBulk'])->name('items.barcodes.generate-bulk')->middleware('pos.role:canManageBarcodes');
+        Route::post('items/barcodes/log-print',           [BarcodeController::class, 'logPrint'])->name('items.barcodes.log-print')->middleware('pos.role:canManageBarcodes');
+
         Route::resource('items', PosItemController::class)
             ->names([
                 'index'   => 'items.index',
@@ -341,6 +349,13 @@ Route::prefix('{branch}')
             ->middleware('pos.role:canEditSettings');
         Route::match(['put', 'post'], '/settings', [PosSettingsController::class, 'update'])
             ->name('settings.update')
+            ->middleware('pos.role:canEditSettings');
+
+        // Workstation & Terminal Printer Setup (Accessible to all staff)
+        Route::get('/printer-setup', [\App\Http\Controllers\Pos\PrinterSetupController::class, 'index'])
+            ->name('printer-setup');
+        Route::post('/printer-setup/branch-default', [\App\Http\Controllers\Pos\PrinterSetupController::class, 'saveBranchDefault'])
+            ->name('printer-setup.save-branch-default')
             ->middleware('pos.role:canEditSettings');
 
         // Branch Audit & Error Logs

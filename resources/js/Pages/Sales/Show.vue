@@ -118,6 +118,7 @@ const showReceiptModal = ref(false)
             v-if="showReceiptModal"
             :sale="sale"
             :settings="settings"
+            :is-reprint="true"
             @close="showReceiptModal = false"
         />
     </div>

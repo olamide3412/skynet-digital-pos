@@ -19,7 +19,7 @@ class RoleController extends Controller
         'canApplyDiscount', 'canEditPrice', 'canViewBuyPrice', 'canViewEndOfDay',
         'canViewReports', 'canViewProfitLoss', 'canManageDebt', 'canGiveDebt',
         'canAdjustStock', 'canTransferStock', 'canManagePurchases', 'canManageItems',
-        'canManageCustomers', 'canManageUsers', 'canEditSettings',
+        'canManageBarcodes', 'canManageCustomers', 'canManageUsers', 'canEditSettings',
     ];
 
     public function index()

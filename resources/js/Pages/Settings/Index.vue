@@ -25,6 +25,13 @@ const form = useForm({
     wholesale_profit_percent: props.settings.wholesale_profit_percent ?? 10,
     consumer_profit_percent:  props.settings.consumer_profit_percent ?? 15,
     business_sector:          props.settings.business_sector ?? 'commerce',
+    receipt_paper_size:       props.settings.receipt_paper_size ?? '80mm',
+    receipt_printer_name:     props.settings.receipt_printer_name ?? 'Default POS Printer',
+    printer_type:             props.settings.printer_type ?? 'thermal_80mm',
+    printer_connection:       props.settings.printer_connection ?? 'kiosk_direct',
+    printer_ip_address:       props.settings.printer_ip_address ?? '',
+    auto_print_receipt:       !!props.settings.auto_print_receipt,
+    show_receipt_preview:     props.settings.show_receipt_preview !== false && props.settings.show_receipt_preview !== 0,
 })
 
 function submit() {
@@ -91,6 +98,26 @@ function submit() {
                         <input v-model="form.business_address" type="text" maxlength="255"
                             class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
                     </div>
+                </div>
+
+                <!-- ══ RECEIPT & PRINTER SETTINGS BANNER ═════════════════════ -->
+                <div class="bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-300 dark:border-emerald-700/60 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+                    <div class="flex items-center gap-3.5">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg flex-shrink-0 shadow-sm">
+                            🖨️
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900 dark:text-white">Terminal & Printer Configuration</h3>
+                            <p class="text-xs text-slate-600 dark:text-slate-400">
+                                Configure local thermal 80mm / A4 receipt printers, network IP addresses, and test zero-dialogue printing.
+                            </p>
+                        </div>
+                    </div>
+                    <Link :href="route('pos.printer-setup')"
+                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer">
+                        <span>Open Printer Setup</span>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </Link>
                 </div>
 
                 <!-- POS Behaviour -->

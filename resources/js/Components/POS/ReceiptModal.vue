@@ -2,17 +2,33 @@
 import { usePage }        from '@inertiajs/vue3'
 import { useCurrency }  from '@/Composables/useCurrency'
 import { usePrint }     from '@/Composables/usePrint'
-import { computed, ref, onMounted, watch, nextTick } from 'vue'
+import { usePrinterSetting } from '@/Composables/usePrinterSetting'
+import { computed, ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import dayjs            from 'dayjs'
 import JsBarcode        from 'jsbarcode'
 
 const props = defineProps({
-    sale:     { type: Object, required: true },
-    settings: { type: Object, default: () => ({}) },
+    sale:         { type: Object, required: true },
+    settings:     { type: Object, default: () => ({}) },
+    isReprint:    { type: Boolean, default: false },
+    customCopies: { type: Number, default: null },
 })
 const emit = defineEmits(['close'])
 
 const page = usePage()
+const { resolvePrinter } = usePrinterSetting()
+const effectivePrinter = computed(() => resolvePrinter(props.settings))
+
+// Paper format selection
+const selectedPaperSize = ref(effectivePrinter.value.paper_size || '80mm')
+
+// Determine copies: if reprinting from history, default to 1 copy; otherwise use workstation setting
+const printCopies = ref(
+    props.isReprint
+        ? (props.customCopies ?? 1)
+        : (props.customCopies ?? effectivePrinter.value.receipt_copies ?? 1)
+)
+
 const poweredByName = computed(() => {
     return page.props.system_config?.company_name || page.props.store_settings?.company_name || props.settings?.business_name || 'SkyNet Digital POS'
 })
@@ -24,6 +40,10 @@ const barcodeSvg       = ref(null)
 const saleDate = computed(() =>
     dayjs(props.sale.created_at || new Date()).format('DD MMM YYYY  HH:mm')
 )
+
+const printerName = computed(() => {
+    return effectivePrinter.value.printer_name || 'Default POS Printer'
+})
 
 function renderBarcode() {
     if (!barcodeSvg.value || !props.sale.receipt_id) return
@@ -46,8 +66,38 @@ function renderBarcode() {
     }
 }
 
-onMounted(() => nextTick(renderBarcode))
-watch(() => props.sale.receipt_id, () => nextTick(renderBarcode))
+function printSelected() {
+    printElement('.receipt-print-area', {
+        paperSize: selectedPaperSize.value,
+        printerConnection: effectivePrinter.value.printer_connection,
+        printerIpAddress: effectivePrinter.value.printer_ip_address,
+        printerName: effectivePrinter.value.printer_name,
+        copies: printCopies.value || 1,
+    })
+}
+
+function handleKeydown(e) {
+    if (e.key === 'Enter') {
+        e.preventDefault()
+        printSelected()
+    } else if (e.key === 'Escape') {
+        e.preventDefault()
+        emit('close')
+    }
+}
+
+onMounted(() => {
+    nextTick(renderBarcode)
+    window.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+    window.removeEventListener('keydown', handleKeydown)
+})
+
+watch(() => props.sale.receipt_id, () => {
+    nextTick(renderBarcode)
+})
 
 const items = computed(() => props.sale.sale_orders || props.sale.saleOrders || props.sale.items || [])
 
@@ -58,64 +108,48 @@ const discountAmt  = computed(() => parseFloat(props.sale.discount_amount || 0))
 const taxAmt       = computed(() => parseFloat(props.sale.tax_amount   || 0))
 const changeBal    = computed(() => parseFloat(props.sale.change_bal   || 0))
 const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.value - amountPaid.value) : 0)
-
-function printThermal() {
-    printElement('.receipt-print-area', { paperSize: '80mm' })
-}
-
-function printA4() {
-    printElement('.receipt-print-area', { paperSize: 'A4' })
-}
 </script>
 
 <template>
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
         <!-- Modal shell -->
-        <div class="bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-md flex flex-col overflow-hidden">
+        <div class="bg-white text-gray-900 rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[92vh] overflow-hidden border border-slate-200 dark:border-slate-700">
 
-            <!-- ── Action bar (not printed) ────────────────────────────────── -->
-            <div class="no-print flex items-center justify-between px-4 py-3 bg-slate-50 border-b border-slate-200">
-                <div class="flex items-center gap-2">
-                    <div class="w-7 h-7 bg-emerald-100 rounded-lg flex items-center justify-center">
-                        <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
+            <!-- ── Top Header (Clean & Spacious) ────────────────────────── -->
+            <div class="no-print flex items-center justify-between px-5 py-3.5 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl flex items-center justify-center font-bold text-lg flex-shrink-0">
+                        🧾
                     </div>
-                    <span class="font-bold text-sm text-slate-800">Sales Receipt</span>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="font-bold text-sm text-slate-900 dark:text-white">Sales Receipt Preview</h2>
+                            <span v-if="isReprint" class="text-[10px] px-2 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-300 font-bold rounded-full">
+                                Reprint
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                            <span class="font-mono font-medium text-slate-700 dark:text-slate-300">#{{ sale.receipt_id }}</span>
+                            <span>•</span>
+                            <span class="truncate max-w-[180px]">{{ printerName }}</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="flex items-center gap-1.5">
-                    <!-- Print 80mm Thermal -->
-                    <button @click="printThermal"
-                        title="Print 80mm Thermal Receipt"
-                        class="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg transition shadow-xs">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-                        </svg>
-                        80mm Thermal
-                    </button>
 
-                    <!-- Print A4 Invoice -->
-                    <button @click="printA4"
-                        title="Print A4 Invoice Paper"
-                        class="flex items-center gap-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition shadow-xs">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
-                        A4 Paper
-                    </button>
-
-                    <button @click="emit('close')"
-                        class="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-semibold rounded-lg transition">
-                        Close
-                    </button>
-                </div>
+                <!-- Close 'X' Button -->
+                <button
+                    @click="emit('close')"
+                    type="button"
+                    class="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-700 transition cursor-pointer"
+                    title="Close (Esc)">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
             </div>
 
-            <!-- ── Receipt printable area ───────────────────────────────────── -->
-            <div class="receipt-print-area overflow-y-auto max-h-[75vh] px-5 py-4"
+            <!-- ── Receipt printable area (Scrollable middle body) ───────────── -->
+            <div class="receipt-print-area overflow-y-auto flex-1 p-6 bg-white"
                  style="font-family: 'Consolas', 'Lucida Console', 'Segoe UI', Arial, 'Courier New', monospace, sans-serif; font-size: 12px; font-weight: 600; line-height: 1.4; color: #000000;">
 
                 <!-- ══ BUSINESS HEADER ══════════════════════════════════════ -->
@@ -274,6 +308,73 @@ function printA4() {
                 </div>
 
             </div><!-- end receipt-print-area -->
+
+            <!-- ── Bottom Action Toolbar (Spacious & Clean) ──────────────────── -->
+            <div class="no-print bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
+                <!-- Left: Paper format toggle & Copies selector -->
+                <div class="flex items-center gap-3">
+                    <!-- Paper Format Toggle -->
+                    <div class="flex items-center bg-slate-200/80 dark:bg-slate-700 p-0.5 rounded-lg text-xs font-semibold">
+                        <button
+                            type="button"
+                            @click="selectedPaperSize = '80mm'"
+                            :class="['px-2.5 py-1 rounded-md transition cursor-pointer',
+                                selectedPaperSize === '80mm'
+                                    ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs font-bold'
+                                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900']">
+                            80mm Thermal
+                        </button>
+                        <button
+                            type="button"
+                            @click="selectedPaperSize = 'A4'"
+                            :class="['px-2.5 py-1 rounded-md transition cursor-pointer',
+                                selectedPaperSize === 'A4'
+                                    ? 'bg-white dark:bg-slate-800 text-emerald-600 dark:text-emerald-400 shadow-xs font-bold'
+                                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900']">
+                            A4 Page
+                        </button>
+                    </div>
+
+                    <!-- Copies Stepper -->
+                    <div class="flex items-center border border-slate-300 dark:border-slate-600 rounded-lg overflow-hidden bg-white dark:bg-slate-700 text-xs">
+                        <button
+                            type="button"
+                            @click="printCopies = Math.max(1, printCopies - 1)"
+                            class="px-2 py-1 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 font-bold cursor-pointer select-none">
+                            -
+                        </button>
+                        <span class="px-2 py-1 font-mono font-bold text-xs text-slate-800 dark:text-slate-200">
+                            {{ printCopies }} {{ printCopies === 1 ? 'Copy' : 'Copies' }}
+                        </span>
+                        <button
+                            type="button"
+                            @click="printCopies = Math.min(10, printCopies + 1)"
+                            class="px-2 py-1 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-600 font-bold cursor-pointer select-none">
+                            +
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Right: Print and Done buttons -->
+                <div class="flex items-center gap-2">
+                    <button
+                        @click="emit('close')"
+                        type="button"
+                        class="px-3.5 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-xl transition cursor-pointer">
+                        Done (Esc)
+                    </button>
+
+                    <button
+                        @click="printSelected"
+                        type="button"
+                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition shadow-md shadow-emerald-600/20 active:scale-95 flex items-center gap-2 cursor-pointer">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                        </svg>
+                        <span>Print ({{ selectedPaperSize }}{{ printCopies > 1 ? ' · ' + printCopies + 'x' : '' }})</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </template>
