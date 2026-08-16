@@ -13,7 +13,7 @@ class Item extends Model
         'item_name', 'barcode_number',
         'buy_price', 'stock_worth', 'price', 'wholesale_price',
         'pack_price', 'carton_price', 'pack_wholesale_price', 'carton_wholesale_price',
-        'price_locked',
+        'price_locked', 'is_imei_tracked',
         'back_store_qty', 'front_store_qty',
         'reorder_point', 'reorder_unit',
         'unit_label', 'pack_label', 'carton_label',
@@ -27,6 +27,7 @@ class Item extends Model
     {
         return [
             'price_locked'           => 'boolean',
+            'is_imei_tracked'        => 'boolean',
             'buy_price'              => 'decimal:2',
             'stock_worth'            => 'decimal:2',
             'price'                  => 'decimal:2',
@@ -232,5 +233,15 @@ class Item extends Model
     {
         // Uses branch settings threshold if not passed
         return $this->front_store_qty <= ($threshold ?? 0);
+    }
+
+    public function deviceUnits(): HasMany
+    {
+        return $this->hasMany(ItemDeviceUnit::class);
+    }
+
+    public function inStockDeviceUnits(): HasMany
+    {
+        return $this->hasMany(ItemDeviceUnit::class)->where('status', 'in_stock');
     }
 }

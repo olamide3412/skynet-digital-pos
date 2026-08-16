@@ -10,7 +10,7 @@ class SaleOrder extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'sale_id', 'item_id', 'item_name', 'selling_price',
+        'sale_id', 'item_id', 'item_name', 'imei_or_device_id', 'selling_price',
         'total_selling_price', 'qty', 'unit_used', 'purchase_type', 'user_id', 'sort_date',
     ];
 
@@ -37,5 +37,10 @@ class SaleOrder extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function deviceUnit(): BelongsTo
+    {
+        return $this->belongsTo(ItemDeviceUnit::class, 'imei_or_device_id', 'imei_or_device_id');
     }
 }

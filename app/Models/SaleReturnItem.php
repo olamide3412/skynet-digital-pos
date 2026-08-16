@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SaleReturnItem extends Model
 {
     protected $fillable = [
-        'sale_id', 'item_id', 'item_name', 'qty', 'unit_used', 'price',
+        'sale_id', 'item_id', 'item_name', 'imei_or_device_id', 'qty', 'unit_used', 'price',
         'total_price', 'purchase_type', 'return_reason', 'refund_amount', 'user_id',
     ];
 

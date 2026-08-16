@@ -216,7 +216,11 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
                             style="border-bottom: 1px dashed #000000;">
                             <td style="padding: 4px 0; font-weight:600; color:#000000; word-break:break-word; max-width:100px;">
                                 {{ item.item_name }}
-                                <div v-if="item.unit_used && item.unit_used !== 'unit'"
+                                <div v-if="item.imei_or_device_id"
+                                     style="font-size:10px; font-family:monospace; font-weight:700; color:#000000; margin-top:1px;">
+                                    IMEI: {{ item.imei_or_device_id }}
+                                </div>
+                                <div v-else-if="item.unit_used && item.unit_used !== 'unit'"
                                      style="font-size:10px; font-weight:600; color:#000000; text-transform:capitalize;">
                                     ({{ item.unit_used }})
                                 </div>

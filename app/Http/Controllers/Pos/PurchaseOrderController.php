@@ -121,27 +121,60 @@ class PurchaseOrderController extends Controller
         }
 
         $data = $request->validate([
-            'items'           => 'required|array|min:1',
-            'items.*.id'      => 'required|exists:purchase_order_items,id',
+            'items'               => 'required|array|min:1',
+            'items.*.id'          => 'required|exists:purchase_order_items,id',
             'items.*.receive_qty' => 'required|integer|min:0',
+            'items.*.location'    => 'nullable|in:back_store,front_store',
+            'items.*.imeis'       => 'nullable|array',
+            'items.*.imeis.*'     => 'nullable|string|max:100',
         ]);
 
-        DB::transaction(function () use ($data, $purchase) {
+        $branch = current_branch();
+
+        DB::transaction(function () use ($data, $purchase, $branch) {
             $allReceived = true;
             $itemsReceived = 0;
 
             foreach ($data['items'] as $receiveData) {
-                $poItem = $purchase->items()->find($receiveData['id']);
+                $poItem = $purchase->items()->with('item')->find($receiveData['id']);
                 if (!$poItem || $receiveData['receive_qty'] <= 0) {
                     if ($poItem && $poItem->received_qty < $poItem->qty) $allReceived = false;
                     continue;
                 }
 
                 $qtyToReceive = $receiveData['receive_qty'];
+                $destLocation = $receiveData['location'] ?? 'back_store';
                 
                 // Prevent over-receiving
                 if ($poItem->received_qty + $qtyToReceive > $poItem->qty) {
                     $qtyToReceive = $poItem->qty - $poItem->received_qty;
+                }
+
+                $item = $poItem->item;
+                $enteredImeis = [];
+
+                // Handle IMEI tracking validation
+                if ($item && $item->is_imei_tracked && $qtyToReceive > 0) {
+                    $rawImeis = $receiveData['imeis'] ?? [];
+                    $enteredImeis = array_values(array_unique(array_filter(array_map('trim', $rawImeis))));
+
+                    if (count($enteredImeis) !== $qtyToReceive) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'items' => "Please enter exactly {$qtyToReceive} distinct IMEI/Device IDs for '{$item->item_name}' (entered: " . count($enteredImeis) . ").",
+                        ]);
+                    }
+
+                    // Check duplicate in-stock IMEIs for this branch
+                    $duplicate = \App\Models\ItemDeviceUnit::where('branch_id', $branch->id)
+                        ->where('status', 'in_stock')
+                        ->whereIn('imei_or_device_id', $enteredImeis)
+                        ->value('imei_or_device_id');
+
+                    if ($duplicate) {
+                        throw \Illuminate\Validation\ValidationException::withMessages([
+                            'items' => "IMEI/Device ID '{$duplicate}' is already in stock in this branch.",
+                        ]);
+                    }
                 }
                 
                 if ($qtyToReceive > 0) {
@@ -153,14 +186,30 @@ class PurchaseOrderController extends Controller
                     ]);
 
                     $poItem->increment('received_qty', $qtyToReceive);
+
+                    // Insert individual device unit records
+                    if ($item && $item->is_imei_tracked && !empty($enteredImeis)) {
+                        foreach ($enteredImeis as $imei) {
+                            \App\Models\ItemDeviceUnit::create([
+                                'branch_id'         => $branch->id,
+                                'item_id'           => $item->id,
+                                'imei_or_device_id' => $imei,
+                                'status'            => 'in_stock',
+                                'location'          => $destLocation,
+                                'purchase_order_id' => $purchase->id,
+                                'user_id'           => Auth::id(),
+                            ]);
+                        }
+                    }
                     
-                    // Update item stock natively
+                    // Update item stock natively into chosen location (back_store by default)
                     InventoryService::restock(
                         $poItem->item_id,
                         $qtyToReceive,
                         $purchase->po_number,
                         Auth::user(),
-                        'purchase'
+                        'purchase',
+                        $destLocation
                     );
                     
                     // Update base item buy_price based on new cost

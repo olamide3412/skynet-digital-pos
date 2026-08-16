@@ -69,12 +69,45 @@ export const useCartStore = defineStore('cart', () => {
         return parseFloat(isWholesale && Number(item.wholesale_price) > 0 ? item.wholesale_price : item.price)
     }
 
+    const hasUnassignedImeis = computed(() => {
+        return items.value.some(i => i.is_imei_tracked && !i.selected_imei)
+    })
+
     // ── Actions ────────────────────────────────────────────────────────────
-    function addItem(item, unit = 'unit') {
+    function addItem(item, unit = 'unit', preselectedImei = null) {
         const unitUsed  = unit || 'unit'
-        const key       = `${item.id}_${unitUsed}`
+        const isImei    = !!(item.is_imei_tracked || item.raw_item?.is_imei_tracked)
         const unitPrice = getPriceForUnit(item, unitUsed, purchaseType.value)
 
+        // For IMEI-tracked items, each unit must be its own line so it can hold 1 unique serial/IMEI
+        if (isImei) {
+            const key = `${item.id}_unit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+            items.value.push({
+                cart_key:         key,
+                item_id:          item.id,
+                item_name:        item.item_name,
+                qty:              1,
+                unit_used:        'unit',
+                unit_price:       unitPrice,
+                buy_price:        parseFloat(item.buy_price || 0),
+                purchase_type:    purchaseType.value,
+                line_total:       Math.round(unitPrice * 100) / 100,
+                price_locked:     item.price_locked || false,
+                max_qty:          item.front_store_qty ?? item.qty ?? 9999,
+                unit_label:       item.unit_label || 'Unit',
+                pack_label:       item.pack_label || 'Pack',
+                carton_label:     item.carton_label || 'Carton',
+                units_per_pack:   item.units_per_pack || 1,
+                packs_per_carton: item.packs_per_carton || 1,
+                is_imei_tracked:  true,
+                available_imeis:  item.available_imeis || [],
+                selected_imei:    preselectedImei || null,
+                raw_item:         item,
+            })
+            return
+        }
+
+        const key = `${item.id}_${unitUsed}`
         const existing = items.value.find(i => i.cart_key === key || (i.item_id === item.id && i.unit_used === unitUsed))
         if (existing) {
             existing.qty++
@@ -97,8 +130,18 @@ export const useCartStore = defineStore('cart', () => {
                 carton_label:     item.carton_label || 'Carton',
                 units_per_pack:   item.units_per_pack || 1,
                 packs_per_carton: item.packs_per_carton || 1,
+                is_imei_tracked:  false,
+                available_imeis:  [],
+                selected_imei:    null,
                 raw_item:         item,
             })
+        }
+    }
+
+    function setItemImei(cartKey, imei) {
+        const item = items.value.find(i => i.cart_key === cartKey || i.item_id === cartKey)
+        if (item) {
+            item.selected_imei = imei
         }
     }
 
@@ -197,10 +240,11 @@ export const useCartStore = defineStore('cart', () => {
     function toPayload() {
         return {
             items: items.value.map(i => ({
-                item_id:   i.item_id,
-                qty:       i.qty,
-                price:     i.unit_price,
-                unit_used: i.unit_used || 'unit',
+                item_id:            i.item_id,
+                qty:                i.qty,
+                price:              i.unit_price,
+                unit_used:          i.unit_used || 'unit',
+                imei_or_device_id:  i.selected_imei || null,
             })),
             customer_id:      customer.value?.id ?? null,
             purchase_type:    purchaseType.value,
@@ -216,8 +260,8 @@ export const useCartStore = defineStore('cart', () => {
 
     return {
         items, customer, purchaseType, discount, consultationFee, payment,
-        subtotal, discountAmount, taxAmount, grandTotal, itemCount,
-        addItem, switchUnit, removeItem, updateQty, updatePrice,
+        subtotal, discountAmount, taxAmount, grandTotal, itemCount, hasUnassignedImeis,
+        addItem, switchUnit, removeItem, updateQty, updatePrice, setItemImei,
         setPurchaseType, applyDiscount, clearDiscount,
         setCustomer, clearCustomer, setConsultationFee,
         clearCart, loadFromHeld, toPayload,

@@ -46,6 +46,7 @@ class SettingsController extends Controller
             'is_qty_deduction'         => 'nullable|boolean',
             'out_of_stock'             => 'required|integer|min:0',
             'is_check_expiration'      => 'nullable|boolean',
+            'is_imei_enabled'          => 'nullable|boolean',
             'is_show_buy_price'        => 'nullable|boolean',
             'is_use_profit_percentage' => 'nullable|boolean',
             'is_tax_enabled'           => 'nullable|boolean',

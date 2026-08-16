@@ -33,6 +33,8 @@ const form = useForm({
     expiry_date:            '',
     item_description:       '',
     price_locked:           false,
+    is_imei_tracked:        false,
+    initial_imeis:          '',
     image:                  null,
 })
 
@@ -308,7 +310,40 @@ function submit() {
                     </div>
                 </div>
 
-                <!-- 4. Inventory Stock Levels (Base Units) -->
+                <!-- 4. IMEI / Device ID Tracking (When Enabled for Branch) -->
+                <div v-if="settings?.is_imei_enabled" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                            📱 IMEI / Serial / Device ID Tracking
+                        </h2>
+                        <span class="text-xs text-slate-500">For gadgets, smartphones, laptops & electronics</span>
+                    </div>
+
+                    <label class="flex items-center gap-3 cursor-pointer p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                        <input type="checkbox" v-model="form.is_imei_tracked" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                        <div>
+                            <span class="text-sm font-semibold text-slate-900 dark:text-white">Track this item by unique IMEI / Serial Number</span>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Each physical unit sold will require selecting or scanning its specific serial/IMEI at checkout.</p>
+                        </div>
+                    </label>
+
+                    <div v-if="form.is_imei_tracked" class="space-y-2 p-3.5 bg-emerald-50/50 dark:bg-emerald-950/20 rounded-xl border border-emerald-200 dark:border-emerald-800">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            Initial In-Stock IMEIs / Serial Numbers (Optional — Paste or scan 1 per line)
+                        </label>
+                        <textarea
+                            v-model="form.initial_imeis"
+                            rows="3"
+                            placeholder="354892019283741&#10;354892019283742&#10;FK1290XYZ"
+                            class="w-full bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-xs font-mono transition"
+                        ></textarea>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                            Count of entered IMEIs will automatically set the starting in-stock quantity. You can also receive IMEIs later via Purchase Orders.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 5. Inventory Stock Levels (Base Units) -->
                 <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
                     <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b border-slate-200 dark:border-slate-700 pb-2">
                         Inventory Stock Levels (In Base {{ form.unit_label || 'Units' }})

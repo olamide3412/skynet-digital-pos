@@ -35,6 +35,7 @@ const form = useForm({
     expiry_date:            props.item.expiry_date ?? '',
     item_description:       props.item.item_description ?? '',
     price_locked:           props.item.price_locked,
+    is_imei_tracked:        !!props.item.is_imei_tracked,
     image:                  null,
 })
 
@@ -309,7 +310,25 @@ function submit() {
                     </div>
                 </div>
 
-                <!-- 4. Inventory Stock Levels (Base Units) -->
+                <!-- 4. IMEI / Device ID Tracking (When Enabled for Branch) -->
+                <div v-if="settings?.is_imei_enabled" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                            📱 IMEI / Serial / Device ID Tracking
+                        </h2>
+                        <span class="text-xs text-slate-500">For gadgets, smartphones, laptops & electronics</span>
+                    </div>
+
+                    <label class="flex items-center gap-3 cursor-pointer p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                        <input type="checkbox" v-model="form.is_imei_tracked" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                        <div>
+                            <span class="text-sm font-semibold text-slate-900 dark:text-white">Track this item by unique IMEI / Serial Number</span>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Each physical unit sold will require selecting or scanning its specific serial/IMEI at checkout.</p>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- 5. Inventory Stock Levels (Base Units) -->
                 <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
                     <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b border-slate-200 dark:border-slate-700 pb-2">
                         Inventory Stock Levels (In Base {{ form.unit_label || 'Units' }})

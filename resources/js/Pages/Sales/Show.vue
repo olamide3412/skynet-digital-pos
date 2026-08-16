@@ -91,7 +91,12 @@ const showReceiptModal = ref(false)
                         </thead>
                         <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
                             <tr v-for="order in sale.sale_orders" :key="order.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/20">
-                                <td class="px-4 py-2 text-slate-900 dark:text-white font-medium">{{ order.item_name }}</td>
+                                <td class="px-4 py-2 text-slate-900 dark:text-white font-medium">
+                                    <div>{{ order.item_name }}</div>
+                                    <div v-if="order.imei_or_device_id" class="text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">
+                                        📱 IMEI: {{ order.imei_or_device_id }}
+                                    </div>
+                                </td>
                                 <td class="px-4 py-2 text-right text-slate-700 dark:text-slate-300 font-mono">{{ format(order.selling_price) }}</td>
                                 <td class="px-4 py-2 text-right text-slate-700 dark:text-slate-300 font-mono">{{ order.qty }}</td>
                                 <td class="px-4 py-2 text-right text-emerald-600 dark:text-emerald-400 font-bold font-mono">{{ format(order.total_selling_price) }}</td>

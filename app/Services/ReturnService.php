@@ -80,19 +80,34 @@ class ReturnService
                 }
 
                 // Record the return
+                $imei = $returnItem['imei_or_device_id'] ?? null;
                 SaleReturnItem::create([
-                    'sale_id'       => $sale?->id,
-                    'item_id'       => $itemId,
-                    'item_name'     => $item->item_name,
-                    'qty'           => $qty,
-                    'unit_used'     => $unitUsed,
-                    'price'         => $unitPrice,
-                    'total_price'   => $refundAmount,
-                    'purchase_type' => $purchaseType,
-                    'return_reason' => $reason,
-                    'refund_amount' => $refundAmount,
-                    'user_id'       => $user->id,
+                    'sale_id'            => $sale?->id,
+                    'item_id'            => $itemId,
+                    'item_name'          => $item->item_name,
+                    'imei_or_device_id'  => $imei,
+                    'qty'                => $qty,
+                    'unit_used'          => $unitUsed,
+                    'price'              => $unitPrice,
+                    'total_price'        => $refundAmount,
+                    'purchase_type'      => $purchaseType,
+                    'return_reason'      => $reason,
+                    'refund_amount'      => $refundAmount,
+                    'user_id'            => $user->id,
                 ]);
+
+                // Restore device unit status to in_stock
+                if ($item->is_imei_tracked && $imei) {
+                    \App\Models\ItemDeviceUnit::where('item_id', $item->id)
+                        ->where('imei_or_device_id', $imei)
+                        ->update([
+                            'status'        => 'in_stock',
+                            'location'      => 'front_store',
+                            'sale_id'       => null,
+                            'sale_order_id' => null,
+                            'sold_at'       => null,
+                        ]);
+                }
 
                 // Format friendly inventory log note
                 $unitLabel = match($unitUsed) {

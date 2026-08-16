@@ -16,12 +16,18 @@ class SaleReturnController extends Controller
             'sale_id'           => 'nullable|integer|exists:sales,id',
             'items'             => 'required|array|min:1',
             'items.*.item_id'   => 'required|integer|exists:items,id',
-            'items.*.qty'       => 'required|integer|min:1',
-            'items.*.unit_used' => 'nullable|string',
-            'items.*.reason'    => 'nullable|string|max:255',
+            'items.*.qty'                => 'required|integer|min:1',
+            'items.*.unit_used'          => 'nullable|string',
+            'items.*.imei_or_device_id'  => 'nullable|string|max:100',
+            'items.*.reason'             => 'nullable|string|max:255',
         ]);
 
         try {
+            \App\Services\ReturnService::process(
+                $data['sale_id'] ?? null,
+                $data['items'],
+                Auth::user()
+            );
             \App\Services\ActivityLogger::return(
                 "Processed sale return for " . count($data['items']) . " item(s)",
                 current_branch()?->id,

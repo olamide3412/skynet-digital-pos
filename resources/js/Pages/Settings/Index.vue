@@ -18,6 +18,7 @@ const form = useForm({
     is_qty_deduction:         !!props.settings.is_qty_deduction,
     out_of_stock:             props.settings.out_of_stock ?? 25,
     is_check_expiration:      !!props.settings.is_check_expiration,
+    is_imei_enabled:          !!props.settings.is_imei_enabled,
     is_show_buy_price:        !!props.settings.is_show_buy_price,
     is_use_profit_percentage: !!props.settings.is_use_profit_percentage,
     is_tax_enabled:           !!props.settings.is_tax_enabled,
@@ -184,6 +185,14 @@ function submit() {
                             <div>
                                 <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Expiry Date Alerts</span>
                                 <p class="text-xs text-slate-500 dark:text-slate-400">Warns cashiers if an item is expiring soon during checkout</p>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" v-model="form.is_imei_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                            <div>
+                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable IMEI / Device ID Tracking</span>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Allows unit-level serial & IMEI tracking for gadgets, phones, laptops, and electronics</p>
                             </div>
                         </label>
                     </div>

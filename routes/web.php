@@ -276,6 +276,10 @@ Route::prefix('{branch}')
         Route::post('items/barcodes/generate-bulk',       [BarcodeController::class, 'generateBulk'])->name('items.barcodes.generate-bulk')->middleware('pos.role:canManageBarcodes');
         Route::post('items/barcodes/log-print',           [BarcodeController::class, 'logPrint'])->name('items.barcodes.log-print')->middleware('pos.role:canManageBarcodes');
 
+        // IMEI & Device Unit Tracking
+        Route::get('items/imei-tracking',                 [\App\Http\Controllers\Pos\ImeiTrackingController::class, 'index'])->name('items.imeis')->middleware('pos.role:canManageItems');
+        Route::get('items/{item}/available-imeis',        [PosItemController::class, 'availableImeis'])->name('items.available-imeis');
+
         Route::resource('items', PosItemController::class)
             ->names([
                 'index'   => 'items.index',
@@ -364,12 +368,13 @@ Route::prefix('{branch}')
 
         // JSON API
         Route::prefix('api')->name('api.')->group(function () {
-            Route::get('/items/search',     [PosItemController::class, 'search'])->name('items.search');
-            Route::get('/customers/search', [PosCustomerController::class, 'search'])->name('customers.search');
-            Route::get('/held-sales',       [HeldSaleController::class, 'apiIndex'])->name('held-sales.index');
-            Route::post('/held-sales',      [HeldSaleController::class, 'apiStore'])->name('held-sales.store');
-            Route::delete('/held-sales/{id}',[HeldSaleController::class, 'apiDestroy'])->name('held-sales.destroy');
-            Route::get('/settings',         [PosSettingsController::class, 'apiShow'])->name('settings.show');
+            Route::get('/items/search',          [PosItemController::class, 'search'])->name('items.search');
+            Route::get('/items/available-imeis', [PosItemController::class, 'availableImeis'])->name('items.available-imeis');
+            Route::get('/customers/search',      [PosCustomerController::class, 'search'])->name('customers.search');
+            Route::get('/held-sales',            [HeldSaleController::class, 'apiIndex'])->name('held-sales.index');
+            Route::post('/held-sales',           [HeldSaleController::class, 'apiStore'])->name('held-sales.store');
+            Route::delete('/held-sales/{id}',     [HeldSaleController::class, 'apiDestroy'])->name('held-sales.destroy');
+            Route::get('/settings',              [PosSettingsController::class, 'apiShow'])->name('settings.show');
         });
     });
 });

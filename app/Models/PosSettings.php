@@ -16,7 +16,7 @@ class PosSettings extends Model
     protected $fillable = [
         'branch_id',
         'is_price_editable', 'is_qty_deduction', 'out_of_stock',
-        'is_check_expiration', 'is_show_buy_price', 'is_use_profit_percentage',
+        'is_check_expiration', 'is_imei_enabled', 'is_show_buy_price', 'is_use_profit_percentage',
         'is_tax_enabled', 'tax_percentage',
         'item_icon_preview', 'wholesale_profit_percent', 'consumer_profit_percent',
         'sell_interface', 'business_sector',
@@ -31,6 +31,7 @@ class PosSettings extends Model
             'is_price_editable'        => 'boolean',
             'is_qty_deduction'         => 'boolean',
             'is_check_expiration'      => 'boolean',
+            'is_imei_enabled'          => 'boolean',
             'is_show_buy_price'        => 'boolean',
             'is_use_profit_percentage' => 'boolean',
             'is_tax_enabled'           => 'boolean',

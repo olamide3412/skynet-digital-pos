@@ -141,6 +141,15 @@ class InventoryService
             $item->decrement($fromCol, $qtyBaseUnits);
             $item->increment($toCol, $qtyBaseUnits);
 
+            if ($item->is_imei_tracked) {
+                \App\Models\ItemDeviceUnit::where('branch_id', $item->branch_id)
+                    ->where('item_id', $item->id)
+                    ->where('status', 'in_stock')
+                    ->where('location', $from)
+                    ->limit($qtyBaseUnits)
+                    ->update(['location' => $to]);
+            }
+
             // Log transfer
             $transfer = StockTransfer::create([
                 'branch_id'      => $item->branch_id,

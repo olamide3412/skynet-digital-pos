@@ -61,6 +61,10 @@ function isValid() {
 
 async function submitSale() {
     if (isSubmitting.value) return
+    if (cart.hasUnassignedImeis) {
+        errors.value = { sale: 'Please select or scan an IMEI/Serial for every device item in the cart before completing payment.' }
+        return
+    }
     if (!isValid()) {
         errors.value = { sale: 'Amount paid must be greater than or equal to the total amount due.' }
         return

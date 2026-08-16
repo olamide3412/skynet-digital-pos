@@ -80,6 +80,24 @@ class SaleService
             if ($settings->is_check_expiration && $item->isExpired()) {
                 throw new \InvalidArgumentException("Item '{$item->item_name}' is expired.");
             }
+
+            if ($item->is_imei_tracked) {
+                $imei = trim($cartItem['imei_or_device_id'] ?? '');
+                if (empty($imei)) {
+                    throw new \InvalidArgumentException("Please assign an IMEI/Serial number to '{$item->item_name}'.");
+                }
+
+                $branchId = $branch?->id ?? $item->branch_id;
+                $deviceUnit = \App\Models\ItemDeviceUnit::where('branch_id', $branchId)
+                    ->where('item_id', $item->id)
+                    ->where('imei_or_device_id', $imei)
+                    ->where('status', 'in_stock')
+                    ->first();
+
+                if (!$deviceUnit) {
+                    throw new \InvalidArgumentException("Device with IMEI '{$imei}' for '{$item->item_name}' is not in stock or already sold.");
+                }
+            }
         }
 
         // Calculate totals & tax
@@ -125,8 +143,9 @@ class SaleService
             $changeBal = max(0, round($amountPaid - $finalTotal, 2));
 
             // Create Sale
+            $resolvedBranchId = $branch?->id ?? $itemsMap->first()?->branch_id;
             $sale = Sale::create([
-                'branch_id' => $branch?->id,
+                'branch_id' => $resolvedBranchId,
                 'customer_id' => $customerId,
                 'receipt_id' => $receiptId,
                 'items_order_count' => count($cartItems),
@@ -156,11 +175,13 @@ class SaleService
                 $unitUsed = $cartItem['unit_used'] ?? 'unit';
                 $price = (float) $cartItem['price'];
                 $baseQty = $item->toBaseUnits($qty, $unitUsed);
+                $imei = $cartItem['imei_or_device_id'] ?? null;
 
-                SaleOrder::create([
+                $saleOrder = SaleOrder::create([
                     'sale_id' => $sale->id,
                     'item_id' => $item->id,
                     'item_name' => $item->item_name,
+                    'imei_or_device_id' => $imei,
                     'selling_price' => $price,
                     'total_selling_price' => $price * $qty,
                     'qty' => $qty,
@@ -169,6 +190,21 @@ class SaleService
                     'user_id' => $user->id,
                     'sort_date' => now(),
                 ]);
+
+                // Mark IMEI device unit as sold
+                if ($item->is_imei_tracked && $imei) {
+                    \App\Models\ItemDeviceUnit::where('branch_id', $resolvedBranchId)
+                        ->where('item_id', $item->id)
+                        ->where('imei_or_device_id', $imei)
+                        ->where('status', 'in_stock')
+                        ->limit(1)
+                        ->update([
+                            'status'        => 'sold',
+                            'sale_id'       => $sale->id,
+                            'sale_order_id' => $saleOrder->id,
+                            'sold_at'       => now(),
+                        ]);
+                }
 
                 // Deduct stock in base units
                 if ($settings->is_qty_deduction) {

@@ -63,6 +63,8 @@ class ItemController extends Controller
             'pack_wholesale_price'   => 'nullable|numeric|min:0',
             'carton_wholesale_price' => 'nullable|numeric|min:0',
             'price_locked'           => 'boolean',
+            'is_imei_tracked'        => 'nullable|boolean',
+            'initial_imeis'          => 'nullable|string',
             'back_store_qty'         => 'nullable|integer|min:0',
             'front_store_qty'        => 'nullable|integer|min:0',
             'unit_label'             => 'nullable|string|max:50',
@@ -94,6 +96,7 @@ class ItemController extends Controller
 
         $data['branch_id']        = $branch->id;
         $data['wholesale_price']  = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? $data['wholesale_price'] : $data['price'];
+        $data['is_imei_tracked']  = !empty($data['is_imei_tracked']);
         $data['front_store_qty']  = $data['front_store_qty'] ?? 0;
         $data['back_store_qty']   = $data['back_store_qty'] ?? 0;
         $data['unit_label']       = $data['unit_label'] ?: 'Unit';
@@ -105,9 +108,34 @@ class ItemController extends Controller
         if ($request->hasFile('image')) {
             $data['image_path'] = $request->file('image')->store('items', 'public');
         }
-        unset($data['image']);
+        $initialImeisRaw = $data['initial_imeis'] ?? '';
+        unset($data['image'], $data['initial_imeis']);
 
         $newItem = Item::create($data);
+
+        // If IMEI tracked and initial IMEIs were entered, create device units
+        if ($newItem->is_imei_tracked && !empty($initialImeisRaw)) {
+            $lines = preg_split('/[\r\n,]+/', $initialImeisRaw, -1, PREG_SPLIT_NO_EMPTY);
+            $enteredImeis = array_values(array_unique(array_filter(array_map('trim', $lines))));
+            
+            $createdCount = 0;
+            foreach ($enteredImeis as $imei) {
+                if (empty($imei)) continue;
+                \App\Models\ItemDeviceUnit::create([
+                    'branch_id'          => $branch->id,
+                    'item_id'            => $newItem->id,
+                    'imei_or_device_id'  => $imei,
+                    'status'             => 'in_stock',
+                    'location'           => 'front_store',
+                    'user_id'            => \Illuminate\Support\Facades\Auth::id(),
+                ]);
+                $createdCount++;
+            }
+            if ($createdCount > 0) {
+                $newItem->update(['front_store_qty' => $createdCount]);
+            }
+        }
+
         \App\Services\ActivityLogger::item("Created item '{$newItem->item_name}' (Barcode: {$newItem->barcode_number})", $branch->id);
         return redirect()->route('pos.items.index')
             ->with('success', 'Item created successfully.');
@@ -143,6 +171,7 @@ class ItemController extends Controller
             'wholesale_price'        => 'nullable|numeric|min:0',
             'minimum_retail_price'   => 'nullable|numeric|min:0',
             'minimum_wholesale_price' => 'nullable|numeric|min:0',
+            'is_imei_tracked'        => 'nullable|boolean',
             'unit_label'             => 'nullable|string|max:50',
             'pack_label'             => 'nullable|string|max:50',
             'carton_label'           => 'nullable|string|max:50',
@@ -167,6 +196,7 @@ class ItemController extends Controller
         }
 
         $data['wholesale_price']  = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? $data['wholesale_price'] : $data['price'];
+        $data['is_imei_tracked']  = !empty($data['is_imei_tracked']);
         $data['unit_label']       = $data['unit_label'] ?: 'Unit';
         $data['pack_label']       = $data['pack_label'] ?: 'Pack';
         $data['carton_label']     = $data['carton_label'] ?: 'Carton';
@@ -216,10 +246,13 @@ class ItemController extends Controller
             ->select('id', 'item_name', 'barcode_number',
                      'back_store_qty', 'front_store_qty', 'price', 'wholesale_price',
                      'pack_price', 'carton_price', 'pack_wholesale_price', 'carton_wholesale_price',
-                     'buy_price', 'expiry_date', 'price_locked', 'category_id', 'image_path',
+                     'buy_price', 'expiry_date', 'price_locked', 'is_imei_tracked', 'category_id', 'image_path',
                      'unit_label', 'pack_label', 'carton_label',
                      'units_per_pack', 'packs_per_carton')
-            ->limit(20)
+            ->with(['inStockDeviceUnits' => function ($query) use ($branch) {
+                $query->where('branch_id', $branch->id)->select('id', 'item_id', 'imei_or_device_id', 'location', 'status');
+            }])
+            ->limit(25)
             ->get()
             ->map(fn($item) => array_merge($item->toArray(), [
                 'qty' => $item->front_store_qty,
@@ -228,9 +261,48 @@ class ItemController extends Controller
                 'pack_display_price' => $item->getPriceForUnitLevel('pack', $purchaseType),
                 'carton_display_price' => $item->getPriceForUnitLevel('carton', $purchaseType),
                 'image_url' => $item->image_url,
+                'available_imeis' => $item->is_imei_tracked
+                    ? $item->inStockDeviceUnits->pluck('imei_or_device_id')->values()->all()
+                    : [],
             ]));
 
         return response()->json($items);
+    }
+
+    /** API: Get available in-stock IMEIs for an item */
+    public function availableImeis(Request $request, $branchParam = null, $item = null)
+    {
+        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
+        $branchId = $branch?->id;
+        $itemId = $item instanceof Item ? $item->id : ($request->get('item_id') ?? $item);
+        
+        if (!$itemId) {
+            return response()->json(['imeis' => [], 'count' => 0]);
+        }
+
+        $targetItem = $item instanceof Item 
+            ? $item 
+            : ($branchId ? Item::where('branch_id', $branchId)->find($itemId) : Item::find($itemId));
+
+        if (!$targetItem) {
+            return response()->json(['imeis' => [], 'count' => 0]);
+        }
+
+        $effectiveBranchId = $branchId ?? $targetItem->branch_id;
+
+        $imeis = \App\Models\ItemDeviceUnit::where('branch_id', $effectiveBranchId)
+            ->where('item_id', $targetItem->id)
+            ->where('status', 'in_stock')
+            ->orderBy('imei_or_device_id')
+            ->get(['id', 'imei_or_device_id', 'location', 'status']);
+
+        return response()->json([
+            'item_id'         => $targetItem->id,
+            'item_name'       => $targetItem->item_name,
+            'is_imei_tracked' => (bool) $targetItem->is_imei_tracked,
+            'count'           => $imeis->count(),
+            'imeis'           => $imeis,
+        ]);
     }
 
     /** Export sample CSV template matching current items table schema */
