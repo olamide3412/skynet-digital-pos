@@ -1,3 +1,32 @@
+@php
+    $companyName      = \App\Models\SystemSetting::get('company_name', 'Skynet Digital Limited');
+    $companyShortName = \App\Models\SystemSetting::get('company_short_name', 'Skynet');
+    $appTagline       = \App\Models\SystemSetting::get('app_tagline', 'Digital POS & Inventory Terminal');
+    $supportPhone     = \App\Models\SystemSetting::get('support_phone', '+234 803 207 2831');
+    $supportEmail     = \App\Models\SystemSetting::get('support_email', 'support@skynetdigitalltd.com');
+    $logoPath         = \App\Models\SystemSetting::get('company_logo_path');
+    $companyLogo      = $logoPath ? asset('storage/' . $logoPath) : asset('images/logo.png');
+    $cleanPhone       = preg_replace('/[^0-9]/', '', $supportPhone);
+
+    $jsonLdData = [
+        '@context' => 'https://schema.org',
+        '@type' => 'Organization',
+        'name' => $companyName,
+        'description' => $companyName . ' - ' . $appTagline . '. Streamlined sales processing, multi-branch inventory tracking, and business reporting.',
+        'url' => url('/'),
+        'logo' => $companyLogo,
+        'sameAs' => [
+            'https://wa.me/' . $cleanPhone,
+        ],
+        'contactPoint' => [
+            '@type' => 'ContactPoint',
+            'telephone' => $supportPhone,
+            'contactType' => 'Customer Support',
+            'availableLanguage' => 'English',
+            'email' => $supportEmail,
+        ],
+    ];
+@endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-theme="light">
 
@@ -5,12 +34,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title inertia>{{ config('app.name', 'Skynet Digital Limited') }}</title>
+    <title inertia>{{ $companyName }} - {{ $appTagline }}</title>
 
     <meta name="description"
-        content="Skynet Digital Limited offers professional technology solutions, networking, product development, IT training, and maintenance services. Trusted expertise for your digital growth.">
+        content="{{ $companyName }} - {{ $appTagline }}. Streamlined sales processing, multi-branch inventory tracking, real-time barcode scanning, and business reporting.">
     <meta name="keywords"
-        content="Skynet Digital, Skynet Digital Limited, Tech Company Nigeria, Networking Services, Product Development, IT Training Nigeria, AI, Tech Solutions Delta State">
+        content="{{ $companyName }}, {{ $companyShortName }}, POS System, Retail Management, Inventory Tracking, Point of Sale, Tech Solutions">
     <link rel="canonical" href="{{ url()->current() }}">
     <meta name="robots" content="index, follow">
 
@@ -29,55 +58,31 @@
         <meta name="twitter:description" content="{{ $meta['description'] }}">
         <meta name="twitter:image" content="{{ $meta['image'] }}">
     @else
-        <meta property="og:title" content="Skynet Digital Limited">
+        <meta property="og:title" content="{{ $companyName }}">
         <meta property="og:description"
-            content="Skynet Digital Limited provides professional technology solutions, including networking, product development, and IT training.">
+            content="{{ $companyName }} - {{ $appTagline }}. Streamlined sales processing, multi-branch inventory tracking, real-time barcode scanning, and business reporting.">
         <meta property="og:type" content="website">
         <meta property="fb:app_id" content="1440937930739472">
-        <meta property="og:image" content="{{ asset('images/logo.png') }}">
+        <meta property="og:image" content="{{ $companyLogo }}">
         <meta property="og:image:width" content="1200">
         <meta property="og:image:height" content="630">
         <meta property="og:url" content="{{ url()->current() }}">
 
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="Skynet Digital Limited">
+        <meta name="twitter:title" content="{{ $companyName }}">
         <meta name="twitter:description"
-            content="Professional technology solutions, networking, product development, and IT training.">
-        <meta name="twitter:image" content="{{ asset('images/logo.png') }}">
+            content="{{ $companyName }} - {{ $appTagline }}. Professional POS & inventory management system.">
+        <meta name="twitter:image" content="{{ $companyLogo }}">
     @endisset
 
 
     <script type="application/ld+json">
-            {
-                "@@context": "https://schema.org",
-                "@type": "Organization",
-                "name": "Skynet Digital Limited",
-                "description": "Skynet Digital Limited provides professional technology solutions, including networking, product development, and IT training.",
-                "url": "https://pos.skynetdigitalltd.com",
-                "logo": "{{ Vite::asset('resources/images/logo.png') }}",
-                "sameAs": [
-                    "https://wa.me/2348032072831"
-                ],
-                "address": {
-                    "@type": "PostalAddress",
-                    "streetAddress": "Delta State",
-                    "addressLocality": "Asaba",
-                    "addressRegion": "Delta State",
-                    "addressCountry": "Nigeria"
-                },
-                "contactPoint": {
-                    "@type": "ContactPoint",
-                    "telephone": "+2348032072831",
-                    "contactType": "Customer Support",
-                    "areaServed": "NG",
-                    "availableLanguage": "English",
-                    "email": "support@skynetdigitalltd.com"
-                }
-            }
-        </script>
+        {!! json_encode($jsonLdData, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT) !!}
+    </script>
 
 
-    <link rel="icon" type="image/png" href="{{ Vite::asset('resources/images/logo.png') }}">
+
+    <link rel="icon" type="image/png" href="{{ $companyLogo }}">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">
