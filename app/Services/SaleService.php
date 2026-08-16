@@ -102,7 +102,9 @@ class SaleService
             $totalCost += $lineCost;
         }
 
-        $profitMade = ($amountCost + $consultFee - $discountAmount) - $totalCost;
+        $amountCost = round($amountCost, 2);
+        $totalCost  = round($totalCost, 2);
+        $profitMade = round(($amountCost + $consultFee - $discountAmount) - $totalCost, 2);
 
         // Tax calculation on post-discount subtotal
         $taxAmount = 0;
@@ -113,14 +115,14 @@ class SaleService
             $taxAmount = round(($taxableSubtotal * $taxPercentage) / 100, 2);
         }
 
-        $finalTotal = $amountCost + $consultFee - $discountAmount + $taxAmount;
+        $finalTotal = round($amountCost + $consultFee - $discountAmount + $taxAmount, 2);
 
         return DB::transaction(function () use ($data, $user, $branch, $settings, $cartItems, $itemsMap, $purchaseType, $customerId, $amountCost, $finalTotal, $profitMade, $discountAmount, $consultFee, $taxAmount, $taxPercentage) {
             $receiptId = static::generateReceiptId();
             $paymentMethod = $data['payment_method'] ?? 'Cash';
             $isDebt = (bool) ($data['is_debt'] ?? false);
-            $amountPaid = (float) ($data['amount_paid'] ?? 0);
-            $changeBal = max(0, $amountPaid - $finalTotal);
+            $amountPaid = round((float) ($data['amount_paid'] ?? 0), 2);
+            $changeBal = max(0, round($amountPaid - $finalTotal, 2));
 
             // Create Sale
             $sale = Sale::create([

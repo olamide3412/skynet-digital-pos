@@ -36,10 +36,13 @@ class AppServiceProvider extends ServiceProvider
         Model::unguard();
 
         Paginator::useTailwind();
-         // Set the timezone for Carbon (and all date/time functions)
         config(['app.timezone' => 'Africa/Lagos']);
         date_default_timezone_set(config('app.timezone'));
         Carbon::setLocale(config('app.locale'));
+
+        if ($this->app->environment('production') || request()->header('X-Forwarded-Proto') === 'https' || (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on')) {
+            \Illuminate\Support\Facades\URL::forceScheme('https');
+        }
 
 
         Inertia::share([

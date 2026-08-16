@@ -36,21 +36,27 @@ function handleTabChange(t) {
 }
 
 const change = computed(() => {
-    if (tab.value === 'Cash') return Math.max(0, cashInput.value - cart.grandTotal)
+    if (tab.value === 'Cash') {
+        const diff = Number(cashInput.value || 0) - cart.grandTotal
+        return diff > 0 ? Math.round(diff * 100) / 100 : 0
+    }
     return 0
 })
 
 const amountPaid = computed(() => {
-    if (tab.value === 'Cash')          return Number(cashInput.value || 0)
-    if (tab.value === 'Bank Transfer') return Number(bankInput.value || 0)
-    if (tab.value === 'Split')         return Number(cashInput.value || 0) + Number(bankInput.value || 0)
-    if (tab.value === 'Debt')          return Number(cashInput.value || 0)  // partial, rest is debt
-    return 0
+    let raw = 0
+    if (tab.value === 'Cash')          raw = Number(cashInput.value || 0)
+    else if (tab.value === 'Bank Transfer') raw = Number(bankInput.value || 0)
+    else if (tab.value === 'Split')         raw = Number(cashInput.value || 0) + Number(bankInput.value || 0)
+    else if (tab.value === 'Debt')          raw = Number(cashInput.value || 0)  // partial, rest is debt
+    return Math.round(raw * 100) / 100
 })
 
 function isValid() {
     if (tab.value === 'Debt') return true  // allow partial/zero
-    return amountPaid.value >= cart.grandTotal
+    const targetCents = Math.round((cart.grandTotal || 0) * 100)
+    const paidCents = Math.round((amountPaid.value || 0) * 100)
+    return paidCents >= targetCents
 }
 
 async function submitSale() {

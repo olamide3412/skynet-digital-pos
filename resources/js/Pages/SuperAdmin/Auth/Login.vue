@@ -96,10 +96,13 @@ const submit = () => {
             form.reset('password')
             resetTurnstile()
         },
-        onError: () => {
+        onError: (errs) => {
             if (form.errors.cf_turnstile_response) {
                 resetTurnstile()
                 form.cf_turnstile_response = ''
+            }
+            if (!Object.keys(errs || {}).length) {
+                form.setError('login', 'Network or connection error. Please check connection and try again.')
             }
         }
     })

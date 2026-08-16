@@ -221,7 +221,7 @@ const handleLogin = () => {
                     :disabled="form.processing"
                     class="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-900/20 transition duration-200 transform hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
                 >
-                    {{ form.processing ? 'Signing in…' : 'Sign In to ' + branchName }}
+                    {{ form.processing ? 'Signing in…' : 'Sign In'  }}
                 </button>
 
                 <!-- Powered by Branding -->

@@ -82,20 +82,36 @@ createInertiaApp({
     title: (title) => `${title}`,
     resolve: (name) => {
         const pages = import.meta.glob('./Pages/**/*.vue');
-        const page = pages[`./Pages/${name}.vue`]();
+        const pageResolver = pages[`./Pages/${name}.vue`];
+        if (!pageResolver) {
+            console.error(`Page component "./Pages/${name}.vue" not found.`);
+        }
 
-        return page.then((module) => {
-            if (!name.startsWith('Admin/')
-                && !name.startsWith('Auth/')
-                && !name.startsWith('SuperAdmin/')
-                && !name.startsWith('Pos/')
-                && name !== 'Error'
-                && name !== 'BranchUnavailable'
-            ) {
-                module.default.layout = module.default.layout || Layout;
-            }
-            return module;
-        });
+        return pageResolver()
+            .then((module) => {
+                if (!name.startsWith('Admin/')
+                    && !name.startsWith('Auth/')
+                    && !name.startsWith('SuperAdmin/')
+                    && !name.startsWith('Pos/')
+                    && name !== 'Error'
+                    && name !== 'BranchUnavailable'
+                ) {
+                    // Only apply default Layout if the page hasn't explicitly declared a layout
+                    // (even layout: null or layout: false counts as an explicit opt-out)
+                    if (module.default.layout === undefined) {
+                        module.default.layout = Layout;
+                    }
+                }
+                return module;
+            })
+            .catch((err) => {
+                console.error(`Failed to load page module "${name}":`, err);
+                if (typeof window !== 'undefined' && !sessionStorage.getItem('retry_chunk_' + name)) {
+                    sessionStorage.setItem('retry_chunk_' + name, '1');
+                    window.location.reload();
+                }
+                throw err;
+            });
     },
     setup({ el, App, props, plugin }) {
         // Initialize theme color and Ziggy defaults

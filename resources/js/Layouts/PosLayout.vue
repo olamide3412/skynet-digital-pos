@@ -139,6 +139,15 @@ const toggleMenu = (label) => {
     }
 }
 
+const currentBranchSlug = computed(() => {
+    return page.props.current_branch?.slug || page.props.branch?.slug || route().params?.branch || 'felix-enterprise'
+})
+
+const safeRoute = (routeName) => {
+    if (!routeName) return '#'
+    return route(routeName, { branch: currentBranchSlug.value })
+}
+
 const toggleCollapse = () => {
     isCollapsed.value = !isCollapsed.value
     localStorage.setItem('pos_sidebar_collapsed', isCollapsed.value)
@@ -182,7 +191,7 @@ onMounted(() => {
                     <div class="relative group">
                         <!-- Standalone -->
                         <Link v-if="link.route"
-                            :href="route(link.route)"
+                            :href="safeRoute(link.route)"
                             :title="isCollapsed ? link.label : ''"
                             :class="[
                                 'flex items-center rounded-lg py-2 text-xs font-medium transition',
@@ -214,7 +223,7 @@ onMounted(() => {
                         <!-- Children -->
                         <div v-show="link.children && !isCollapsed && expandedMenus.includes(link.label)" class="pl-8 pr-2 mt-0.5 space-y-0.5">
                             <Link v-for="child in link.children" :key="child.label"
-                                :href="route(child.route)"
+                                :href="safeRoute(child.route)"
                                 :class="[
                                     'block px-3 py-1.5 rounded-lg text-xs transition',
                                     isChildActive(child) ? 'bg-theme-light text-theme font-bold shadow-2xs' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700',
@@ -230,7 +239,7 @@ onMounted(() => {
                     <span v-show="!isCollapsed" class="text-xs text-slate-500 dark:text-slate-400 font-medium">Theme</span>
                     <ThemeToggle />
                 </div>
-                <Link :href="route('pos.logout')" method="post" as="button"
+                <Link :href="safeRoute('pos.logout')" method="post" as="button"
                     :class="['flex items-center rounded-lg py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition w-full', isCollapsed ? 'justify-center px-2' : 'px-3 gap-2.5']">
                     <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>

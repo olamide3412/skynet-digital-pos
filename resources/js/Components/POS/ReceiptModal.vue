@@ -1,4 +1,5 @@
 <script setup>
+import { usePage }        from '@inertiajs/vue3'
 import { useCurrency }  from '@/Composables/useCurrency'
 import { usePrint }     from '@/Composables/usePrint'
 import { computed, ref, onMounted, watch, nextTick } from 'vue'
@@ -10,6 +11,11 @@ const props = defineProps({
     settings: { type: Object, default: () => ({}) },
 })
 const emit = defineEmits(['close'])
+
+const page = usePage()
+const poweredByName = computed(() => {
+    return page.props.system_config?.company_name || page.props.store_settings?.company_name || props.settings?.business_name || 'SkyNet Digital POS'
+})
 
 const { format }       = useCurrency()
 const { printElement } = usePrint()
@@ -263,7 +269,7 @@ function printA4() {
                         <span v-if="settings.business_email">{{ settings.business_email }}</span>
                     </p>
                     <p style="font-size:9px; font-weight:700; color:#000000; margin-top:6px; letter-spacing:0.3px;">
-                        Powered by SkyNet Digital POS
+                        Powered by {{ poweredByName }}
                     </p>
                 </div>
 

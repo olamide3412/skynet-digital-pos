@@ -13,28 +13,32 @@ export const useCartStore = defineStore('cart', () => {
     const payment      = ref({ method: 'Cash', cash: 0, bank_transfer: 0, amount_paid: 0 })
 
     // ── Computed ───────────────────────────────────────────────────────────
-    const subtotal = computed(() =>
-        items.value.reduce((sum, i) => sum + i.line_total, 0)
-    )
+    const subtotal = computed(() => {
+        const sum = items.value.reduce((acc, i) => acc + (Number(i.line_total) || 0), 0)
+        return Math.round(sum * 100) / 100
+    })
 
     const discountAmount = computed(() => {
         if (!discount.value.type) return 0
+        let val = 0
         if (discount.value.type === 'percentage') {
-            return (subtotal.value * discount.value.value) / 100
+            val = (subtotal.value * Number(discount.value.value || 0)) / 100
+        } else {
+            val = Number(discount.value.value || 0)
         }
-        return discount.value.value
+        return Math.round(val * 100) / 100
     })
 
     const taxAmount = computed(() => {
         if (!settStore.settings?.is_tax_enabled) return 0
         const rate = parseFloat(settStore.settings.tax_percentage || 0)
         if (rate <= 0) return 0
-        const taxableSubtotal = Math.max(0, subtotal.value + consultationFee.value - discountAmount.value)
-        return (taxableSubtotal * rate) / 100
+        const taxableSubtotal = Math.max(0, subtotal.value + Number(consultationFee.value || 0) - discountAmount.value)
+        return Math.round(((taxableSubtotal * rate) / 100) * 100) / 100
     })
 
     const grandTotal = computed(() =>
-        Math.max(0, subtotal.value + consultationFee.value + taxAmount.value - discountAmount.value)
+        Math.round(Math.max(0, subtotal.value + Number(consultationFee.value || 0) + taxAmount.value - discountAmount.value) * 100) / 100
     )
 
     const itemCount = computed(() =>
@@ -74,7 +78,7 @@ export const useCartStore = defineStore('cart', () => {
         const existing = items.value.find(i => i.cart_key === key || (i.item_id === item.id && i.unit_used === unitUsed))
         if (existing) {
             existing.qty++
-            existing.line_total = existing.unit_price * existing.qty
+            existing.line_total = Math.round(existing.unit_price * existing.qty * 100) / 100
         } else {
             items.value.push({
                 cart_key:         key,
@@ -85,7 +89,7 @@ export const useCartStore = defineStore('cart', () => {
                 unit_price:       unitPrice,
                 buy_price:        parseFloat(item.buy_price || 0),
                 purchase_type:    purchaseType.value,
-                line_total:       unitPrice,
+                line_total:       Math.round(unitPrice * 100) / 100,
                 price_locked:     item.price_locked || false,
                 max_qty:          item.front_store_qty ?? item.qty ?? 9999,
                 unit_label:       item.unit_label || 'Unit',
@@ -105,7 +109,7 @@ export const useCartStore = defineStore('cart', () => {
         item.unit_used  = newUnit
         item.cart_key   = `${item.item_id}_${newUnit}`
         item.unit_price = getPriceForUnit(item.raw_item || item, newUnit, purchaseType.value)
-        item.line_total = item.unit_price * item.qty
+        item.line_total = Math.round(item.unit_price * item.qty * 100) / 100
     }
 
     function removeItem(cartKey) {
@@ -117,14 +121,14 @@ export const useCartStore = defineStore('cart', () => {
         if (!item) return
         const clamped   = Math.max(1, Math.min(qty, 99999))
         item.qty        = clamped
-        item.line_total = item.unit_price * clamped
+        item.line_total = Math.round(item.unit_price * clamped * 100) / 100
     }
 
     function updatePrice(cartKey, price) {
         const item = items.value.find(i => i.cart_key === cartKey || i.item_id === cartKey)
         if (!item) return
         item.unit_price = parseFloat(price)
-        item.line_total = item.unit_price * item.qty
+        item.line_total = Math.round(item.unit_price * item.qty * 100) / 100
     }
 
     function setPurchaseType(type) {
@@ -132,7 +136,7 @@ export const useCartStore = defineStore('cart', () => {
         items.value.forEach(item => {
             item.purchase_type = type
             item.unit_price    = getPriceForUnit(item.raw_item || item, item.unit_used, type)
-            item.line_total    = item.unit_price * item.qty
+            item.line_total    = Math.round(item.unit_price * item.qty * 100) / 100
         })
     }
 
