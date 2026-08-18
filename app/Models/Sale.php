@@ -9,7 +9,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Sale extends Model
 {
     protected $fillable = [
-        'branch_id', 'customer_id', 'receipt_id', 'items_order_count', 'consultation_fee',
+        'branch_id', 'customer_id', 'receipt_id', 'offline_sale_id', 'is_offline_sale', 'synced_at', 'has_conflict',
+        'items_order_count', 'consultation_fee',
         'payment_method', 'bank_transfer', 'cash', 'amount_cost', 'amount_paid',
         'change_bal', 'purchase_type', 'profit_made', 'sale_discount_id',
         'discount_amount', 'tax_amount', 'tax_percentage', 'final_total', 'is_debt', 'user_id',
@@ -19,6 +20,9 @@ class Sale extends Model
     {
         return [
             'is_debt'           => 'boolean',
+            'is_offline_sale'   => 'boolean',
+            'has_conflict'      => 'boolean',
+            'synced_at'         => 'datetime',
             'amount_cost'       => 'decimal:2',
             'amount_paid'       => 'decimal:2',
             'change_bal'        => 'decimal:2',
@@ -61,5 +65,10 @@ class Sale extends Model
     public function returnItems(): HasMany
     {
         return $this->hasMany(SaleReturnItem::class);
+    }
+
+    public function conflicts(): HasMany
+    {
+        return $this->hasMany(StockConflict::class);
     }
 }

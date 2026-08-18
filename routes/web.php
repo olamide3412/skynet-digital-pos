@@ -71,6 +71,8 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
 
         Route::post('/branches/{branch}/toggle', [BranchController::class, 'toggle'])
             ->name('branches.toggle');
+        Route::post('/branches/{branch}/toggle-offline', [BranchController::class, 'toggleOffline'])
+            ->name('branches.toggle-offline');
 
         Route::prefix('branches/{branch}/users')->name('branches.users.')->group(function () {
             Route::get('/',                [BranchUserController::class, 'index'])->name('index');
@@ -216,6 +218,14 @@ Route::prefix('{branch}')
             Route::post('/reorder-points/{item}', [\App\Http\Controllers\Pos\ReorderPointController::class, 'update'])
                 ->name('reorder-points.update')
                 ->middleware('pos.role:canViewReorderPoints');
+
+            // Stock Conflicts & Offline Reconciliation
+            Route::get('/conflicts', [\App\Http\Controllers\Pos\StockConflictController::class, 'index'])
+                ->name('conflicts.index')
+                ->middleware('pos.role:canAdjustStock');
+            Route::post('/conflicts/{conflict}/resolve', [\App\Http\Controllers\Pos\StockConflictController::class, 'resolve'])
+                ->name('conflicts.resolve')
+                ->middleware('pos.role:canAdjustStock');
         });
 
         // Reports
@@ -375,6 +385,8 @@ Route::prefix('{branch}')
             Route::post('/held-sales',           [HeldSaleController::class, 'apiStore'])->name('held-sales.store');
             Route::delete('/held-sales/{id}',     [HeldSaleController::class, 'apiDestroy'])->name('held-sales.destroy');
             Route::get('/settings',              [PosSettingsController::class, 'apiShow'])->name('settings.show');
+            Route::get('/offline-bootstrap',     [\App\Http\Controllers\Pos\OfflineSyncController::class, 'bootstrap'])->name('offline.bootstrap');
+            Route::post('/sync-offline-sales',   [\App\Http\Controllers\Pos\OfflineSyncController::class, 'sync'])->name('offline.sync');
         });
     });
 });

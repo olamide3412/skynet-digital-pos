@@ -18,6 +18,7 @@ const form = useForm({
     address: '',
     phone: '',
     email: '',
+    is_offline_enabled: false,
     admin_name: '',
     admin_username: '',
     admin_email: '',
@@ -40,6 +41,10 @@ const submitCreate = () => {
 const toggleBranch = (branchSlug) => {
     router.post(route('superadmin.branches.toggle', branchSlug))
 }
+
+const toggleOffline = (branchSlug) => {
+    router.post(route('superadmin.branches.toggle-offline', branchSlug))
+}
 </script>
 
 <template>
@@ -48,7 +53,7 @@ const toggleBranch = (branchSlug) => {
         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-4">
             <div>
                 <h1 class="text-xl font-bold text-slate-900 dark:text-white">Branches Directory</h1>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Manage registered business locations and initial branch administrators</p>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Manage registered business locations, offline sales capabilities, and initial branch administrators</p>
             </div>
             <button
                 @click="showCreateModal = true"
@@ -88,6 +93,33 @@ const toggleBranch = (branchSlug) => {
                         <span>Staff: <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ branch.users_count }}</strong></span>
                         <span>Items: <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ branch.items_count }}</strong></span>
                     </div>
+                </div>
+
+                <!-- Offline Capability Toggle Control (Super Admin only) -->
+                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">📡</span>
+                        <div>
+                            <div class="text-xs font-bold text-slate-800 dark:text-slate-200">Offline Sales</div>
+                            <div class="text-[10px] text-slate-500 dark:text-slate-400">
+                                {{ branch.settings?.is_offline_enabled ? 'Active on terminals' : 'Disabled' }}
+                            </div>
+                        </div>
+                    </div>
+                    <button
+                        @click="toggleOffline(branch.slug)"
+                        type="button"
+                        :class="[
+                            'px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer',
+                            branch.settings?.is_offline_enabled
+                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                                : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200'
+                        ]"
+                        :title="branch.settings?.is_offline_enabled ? 'Click to disable offline checkout for this branch' : 'Click to enable offline checkout for this branch'"
+                    >
+                        <span v-if="branch.settings?.is_offline_enabled">● Enabled</span>
+                        <span v-else>Disabled</span>
+                    </button>
                 </div>
 
                 <div class="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap gap-2">
@@ -161,6 +193,16 @@ const toggleBranch = (branchSlug) => {
                         <div>
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Address</label>
                             <input v-model="form.address" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 transition" />
+                        </div>
+
+                        <div class="pt-1">
+                            <label class="flex items-center gap-2.5 cursor-pointer">
+                                <input v-model="form.is_offline_enabled" type="checkbox" class="w-4 h-4 accent-indigo-600 rounded cursor-pointer" />
+                                <div>
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Enable Offline Sales Mode (PWA)</span>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Allows cashiers at this branch to sell and print receipts when offline</p>
+                                </div>
+                            </label>
                         </div>
                     </div>
 

@@ -130,6 +130,9 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
                         </div>
                         <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                             <span class="font-mono font-medium text-slate-700 dark:text-slate-300">#{{ sale.receipt_id }}</span>
+                            <span v-if="sale.is_offline_sale || sale.offline_sale_id" class="px-1.5 py-0.5 rounded bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 text-[10px] font-bold uppercase">
+                                Offline (Pending Sync)
+                            </span>
                             <span>•</span>
                             <span class="truncate max-w-[180px]">{{ printerName }}</span>
                         </div>
@@ -194,6 +197,10 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
                             <td style="text-align:right; text-transform:capitalize; font-weight:700; color:#000000;">
                                 {{ sale.payment_method || '—' }}
                             </td>
+                        </tr>
+                        <tr v-if="sale.is_offline_sale || sale.offline_sale_id">
+                            <td style="color:#000000; font-size:10px;">Mode</td>
+                            <td style="text-align:right; font-weight:800; color:#000000; font-size:10px;">OFFLINE (PENDING SYNC)</td>
                         </tr>
                     </tbody>
                 </table>

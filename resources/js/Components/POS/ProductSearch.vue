@@ -2,6 +2,7 @@
 import { ref, nextTick } from 'vue'
 import axios from 'axios'
 import { useCurrency } from '@/Composables/useCurrency'
+import { searchLocalItems } from '@/Services/offlineDb'
 
 const props = defineProps({
     purchaseType: { type: String, default: 'Consumer' },
@@ -55,6 +56,15 @@ async function doSearch(q, autoSelectFirst = false) {
     if (!q) { results.value = []; return }
     loading.value = true
     try {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            const localResults = await searchLocalItems(q, props.purchaseType)
+            results.value = localResults
+            if (autoSelectFirst && localResults.length > 0) {
+                selectItem(localResults[0])
+            }
+            return
+        }
+
         const res = await axios.get(route('pos.api.items.search'), {
             params: { q, purchase_type: props.purchaseType }
         })
@@ -63,7 +73,16 @@ async function doSearch(q, autoSelectFirst = false) {
             selectItem(res.data[0])
         }
     } catch (err) {
-        console.error(err)
+        console.warn('Network search unavailable, falling back to local storage search:', err)
+        try {
+            const localResults = await searchLocalItems(q, props.purchaseType)
+            results.value = localResults
+            if (autoSelectFirst && localResults.length > 0) {
+                selectItem(localResults[0])
+            }
+        } catch (dbErr) {
+            console.error('Local IndexedDB fallback error:', dbErr)
+        }
     } finally {
         loading.value = false
     }

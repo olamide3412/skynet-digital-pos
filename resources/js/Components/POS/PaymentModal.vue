@@ -59,6 +59,62 @@ function isValid() {
     return paidCents >= targetCents
 }
 
+import { usePage } from '@inertiajs/vue3'
+import {
+    queueOfflineSale,
+    consumeLocalImei,
+    deductLocalStock,
+} from '@/Services/offlineDb'
+
+const page = usePage()
+
+async function processOfflineSale(payload) {
+    const offlinePrefix = props.settings?.offline_receipt_prefix || 'OFF'
+    const randPart = Math.random().toString(36).substring(2, 6).toUpperCase()
+    const tempReceiptId = `${offlinePrefix}-${Date.now().toString(36).toUpperCase()}-${randPart}`
+    const offlineSaleId = typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `off_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`
+
+    const offlineSale = {
+        ...payload,
+        offline_sale_id: offlineSaleId,
+        receipt_id:      tempReceiptId,
+        is_offline_sale: true,
+        created_at:      new Date().toISOString(),
+        cashier_id:      page.props.auth?.user?.id,
+        cashier_name:    page.props.auth?.user?.name || page.props.auth?.user?.full_name || 'Cashier',
+        final_total:     cart.grandTotal,
+        tax_amount:      cart.taxAmount,
+        tax_percentage:  cart.taxPercentage,
+        discount_amount: cart.discountAmount,
+        consultation_fee: cart.consultationFee,
+        purchase_type:   cart.purchaseType,
+        sale_orders:     cart.items.map(item => ({
+            item_id:             item.item_id,
+            item_name:           item.item_name,
+            imei_or_device_id:   item.selected_imei || null,
+            unit_used:           item.unit_used || 'unit',
+            selling_price:       item.unit_price,
+            total_selling_price: item.lineTotal,
+            qty:                 item.quantity,
+        })),
+    }
+
+    // Save locally into IndexedDB queue
+    await queueOfflineSale(offlineSale)
+
+    // Update local cache: decrement front store stock and consume IMEIs
+    for (const item of cart.items) {
+        if (item.selected_imei) {
+            await consumeLocalImei(item.item_id, item.selected_imei)
+        }
+        await deductLocalStock(item.item_id, item.quantity)
+    }
+
+    emit('completed', offlineSale)
+}
+
 async function submitSale() {
     if (isSubmitting.value) return
     if (cart.hasUnassignedImeis) {
@@ -81,10 +137,37 @@ async function submitSale() {
         is_debt:        tab.value === 'Debt',
     }
 
+    // If terminal is explicitly offline and offline mode is enabled
+    if (props.settings?.is_offline_enabled && typeof navigator !== 'undefined' && !navigator.onLine) {
+        try {
+            await processOfflineSale(payload)
+            return
+        } catch (offlineErr) {
+            console.error('Offline sale queuing failed:', offlineErr)
+            errors.value = { sale: 'Failed to record offline sale locally: ' + offlineErr.message }
+            isSubmitting.value = false
+            return
+        } finally {
+            isSubmitting.value = false
+        }
+    }
+
     try {
-        const res = await axios.post(route('pos.sales.store'), payload, { timeout: 15000 })
+        const res = await axios.post(route('pos.sales.store'), payload, { timeout: 10000 })
         emit('completed', res.data?.sale ?? { receipt_id: res.data?.receipt_id, ...payload })
     } catch (err) {
+        // If network request failed / timed out and offline mode is enabled, fallback to offline sale queue!
+        const isNetworkFailure = err.code === 'ECONNABORTED' || !err.response || err.message?.includes('Network Error') || err.message?.includes('timeout')
+        if (props.settings?.is_offline_enabled && isNetworkFailure) {
+            try {
+                console.warn('Network unavailable during payment submission. Recording sale locally in offline mode...')
+                await processOfflineSale(payload)
+                return
+            } catch (offlineErr) {
+                console.error('Offline sale fallback failed:', offlineErr)
+            }
+        }
+
         if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
             errors.value = { sale: 'Connection timed out. Please check network connection and try again.' }
         } else if (err.response?.status === 422) {

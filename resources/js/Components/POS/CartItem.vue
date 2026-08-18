@@ -24,6 +24,15 @@ async function fetchFreshImeis() {
     if (!isImeiItem.value || !props.item.item_id) return
     loadingImeis.value = true
     try {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            const { getLocalAvailableImeis } = await import('@/Services/offlineDb')
+            const localImeis = await getLocalAvailableImeis(props.item.item_id)
+            if (localImeis && localImeis.length > 0) {
+                localAvailableImeis.value = localImeis
+            }
+            return
+        }
+
         const res = await axios.get(route('pos.api.items.available-imeis'), {
             params: { item_id: props.item.item_id }
         })
@@ -38,7 +47,16 @@ async function fetchFreshImeis() {
             }
         }
     } catch (e) {
-        console.warn('Could not refresh in-stock IMEIs from server, using local cache:', e)
+        console.warn('Could not refresh in-stock IMEIs from server, using local store:', e)
+        try {
+            const { getLocalAvailableImeis } = await import('@/Services/offlineDb')
+            const localImeis = await getLocalAvailableImeis(props.item.item_id)
+            if (localImeis && localImeis.length > 0) {
+                localAvailableImeis.value = localImeis
+            }
+        } catch (dbErr) {
+            console.error('IndexedDB IMEI lookup failed:', dbErr)
+        }
     } finally {
         loadingImeis.value = false
     }

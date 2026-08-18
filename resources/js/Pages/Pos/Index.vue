@@ -16,6 +16,7 @@ import ReturnModal from '@/Components/POS/ReturnModal.vue'
 import CustomerSelector from '@/Components/POS/CustomerSelector.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 import { useBarcodeScanner } from '@/Composables/useBarcodeScanner'
+import { useOfflineSync } from '@/Composables/useOfflineSync'
 
 defineOptions({ layout: PosLayout })
 
@@ -43,6 +44,31 @@ const settStore     = usePosSettingsStore()
 const productSearch = ref(null)   // ref to ProductSearch component
 settStore.set(props.settings)
 
+// Offline synchronization composable
+const {
+    isOnline,
+    isSyncing,
+    syncState,
+    pendingCount,
+    queuedSalesList,
+    syncQueuedSales,
+    refreshCatalog,
+    startSyncMonitor,
+    stopSyncMonitor,
+} = useOfflineSync()
+
+const showOfflineModal = ref(false)
+
+onMounted(() => {
+    if (props.settings?.is_offline_enabled) {
+        startSyncMonitor()
+    }
+})
+
+onUnmounted(() => {
+    stopSyncMonitor()
+})
+
 // Modal visibility
 const showPayment    = ref(false)
 const showReceipt    = ref(false)
@@ -51,7 +77,7 @@ const showHeld       = ref(false)
 const showReturn     = ref(false)
 const completedSale  = ref(null)
 
-const isAnyModalOpen = computed(() => showPayment.value || showReceipt.value || showHold.value || showHeld.value || showReturn.value)
+const isAnyModalOpen = computed(() => showPayment.value || showReceipt.value || showHold.value || showHeld.value || showReturn.value || showOfflineModal.value)
 
 useBarcodeScanner({
     onScan: (item) => {
@@ -86,11 +112,12 @@ function handleKeydown(e) {
         case 'F10': e.preventDefault(); if (cart.items.length) showPayment.value = true; break
         case 'F9':  e.preventDefault(); if (cart.items.length) showHold.value = true; break
         case 'Escape':
-            showPayment.value = false
-            showReceipt.value = false
-            showHold.value    = false
-            showHeld.value    = false
-            showReturn.value  = false
+            showPayment.value    = false
+            showReceipt.value    = false
+            showHold.value       = false
+            showHeld.value       = false
+            showReturn.value     = false
+            showOfflineModal.value = false
             break
     }
 }
@@ -142,6 +169,35 @@ const viewMode = ref(props.settings?.sell_interface ?? 'classic')
                 <span class="text-slate-600 dark:text-slate-300">Cashier: <span class="font-medium text-slate-900 dark:text-white">{{ $page.props.auth.user?.full_name || $page.props.auth.user?.name }}</span></span>
             </div>
             <div class="flex items-center gap-3">
+                <!-- Offline Connection Status Badge -->
+                <div v-if="settings?.is_offline_enabled" class="flex items-center">
+                    <button
+                        @click="showOfflineModal = true"
+                        type="button"
+                        :class="[
+                            'px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs',
+                            syncState === 'online'
+                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
+                                : syncState === 'syncing'
+                                ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 animate-pulse hover:bg-blue-500/25'
+                                : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 hover:bg-rose-500/25'
+                        ]"
+                        :title="syncState === 'online' ? 'Online – All systems operational' : syncState === 'syncing' ? 'Syncing queued sales with server...' : 'Offline – Sales are stored locally on device'"
+                    >
+                        <span v-if="syncState === 'online'" class="w-2 h-2 rounded-full bg-emerald-500 shadow-xs"></span>
+                        <span v-else-if="syncState === 'syncing'" class="animate-spin text-[10px]">🔄</span>
+                        <span v-else class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                        </span>
+                        
+                        <span class="capitalize tracking-wide">{{ syncState }}</span>
+                        <span v-if="pendingCount > 0" class="px-1.5 py-0.2 bg-rose-600 text-white rounded-full text-[10px] font-bold">
+                            {{ pendingCount }}
+                        </span>
+                    </button>
+                </div>
+
                 <span class="text-slate-500 dark:text-slate-400 text-xs hidden sm:inline">{{ formattedTime }}</span>
                 <ThemeToggle />
                 <div class="flex items-center gap-2">
@@ -311,6 +367,85 @@ const viewMode = ref(props.settings?.sell_interface ?? 'classic')
             v-if="showReturn"
             @close="showReturn = false"
         />
+
+        <!-- Offline Sales Queue Inspection Modal -->
+        <div v-if="showOfflineModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 max-w-lg w-full overflow-hidden shadow-2xl space-y-4 p-5">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">📡</span>
+                        <div>
+                            <h3 class="font-bold text-slate-800 dark:text-white text-base">Offline Sales Queue</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                Terminal Status: 
+                                <strong :class="isOnline ? 'text-emerald-500' : 'text-rose-500'">
+                                    {{ isOnline ? 'Connected' : 'Offline' }}
+                                </strong>
+                            </p>
+                        </div>
+                    </div>
+                    <button @click="showOfflineModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+                </div>
+
+                <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    <div v-if="queuedSalesList.length === 0" class="text-center py-8 text-slate-400 text-sm">
+                        <p class="text-3xl mb-2">🎉</p>
+                        All sales are synced with the server. No pending offline transactions.
+                    </div>
+                    <div
+                        v-for="sale in queuedSalesList"
+                        :key="sale.offline_sale_id"
+                        class="p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between text-xs"
+                    >
+                        <div>
+                            <div class="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                <span>{{ sale.receipt_id }}</span>
+                                <span
+                                    :class="[
+                                        'px-1.5 py-0.2 rounded text-[10px] font-bold uppercase',
+                                        sale.sync_status === 'synced' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' :
+                                        sale.sync_status === 'failed' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' :
+                                        'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                                    ]"
+                                >
+                                    {{ sale.sync_status }}
+                                </span>
+                            </div>
+                            <div class="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
+                                {{ new Date(sale.created_at).toLocaleTimeString() }} • {{ sale.cashier_name || 'Cashier' }} • {{ sale.payment_method }}
+                            </div>
+                            <div v-if="sale.error_message" class="text-rose-500 text-[11px] mt-1 font-mono">
+                                {{ sale.error_message }}
+                            </div>
+                        </div>
+                        <div class="font-bold text-slate-800 dark:text-white text-sm">
+                            {{ format(sale.final_total) }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700">
+                    <button
+                        @click="refreshCatalog"
+                        type="button"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 transition"
+                    >
+                        📥 Refresh Catalog
+                    </button>
+                    <div class="flex items-center gap-2">
+                        <button
+                            @click="syncQueuedSales"
+                            :disabled="isSyncing || pendingCount === 0 || !isOnline"
+                            type="button"
+                            class="px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                        >
+                            <span v-if="isSyncing" class="animate-spin">🔄</span>
+                            <span>{{ isSyncing ? 'Syncing...' : 'Sync Now' }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 

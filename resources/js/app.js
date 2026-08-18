@@ -170,6 +170,15 @@ createInertiaApp({
                 });
             }
         }).catch(err => console.warn('AOS failed to load:', err));
+
+        // ✅ Register PWA Service Worker for offline shell caching
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(err => {
+                    console.warn('ServiceWorker registration error:', err);
+                });
+            });
+        }
     },
     progress: {
         delay: 250,

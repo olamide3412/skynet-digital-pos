@@ -83,6 +83,8 @@
 
 
     <link rel="icon" type="image/png" href="{{ $companyLogo }}">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#10b981">
 
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.bunny.net">

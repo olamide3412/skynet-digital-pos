@@ -15,7 +15,7 @@ class BranchController extends Controller
 {
     public function index()
     {
-        $branches = Branch::withCount(['users', 'items', 'sales'])->latest()->get();
+        $branches = Branch::with(['settings'])->withCount(['users', 'items', 'sales'])->latest()->get();
         return Inertia::render('SuperAdmin/Branches/Index', ['branches' => $branches]);
     }
 
@@ -27,16 +27,17 @@ class BranchController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'    => 'required|string|max:255',
-            'slug'    => 'required|string|max:100|unique:branches|regex:/^[a-z0-9\-]+$/',
-            'address' => 'nullable|string|max:500',
-            'phone'   => 'nullable|string|max:50',
-            'email'   => 'nullable|email|max:255',
+            'name'               => 'required|string|max:255',
+            'slug'               => 'required|string|max:100|unique:branches|regex:/^[a-z0-9\-]+$/',
+            'address'            => 'nullable|string|max:500',
+            'phone'              => 'nullable|string|max:50',
+            'email'              => 'nullable|email|max:255',
+            'is_offline_enabled' => 'nullable|boolean',
             // Branch Admin account details
-            'admin_name'     => 'required|string|max:255',
-            'admin_username' => 'required|string|max:50|unique:users,username',
-            'admin_email'    => 'required|email|max:255|unique:users,email',
-            'admin_password' => 'required|string|min:8',
+            'admin_name'         => 'required|string|max:255',
+            'admin_username'     => 'required|string|max:50|unique:users,username',
+            'admin_email'        => 'required|email|max:255|unique:users,email',
+            'admin_password'     => 'required|string|min:8',
         ]);
 
         DB::transaction(function () use ($data) {
@@ -67,7 +68,10 @@ class BranchController extends Controller
             $admin->assignRole('branch-admin');
 
             // Create branch POS settings with defaults
-            $branch->getSettings();
+            $settings = $branch->getSettings();
+            if (!empty($data['is_offline_enabled'])) {
+                $settings->update(['is_offline_enabled' => true]);
+            }
         });
 
         return redirect()->route('superadmin.branches.index')
@@ -116,5 +120,17 @@ class BranchController extends Controller
         $branch->update(['is_active' => !$branch->is_active]);
         $status = $branch->is_active ? 'enabled' : 'disabled';
         return back()->with('success', "Branch {$status} successfully.");
+    }
+
+    /**
+     * Toggle branch offline sales enablement status.
+     */
+    public function toggleOffline(Branch $branch)
+    {
+        $settings = $branch->getSettings();
+        $newState = !$settings->is_offline_enabled;
+        $settings->update(['is_offline_enabled' => $newState]);
+        $status = $newState ? 'enabled' : 'disabled';
+        return back()->with('success', "Offline sales mode {$status} for {$branch->name}.");
     }
 }

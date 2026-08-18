@@ -39,8 +39,24 @@ export function useBarcodeScanner({ onScan, getPurchaseType, isEnabled }) {
         const cleanCode = code.trim()
         if (!cleanCode || cleanCode.length < 2) return
 
+        const purchaseType = getPurchaseType ? getPurchaseType() : 'Consumer'
+
+        // If explicitly offline, immediately query local IndexedDB
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            try {
+                const { getLocalItemByBarcode } = await import('@/Services/offlineDb')
+                const matchedItem = await getLocalItemByBarcode(cleanCode, purchaseType)
+                if (matchedItem) {
+                    playBeepSound()
+                    if (onScan) onScan(matchedItem)
+                }
+            } catch (e) {
+                console.error('Offline barcode scan error:', e)
+            }
+            return
+        }
+
         try {
-            const purchaseType = getPurchaseType ? getPurchaseType() : 'Consumer'
             const res = await axios.get(route('pos.api.items.search'), {
                 params: { q: cleanCode, purchase_type: purchaseType }
             })
@@ -54,7 +70,17 @@ export function useBarcodeScanner({ onScan, getPurchaseType, isEnabled }) {
                 }
             }
         } catch (err) {
-            console.warn('Background barcode scan search error:', err)
+            console.warn('Online barcode lookup failed, trying local store:', err)
+            try {
+                const { getLocalItemByBarcode } = await import('@/Services/offlineDb')
+                const matchedItem = await getLocalItemByBarcode(cleanCode, purchaseType)
+                if (matchedItem) {
+                    playBeepSound()
+                    if (onScan) onScan(matchedItem)
+                }
+            } catch (dbErr) {
+                console.error('Local barcode scan fallback error:', dbErr)
+            }
         }
     }
 
