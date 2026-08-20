@@ -33,6 +33,7 @@ class BranchRoleController extends Controller
         'canManageCustomers' => 'Manage Customers Directory',
         'canManageUsers'     => 'Manage Staff Accounts & Roles',
         'canEditSettings'    => 'Edit Branch Settings & POS Config',
+        'canViewReorderPoints' => 'View Reorder Points & Stock Alerts',
     ];
 
     public function index(Branch $branch)

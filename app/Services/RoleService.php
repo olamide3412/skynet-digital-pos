@@ -36,7 +36,15 @@ class RoleService
         }
 
         if ($user->isBranchAdmin()) return true;
-        return $user->hasPermissionTo($permission);
+
+        try {
+            return $user->hasPermissionTo($permission);
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            \Spatie\Permission\Models\Permission::findOrCreate($permission, 'web');
+            return false;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     // ── Ability checks ────────────────────────────────────────────────────────
@@ -168,7 +176,14 @@ class RoleService
             setPermissionsTeamId($user->branch_id);
         }
 
-        return $user->hasDirectPermission('canResetPassword');
+        try {
+            return $user->hasDirectPermission('canResetPassword');
+        } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
+            \Spatie\Permission\Models\Permission::findOrCreate('canResetPassword', 'web');
+            return false;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     /**

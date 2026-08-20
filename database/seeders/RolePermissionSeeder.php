@@ -35,6 +35,7 @@ class RolePermissionSeeder extends Seeder
         'canManageUsers',
         'canEditSettings',
         'canResetPassword',
+        'canViewReorderPoints',
     ];
 
     public function run(): void
