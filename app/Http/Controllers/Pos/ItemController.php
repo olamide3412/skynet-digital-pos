@@ -95,15 +95,20 @@ class ItemController extends Controller
         $data['barcode_number'] = $barcode;
 
         $data['branch_id']        = $branch->id;
-        $data['wholesale_price']  = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? $data['wholesale_price'] : $data['price'];
-        $data['is_imei_tracked']  = !empty($data['is_imei_tracked']);
-        $data['front_store_qty']  = $data['front_store_qty'] ?? 0;
-        $data['back_store_qty']   = $data['back_store_qty'] ?? 0;
-        $data['unit_label']       = $data['unit_label'] ?: 'Unit';
-        $data['pack_label']       = $data['pack_label'] ?: 'Pack';
-        $data['carton_label']     = $data['carton_label'] ?: 'Carton';
-        $data['units_per_pack']   = $data['units_per_pack'] ?: 1;
-        $data['packs_per_carton'] = $data['packs_per_carton'] ?: 1;
+        $data['wholesale_price']        = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? (float) $data['wholesale_price'] : (float) $data['price'];
+        $data['pack_price']             = (!empty($data['pack_price']) && $data['pack_price'] > 0) ? (float) $data['pack_price'] : null;
+        $data['carton_price']           = (!empty($data['carton_price']) && $data['carton_price'] > 0) ? (float) $data['carton_price'] : null;
+        $data['pack_wholesale_price']   = (!empty($data['pack_wholesale_price']) && $data['pack_wholesale_price'] > 0) ? (float) $data['pack_wholesale_price'] : null;
+        $data['carton_wholesale_price'] = (!empty($data['carton_wholesale_price']) && $data['carton_wholesale_price'] > 0) ? (float) $data['carton_wholesale_price'] : null;
+        $data['price_locked']           = !empty($data['price_locked']);
+        $data['is_imei_tracked']        = !empty($data['is_imei_tracked']);
+        $data['front_store_qty']        = $data['front_store_qty'] ?? 0;
+        $data['back_store_qty']         = $data['back_store_qty'] ?? 0;
+        $data['unit_label']             = $data['unit_label'] ?: 'Unit';
+        $data['pack_label']             = $data['pack_label'] ?: 'Pack';
+        $data['carton_label']           = $data['carton_label'] ?: 'Carton';
+        $data['units_per_pack']         = $data['units_per_pack'] ?: 1;
+        $data['packs_per_carton']       = $data['packs_per_carton'] ?: 1;
 
         if ($request->hasFile('image')) {
             $data['image_path'] = $request->file('image')->store('items', 'public');
@@ -137,13 +142,13 @@ class ItemController extends Controller
         }
 
         \App\Services\ActivityLogger::item("Created item '{$newItem->item_name}' (Barcode: {$newItem->barcode_number})", $branch->id);
-        return redirect()->route('pos.items.index')
+        return redirect()->route('pos.items.index', ['branch' => $branch->slug])
             ->with('success', 'Item created successfully.');
     }
 
     public function edit($branchParam, Item $item)
     {
-        $branch = current_branch();
+        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
         $this->authorizeBranch($item, $branch);
 
         return Inertia::render('Items/Edit', [
@@ -158,7 +163,7 @@ class ItemController extends Controller
 
     public function update(Request $request, $branchParam, Item $item)
     {
-        $branch = current_branch();
+        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
         $this->authorizeBranch($item, $branch);
 
         $data = $request->validate([
@@ -169,8 +174,11 @@ class ItemController extends Controller
             'buy_price'              => 'required|numeric|min:0',
             'price'                  => 'required|numeric|min:0',
             'wholesale_price'        => 'nullable|numeric|min:0',
-            'minimum_retail_price'   => 'nullable|numeric|min:0',
-            'minimum_wholesale_price' => 'nullable|numeric|min:0',
+            'pack_price'             => 'nullable|numeric|min:0',
+            'carton_price'           => 'nullable|numeric|min:0',
+            'pack_wholesale_price'   => 'nullable|numeric|min:0',
+            'carton_wholesale_price' => 'nullable|numeric|min:0',
+            'price_locked'           => 'nullable|boolean',
             'is_imei_tracked'        => 'nullable|boolean',
             'unit_label'             => 'nullable|string|max:50',
             'pack_label'             => 'nullable|string|max:50',
@@ -179,9 +187,8 @@ class ItemController extends Controller
             'packs_per_carton'       => 'nullable|integer|min:1',
             'front_store_qty'        => 'nullable|integer|min:0',
             'back_store_qty'         => 'nullable|integer|min:0',
-            'low_stock_threshold'    => 'nullable|integer|min:0',
-            'expire_date'            => 'nullable|date',
-            'shelf_location'         => 'nullable|string|max:100',
+            'expiry_date'            => 'nullable|date',
+            'item_description'       => 'nullable|string|max:500',
             'image'                  => 'nullable|image|max:2048',
         ]);
 
@@ -195,13 +202,18 @@ class ItemController extends Controller
             }
         }
 
-        $data['wholesale_price']  = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? $data['wholesale_price'] : $data['price'];
-        $data['is_imei_tracked']  = !empty($data['is_imei_tracked']);
-        $data['unit_label']       = $data['unit_label'] ?: 'Unit';
-        $data['pack_label']       = $data['pack_label'] ?: 'Pack';
-        $data['carton_label']     = $data['carton_label'] ?: 'Carton';
-        $data['units_per_pack']   = $data['units_per_pack'] ?: 1;
-        $data['packs_per_carton'] = $data['packs_per_carton'] ?: 1;
+        $data['wholesale_price']        = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? (float) $data['wholesale_price'] : (float) $data['price'];
+        $data['pack_price']             = (!empty($data['pack_price']) && $data['pack_price'] > 0) ? (float) $data['pack_price'] : null;
+        $data['carton_price']           = (!empty($data['carton_price']) && $data['carton_price'] > 0) ? (float) $data['carton_price'] : null;
+        $data['pack_wholesale_price']   = (!empty($data['pack_wholesale_price']) && $data['pack_wholesale_price'] > 0) ? (float) $data['pack_wholesale_price'] : null;
+        $data['carton_wholesale_price'] = (!empty($data['carton_wholesale_price']) && $data['carton_wholesale_price'] > 0) ? (float) $data['carton_wholesale_price'] : null;
+        $data['price_locked']           = !empty($data['price_locked']);
+        $data['is_imei_tracked']        = !empty($data['is_imei_tracked']);
+        $data['unit_label']             = $data['unit_label'] ?: 'Unit';
+        $data['pack_label']             = $data['pack_label'] ?: 'Pack';
+        $data['carton_label']           = $data['carton_label'] ?: 'Carton';
+        $data['units_per_pack']         = $data['units_per_pack'] ?: 1;
+        $data['packs_per_carton']       = $data['packs_per_carton'] ?: 1;
 
         if ($request->hasFile('image')) {
             if ($item->image_path) {
@@ -213,13 +225,13 @@ class ItemController extends Controller
 
         $item->update($data);
         \App\Services\ActivityLogger::item("Updated details for item '{$item->item_name}'", $branch->id);
-        return redirect()->route('pos.items.index')
+        return redirect()->route('pos.items.index', ['branch' => $branch->slug])
             ->with('success', 'Item updated successfully.');
     }
 
     public function destroy($branchParam, Item $item)
     {
-        $branch = current_branch();
+        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
         $this->authorizeBranch($item, $branch);
 
         if ($item->image_path) {
@@ -228,7 +240,7 @@ class ItemController extends Controller
         $itemName = $item->item_name;
         $item->delete();
         \App\Services\ActivityLogger::item("Deleted item '{$itemName}'", $branch->id);
-        return redirect()->route('pos.items.index')
+        return redirect()->route('pos.items.index', ['branch' => $branch->slug])
             ->with('success', 'Item deleted.');
     }
 
