@@ -255,7 +255,14 @@ class ItemController extends Controller
     /** API: real-time item search for POS screen */
     public function search(Request $request)
     {
-        $branch = current_branch();
+        $branch = current_branch() ?? ($request->route('branch') ? \App\Models\Branch::where('slug', $request->route('branch'))->first() : null);
+        if (!$branch && auth()->check() && auth()->user()->branch_id) {
+            $branch = \App\Models\Branch::find(auth()->user()->branch_id);
+        }
+        if (!$branch) {
+            return response()->json([]);
+        }
+
         $q = $request->get('q', '');
         $purchaseType = $request->get('purchase_type', 'Consumer');
 

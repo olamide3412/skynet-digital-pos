@@ -74,7 +74,7 @@ export function useOfflineSync() {
     }
 
     /**
-     * Flush all queued offline sales to server in FIFO order.
+     * Flush all queued offline sales to server in FIFO order (loops in batches until 100% complete).
      */
     async function syncQueuedSales() {
         if (isSyncing.value) return
@@ -91,27 +91,44 @@ export function useOfflineSync() {
         isSyncing.value = true
 
         try {
-            const pendingSales = await getPendingOfflineSales()
-            if (pendingSales.length === 0) {
-                isSyncing.value = false
-                return
-            }
+            let hasMore = true
+            while (hasMore) {
+                const pendingSales = await getPendingOfflineSales(100)
+                if (!pendingSales || pendingSales.length === 0) {
+                    hasMore = false
+                    break
+                }
 
-            // Extract the payloads
-            const salesPayloads = pendingSales.map(s => s.payload)
+                // Extract the payloads
+                const salesPayloads = pendingSales.map(s => s.payload)
 
-            const res = await axios.post(route('pos.api.offline.sync'), {
-                sales: salesPayloads,
-            }, { timeout: 30000 })
+                const res = await axios.post(route('pos.api.offline.sync'), {
+                    sales: salesPayloads,
+                }, { timeout: 45000 })
 
-            if (res.data && Array.isArray(res.data.results)) {
-                for (const result of res.data.results) {
-                    if (result.status === 'synced') {
-                        await markSaleSynced(result.offline_sale_id, result)
-                    } else if (result.status === 'failed') {
-                        await markSaleFailed(result.offline_sale_id, result.error)
+                let syncedInThisBatch = 0
+                if (res.data && Array.isArray(res.data.results)) {
+                    for (const result of res.data.results) {
+                        if (result.status === 'synced') {
+                            await markSaleSynced(result.offline_sale_id, result)
+                            syncedInThisBatch++
+                        } else if (result.status === 'failed') {
+                            await markSaleFailed(result.offline_sale_id, result.error)
+                        }
                     }
                 }
+
+                // If nothing synced (e.g. server error or permanent conflict), break to avoid infinite loop
+                if (syncedInThisBatch === 0 && res.data?.results?.length > 0) {
+                    hasMore = false
+                }
+
+                // If fewer items than the batch limit were fetched, we have reached the end
+                if (pendingSales.length < 100) {
+                    hasMore = false
+                }
+
+                await updatePendingCount()
             }
 
             // Re-fetch catalog to update live stock counts and IMEI pools on device

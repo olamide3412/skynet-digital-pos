@@ -15,7 +15,9 @@ class ItemGridController extends Controller
         $branch = current_branch();
 
         $grids = ItemGrid::whereHas('item', fn ($q) => $q->where('branch_id', $branch->id))
-            ->with('item.category')
+            ->with(['item' => function ($query) use ($branch) {
+                $query->where('branch_id', $branch->id)->with('category');
+            }])
             ->orderBy('menu_index')
             ->get();
 
@@ -33,8 +35,16 @@ class ItemGridController extends Controller
 
     public function store(Request $request)
     {
+        $branch = current_branch() ?? ($request->route('branch') ? \App\Models\Branch::where('slug', $request->route('branch'))->first() : null);
+        if (!$branch && auth()->check() && auth()->user()->branch_id) {
+            $branch = \App\Models\Branch::find(auth()->user()->branch_id);
+        }
+
         $data = $request->validate([
-            'item_id'    => 'required|exists:items,id',
+            'item_id'    => [
+                'required',
+                \Illuminate\Validation\Rule::exists('items', 'id')->where('branch_id', $branch->id),
+            ],
             'menu_name'  => 'nullable|string|max:100',
             'menu_index' => 'required|integer',
             'fore_color' => 'nullable|string|max:20',
@@ -48,8 +58,20 @@ class ItemGridController extends Controller
 
     public function update(Request $request, $branchParam, ItemGrid $item_grid)
     {
+        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
+        if (!$branch && auth()->check() && auth()->user()->branch_id) {
+            $branch = \App\Models\Branch::find(auth()->user()->branch_id);
+        }
+
+        if ($item_grid->item?->branch_id !== $branch->id) {
+            abort(403, 'This grid item does not belong to your branch.');
+        }
+
         $data = $request->validate([
-            'item_id'    => 'required|exists:items,id',
+            'item_id'    => [
+                'required',
+                \Illuminate\Validation\Rule::exists('items', 'id')->where('branch_id', $branch->id),
+            ],
             'menu_name'  => 'nullable|string|max:100',
             'menu_index' => 'required|integer',
             'fore_color' => 'nullable|string|max:20',
@@ -63,6 +85,15 @@ class ItemGridController extends Controller
 
     public function destroy($branchParam, ItemGrid $item_grid)
     {
+        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
+        if (!$branch && auth()->check() && auth()->user()->branch_id) {
+            $branch = \App\Models\Branch::find(auth()->user()->branch_id);
+        }
+
+        if ($item_grid->item?->branch_id !== $branch->id) {
+            abort(403, 'This grid item does not belong to your branch.');
+        }
+
         $item_grid->delete();
 
         return back()->with('success', 'Grid item removed.');

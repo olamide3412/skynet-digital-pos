@@ -191,11 +191,13 @@ export async function queueOfflineSale(saleRecord) {
 /**
  * Get all pending/failed sales waiting to be synchronized in FIFO order.
  */
-export async function getPendingOfflineSales() {
-    return await db.queued_sales
+export async function getPendingOfflineSales(limit = 100) {
+    const query = db.queued_sales
         .where('sync_status')
         .anyOf(['pending', 'failed'])
         .sortBy('created_at')
+    const results = await query
+    return limit > 0 ? results.slice(0, limit) : results
 }
 
 /**
@@ -236,7 +238,11 @@ export async function markSaleFailed(offlineSaleId, errorMsg) {
 
 /**
  * Get all queued sales for inspection drawer.
+ * By default fetches all records (pass limit > 0 if capping is desired).
  */
-export async function getAllQueuedSales() {
+export async function getAllQueuedSales(limit = 0) {
+    if (limit && limit > 0) {
+        return await db.queued_sales.orderBy('created_at').reverse().limit(limit).toArray()
+    }
     return await db.queued_sales.orderBy('created_at').reverse().toArray()
 }

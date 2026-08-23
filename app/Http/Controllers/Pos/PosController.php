@@ -19,20 +19,29 @@ class PosController extends Controller
         $branch       = current_branch();
         $settings     = PosSettings::current();
         $user         = Auth::user();
-        $activeDiscount = SaleDiscount::where('is_apply', true)
+        $activeDiscount = $branch ? SaleDiscount::where('branch_id', $branch->id)
+            ->where('is_apply', true)
             ->where('start_date_time', '<=', now())
             ->where('end_date_time',   '>=', now())
-            ->first();
+            ->first() : null;
 
-        // Grid items for gallery mode
-        $itemGrids = ItemGrid::with('item.category')->get();
+        // Grid items for gallery mode (strictly scoped to this branch)
+        $itemGrids = $branch ? ItemGrid::whereHas('item', fn($q) => $q->where('branch_id', $branch->id))
+            ->with(['item' => function ($query) use ($branch) {
+                $query->where('branch_id', $branch->id)
+                      ->with(['category', 'inStockDeviceUnits' => function ($dq) use ($branch) {
+                          $dq->where('branch_id', $branch->id)->select('id', 'item_id', 'imei_or_device_id', 'location', 'status');
+                      }]);
+            }])
+            ->orderBy('menu_index')
+            ->get() : collect();
 
         // Held sales for current user
-        $heldSales = HeldSale::with(['items.item', 'customer'])
+        $heldSales = $user ? HeldSale::with(['items.item', 'customer'])
             ->where('user_id', $user->id)
             ->where('status', 'Held')
             ->latest()
-            ->get();
+            ->get() : collect();
 
         // Merge branch business details into settings for receipt/UI use
         $settingsData = $settings->toArray();

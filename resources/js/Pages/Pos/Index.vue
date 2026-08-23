@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
 import { useCartStore } from '@/Stores/cart'
 import { usePosSettingsStore } from '@/Stores/posSettings'
@@ -53,11 +53,51 @@ const {
     queuedSalesList,
     syncQueuedSales,
     refreshCatalog,
+    updatePendingCount,
     startSyncMonitor,
     stopSyncMonitor,
 } = useOfflineSync()
 
 const showOfflineModal = ref(false)
+const offlineTabFilter = ref('all') // 'all' | 'pending' | 'synced' | 'failed'
+const offlineSearchQuery = ref('')
+
+const pendingSalesCount = computed(() => queuedSalesList.value.filter(s => s.sync_status === 'pending').length)
+const syncedSalesCount = computed(() => queuedSalesList.value.filter(s => s.sync_status === 'synced').length)
+const failedSalesCount = computed(() => queuedSalesList.value.filter(s => s.sync_status === 'failed').length)
+
+const pendingTotalAmount = computed(() => {
+    return queuedSalesList.value
+        .filter(s => s.sync_status === 'pending')
+        .reduce((sum, s) => sum + (parseFloat(s.final_total) || 0), 0)
+})
+
+const filteredQueuedSales = computed(() => {
+    let list = queuedSalesList.value
+    if (offlineTabFilter.value !== 'all') {
+        list = list.filter(s => s.sync_status === offlineTabFilter.value)
+    }
+    const q = offlineSearchQuery.value.trim().toLowerCase()
+    if (q) {
+        list = list.filter(s => {
+            return (s.receipt_id || '').toLowerCase().includes(q) ||
+                   (s.cashier_name || '').toLowerCase().includes(q) ||
+                   (s.payment_method || '').toLowerCase().includes(q)
+        })
+    }
+    return list
+})
+
+async function openOfflineModal() {
+    await updatePendingCount()
+    showOfflineModal.value = true
+}
+
+watch(showOfflineModal, async (open) => {
+    if (open) {
+        await updatePendingCount()
+    }
+})
 
 onMounted(() => {
     if (props.settings?.is_offline_enabled) {
@@ -172,7 +212,7 @@ const viewMode = ref(props.settings?.sell_interface ?? 'classic')
                 <!-- Offline Connection Status Badge -->
                 <div v-if="settings?.is_offline_enabled" class="flex items-center">
                     <button
-                        @click="showOfflineModal = true"
+                        @click="openOfflineModal"
                         type="button"
                         :class="[
                             'px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs',
@@ -370,55 +410,147 @@ const viewMode = ref(props.settings?.sell_interface ?? 'classic')
 
         <!-- Offline Sales Queue Inspection Modal -->
         <div v-if="showOfflineModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 max-w-lg w-full overflow-hidden shadow-2xl space-y-4 p-5">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 max-w-xl w-full overflow-hidden shadow-2xl space-y-4 p-5">
                 <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-3">
                     <div class="flex items-center gap-2">
-                        <span class="text-xl">📡</span>
+                        <span class="text-2xl">📡</span>
                         <div>
-                            <h3 class="font-bold text-slate-800 dark:text-white text-base">Offline Sales Queue</h3>
+                            <h3 class="font-bold text-slate-800 dark:text-white text-base flex items-center gap-2">
+                                <span>Offline Sales Queue</span>
+                                <span class="text-xs font-normal text-slate-500 dark:text-slate-400">
+                                    ({{ queuedSalesList.length }} Total Transactions)
+                                </span>
+                            </h3>
                             <p class="text-xs text-slate-500 dark:text-slate-400">
                                 Terminal Status: 
                                 <strong :class="isOnline ? 'text-emerald-500' : 'text-rose-500'">
-                                    {{ isOnline ? 'Connected' : 'Offline' }}
+                                    {{ isOnline ? 'Connected (Online)' : 'Disconnected (Offline Mode)' }}
                                 </strong>
                             </p>
                         </div>
                     </div>
-                    <button @click="showOfflineModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg">✕</button>
+                    <div class="flex items-center gap-2">
+                        <button
+                            @click="updatePendingCount"
+                            type="button"
+                            title="Re-query local IndexedDB queue"
+                            class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition cursor-pointer"
+                        >
+                            🔄 Refresh
+                        </button>
+                        <button @click="showOfflineModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg p-1">✕</button>
+                    </div>
                 </div>
 
+                <!-- Pending Summary Banner if pending transactions exist -->
+                <div v-if="pendingSalesCount > 0" class="p-2.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl flex items-center justify-between text-xs">
+                    <div class="flex items-center gap-2 text-amber-800 dark:text-amber-300">
+                        <span class="text-sm">⏳</span>
+                        <span><strong>{{ pendingSalesCount }}</strong> offline {{ pendingSalesCount === 1 ? 'sale' : 'sales' }} waiting to sync</span>
+                    </div>
+                    <div class="font-bold text-amber-900 dark:text-amber-200">
+                        Total: {{ format(pendingTotalAmount) }}
+                    </div>
+                </div>
+
+                <!-- Status Filter Tabs -->
+                <div class="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-900/60 rounded-xl text-xs font-semibold">
+                    <button
+                        type="button"
+                        @click="offlineTabFilter = 'all'"
+                        :class="[
+                            'flex-1 py-1.5 px-2 rounded-lg transition text-center cursor-pointer',
+                            offlineTabFilter === 'all'
+                                ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs font-bold'
+                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                        ]"
+                    >
+                        All ({{ queuedSalesList.length }})
+                    </button>
+                    <button
+                        type="button"
+                        @click="offlineTabFilter = 'pending'"
+                        :class="[
+                            'flex-1 py-1.5 px-2 rounded-lg transition text-center cursor-pointer',
+                            offlineTabFilter === 'pending'
+                                ? 'bg-amber-500 text-white shadow-xs font-bold'
+                                : 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10'
+                        ]"
+                    >
+                        Pending ({{ pendingSalesCount }})
+                    </button>
+                    <button
+                        type="button"
+                        @click="offlineTabFilter = 'synced'"
+                        :class="[
+                            'flex-1 py-1.5 px-2 rounded-lg transition text-center cursor-pointer',
+                            offlineTabFilter === 'synced'
+                                ? 'bg-emerald-600 text-white shadow-xs font-bold'
+                                : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600/10'
+                        ]"
+                    >
+                        Synced ({{ syncedSalesCount }})
+                    </button>
+                    <button
+                        type="button"
+                        @click="offlineTabFilter = 'failed'"
+                        :class="[
+                            'flex-1 py-1.5 px-2 rounded-lg transition text-center cursor-pointer',
+                            offlineTabFilter === 'failed'
+                                ? 'bg-rose-600 text-white shadow-xs font-bold'
+                                : 'text-rose-600 dark:text-rose-400 hover:bg-rose-600/10'
+                        ]"
+                    >
+                        Failed ({{ failedSalesCount }})
+                    </button>
+                </div>
+
+                <!-- Search Input for Queued Sales -->
+                <div v-if="queuedSalesList.length > 5">
+                    <input
+                        v-model="offlineSearchQuery"
+                        type="text"
+                        placeholder="Search offline sales by receipt ID, cashier or payment method..."
+                        class="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
+                    />
+                </div>
+
+                <!-- Sales Queue Listing -->
                 <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
-                    <div v-if="queuedSalesList.length === 0" class="text-center py-8 text-slate-400 text-sm">
+                    <div v-if="filteredQueuedSales.length === 0" class="text-center py-8 text-slate-400 text-sm">
                         <p class="text-3xl mb-2">🎉</p>
-                        All sales are synced with the server. No pending offline transactions.
+                        <span v-if="offlineTabFilter === 'pending'">No pending offline sales to sync.</span>
+                        <span v-else-if="offlineTabFilter === 'failed'">No failed sync records.</span>
+                        <span v-else-if="offlineTabFilter === 'synced'">No synced records on this terminal.</span>
+                        <span v-else>No offline transactions currently recorded on this terminal.</span>
                     </div>
                     <div
-                        v-for="sale in queuedSalesList"
+                        v-for="sale in filteredQueuedSales"
                         :key="sale.offline_sale_id"
-                        class="p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between text-xs"
+                        class="p-3 rounded-xl border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between text-xs transition"
                     >
                         <div>
                             <div class="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                                 <span>{{ sale.receipt_id }}</span>
                                 <span
                                     :class="[
-                                        'px-1.5 py-0.2 rounded text-[10px] font-bold uppercase',
+                                        'px-1.5 py-0.5 rounded text-[10px] font-bold uppercase',
                                         sale.sync_status === 'synced' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' :
                                         sale.sync_status === 'failed' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' :
-                                        'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300'
+                                        'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse'
                                     ]"
                                 >
                                     {{ sale.sync_status }}
                                 </span>
                             </div>
                             <div class="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
-                                {{ new Date(sale.created_at).toLocaleTimeString() }} • {{ sale.cashier_name || 'Cashier' }} • {{ sale.payment_method }}
+                                {{ new Date(sale.created_at).toLocaleTimeString() }} • {{ sale.cashier_name || 'Cashier' }} • {{ sale.payment_method }} • {{ sale.payload?.sale_orders?.length || 1 }} items
                             </div>
                             <div v-if="sale.error_message" class="text-rose-500 text-[11px] mt-1 font-mono">
                                 {{ sale.error_message }}
                             </div>
                         </div>
-                        <div class="font-bold text-slate-800 dark:text-white text-sm">
+                        <div class="font-bold text-slate-800 dark:text-white text-sm text-right">
                             {{ format(sale.final_total) }}
                         </div>
                     </div>
@@ -428,7 +560,8 @@ const viewMode = ref(props.settings?.sell_interface ?? 'classic')
                     <button
                         @click="refreshCatalog"
                         type="button"
-                        class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 transition"
+                        :disabled="!isOnline"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 transition disabled:opacity-40"
                     >
                         📥 Refresh Catalog
                     </button>

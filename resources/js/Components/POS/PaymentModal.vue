@@ -65,8 +65,10 @@ import {
     consumeLocalImei,
     deductLocalStock,
 } from '@/Services/offlineDb'
+import { useOfflineSync } from '@/Composables/useOfflineSync'
 
 const page = usePage()
+const { updatePendingCount } = useOfflineSync()
 
 async function processOfflineSale(payload) {
     const offlinePrefix = props.settings?.offline_receipt_prefix || 'OFF'
@@ -111,6 +113,9 @@ async function processOfflineSale(payload) {
         }
         await deductLocalStock(item.item_id, item.quantity)
     }
+
+    // Refresh pending count and queued list immediately so the UI updates live while offline
+    await updatePendingCount()
 
     emit('completed', offlineSale)
 }
