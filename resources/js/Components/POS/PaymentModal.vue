@@ -68,7 +68,7 @@ import {
 import { useOfflineSync } from '@/Composables/useOfflineSync'
 
 const page = usePage()
-const { updatePendingCount } = useOfflineSync()
+const { isOnline, updatePendingCount } = useOfflineSync()
 
 async function processOfflineSale(payload) {
     const offlinePrefix = props.settings?.offline_receipt_prefix || 'OFF'
@@ -142,15 +142,15 @@ async function submitSale() {
         is_debt:        tab.value === 'Debt',
     }
 
-    // If terminal is explicitly offline and offline mode is enabled
-    if (props.settings?.is_offline_enabled && typeof navigator !== 'undefined' && !navigator.onLine) {
+    // If terminal is offline and offline mode is enabled, immediately record locally with zero network delay
+    const isDeviceOffline = !isOnline.value || (typeof navigator !== 'undefined' && !navigator.onLine)
+    if (props.settings?.is_offline_enabled && isDeviceOffline) {
         try {
             await processOfflineSale(payload)
             return
         } catch (offlineErr) {
             console.error('Offline sale queuing failed:', offlineErr)
             errors.value = { sale: 'Failed to record offline sale locally: ' + offlineErr.message }
-            isSubmitting.value = false
             return
         } finally {
             isSubmitting.value = false
@@ -158,7 +158,7 @@ async function submitSale() {
     }
 
     try {
-        const res = await axios.post(route('pos.sales.store'), payload, { timeout: 10000 })
+        const res = await axios.post(route('pos.sales.store'), payload, { timeout: 3500 })
         emit('completed', res.data?.sale ?? { receipt_id: res.data?.receipt_id, ...payload })
     } catch (err) {
         // If network request failed / timed out and offline mode is enabled, fallback to offline sale queue!

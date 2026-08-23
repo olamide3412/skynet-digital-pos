@@ -3,6 +3,7 @@ import { ref, nextTick } from 'vue'
 import axios from 'axios'
 import { useCurrency } from '@/Composables/useCurrency'
 import { searchLocalItems } from '@/Services/offlineDb'
+import { useOfflineSync } from '@/Composables/useOfflineSync'
 
 const props = defineProps({
     purchaseType: { type: String, default: 'Consumer' },
@@ -11,6 +12,7 @@ const props = defineProps({
 const emit = defineEmits(['select'])
 
 const { format } = useCurrency()
+const { isOnline } = useOfflineSync()
 const searchInput = ref(null)   // template ref for reliable focus
 const query       = ref('')
 const results     = ref([])
@@ -38,7 +40,7 @@ function onInput(e) {
     query.value = val
     clearTimeout(debounce)
     if (!val) { results.value = []; return }
-    debounce = setTimeout(() => doSearch(val), 300)
+    debounce = setTimeout(() => doSearch(val), 150)
 }
 
 async function onEnter() {
@@ -55,33 +57,46 @@ async function onEnter() {
 async function doSearch(q, autoSelectFirst = false) {
     if (!q) { results.value = []; return }
     loading.value = true
+
+    // 1. Instant local search from IndexedDB (0ms latency)
+    let localResults = []
     try {
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            const localResults = await searchLocalItems(q, props.purchaseType)
-            results.value = localResults
-            if (autoSelectFirst && localResults.length > 0) {
-                selectItem(localResults[0])
-            }
+        localResults = await searchLocalItems(q, props.purchaseType)
+    } catch (e) {
+        console.warn('Local search error:', e)
+    }
+
+    // If offline or offline mode active without confirmed online connection, immediately use local results
+    const isDeviceOffline = !isOnline.value || (typeof navigator !== 'undefined' && !navigator.onLine)
+    if (isDeviceOffline || (props.settings?.is_offline_enabled && localResults.length > 0)) {
+        results.value = localResults
+        if (autoSelectFirst && localResults.length > 0) {
+            selectItem(localResults[0])
+            loading.value = false
             return
         }
+        if (isDeviceOffline) {
+            loading.value = false
+            return
+        }
+    }
 
+    // 2. If online, fetch fresh server data with fast 2.5s timeout
+    try {
         const res = await axios.get(route('pos.api.items.search'), {
-            params: { q, purchase_type: props.purchaseType }
+            params: { q, purchase_type: props.purchaseType },
+            timeout: 2500,
         })
-        results.value = res.data
-        if (autoSelectFirst && res.data.length > 0) {
-            selectItem(res.data[0])
+        if (res.data && Array.isArray(res.data)) {
+            results.value = res.data
+            if (autoSelectFirst && res.data.length > 0) {
+                selectItem(res.data[0])
+            }
         }
     } catch (err) {
-        console.warn('Network search unavailable, falling back to local storage search:', err)
-        try {
-            const localResults = await searchLocalItems(q, props.purchaseType)
+        // Fallback already displayed localResults
+        if (localResults.length > 0) {
             results.value = localResults
-            if (autoSelectFirst && localResults.length > 0) {
-                selectItem(localResults[0])
-            }
-        } catch (dbErr) {
-            console.error('Local IndexedDB fallback error:', dbErr)
         }
     } finally {
         loading.value = false

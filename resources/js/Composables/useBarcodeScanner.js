@@ -41,45 +41,36 @@ export function useBarcodeScanner({ onScan, getPurchaseType, isEnabled }) {
 
         const purchaseType = getPurchaseType ? getPurchaseType() : 'Consumer'
 
-        // If explicitly offline, immediately query local IndexedDB
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            try {
-                const { getLocalItemByBarcode } = await import('@/Services/offlineDb')
-                const matchedItem = await getLocalItemByBarcode(cleanCode, purchaseType)
-                if (matchedItem) {
-                    playBeepSound()
-                    if (onScan) onScan(matchedItem)
-                }
-            } catch (e) {
-                console.error('Offline barcode scan error:', e)
+        // 1. Instant local barcode lookup (0ms response time)
+        try {
+            const { getLocalItemByBarcode } = await import('@/Services/offlineDb')
+            const matchedItem = await getLocalItemByBarcode(cleanCode, purchaseType)
+            if (matchedItem) {
+                playBeepSound()
+                if (onScan) onScan(matchedItem)
+                return
             }
-            return
+        } catch (e) {
+            console.warn('Local barcode lookup error:', e)
         }
 
-        try {
-            const res = await axios.get(route('pos.api.items.search'), {
-                params: { q: cleanCode, purchase_type: purchaseType }
-            })
-
-            if (res.data && res.data.length > 0) {
-                // Find exact barcode match first, or fallback to first search result
-                const matchedItem = res.data.find(i => String(i.barcode_number).trim() === cleanCode) || res.data[0]
-                if (matchedItem) {
-                    playBeepSound()
-                    if (onScan) onScan(matchedItem)
-                }
-            }
-        } catch (err) {
-            console.warn('Online barcode lookup failed, trying local store:', err)
+        // 2. If not found locally and network is available, try server search with fast 2.5s timeout
+        if (typeof navigator === 'undefined' || navigator.onLine) {
             try {
-                const { getLocalItemByBarcode } = await import('@/Services/offlineDb')
-                const matchedItem = await getLocalItemByBarcode(cleanCode, purchaseType)
-                if (matchedItem) {
-                    playBeepSound()
-                    if (onScan) onScan(matchedItem)
+                const res = await axios.get(route('pos.api.items.search'), {
+                    params: { q: cleanCode, purchase_type: purchaseType },
+                    timeout: 2500,
+                })
+
+                if (res.data && res.data.length > 0) {
+                    const matchedItem = res.data.find(i => String(i.barcode_number).trim() === cleanCode) || res.data[0]
+                    if (matchedItem) {
+                        playBeepSound()
+                        if (onScan) onScan(matchedItem)
+                    }
                 }
-            } catch (dbErr) {
-                console.error('Local barcode scan fallback error:', dbErr)
+            } catch (err) {
+                console.warn('Online barcode lookup failed:', err)
             }
         }
     }

@@ -2,6 +2,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useCurrency } from '@/Composables/useCurrency'
 import { useCartStore } from '@/Stores/cart'
+import { useOfflineSync } from '@/Composables/useOfflineSync'
+import { getLocalAvailableImeis } from '@/Services/offlineDb'
 import axios from 'axios'
 
 const props = defineProps({
@@ -11,6 +13,7 @@ const props = defineProps({
 
 const emit = defineEmits(['remove', 'update-qty', 'update-price'])
 const { format } = useCurrency()
+const { isOnline } = useOfflineSync()
 const cartStore  = useCartStore()
 
 const editingPrice = ref(false)
@@ -23,18 +26,25 @@ const loadingImeis = ref(false)
 async function fetchFreshImeis() {
     if (!isImeiItem.value || !props.item.item_id) return
     loadingImeis.value = true
-    try {
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            const { getLocalAvailableImeis } = await import('@/Services/offlineDb')
-            const localImeis = await getLocalAvailableImeis(props.item.item_id)
-            if (localImeis && localImeis.length > 0) {
-                localAvailableImeis.value = localImeis
-            }
-            return
-        }
 
+    // 1. Instant local lookup (0ms)
+    try {
+        const localImeis = await getLocalAvailableImeis(props.item.item_id)
+        if (localImeis && localImeis.length > 0) {
+            localAvailableImeis.value = localImeis
+        }
+    } catch (e) {}
+
+    const isDeviceOffline = !isOnline.value || (typeof navigator !== 'undefined' && !navigator.onLine)
+    if (isDeviceOffline) {
+        loadingImeis.value = false
+        return
+    }
+
+    try {
         const res = await axios.get(route('pos.api.items.available-imeis'), {
-            params: { item_id: props.item.item_id }
+            params: { item_id: props.item.item_id },
+            timeout: 2500,
         })
         if (res.data && Array.isArray(res.data.imeis)) {
             localAvailableImeis.value = res.data.imeis
@@ -47,16 +57,7 @@ async function fetchFreshImeis() {
             }
         }
     } catch (e) {
-        console.warn('Could not refresh in-stock IMEIs from server, using local store:', e)
-        try {
-            const { getLocalAvailableImeis } = await import('@/Services/offlineDb')
-            const localImeis = await getLocalAvailableImeis(props.item.item_id)
-            if (localImeis && localImeis.length > 0) {
-                localAvailableImeis.value = localImeis
-            }
-        } catch (dbErr) {
-            console.error('IndexedDB IMEI lookup failed:', dbErr)
-        }
+        // Already loaded local IMEIs
     } finally {
         loadingImeis.value = false
     }

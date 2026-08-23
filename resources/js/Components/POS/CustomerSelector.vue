@@ -1,11 +1,14 @@
 <script setup>
 import { ref } from 'vue'
 import axios from 'axios'
+import { searchLocalCustomers } from '@/Services/offlineDb'
+import { useOfflineSync } from '@/Composables/useOfflineSync'
 
 const props = defineProps({
     customer: { type: Object, default: null },
 })
 const emit    = defineEmits(['select', 'clear'])
+const { isOnline } = useOfflineSync()
 const query   = ref('')
 const results = ref([])
 const loading = ref(false)
@@ -14,9 +17,32 @@ let   debounce = null
 async function search(val) {
     if (!val) { results.value = []; return }
     loading.value = true
+
+    // 1. Instant local customer search (0ms)
+    let localCusts = []
     try {
-        const res = await axios.get(route('pos.api.customers.search'), { params: { q: val } })
-        results.value = res.data
+        localCusts = await searchLocalCustomers(val)
+    } catch (e) {}
+
+    const isDeviceOffline = !isOnline.value || (typeof navigator !== 'undefined' && !navigator.onLine)
+    if (isDeviceOffline || localCusts.length > 0) {
+        results.value = localCusts
+        if (isDeviceOffline) {
+            loading.value = false
+            return
+        }
+    }
+
+    try {
+        const res = await axios.get(route('pos.api.customers.search'), {
+            params: { q: val },
+            timeout: 2500,
+        })
+        if (res.data && Array.isArray(res.data)) {
+            results.value = res.data
+        }
+    } catch (e) {
+        if (localCusts.length > 0) results.value = localCusts
     } finally { loading.value = false }
 }
 

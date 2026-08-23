@@ -113,6 +113,20 @@ export async function getLocalItemByBarcode(barcode, purchaseType = 'Consumer') 
 }
 
 /**
+ * Search customers locally from IndexedDB.
+ */
+export async function searchLocalCustomers(query = '') {
+    const q = String(query).trim().toLowerCase()
+    if (!q) return []
+    const allCustomers = await db.customers.toArray()
+    return allCustomers.filter(c => {
+        const nameMatch = (c.name || '').toLowerCase().includes(q)
+        const phoneMatch = (c.phone || '').toLowerCase().includes(q)
+        return nameMatch || phoneMatch
+    }).slice(0, 20)
+}
+
+/**
  * Get available in-stock IMEIs for an item from local IndexedDB.
  */
 export async function getLocalAvailableImeis(itemId) {
