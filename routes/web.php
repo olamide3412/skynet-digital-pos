@@ -29,6 +29,59 @@ use Illuminate\Support\Facades\Route;
  * ══════════════════════════════════════════════════════════════════════════════ */
 Route::get('/', [HomeController::class, 'index'])->name('home');
 
+// PWA Service Worker & Web Manifest routes (guarantees HTTP 200 even if static routing is missed)
+Route::get('/sw.js', function () {
+    $path = public_path('sw.js');
+    if (file_exists($path)) {
+        return response()->file($path, [
+            'Content-Type' => 'application/javascript; charset=utf-8',
+            'Service-Worker-Allowed' => '/',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        ]);
+    }
+    $fallbackScript = <<<'JS'
+const CACHE_NAME = 'skynet-pos-shell-v1';
+const STATIC_ASSETS = ['/', '/favicon.ico', '/manifest.json'];
+self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(STATIC_ASSETS).catch(() => {}))); self.skipWaiting(); });
+self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => k !== CACHE_NAME ? caches.delete(k) : null)))); self.clients.claim(); });
+self.addEventListener('fetch', (e) => {
+    if (e.request.method !== 'GET') return;
+    const url = new URL(e.request.url);
+    if (url.pathname.includes('/api/')) return;
+    e.respondWith(fetch(e.request).then(res => {
+        if (res && res.status === 200 && res.type === 'basic') {
+            const clone = res.clone();
+            caches.open(CACHE_NAME).then(c => c.put(e.request, clone).catch(() => {}));
+        }
+        return res;
+    }).catch(() => caches.match(e.request).then(c => c || (e.request.mode === 'navigate' ? caches.match('/') : null))));
+});
+JS;
+    return response($fallbackScript, 200, [
+        'Content-Type' => 'application/javascript; charset=utf-8',
+        'Service-Worker-Allowed' => '/',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+})->name('pwa.sw');
+
+Route::get('/manifest.json', function () {
+    $path = public_path('manifest.json');
+    if (file_exists($path)) {
+        return response()->file($path, [
+            'Content-Type' => 'application/json; charset=utf-8',
+            'Cache-Control' => 'no-cache, no-store, must-revalidate',
+        ]);
+    }
+    return response()->json([
+        'name' => 'Skynet POS',
+        'short_name' => 'POS',
+        'start_url' => '/',
+        'display' => 'standalone',
+        'background_color' => '#0f172a',
+        'theme_color' => '#059669',
+    ]);
+})->name('pwa.manifest');
+
 // Global Auth Fallbacks — Redirects /login to current or default branch login
 Route::get('/login', function () {
     $branchSlug = current_branch()?->slug
