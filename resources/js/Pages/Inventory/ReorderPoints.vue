@@ -306,7 +306,7 @@ function getStatusBadge(item) {
                                         Threshold
                                     </button>
                                     <Link
-                                        :href="route('pos.purchases.create', { branch: $page.props.current_branch?.slug || 'felix-enterprise' })"
+                                        :href="route('pos.purchases.create', { branch: $page.props.current_branch?.slug || $page.props.default_branch?.slug || '' })"
                                         class="px-2.5 py-1.5 bg-theme hover:opacity-90 text-white font-bold text-[11px] rounded-lg transition inline-block shadow-2xs"
                                     >
                                         Reorder PO

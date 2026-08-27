@@ -1,5 +1,6 @@
 <script setup>
-import { Link, router } from '@inertiajs/vue3'
+import { computed } from 'vue'
+import { Link, router, usePage } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import { useCurrency } from '@/Composables/useCurrency'
 import dayjs from 'dayjs'
@@ -7,11 +8,20 @@ import dayjs from 'dayjs'
 defineOptions({ layout: PosLayout })
 
 const props = defineProps({ order: Object })
+const page = usePage()
+const branchSlug = computed(() => page.props.current_branch?.slug || page.props.default_branch?.slug || '')
 const { format } = useCurrency()
+
+const itemsSubtotal = computed(() => {
+    if (props.order?.items && props.order.items.length > 0) {
+        return props.order.items.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.cost || 0)), 0)
+    }
+    return (Number(props.order?.total_amount) || 0) - (Number(props.order?.shipping_cost) || 0) + (Number(props.order?.discount) || 0)
+})
 
 function destroy() {
     if (confirm('Are you sure you want to delete this pending purchase order?')) {
-        router.delete(route('pos.purchases.destroy', props.order.id))
+        router.delete(route('pos.purchases.destroy', { branch: branchSlug.value, purchase: props.order.id }))
     }
 }
 </script>
@@ -19,7 +29,7 @@ function destroy() {
 <template>
     <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
-            <Link :href="route('pos.purchases.index')" class="text-slate-400 hover:text-slate-700 dark:hover:text-white transition">
+            <Link :href="route('pos.purchases.index', { branch: branchSlug })" class="text-slate-400 hover:text-slate-700 dark:hover:text-white transition">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
             </Link>
             <h1 class="text-lg font-bold text-slate-900 dark:text-white">PO #{{ order.po_number }}</h1>
@@ -30,7 +40,7 @@ function destroy() {
             }">{{ order.status }}</span>
 
             <div class="ml-auto flex gap-2">
-                <Link v-if="order.status !== 'Received'" :href="route('pos.purchases.receive', order.id)" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition font-medium shadow-xs">
+                <Link v-if="order.status !== 'Received'" :href="route('pos.purchases.receive', { branch: branchSlug, purchase: order.id })" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition font-medium shadow-xs">
                     Receive Items
                 </Link>
                 <button v-if="order.status === 'Pending'" @click="destroy" class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-red-600 dark:text-red-400 text-sm rounded-lg transition font-medium">
@@ -118,19 +128,19 @@ function destroy() {
                 <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-2 text-sm shadow-xs">
                     <div class="flex justify-between text-slate-600 dark:text-slate-400">
                         <span>Items Total</span>
-                        <span>{{ format(order.total_amount - order.shipping_cost + order.discount) }}</span>
+                        <span class="font-medium text-slate-900 dark:text-white">{{ format(itemsSubtotal) }}</span>
                     </div>
-                    <div v-if="order.shipping_cost > 0" class="flex justify-between text-slate-600 dark:text-slate-400">
+                    <div v-if="Number(order.shipping_cost) > 0" class="flex justify-between text-slate-600 dark:text-slate-400">
                         <span>Shipping</span>
-                        <span>+{{ format(order.shipping_cost) }}</span>
+                        <span>+{{ format(Number(order.shipping_cost)) }}</span>
                     </div>
-                    <div v-if="order.discount > 0" class="flex justify-between text-red-600 dark:text-red-400">
+                    <div v-if="Number(order.discount) > 0" class="flex justify-between text-red-600 dark:text-red-400">
                         <span>Discount</span>
-                        <span>-{{ format(order.discount) }}</span>
+                        <span>-{{ format(Number(order.discount)) }}</span>
                     </div>
                     <div class="flex justify-between items-center text-slate-900 dark:text-white font-bold pt-3 border-t border-slate-200 dark:border-slate-700 text-lg">
                         <span>Grand Total</span>
-                        <span class="text-theme font-black">{{ format(order.total_amount) }}</span>
+                        <span class="text-theme font-black">{{ format(Number(order.total_amount)) }}</span>
                     </div>
                 </div>
             </div>

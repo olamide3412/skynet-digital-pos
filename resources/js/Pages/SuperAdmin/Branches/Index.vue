@@ -39,11 +39,11 @@ const submitCreate = () => {
 }
 
 const toggleBranch = (branchSlug) => {
-    router.post(route('superadmin.branches.toggle', branchSlug))
+    router.post(route('superadmin.branches.toggle', { branch: branchSlug }))
 }
 
 const toggleOffline = (branchSlug) => {
-    router.post(route('superadmin.branches.toggle-offline', branchSlug))
+    router.post(route('superadmin.branches.toggle-offline', { branch: branchSlug }))
 }
 </script>
 
@@ -130,13 +130,13 @@ const toggleOffline = (branchSlug) => {
                         Open POS &rarr;
                     </Link>
                     <Link
-                        :href="route('superadmin.branches.users.index', branch.slug)"
+                        :href="route('superadmin.branches.users.index', { branch: branch.slug })"
                         class="px-3 py-2 text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold transition-colors"
                     >
                         Users
                     </Link>
                     <Link
-                        :href="route('superadmin.branches.items.index', branch.slug)"
+                        :href="route('superadmin.branches.items.index', { branch: branch.slug })"
                         class="px-3 py-2 text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold transition-colors"
                     >
                         Items
@@ -144,7 +144,7 @@ const toggleOffline = (branchSlug) => {
                     <button
                         @click="toggleBranch(branch.slug)"
                         :class="branch.is_active ? 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30' : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'"
-                        class="px-2.5 py-2 text-xs rounded-xl transition-colors font-bold"
+                        class="px-2.5 py-2 text-xs rounded-xl transition-colors font-bold cursor-pointer"
                     >
                         {{ branch.is_active ? 'Disable' : 'Enable' }}
                     </button>

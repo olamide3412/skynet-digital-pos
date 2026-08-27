@@ -13,8 +13,8 @@ const appTagline     = computed(() => systemConfig.value.app_tagline || 'Point o
 const companyLogoUrl = computed(() => systemConfig.value.company_logo_url || null)
 
 const posUrl = computed(() => {
-    const branchSlug = page.props.current_branch?.slug || 'skynet-digital-enterprise'
-    return route('pos.index', { branch: branchSlug })
+    const branchSlug = page.props.current_branch?.slug || page.props.default_branch?.slug || ''
+    return branchSlug ? route('pos.index', { branch: branchSlug }) : route('home')
 })
 </script>
 

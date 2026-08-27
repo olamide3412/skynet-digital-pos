@@ -68,14 +68,19 @@ function applyTheme(themeColor, customPrimaryHex, customSecondaryHex) {
 // Listen to Inertia navigation events to update Ziggy defaults & theme_color
 router.on('navigate', (event) => {
     const props = event.detail.page.props;
-    const branchSlug = props.current_branch?.slug;
+    const isSuperAdmin = window.location.pathname.startsWith('/superadmin');
+    const branchSlug = !isSuperAdmin ? (props.current_branch?.slug || props.default_branch?.slug) : null;
     applyTheme(props.theme_color, props.custom_primary_hex, props.custom_secondary_hex);
 
     if (typeof window !== 'undefined' && window.Ziggy) {
-        window.Ziggy.defaults = {
-            ...(window.Ziggy.defaults || {}),
-            branch: branchSlug || window.Ziggy.defaults?.branch || 'felix-enterprise',
-        };
+        if (branchSlug) {
+            window.Ziggy.defaults = {
+                ...(window.Ziggy.defaults || {}),
+                branch: branchSlug,
+            };
+        } else if (isSuperAdmin && window.Ziggy.defaults?.branch) {
+            delete window.Ziggy.defaults.branch;
+        }
     }
 });
 
@@ -135,10 +140,10 @@ createInertiaApp({
         applyTheme(props.initialPage.props.theme_color, props.initialPage.props.custom_primary_hex, props.initialPage.props.custom_secondary_hex);
 
         if (typeof window !== 'undefined' && window.Ziggy) {
-            const initialSlug = props.initialPage.props.current_branch?.slug;
+            const initialSlug = props.initialPage.props.current_branch?.slug || props.initialPage.props.default_branch?.slug;
             window.Ziggy.defaults = {
                 ...(window.Ziggy.defaults || {}),
-                branch: initialSlug || 'felix-enterprise',
+                branch: initialSlug || window.Ziggy.defaults?.branch,
             };
         }
 

@@ -1,13 +1,22 @@
 <script setup>
 import { computed } from 'vue'
-import { Link, useForm } from '@inertiajs/vue3'
+import { Link, useForm, usePage } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import { useCurrency } from '@/Composables/useCurrency'
 
 defineOptions({ layout: PosLayout })
 
 const props = defineProps({ order: Object })
+const page = usePage()
+const branchSlug = computed(() => page.props.current_branch?.slug || page.props.default_branch?.slug || '')
 const { format } = useCurrency()
+
+const itemsSubtotal = computed(() => {
+    if (props.order?.items && props.order.items.length > 0) {
+        return props.order.items.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.cost || 0)), 0)
+    }
+    return (Number(props.order?.total_amount) || 0) - (Number(props.order?.shipping_cost) || 0) + (Number(props.order?.discount) || 0)
+})
 
 const form = useForm({
     items: props.order.items.map(i => ({
@@ -46,7 +55,7 @@ const canSubmit = computed(() => {
 })
 
 function submit() {
-    form.post(route('pos.purchases.process-receive', props.order.id))
+    form.post(route('pos.purchases.process-receive', { branch: branchSlug.value, purchase: props.order.id }))
 }
 
 function receiveAll() {
@@ -62,7 +71,7 @@ function setAllLocation(loc) {
     <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
         <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
             <div class="flex items-center gap-3">
-                <Link :href="route('pos.purchases.show', order.id)" class="text-slate-400 hover:text-slate-700 dark:hover:text-white transition">
+                <Link :href="route('pos.purchases.show', { branch: branchSlug, purchase: order.id })" class="text-slate-400 hover:text-slate-700 dark:hover:text-white transition">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
                 </Link>
                 <h1 class="text-lg font-bold text-slate-900 dark:text-white">Receive Inventory</h1>
@@ -75,7 +84,7 @@ function setAllLocation(loc) {
         <div class="flex-1 overflow-y-auto p-6">
             <form @submit.prevent="submit" class="max-w-5xl mx-auto space-y-6">
                 <!-- Top Summary Card -->
-                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 flex flex-col sm:flex-row gap-4 sm:gap-8 sm:items-center shadow-xs">
+                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 flex flex-col sm:flex-row gap-4 sm:gap-6 sm:items-center shadow-xs">
                     <div>
                         <p class="text-xs text-slate-400 dark:text-slate-500 mb-0.5 uppercase tracking-wider font-semibold">Vendor</p>
                         <p class="text-sm text-slate-900 dark:text-white font-medium">{{ order.vendor?.name }}</p>
@@ -83,6 +92,14 @@ function setAllLocation(loc) {
                     <div>
                         <p class="text-xs text-slate-400 dark:text-slate-500 mb-0.5 uppercase tracking-wider font-semibold">Status</p>
                         <span class="px-2.5 py-0.5 text-xs rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 font-medium">{{ order.status }}</span>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 dark:text-slate-500 mb-0.5 uppercase tracking-wider font-semibold">Items Total</p>
+                        <p class="text-sm text-slate-900 dark:text-white font-semibold">{{ format(itemsSubtotal) }}</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-slate-400 dark:text-slate-500 mb-0.5 uppercase tracking-wider font-semibold">Grand Total</p>
+                        <p class="text-sm text-emerald-600 dark:text-emerald-400 font-bold">{{ format(Number(order.total_amount)) }}</p>
                     </div>
 
                     <!-- Quick Batch Actions -->

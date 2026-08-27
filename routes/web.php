@@ -85,7 +85,7 @@ Route::get('/manifest.json', function () {
 // Global Auth Fallbacks — Redirects /login to current or default branch login
 Route::get('/login', function () {
     $branchSlug = current_branch()?->slug
-        ?? \App\Models\Branch::first()?->slug
+        ?? \App\Models\Branch::orderBy('id')->value('slug')
         ?? 'skynet-digital-enterprise';
     return redirect()->route('pos.login', ['branch' => $branchSlug]);
 })->name('login');

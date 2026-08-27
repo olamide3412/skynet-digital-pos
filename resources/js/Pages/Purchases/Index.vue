@@ -1,6 +1,6 @@
 <script setup>
-import { ref } from 'vue'
-import { Link, router } from '@inertiajs/vue3'
+import { ref, computed } from 'vue'
+import { Link, router, usePage } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import { useCurrency } from '@/Composables/useCurrency'
 import dayjs from 'dayjs'
@@ -12,12 +12,15 @@ const props = defineProps({
     filters: Object,
 })
 
+const page = usePage()
+const branchSlug = computed(() => page.props.current_branch?.slug || page.props.default_branch?.slug || '')
+
 const { format } = useCurrency()
 const search = ref(props.filters?.search ?? '')
 const status = ref(props.filters?.status ?? '')
 
 function doFilter() {
-    router.get(route('pos.purchases.index'), { search: search.value, status: status.value }, { preserveState: true, replace: true })
+    router.get(route('pos.purchases.index', { branch: branchSlug.value }), { search: search.value, status: status.value }, { preserveState: true, replace: true })
 }
 </script>
 
@@ -26,7 +29,7 @@ function doFilter() {
         <!-- Header -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
             <h1 class="text-lg font-bold text-slate-900 dark:text-white">Purchase Orders</h1>
-            <Link :href="route('pos.purchases.create')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition font-medium flex items-center gap-1.5 shadow-xs">
+            <Link :href="route('pos.purchases.create', { branch: branchSlug })" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm rounded-lg transition font-medium flex items-center gap-1.5 shadow-xs">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                 New PO
             </Link>
@@ -60,7 +63,7 @@ function doFilter() {
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                         <tr v-for="order in orders.data" :key="order.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
                             <td class="px-4 py-3 font-mono text-slate-900 dark:text-white font-medium">
-                                <Link :href="route('pos.purchases.show', order.id)" class="hover:text-emerald-600 dark:hover:text-emerald-400 transition">{{ order.po_number }}</Link>
+                                <Link :href="route('pos.purchases.show', { branch: branchSlug, purchase: order.id })" class="hover:text-emerald-600 dark:hover:text-emerald-400 transition">{{ order.po_number }}</Link>
                             </td>
                             <td class="px-4 py-3 text-slate-700 dark:text-slate-300 font-medium">{{ order.vendor?.name ?? '—' }}</td>
                             <td class="px-4 py-3 text-emerald-600 dark:text-emerald-400 font-semibold text-right">{{ format(order.total_amount) }}</td>
@@ -74,8 +77,8 @@ function doFilter() {
                             </td>
                             <td class="px-4 py-3 text-right">
                                 <div class="flex items-center justify-end gap-3">
-                                    <Link :href="route('pos.purchases.show', order.id)" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium transition">View</Link>
-                                    <Link v-if="order.status !== 'Received'" :href="route('pos.purchases.receive', order.id)" class="text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 font-semibold transition">Receive Stock</Link>
+                                    <Link :href="route('pos.purchases.show', { branch: branchSlug, purchase: order.id })" class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-500 font-medium transition">View</Link>
+                                    <Link v-if="order.status !== 'Received'" :href="route('pos.purchases.receive', { branch: branchSlug, purchase: order.id })" class="text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-500 font-semibold transition">Receive Stock</Link>
                                 </div>
                             </td>
                         </tr>

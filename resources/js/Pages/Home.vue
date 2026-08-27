@@ -4,6 +4,9 @@ import { computed, ref, onMounted } from 'vue'
 
 defineOptions({ layout: null })
 
+const props = defineProps({
+    default_branch: Object,
+})
 
 const page = usePage()
 
@@ -13,8 +16,11 @@ const appTagline   = computed(() => systemConfig.value.app_tagline || 'Digital P
 const logoUrl      = computed(() => systemConfig.value.company_logo_url || null)
 
 const posUrl = computed(() => {
-    const branchSlug = page.props.current_branch?.slug || 'skynet-digital-enterprise'
-    return route('pos.index', { branch: branchSlug })
+    const branchSlug = page.props.current_branch?.slug 
+        || props.default_branch?.slug 
+        || page.props.default_branch?.slug 
+        || ''
+    return branchSlug ? route('pos.index', { branch: branchSlug }) : route('home')
 })
 
 const currentYear = new Date().getFullYear()

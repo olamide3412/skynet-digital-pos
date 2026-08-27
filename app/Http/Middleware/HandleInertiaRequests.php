@@ -19,7 +19,14 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = Auth::guard('web')->check() ? Auth::guard('web')->user() : null;
-        $branch = current_branch();
+        $activeBranch = current_branch() 
+            ?? ($user?->branch_id ? \App\Models\Branch::find($user->branch_id) : null);
+        $defaultBranch = \App\Models\Branch::orderBy('id')->first();
+        $branch = $activeBranch ?? $defaultBranch;
+
+        if ($activeBranch) {
+            \Illuminate\Support\Facades\URL::defaults(['branch' => $activeBranch->slug]);
+        }
 
         return [
             ...parent::share($request),
@@ -32,7 +39,7 @@ class HandleInertiaRequests extends Middleware
                 'type' => fn() => Auth::guard('web')->check() ? 'staff' : null,
             ],
 
-            // ── Current Branch (null in Super Admin context) ───────────────────
+            // ── Current Branch (dynamically falls back to first branch in DB) ──
             'current_branch' => fn() => $branch ? [
                 'id' => $branch->id,
                 'name' => $branch->name,
@@ -41,6 +48,14 @@ class HandleInertiaRequests extends Middleware
                 'phone' => $branch->phone,
                 'email' => $branch->email,
                 'address' => $branch->address,
+            ] : null,
+
+            // ── Default Branch (first created branch in database) ─────────────
+            'default_branch' => fn() => $defaultBranch ? [
+                'id' => $defaultBranch->id,
+                'name' => $defaultBranch->name,
+                'slug' => $defaultBranch->slug,
+                'logo_url' => $defaultBranch->logo_path ? asset('storage/' . $defaultBranch->logo_path) : null,
             ] : null,
 
             // ── Flash messages ─────────────────────────────────────────────────

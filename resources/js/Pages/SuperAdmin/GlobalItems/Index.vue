@@ -46,12 +46,12 @@ const submitCreate = () => {
 
 const pushItemToBranch = (globalItemId, branchSlug) => {
     if (!branchSlug) return
-    router.post(route('superadmin.global-items.import', [globalItemId, branchSlug]))
+    router.post(route('superadmin.global-items.import', { globalItem: globalItemId, branch: branchSlug }))
 }
 
 const pushBatchToBranch = () => {
     if (!selectedBranchSlug.value || !selectedGlobalIds.value.length) return
-    router.post(route('superadmin.branches.items.import-batch', selectedBranchSlug.value), {
+    router.post(route('superadmin.branches.items.import-batch', { branch: selectedBranchSlug.value }), {
         global_item_ids: selectedGlobalIds.value,
     }, {
         onSuccess: () => {
@@ -64,7 +64,7 @@ const pushAllToBranch = () => {
     if (!selectedBranchSlug.value) return
     const branchName = props.branches.find(b => b.slug === selectedBranchSlug.value)?.name ?? selectedBranchSlug.value
     if (!confirm(`Push ALL ${props.items.total} Master Pool items into branch "${branchName}"?`)) return
-    router.post(route('superadmin.branches.items.import-all', selectedBranchSlug.value))
+    router.post(route('superadmin.branches.items.import-all', { branch: selectedBranchSlug.value }))
 }
 
 const toggleSelectAll = () => {

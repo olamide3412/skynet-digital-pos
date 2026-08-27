@@ -16,7 +16,7 @@ const formatCurrency = (amount) => {
 }
 
 const toggleBranch = (branchSlug) => {
-    router.post(route('superadmin.branches.toggle', branchSlug))
+    router.post(route('superadmin.branches.toggle', { branch: branchSlug }))
 }
 </script>
 
@@ -120,7 +120,7 @@ const toggleBranch = (branchSlug) => {
                                     Open POS &rarr;
                                 </Link>
                                 <Link
-                                    :href="route('superadmin.branches.users.index', branch.slug)"
+                                    :href="route('superadmin.branches.users.index', { branch: branch.slug })"
                                     class="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 px-3 py-1.5 rounded-lg transition-colors inline-block font-semibold"
                                 >
                                     Users

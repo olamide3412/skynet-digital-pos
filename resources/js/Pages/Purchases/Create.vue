@@ -28,7 +28,7 @@ const form = useForm({
     items: [],
 })
 
-const branchSlug = computed(() => page.props.current_branch?.slug || 'skynet-digital-enterprise')
+const branchSlug = computed(() => page.props.current_branch?.slug || page.props.default_branch?.slug || '')
 
 // Filter available items locally or via API search
 function onSearchInput() {
@@ -106,7 +106,7 @@ function submit() {
         alert('Please add at least one item.')
         return
     }
-    form.post(route('pos.purchases.store'))
+    form.post(route('pos.purchases.store', { branch: branchSlug.value }))
 }
 </script>
 
@@ -114,7 +114,7 @@ function submit() {
     <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
         <!-- Header -->
         <div class="flex items-center gap-3 px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
-            <Link :href="route('pos.purchases.index')" class="text-slate-400 hover:text-slate-700 dark:hover:text-white transition">
+            <Link :href="route('pos.purchases.index', { branch: branchSlug })" class="text-slate-400 hover:text-slate-700 dark:hover:text-white transition">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
             </Link>
             <h1 class="text-lg font-bold text-slate-900 dark:text-white">Create Purchase Order</h1>
