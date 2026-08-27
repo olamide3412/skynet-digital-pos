@@ -45,6 +45,20 @@ const toggleBranch = (branchSlug) => {
 const toggleOffline = (branchSlug) => {
     router.post(route('superadmin.branches.toggle-offline', { branch: branchSlug }))
 }
+
+const copiedBranchSlug = ref(null)
+const copyBranchUrl = (slug) => {
+    const fullUrl = typeof window !== 'undefined' && window.location?.origin
+        ? `${window.location.origin}/${slug}`
+        : `https://skynetpos.com/${slug}`
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(fullUrl)
+    }
+    copiedBranchSlug.value = slug
+    setTimeout(() => {
+        if (copiedBranchSlug.value === slug) copiedBranchSlug.value = null
+    }, 2000)
+}
 </script>
 
 <template>
@@ -70,84 +84,119 @@ const toggleOffline = (branchSlug) => {
             <div
                 v-for="branch in branches"
                 :key="branch.id"
-                class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-all flex flex-col"
+                class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-5 space-y-4 shadow-xs hover:border-indigo-300 dark:hover:border-indigo-800 transition-all flex flex-col justify-between"
             >
-                <div class="flex items-start justify-between">
-                    <div>
-                        <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base leading-tight">{{ branch.name }}</h2>
-                        <span class="text-xs text-indigo-600 dark:text-indigo-400 font-mono">/{{ branch.slug }}</span>
-                    </div>
-                    <span
-                        :class="branch.is_active ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30' : 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30'"
-                        class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
-                    >
-                        {{ branch.is_active ? 'Active' : 'Disabled' }}
-                    </span>
-                </div>
-
-                <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1 flex-1">
-                    <div v-if="branch.address"><span class="text-slate-400 dark:text-slate-500 font-medium">Address:</span> {{ branch.address }}</div>
-                    <div v-if="branch.phone"><span class="text-slate-400 dark:text-slate-500 font-medium">Phone:</span> {{ branch.phone }}</div>
-                    <div v-if="branch.email"><span class="text-slate-400 dark:text-slate-500 font-medium">Email:</span> {{ branch.email }}</div>
-                    <div class="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
-                        <span>Staff: <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ branch.users_count }}</strong></span>
-                        <span>Items: <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ branch.items_count }}</strong></span>
-                    </div>
-                </div>
-
-                <!-- Offline Capability Toggle Control (Super Admin only) -->
-                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
-                    <div class="flex items-center gap-2">
-                        <span class="text-base">📡</span>
-                        <div>
-                            <div class="text-xs font-bold text-slate-800 dark:text-slate-200">Offline Sales</div>
-                            <div class="text-[10px] text-slate-500 dark:text-slate-400">
-                                {{ branch.settings?.is_offline_enabled ? 'Active on terminals' : 'Disabled' }}
+                <div class="space-y-3">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white text-sm font-black shadow-xs overflow-hidden flex-shrink-0">
+                                <img v-if="branch.logo_url" :src="branch.logo_url" :alt="branch.name" class="w-full h-full object-cover" />
+                                <span v-else>{{ branch.name.substring(0, 2).toUpperCase() }}</span>
+                            </div>
+                            <div>
+                                <Link
+                                    :href="route('superadmin.branches.show', { branch: branch.slug })"
+                                    class="font-bold text-slate-900 dark:text-slate-100 text-base leading-tight hover:text-indigo-600 dark:hover:text-indigo-400 transition"
+                                >
+                                    {{ branch.name }}
+                                </Link>
+                                <div class="flex items-center gap-1.5 mt-0.5">
+                                    <span class="text-xs text-indigo-600 dark:text-indigo-400 font-mono">/{{ branch.slug }}</span>
+                                    <button
+                                        @click="copyBranchUrl(branch.slug)"
+                                        type="button"
+                                        class="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-0.5 rounded transition cursor-pointer flex items-center gap-1"
+                                        title="Copy full branch share link"
+                                    >
+                                        <svg v-if="copiedBranchSlug !== branch.slug" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                                        <span v-if="copiedBranchSlug === branch.slug" class="inline-flex items-center gap-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-500/20">
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                            Copied!
+                                        </span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
+
+                        <span
+                            :class="branch.is_active ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/30' : 'bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-500/10 dark:text-rose-400 dark:border-rose-500/30'"
+                            class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
+                        >
+                            {{ branch.is_active ? 'Active' : 'Disabled' }}
+                        </span>
                     </div>
-                    <button
-                        @click="toggleOffline(branch.slug)"
-                        type="button"
-                        :class="[
-                            'px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer',
-                            branch.settings?.is_offline_enabled
-                                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
-                                : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200'
-                        ]"
-                        :title="branch.settings?.is_offline_enabled ? 'Click to disable offline checkout for this branch' : 'Click to enable offline checkout for this branch'"
-                    >
-                        <span v-if="branch.settings?.is_offline_enabled">● Enabled</span>
-                        <span v-else>Disabled</span>
-                    </button>
+
+                    <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1">
+                        <div v-if="branch.address" class="line-clamp-1"><span class="text-slate-400 dark:text-slate-500 font-medium">📍</span> {{ branch.address }}</div>
+                        <div v-if="branch.phone"><span class="text-slate-400 dark:text-slate-500 font-medium">📞</span> {{ branch.phone }}</div>
+                        <div v-if="branch.email"><span class="text-slate-400 dark:text-slate-500 font-medium">✉️</span> {{ branch.email }}</div>
+                        <div class="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+                            <span>Staff: <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ branch.users_count }}</strong></span>
+                            <span>Items: <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ branch.items_count }}</strong></span>
+                            <span>Sales: <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ branch.sales_count }}</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Offline Capability Toggle Control (Super Admin only) -->
+                    <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">📡</span>
+                            <div>
+                                <div class="text-xs font-bold text-slate-800 dark:text-slate-200">Offline Sales</div>
+                                <div class="text-[10px] text-slate-500 dark:text-slate-400">
+                                    {{ branch.settings?.is_offline_enabled ? 'Active on terminals' : 'Disabled' }}
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            @click="toggleOffline(branch.slug)"
+                            type="button"
+                            :class="[
+                                'px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer',
+                                branch.settings?.is_offline_enabled
+                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                                    : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200'
+                            ]"
+                            :title="branch.settings?.is_offline_enabled ? 'Click to disable offline checkout for this branch' : 'Click to enable offline checkout for this branch'"
+                        >
+                            <span v-if="branch.settings?.is_offline_enabled">● Enabled</span>
+                            <span v-else>Disabled</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div class="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap gap-2">
+                <div class="pt-3 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
+                    <!-- Primary Manage Branch CTA -->
                     <Link
-                        :href="route('pos.index', { branch: branch.slug })"
-                        class="flex-1 text-center py-2 text-xs bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-100 dark:hover:bg-indigo-600/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-xl font-bold transition-colors"
+                        :href="route('superadmin.branches.show', { branch: branch.slug })"
+                        class="w-full text-center py-2.5 px-4 text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-sm flex items-center justify-center gap-1.5"
                     >
-                        Open POS &rarr;
+                        <span>Manage Branch Workspace</span>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                     </Link>
-                    <Link
-                        :href="route('superadmin.branches.users.index', { branch: branch.slug })"
-                        class="px-3 py-2 text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold transition-colors"
-                    >
-                        Users
-                    </Link>
-                    <Link
-                        :href="route('superadmin.branches.items.index', { branch: branch.slug })"
-                        class="px-3 py-2 text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-xl font-semibold transition-colors"
-                    >
-                        Items
-                    </Link>
-                    <button
-                        @click="toggleBranch(branch.slug)"
-                        :class="branch.is_active ? 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30' : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'"
-                        class="px-2.5 py-2 text-xs rounded-xl transition-colors font-bold cursor-pointer"
-                    >
-                        {{ branch.is_active ? 'Disable' : 'Enable' }}
-                    </button>
+
+                    <div class="flex items-center gap-1.5">
+                        <Link
+                            :href="route('pos.index', { branch: branch.slug })"
+                            target="_blank"
+                            class="flex-1 text-center py-1.5 text-xs bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-100 dark:hover:bg-indigo-600/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-lg font-semibold transition-colors"
+                        >
+                            Open POS &rarr;
+                        </Link>
+                        <Link
+                            :href="route('superadmin.branches.users.index', { branch: branch.slug })"
+                            class="px-2.5 py-1.5 text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg font-semibold transition-colors"
+                        >
+                            Staff
+                        </Link>
+                        <button
+                            @click="toggleBranch(branch.slug)"
+                            :class="branch.is_active ? 'text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30' : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'"
+                            class="px-2 py-1.5 text-xs rounded-lg transition-colors font-bold cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-800"
+                        >
+                            {{ branch.is_active ? 'Disable' : 'Enable' }}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

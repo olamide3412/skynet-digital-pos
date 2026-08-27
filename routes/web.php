@@ -112,11 +112,11 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
         Route::put('/profile/password', [SuperAdminProfileController::class, 'updatePassword'])->name('profile.password');
 
         Route::resource('branches', BranchController::class)
-            ->except(['show'])
             ->names([
                 'index'   => 'branches.index',
                 'create'  => 'branches.create',
                 'store'   => 'branches.store',
+                'show'    => 'branches.show',
                 'edit'    => 'branches.edit',
                 'update'  => 'branches.update',
                 'destroy' => 'branches.destroy',
@@ -126,6 +126,10 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.toggle');
         Route::post('/branches/{branch}/toggle-offline', [BranchController::class, 'toggleOffline'])
             ->name('branches.toggle-offline');
+        Route::put('/branches/{branch}/settings', [BranchController::class, 'updateSettings'])
+            ->name('branches.settings.update');
+        Route::post('/branches/{branch}/logo', [BranchController::class, 'updateLogo'])
+            ->name('branches.logo.update');
 
         Route::prefix('branches/{branch}/users')->name('branches.users.')->group(function () {
             Route::get('/',                [BranchUserController::class, 'index'])->name('index');
