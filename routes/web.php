@@ -130,6 +130,8 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.settings.update');
         Route::post('/branches/{branch}/logo', [BranchController::class, 'updateLogo'])
             ->name('branches.logo.update');
+        Route::get('/branches/{branch}/export-items', [BranchController::class, 'exportItems'])
+            ->name('branches.export-items');
 
         Route::prefix('branches/{branch}/users')->name('branches.users.')->group(function () {
             Route::get('/',                [BranchUserController::class, 'index'])->name('index');
@@ -175,6 +177,26 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
         Route::post('/global-items/{globalItem}/import/{branch}',
             [GlobalItemController::class, 'import'])
             ->name('global-items.import');
+
+        // Item Import Library (CSV / Excel Files & Manageable Categories)
+        Route::prefix('import-library')->name('import-library.')->group(function () {
+            Route::get('/',                      [\App\Http\Controllers\SuperAdmin\ImportLibraryController::class, 'index'])->name('index');
+            Route::post('/',                     [\App\Http\Controllers\SuperAdmin\ImportLibraryController::class, 'store'])->name('store');
+            Route::post('/{libraryFile}/replace', [\App\Http\Controllers\SuperAdmin\ImportLibraryController::class, 'replace'])->name('replace');
+            Route::post('/{libraryFile}/toggle-status', [\App\Http\Controllers\SuperAdmin\ImportLibraryController::class, 'toggleStatus'])->name('toggle-status');
+            Route::delete('/{libraryFile}',      [\App\Http\Controllers\SuperAdmin\ImportLibraryController::class, 'destroy'])->name('destroy');
+            Route::get('/{libraryFile}/download', [\App\Http\Controllers\SuperAdmin\ImportLibraryController::class, 'download'])->name('download');
+            Route::get('/template/{format}',     [\App\Http\Controllers\SuperAdmin\ImportLibraryController::class, 'downloadTemplate'])->name('template');
+            Route::post('/preview',              [\App\Http\Controllers\SuperAdmin\ImportLibraryController::class, 'preview'])->name('preview');
+            Route::post('/import-to-branch',     [\App\Http\Controllers\SuperAdmin\ImportLibraryController::class, 'importToBranch'])->name('import-to-branch');
+        });
+
+        // Manageable Item Type Tags
+        Route::prefix('import-item-types')->name('import-item-types.')->group(function () {
+            Route::post('/',             [\App\Http\Controllers\SuperAdmin\ImportItemTypeController::class, 'store'])->name('store');
+            Route::put('/{itemType}',    [\App\Http\Controllers\SuperAdmin\ImportItemTypeController::class, 'update'])->name('update');
+            Route::delete('/{itemType}', [\App\Http\Controllers\SuperAdmin\ImportItemTypeController::class, 'destroy'])->name('destroy');
+        });
     });
 });
 
@@ -336,6 +358,8 @@ Route::prefix('{branch}')
         Route::get('items/export',          [PosItemController::class, 'exportCsv'])->name('items.export')->middleware('pos.role:canManageItems');
         Route::post('items/import',          [PosItemController::class, 'importNativeCsv'])->name('items.import')->middleware('pos.role:canManageItems');
         Route::post('items/import-medfusion',[PosItemController::class, 'importMedfusionCsv'])->name('items.import-medfusion')->middleware('pos.role:canManageItems');
+        Route::post('items/bulk-action',     [PosItemController::class, 'bulkAction'])->name('items.bulk-action')->middleware('pos.role:canManageItems');
+        Route::post('items/{item}/duplicate',[PosItemController::class, 'duplicate'])->name('items.duplicate')->middleware('pos.role:canManageItems');
         // Barcode Management & Studio
         Route::get('items/barcodes',                      [BarcodeController::class, 'index'])->name('items.barcodes')->middleware('pos.role:canManageBarcodes');
         Route::get('items/barcodes/search-items',         [BarcodeController::class, 'searchItems'])->name('items.barcodes.search-items')->middleware('pos.role:canManageBarcodes');

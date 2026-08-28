@@ -59,6 +59,34 @@ const copyBranchUrl = (slug) => {
         if (copiedBranchSlug.value === slug) copiedBranchSlug.value = null
     }, 2000)
 }
+
+// Export Items State
+const showExportModal = ref(false)
+const exportingBranch = ref(null)
+const exportForm = ref({
+    format: 'xlsx',
+    quantity_option: 'total',
+})
+
+const openExportModal = (branch) => {
+    exportingBranch.value = branch
+    exportForm.value = {
+        format: 'xlsx',
+        quantity_option: 'total',
+    }
+    showExportModal.value = true
+}
+
+const triggerExport = () => {
+    if (!exportingBranch.value) return
+    const url = route('superadmin.branches.export-items', {
+        branch: exportingBranch.value.slug,
+        format: exportForm.value.format,
+        quantity_option: exportForm.value.quantity_option,
+    })
+    window.location.href = url
+    showExportModal.value = false
+}
 </script>
 
 <template>
@@ -175,14 +203,23 @@ const copyBranchUrl = (slug) => {
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
                     </Link>
 
-                    <div class="flex items-center gap-1.5">
+                    <div class="flex items-center gap-1.5 flex-wrap">
                         <Link
                             :href="route('pos.index', { branch: branch.slug })"
                             target="_blank"
-                            class="flex-1 text-center py-1.5 text-xs bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-100 dark:hover:bg-indigo-600/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-lg font-semibold transition-colors"
+                            class="flex-1 min-w-[80px] text-center py-1.5 text-xs bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-100 dark:hover:bg-indigo-600/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-lg font-semibold transition-colors"
                         >
                             Open POS &rarr;
                         </Link>
+                        <button
+                            @click="openExportModal(branch)"
+                            type="button"
+                            class="px-2.5 py-1.5 text-xs bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/30 rounded-lg font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                            title="Download branch items in CSV or Excel format"
+                        >
+                            <svg class="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                            <span>Export</span>
+                        </button>
                         <Link
                             :href="route('superadmin.branches.users.index', { branch: branch.slug })"
                             class="px-2.5 py-1.5 text-xs bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg font-semibold transition-colors"
@@ -197,6 +234,152 @@ const copyBranchUrl = (slug) => {
                             {{ branch.is_active ? 'Disable' : 'Enable' }}
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Branch Items Modal -->
+        <div v-if="showExportModal && exportingBranch" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
+                <div class="flex items-start justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        </div>
+                        <div>
+                            <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Export Branch Catalog</h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Download current item inventory for <strong>{{ exportingBranch.name }}</strong></p>
+                        </div>
+                    </div>
+                    <button @click="showExportModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold">&times;</button>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Format selection -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">1. Choose File Format:</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-center gap-3',
+                                    exportForm.format === 'xlsx'
+                                        ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/50'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.format" value="xlsx" class="sr-only" />
+                                <div class="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs">
+                                    XLS
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">Excel (.xlsx)</div>
+                                    <div class="text-[10px] text-slate-500 dark:text-slate-400">Best for Excel / Spreadsheets</div>
+                                </div>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-center gap-3',
+                                    exportForm.format === 'csv'
+                                        ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/50'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.format" value="csv" class="sr-only" />
+                                <div class="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs">
+                                    CSV
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">CSV (.csv)</div>
+                                    <div class="text-[10px] text-slate-500 dark:text-slate-400">Universal comma-separated</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Quantity option selection -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">2. Choose Stock Quantity Level:</label>
+                        <div class="space-y-2">
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-start gap-3',
+                                    exportForm.quantity_option === 'total'
+                                        ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/30'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.quantity_option" value="total" class="mt-0.5 text-indigo-600" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">Total Stock (Front + Back Store)</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Exports combined quantity across floor & warehouse locations</div>
+                                </div>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-start gap-3',
+                                    exportForm.quantity_option === 'front_store'
+                                        ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/30'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.quantity_option" value="front_store" class="mt-0.5 text-indigo-600" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">Front Store Quantity Only</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Exports only floor stock currently available for retail sale</div>
+                                </div>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-start gap-3',
+                                    exportForm.quantity_option === 'back_store'
+                                        ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/30'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.quantity_option" value="back_store" class="mt-0.5 text-indigo-600" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">Back Store / Warehouse Quantity Only</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Exports reserve stock in warehouse storage</div>
+                                </div>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-start gap-3',
+                                    exportForm.quantity_option === 'none'
+                                        ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/30'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.quantity_option" value="none" class="mt-0.5 text-indigo-600" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">Catalog Only (No Quantities / 0 Qty)</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Perfect for cloning product catalog into other branches or saving to Import Library</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <button
+                        type="button"
+                        @click="showExportModal = false"
+                        class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        @click="triggerExport"
+                        class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        <span>Download {{ exportForm.format.toUpperCase() }}</span>
+                    </button>
                 </div>
             </div>
         </div>

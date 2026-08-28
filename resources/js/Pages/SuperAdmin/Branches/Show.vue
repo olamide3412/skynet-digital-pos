@@ -14,6 +14,8 @@ const props = defineProps({
     all_permissions: Array,
     branch_items: Object,
     global_items: Array,
+    import_library_files: Array,
+    import_item_types: Array,
     categories: Array,
     recent_sales: Object,
     activity_logs: Object,
@@ -100,12 +102,24 @@ const showCreatePass = ref(false)
 const showResetPass = ref(false)
 const showResetConfirmPass = ref(false)
 
+const formatRoleName = (name) => {
+    if (!name) return ''
+    const map = {
+        'branch-admin': 'Branch Administrator',
+        'cashier': 'Cashier / Sales Staff',
+        'manager': 'Store Manager',
+        'inventory-manager': 'Inventory / Stock Manager',
+    }
+    if (map[name]) return map[name]
+    return name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
 const userForm = useForm({
     name: '',
     username: '',
     email: '',
     password: '',
-    role: 'branch-admin',
+    role: props.roles?.[0]?.name || 'branch-admin',
     permissions: [],
     is_active: true,
 })
@@ -128,6 +142,37 @@ watch(() => userForm.role, (newRole) => {
             'canApplyDiscount',
             'canProcessReturn',
             'canManageCustomers',
+        ]
+    } else if (newRole === 'manager') {
+        userForm.permissions = [
+            'canAccessPos',
+            'canViewSales',
+            'canProcessReturn',
+            'canApplyDiscount',
+            'canEditPrice',
+            'canViewBuyPrice',
+            'canViewEndOfDay',
+            'canViewReports',
+            'canViewProfitLoss',
+            'canManageDebt',
+            'canGiveDebt',
+            'canAdjustStock',
+            'canTransferStock',
+            'canViewReorderPoints',
+            'canManagePurchases',
+            'canManageItems',
+            'canManageBarcodes',
+            'canManageCustomers',
+            'canManageUsers',
+        ]
+    } else if (newRole === 'inventory-manager') {
+        userForm.permissions = [
+            'canAdjustStock',
+            'canTransferStock',
+            'canViewReorderPoints',
+            'canManagePurchases',
+            'canManageItems',
+            'canManageBarcodes',
         ]
     }
 }, { immediate: true })
@@ -337,6 +382,127 @@ const removeItem = (item) => {
     if (confirm(`Remove "${item.item_name}" from ${props.branch.name} catalog?`)) {
         router.delete(route('superadmin.branches.items.destroy', { branch: props.branch.slug, item: item.id }))
     }
+}
+
+// ── Tab 4: Export Branch Items Flow ──────────────────────────────────────────
+const showExportModal = ref(false)
+const exportForm = ref({
+    format: 'xlsx',
+    quantity_option: 'total',
+})
+
+const openExportModal = () => {
+    exportForm.value = {
+        format: 'xlsx',
+        quantity_option: 'total',
+    }
+    showExportModal.value = true
+}
+
+const triggerExport = () => {
+    const url = route('superadmin.branches.export-items', {
+        branch: props.branch.slug,
+        format: exportForm.value.format,
+        quantity_option: exportForm.value.quantity_option,
+    })
+    window.location.href = url
+    showExportModal.value = false
+}
+
+// ── Tab 4: CSV / Excel Import Library Flow ──────────────────────────────────
+const showCsvImportModal = ref(false)
+const csvImportTab = ref('library') // 'library' or 'upload'
+const isCsvAddingCustomType = ref(false)
+const csvFileRef = ref(null)
+const csvFileName = ref('')
+
+const csvImportForm = useForm({
+    branch_id: props.branch.id,
+    source_type: 'library',
+    library_file_id: '',
+    file: null,
+    save_to_library: false,
+    library_name: '',
+    item_type_id: '',
+    custom_type_name: '',
+    on_duplicate_barcode: 'skip',
+    default_stock_location: 'front_store',
+})
+
+const csvPreviewLoading = ref(false)
+const csvPreviewData = ref(null)
+
+const openCsvImportModal = () => {
+    csvImportTab.value = 'library'
+    csvImportForm.branch_id = props.branch.id
+    csvImportForm.source_type = 'library'
+    csvImportForm.library_file_id = props.import_library_files?.[0]?.id || ''
+    csvImportForm.file = null
+    csvImportForm.save_to_library = false
+    csvImportForm.library_name = ''
+    csvImportForm.item_type_id = ''
+    csvImportForm.custom_type_name = ''
+    csvImportForm.on_duplicate_barcode = 'skip'
+    csvImportForm.default_stock_location = 'front_store'
+    csvFileName.value = ''
+    csvPreviewData.value = null
+    showCsvImportModal.value = true
+
+    if (csvImportForm.library_file_id) {
+        fetchCsvPreview()
+    }
+}
+
+const handleCsvFileChange = (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+    csvImportForm.file = file
+    csvFileName.value = file.name
+    if (!csvImportForm.library_name) {
+        csvImportForm.library_name = file.name.replace(/\.[^/.]+$/, '').replace(/[_\-+]+/g, ' ')
+    }
+    fetchCsvPreview()
+}
+
+const fetchCsvPreview = async () => {
+    csvPreviewLoading.value = true
+    try {
+        const formData = new FormData()
+        formData.append('branch_id', props.branch.id)
+        if (csvImportTab.value === 'library') {
+            if (!csvImportForm.library_file_id) {
+                csvPreviewLoading.value = false
+                return
+            }
+            formData.append('library_file_id', csvImportForm.library_file_id)
+        } else {
+            if (!csvImportForm.file) {
+                csvPreviewLoading.value = false
+                return
+            }
+            formData.append('file', csvImportForm.file)
+        }
+
+        const res = await window.axios.post(route('superadmin.import-library.preview'), formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        })
+        csvPreviewData.value = res.data
+    } catch (e) {
+        console.error('Preview error:', e)
+    } finally {
+        csvPreviewLoading.value = false
+    }
+}
+
+const submitCsvImport = () => {
+    csvImportForm.source_type = csvImportTab.value
+    csvImportForm.post(route('superadmin.import-library.import-to-branch'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showCsvImportModal.value = false
+            csvPreviewData.value = null
+        },
+    })
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1086,18 +1252,33 @@ const toggleBranchOffline = () => router.post(route('superadmin.branches.toggle-
                     <h2 class="text-lg font-bold text-slate-900 dark:text-white">Branch Catalog & Inventory</h2>
                     <p class="text-xs text-slate-500">View items active in this branch or import from the Global Master Pool.</p>
                 </div>
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center flex-wrap gap-2.5">
                     <button
-                        @click="showImportModal = true"
-                        class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-indigo-600/20 flex items-center space-x-2 cursor-pointer"
+                        @click="openExportModal"
+                        class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-600/20 flex items-center space-x-1.5 cursor-pointer"
+                        title="Download current branch catalog in CSV or Excel format"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                        <span>Import from Global Master Pool</span>
+                        <span>Export Catalog</span>
+                    </button>
+                    <button
+                        @click="openCsvImportModal"
+                        class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-indigo-600/20 flex items-center space-x-1.5 cursor-pointer"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                        <span>Import from CSV / Excel</span>
+                    </button>
+                    <button
+                        @click="showImportModal = true"
+                        class="px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs transition border border-slate-200 dark:border-slate-700 flex items-center space-x-1.5 cursor-pointer"
+                    >
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        <span>Global Master Pool</span>
                     </button>
                     <button
                         @click="submitImportAll"
                         :disabled="importAllForm.processing"
-                        class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-600/20 disabled:opacity-50 flex items-center space-x-2 cursor-pointer"
+                        class="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-600/20 disabled:opacity-50 flex items-center space-x-1.5 cursor-pointer"
                     >
                         <span>Import All ({{ global_items.length }}) Items</span>
                     </button>
@@ -1431,7 +1612,8 @@ const toggleBranchOffline = () => router.post(route('superadmin.branches.toggle-
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Base Role *</label>
                         <select v-model="userForm.role" required
                             class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500">
-                            <option v-for="r in roles" :key="r.id" :value="r.name">{{ r.name }}</option>
+                            <option value="" disabled>-- Select Base Role --</option>
+                            <option v-for="r in roles" :key="r.id" :value="r.name">{{ formatRoleName(r.name) }}</option>
                         </select>
                     </div>
 
@@ -1516,7 +1698,8 @@ const toggleBranchOffline = () => router.post(route('superadmin.branches.toggle-
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Role *</label>
                             <select v-model="editUserForm.role" required
                                 class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500">
-                                <option v-for="r in roles" :key="r.id" :value="r.name">{{ r.name }}</option>
+                                <option value="" disabled>-- Select Base Role --</option>
+                                <option v-for="r in roles" :key="r.id" :value="r.name">{{ formatRoleName(r.name) }}</option>
                             </select>
                         </div>
                     </div>
@@ -1675,6 +1858,402 @@ const toggleBranchOffline = () => router.post(route('superadmin.branches.toggle-
                             {{ importBatchForm.processing ? 'Importing…' : `Import Selected (${selectedGlobalIds.length})` }}
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── MODAL: IMPORT FROM CSV / EXCEL LIBRARY OR FILE ────────────────── -->
+        <div v-if="showCsvImportModal" class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-8 max-h-[90vh] flex flex-col">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-shrink-0">
+                    <div>
+                        <h2 class="font-bold text-base text-slate-900 dark:text-slate-100">Import Catalog into {{ branch.name }}</h2>
+                        <p class="text-xs text-slate-500">Pick from stored library catalogs or upload a fresh CSV/Excel spreadsheet.</p>
+                    </div>
+                    <button @click="showCsvImportModal = false" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xl font-bold cursor-pointer">&times;</button>
+                </div>
+
+                <div class="space-y-4 overflow-y-auto pr-1 flex-1 text-xs">
+                    <!-- Source Switcher (Library vs Upload Fresh) -->
+                    <div class="flex items-center p-1 bg-slate-100 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 font-bold">
+                        <button
+                            type="button"
+                            @click="csvImportTab = 'library'; csvImportForm.source_type = 'library'; fetchCsvPreview()"
+                            :class="csvImportTab === 'library' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+                            class="flex-1 py-2 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                            <span>📚 Pick from Stored Library</span>
+                        </button>
+                        <button
+                            type="button"
+                            @click="csvImportTab = 'upload'; csvImportForm.source_type = 'upload'; fetchCsvPreview()"
+                            :class="csvImportTab === 'upload' ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'"
+                            class="flex-1 py-2 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                        >
+                            <span>📂 Upload Fresh Spreadsheet</span>
+                        </button>
+                    </div>
+
+                    <!-- TAB 1: PICK FROM LIBRARY -->
+                    <div v-if="csvImportTab === 'library'" class="space-y-3">
+                        <div v-if="!import_library_files?.length" class="p-6 text-center text-slate-400 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                            No active library files found. Switch to "Upload Fresh Spreadsheet" or visit the Import Library.
+                        </div>
+                        <div v-else>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Select Stored Catalog File *</label>
+                            <select
+                                v-model="csvImportForm.library_file_id"
+                                @change="fetchCsvPreview"
+                                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 font-semibold focus:outline-none focus:border-indigo-500"
+                            >
+                                <option v-for="f in import_library_files" :key="f.id" :value="f.id">
+                                    📄 {{ f.name }} ({{ f.row_count }} items) — {{ f.item_type_tag }}
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: UPLOAD FRESH SPREADSHEET -->
+                    <div v-else class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Select Spreadsheet File (.xlsx, .csv) *</label>
+                            <div
+                                @click="$refs.csvFileRef.click()"
+                                class="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-500 dark:hover:border-indigo-400 rounded-2xl p-4 text-center cursor-pointer transition bg-slate-50/60 dark:bg-slate-950/40 space-y-1"
+                            >
+                                <input
+                                    ref="csvFileRef"
+                                    type="file"
+                                    accept=".xlsx,.xls,.csv"
+                                    @change="handleCsvFileChange"
+                                    class="hidden"
+                                />
+                                <div class="text-xs font-bold text-slate-800 dark:text-slate-200">
+                                    {{ csvFileName || 'Click to select CSV or Excel file from computer' }}
+                                </div>
+                                <p class="text-[11px] text-slate-400">Max 20MB (.xlsx or .csv)</p>
+                            </div>
+                        </div>
+
+                        <!-- Checkbox: Save to Library for future reuse -->
+                        <div class="p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                            <label class="flex items-center gap-2.5 cursor-pointer select-none">
+                                <input
+                                    v-model="csvImportForm.save_to_library"
+                                    type="checkbox"
+                                    class="w-4 h-4 rounded text-indigo-600 border-slate-300 dark:border-slate-700"
+                                />
+                                <div>
+                                    <div class="font-bold text-slate-900 dark:text-white text-xs">Also save this file to the Import Library</div>
+                                    <div class="text-[11px] text-slate-500">Make it reusable to quickly stock other branches in the future</div>
+                                </div>
+                            </label>
+
+                            <div v-if="csvImportForm.save_to_library" class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Library Catalog Name *</label>
+                                    <input
+                                        v-model="csvImportForm.library_name"
+                                        type="text"
+                                        placeholder="e.g. Asaba Supermarket Initial Stock"
+                                        class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                                    />
+                                </div>
+
+                                <div>
+                                    <div class="flex items-center justify-between mb-1">
+                                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300">Category Tag</label>
+                                        <button
+                                            type="button"
+                                            @click="isCsvAddingCustomType = !isCsvAddingCustomType"
+                                            class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                                        >
+                                            {{ isCsvAddingCustomType ? '← Pick' : '+ New' }}
+                                        </button>
+                                    </div>
+                                    <select
+                                        v-if="!isCsvAddingCustomType"
+                                        v-model="csvImportForm.item_type_id"
+                                        class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                                    >
+                                        <option value="">Select Category Tag</option>
+                                        <option v-for="t in import_item_types" :key="t.id" :value="t.id">{{ t.name }}</option>
+                                    </select>
+                                    <input
+                                        v-else
+                                        v-model="csvImportForm.custom_type_name"
+                                        type="text"
+                                        placeholder="New Category Tag"
+                                        class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Strategy Options -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">On Duplicate Barcode:</label>
+                            <select
+                                v-model="csvImportForm.on_duplicate_barcode"
+                                class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                            >
+                                <option value="skip">Skip row (Do not overwrite)</option>
+                                <option value="leave_empty">Import item with empty barcode (Leave null)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Initial Stock Destination:</label>
+                            <select
+                                v-model="csvImportForm.default_stock_location"
+                                class="w-full bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-800 rounded-xl px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                            >
+                                <option value="front_store">Front Store (Ready to sell)</option>
+                                <option value="back_store">Back Store / Warehouse</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Live Validation Preview Box -->
+                    <div v-if="csvPreviewLoading" class="p-6 text-center text-slate-400 space-y-2">
+                        <div class="inline-block animate-spin text-2xl">⏳</div>
+                        <div>Validating catalog rows…</div>
+                    </div>
+
+                    <div v-else-if="csvPreviewData" class="space-y-3">
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="p-2.5 bg-emerald-50 dark:bg-emerald-500/10 rounded-xl border border-emerald-200 dark:border-emerald-500/20 text-center">
+                                <div class="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 uppercase">Valid Rows Ready</div>
+                                <div class="text-base font-black text-emerald-800 dark:text-emerald-300">{{ csvPreviewData.valid_rows }}</div>
+                            </div>
+                            <div class="p-2.5 bg-amber-50 dark:bg-amber-500/10 rounded-xl border border-amber-200 dark:border-amber-500/20 text-center">
+                                <div class="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase">Barcode Conflicts</div>
+                                <div class="text-base font-black text-amber-800 dark:text-amber-300">{{ csvPreviewData.barcode_conflicts_count }}</div>
+                            </div>
+                            <div class="p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-center">
+                                <div class="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase">Invalid Rows</div>
+                                <div class="text-base font-black text-slate-800 dark:text-slate-200">{{ csvPreviewData.invalid_rows }}</div>
+                            </div>
+                        </div>
+
+                        <!-- Sample Rows Preview Table -->
+                        <div>
+                            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Sample Items (First 5 Rows):</div>
+                            <div class="border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
+                                <table class="w-full text-left text-[11px]">
+                                    <thead class="bg-slate-50 dark:bg-slate-800/80 font-semibold text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                                        <tr>
+                                            <th class="px-3 py-1.5">Item Name</th>
+                                            <th class="px-3 py-1.5">Category</th>
+                                            <th class="px-3 py-1.5">Unit Price</th>
+                                            <th class="px-3 py-1.5">Pack Info</th>
+                                            <th class="px-3 py-1.5">IMEI</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
+                                        <tr v-for="(row, idx) in csvPreviewData.sample_rows.slice(0, 5)" :key="idx" class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                                            <td class="px-3 py-1.5 font-bold text-slate-900 dark:text-white">{{ row.data.item_name }}</td>
+                                            <td class="px-3 py-1.5 text-slate-500">{{ row.data.category || '—' }}</td>
+                                            <td class="px-3 py-1.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">₦{{ Number(row.data.base_unit_price).toLocaleString() }}</td>
+                                            <td class="px-3 py-1.5 font-mono text-slate-500">
+                                                {{ row.data.pack_price ? `₦${Number(row.data.pack_price).toLocaleString()} (${row.data.pack_quantity}/pk)` : '—' }}
+                                            </td>
+                                            <td class="px-3 py-1.5">
+                                                <span v-if="row.data.track_by_imei" class="px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 rounded font-bold text-[9px]">IMEI</span>
+                                                <span v-else class="text-slate-400">—</span>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Links to Download Blank/Sample Template -->
+                    <div class="flex items-center justify-between p-3 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-100 dark:border-indigo-900/30 text-[11px]">
+                        <span class="text-slate-600 dark:text-slate-400">Need the standard spreadsheet format?</span>
+                        <div class="flex items-center gap-2">
+                            <a :href="route('superadmin.import-library.template', { format: 'xlsx' })" class="font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                                📊 Blank Excel
+                            </a>
+                            <span class="text-slate-300">·</span>
+                            <a :href="route('superadmin.import-library.template', { format: 'xlsx', sample: 1 })" class="font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
+                                ✨ Sample Excel
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800 flex-shrink-0">
+                    <div class="text-[11px] text-slate-500">
+                        {{ csvPreviewData ? `${csvPreviewData.valid_rows} item(s) will be imported into ${branch.name}.` : '' }}
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button
+                            type="button"
+                            @click="showCsvImportModal = false"
+                            class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 transition cursor-pointer"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            @click="submitCsvImport"
+                            :disabled="csvImportForm.processing || csvPreviewLoading || (csvImportTab === 'library' && !csvImportForm.library_file_id) || (csvImportTab === 'upload' && !csvImportForm.file)"
+                            class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-600/20 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                        >
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>{{ csvImportForm.processing ? 'Importing…' : 'Execute Branch Import' }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Branch Items Modal -->
+        <div v-if="showExportModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
+                <div class="flex items-start justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 font-bold">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        </div>
+                        <div>
+                            <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Export Branch Catalog</h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Download current item inventory for <strong>{{ branch.name }}</strong></p>
+                        </div>
+                    </div>
+                    <button @click="showExportModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold cursor-pointer">&times;</button>
+                </div>
+
+                <div class="space-y-4">
+                    <!-- Format selection -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">1. Choose File Format:</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-center gap-3',
+                                    exportForm.format === 'xlsx'
+                                        ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/50'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.format" value="xlsx" class="sr-only" />
+                                <div class="w-8 h-8 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-xs">
+                                    XLS
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">Excel (.xlsx)</div>
+                                    <div class="text-[10px] text-slate-500 dark:text-slate-400">Best for Excel / Spreadsheets</div>
+                                </div>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-center gap-3',
+                                    exportForm.format === 'csv'
+                                        ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 ring-2 ring-emerald-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/50'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.format" value="csv" class="sr-only" />
+                                <div class="w-8 h-8 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs">
+                                    CSV
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">CSV (.csv)</div>
+                                    <div class="text-[10px] text-slate-500 dark:text-slate-400">Universal comma-separated</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Quantity option selection -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">2. Choose Stock Quantity Level:</label>
+                        <div class="space-y-2">
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-start gap-3',
+                                    exportForm.quantity_option === 'total'
+                                        ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/30'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.quantity_option" value="total" class="mt-0.5 text-indigo-600" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">Total Stock (Front + Back Store)</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Exports combined quantity across floor & warehouse locations</div>
+                                </div>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-start gap-3',
+                                    exportForm.quantity_option === 'front_store'
+                                        ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/30'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.quantity_option" value="front_store" class="mt-0.5 text-indigo-600" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">Front Store Quantity Only</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Exports only floor stock currently available for retail sale</div>
+                                </div>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-start gap-3',
+                                    exportForm.quantity_option === 'back_store'
+                                        ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/30'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.quantity_option" value="back_store" class="mt-0.5 text-indigo-600" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">Back Store / Warehouse Quantity Only</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Exports reserve stock in warehouse storage</div>
+                                </div>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3 rounded-2xl border cursor-pointer transition flex items-start gap-3',
+                                    exportForm.quantity_option === 'none'
+                                        ? 'border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 ring-2 ring-indigo-500/20'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 bg-slate-50/50 dark:bg-slate-800/30'
+                                ]"
+                            >
+                                <input type="radio" v-model="exportForm.quantity_option" value="none" class="mt-0.5 text-indigo-600" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-slate-100">Catalog Only (No Quantities / 0 Qty)</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Perfect for cloning product catalog into other branches or saving to Import Library</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <button
+                        type="button"
+                        @click="showExportModal = false"
+                        class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        @click="triggerExport"
+                        class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        <span>Download {{ exportForm.format.toUpperCase() }}</span>
+                    </button>
                 </div>
             </div>
         </div>

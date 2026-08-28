@@ -17,6 +17,7 @@ class UserController extends Controller
         $branch = current_branch();
 
         setPermissionsTeamId($branch->id);
+        $branch->ensureDefaultRoles();
 
         $users = User::where('branch_id', $branch->id)
             ->with(['roles', 'permissions'])
@@ -80,6 +81,7 @@ class UserController extends Controller
         ]);
 
         setPermissionsTeamId($branch->id);
+        $branch->ensureDefaultRoles();
         $user->assignRole($data['role']);
 
         if (isset($data['permissions'])) {

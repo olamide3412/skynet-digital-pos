@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\GlobalItem;
 use App\Models\Item;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -68,36 +69,46 @@ class BranchItemController extends Controller
         $importedCount = 0;
         $skippedCount = 0;
 
-        foreach ($globalItems as $gItem) {
-            // Check if item already exists in branch (by barcode OR exact item name)
-            $exists = Item::where('branch_id', $branch->id)
-                ->where(function ($q) use ($gItem) {
-                    if ($gItem->barcode_number) {
-                        $q->where('barcode_number', $gItem->barcode_number);
-                    }
-                    $q->orWhere('item_name', $gItem->item_name);
-                })
-                ->exists();
+        DB::beginTransaction();
+        try {
+            foreach ($globalItems as $gItem) {
+                // Check if item already exists in branch (by barcode OR exact item name)
+                $exists = Item::where('branch_id', $branch->id)
+                    ->where(function ($q) use ($gItem) {
+                        if ($gItem->barcode_number) {
+                            $q->where('barcode_number', $gItem->barcode_number);
+                        }
+                        $q->orWhere('item_name', $gItem->item_name);
+                    })
+                    ->exists();
 
-            if ($exists) {
-                $skippedCount++;
-                continue;
+                if ($exists) {
+                    $skippedCount++;
+                    continue;
+                }
+
+                // Find or create matching branch category by category_hint (scoped strictly to target branch)
+                $categoryId = null;
+                if ($gItem->category_hint) {
+                    $category = Category::firstOrCreate([
+                        'name'      => $gItem->category_hint,
+                        'branch_id' => $branch->id,
+                    ], [
+                        'name'      => $gItem->category_hint,
+                        'slug'      => Str::slug($gItem->category_hint) . '-' . $branch->id . '-' . rand(100, 999),
+                        'branch_id' => $branch->id,
+                    ]);
+                    $categoryId = $category->id;
+                }
+
+                $gItem->importToBranch($branch, $categoryId);
+                $importedCount++;
             }
 
-            // Find or create matching branch category by category_hint
-            $categoryId = null;
-            if ($gItem->category_hint) {
-                $category = Category::firstOrCreate([
-                    'slug' => Str::slug($gItem->category_hint),
-                ], [
-                    'name' => $gItem->category_hint,
-                    'slug' => Str::slug($gItem->category_hint),
-                ]);
-                $categoryId = $category->id;
-            }
-
-            $gItem->importToBranch($branch, $categoryId);
-            $importedCount++;
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()->with('error', 'Import batch failed and was rolled back: ' . $e->getMessage());
         }
 
         $message = "Imported {$importedCount} new item(s) into {$branch->name}.";
@@ -119,34 +130,44 @@ class BranchItemController extends Controller
         $importedCount = 0;
         $skippedCount = 0;
 
-        foreach ($globalItems as $gItem) {
-            $exists = Item::where('branch_id', $branch->id)
-                ->where(function ($q) use ($gItem) {
-                    if ($gItem->barcode_number) {
-                        $q->where('barcode_number', $gItem->barcode_number);
-                    }
-                    $q->orWhere('item_name', $gItem->item_name);
-                })
-                ->exists();
+        DB::beginTransaction();
+        try {
+            foreach ($globalItems as $gItem) {
+                $exists = Item::where('branch_id', $branch->id)
+                    ->where(function ($q) use ($gItem) {
+                        if ($gItem->barcode_number) {
+                            $q->where('barcode_number', $gItem->barcode_number);
+                        }
+                        $q->orWhere('item_name', $gItem->item_name);
+                    })
+                    ->exists();
 
-            if ($exists) {
-                $skippedCount++;
-                continue;
+                if ($exists) {
+                    $skippedCount++;
+                    continue;
+                }
+
+                $categoryId = null;
+                if ($gItem->category_hint) {
+                    $category = Category::firstOrCreate([
+                        'name'      => $gItem->category_hint,
+                        'branch_id' => $branch->id,
+                    ], [
+                        'name'      => $gItem->category_hint,
+                        'slug'      => Str::slug($gItem->category_hint) . '-' . $branch->id . '-' . rand(100, 999),
+                        'branch_id' => $branch->id,
+                    ]);
+                    $categoryId = $category->id;
+                }
+
+                $gItem->importToBranch($branch, $categoryId);
+                $importedCount++;
             }
 
-            $categoryId = null;
-            if ($gItem->category_hint) {
-                $category = Category::firstOrCreate([
-                    'slug' => Str::slug($gItem->category_hint),
-                ], [
-                    'name' => $gItem->category_hint,
-                    'slug' => Str::slug($gItem->category_hint),
-                ]);
-                $categoryId = $category->id;
-            }
-
-            $gItem->importToBranch($branch, $categoryId);
-            $importedCount++;
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            return back()->with('error', 'Import all failed and was rolled back: ' . $e->getMessage());
         }
 
         $message = "Imported {$importedCount} master items into {$branch->name}.";

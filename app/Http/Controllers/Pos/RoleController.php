@@ -27,6 +27,7 @@ class RoleController extends Controller
     {
         $branch = current_branch();
         setPermissionsTeamId($branch->id);
+        $branch->ensureDefaultRoles();
 
         $roles = Role::where('team_id', $branch->id)
             ->withCount('users')

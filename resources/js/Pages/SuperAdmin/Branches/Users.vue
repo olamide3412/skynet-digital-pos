@@ -19,12 +19,24 @@ const showCreatePass       = ref(false)
 const showResetPass        = ref(false)
 const showResetConfirmPass = ref(false)
 
+const formatRoleName = (name) => {
+    if (!name) return ''
+    const map = {
+        'branch-admin': 'Branch Administrator',
+        'cashier': 'Cashier / Sales Staff',
+        'manager': 'Store Manager',
+        'inventory-manager': 'Inventory / Stock Manager',
+    }
+    if (map[name]) return map[name]
+    return name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
 const form = useForm({
     name: '',
     username: '',
     email: '',
     password: '',
-    role: 'branch-admin',
+    role: props.roles?.[0]?.name || 'branch-admin',
     permissions: [],
     is_active: true,
 })
@@ -48,6 +60,37 @@ watch(() => form.role, (newRole) => {
             'canApplyDiscount',
             'canProcessReturn',
             'canManageCustomers',
+        ]
+    } else if (newRole === 'manager') {
+        form.permissions = [
+            'canAccessPos',
+            'canViewSales',
+            'canProcessReturn',
+            'canApplyDiscount',
+            'canEditPrice',
+            'canViewBuyPrice',
+            'canViewEndOfDay',
+            'canViewReports',
+            'canViewProfitLoss',
+            'canManageDebt',
+            'canGiveDebt',
+            'canAdjustStock',
+            'canTransferStock',
+            'canViewReorderPoints',
+            'canManagePurchases',
+            'canManageItems',
+            'canManageBarcodes',
+            'canManageCustomers',
+            'canManageUsers',
+        ]
+    } else if (newRole === 'inventory-manager') {
+        form.permissions = [
+            'canAdjustStock',
+            'canTransferStock',
+            'canViewReorderPoints',
+            'canManagePurchases',
+            'canManageItems',
+            'canManageBarcodes',
         ]
     }
 }, { immediate: true })
@@ -338,7 +381,8 @@ const togglePermInForm = (targetForm, permName) => {
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Base Role *</label>
                         <select v-model="form.role" required
                             class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500">
-                            <option v-for="r in roles" :key="r.id" :value="r.name">{{ r.name }}</option>
+                            <option value="" disabled>-- Select Base Role --</option>
+                            <option v-for="r in roles" :key="r.id" :value="r.name">{{ formatRoleName(r.name) }}</option>
                         </select>
                         <div v-if="form.errors.role" class="text-rose-500 text-xs mt-1">{{ form.errors.role }}</div>
                     </div>
@@ -437,7 +481,8 @@ const togglePermInForm = (targetForm, permName) => {
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Role *</label>
                             <select v-model="editForm.role" required
                                 class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500">
-                                <option v-for="r in roles" :key="r.id" :value="r.name">{{ r.name }}</option>
+                                <option value="" disabled>-- Select Base Role --</option>
+                                <option v-for="r in roles" :key="r.id" :value="r.name">{{ formatRoleName(r.name) }}</option>
                             </select>
                             <div v-if="editForm.errors.role" class="text-rose-500 text-xs mt-1">{{ editForm.errors.role }}</div>
                         </div>

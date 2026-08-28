@@ -41,6 +41,10 @@ class BarcodeController extends Controller
                   ->where('barcode_number', '!=', '')
                   ->where('barcode_number', 'not like', 'NO_BARCODE%');
             })
+            ->when($request->item_ids, function ($q, $itemIds) {
+                $ids = is_array($itemIds) ? $itemIds : explode(',', $itemIds);
+                $q->whereIn('id', $ids);
+            })
             ->orderBy('item_name');
 
         $items = (clone $itemsQuery)->paginate(30)->withQueryString();

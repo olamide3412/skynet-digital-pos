@@ -20,12 +20,24 @@ const showUserPass = ref(false)
 const showResetPass = ref(false)
 const showResetConfirmPass = ref(false)
 
+const formatRoleName = (name) => {
+    if (!name) return ''
+    const map = {
+        'branch-admin': 'Branch Administrator',
+        'cashier': 'Cashier / Sales Staff',
+        'manager': 'Store Manager',
+        'inventory-manager': 'Inventory / Stock Manager',
+    }
+    if (map[name]) return map[name]
+    return name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
 const form = useForm({
     name: '',
     username: '',
     email: '',
     password: '',
-    role: 'cashier',
+    role: props.roles?.[0]?.name || 'cashier',
     permissions: [],
     is_active: true,
     status: 'Active',
@@ -277,7 +289,8 @@ function submitResetPassword() {
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Base Role *</label>
                                 <select v-model="form.role" required class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-emerald-500 transition">
-                                    <option v-for="role in roles" :key="role.id" :value="role.name" class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white">{{ role.name }}</option>
+                                    <option value="" disabled>-- Select Base Role --</option>
+                                    <option v-for="role in roles" :key="role.id" :value="role.name" class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white">{{ formatRoleName(role.name) }}</option>
                                 </select>
                             </div>
                         </div>

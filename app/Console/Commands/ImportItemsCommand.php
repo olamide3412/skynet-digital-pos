@@ -109,8 +109,20 @@ class ImportItemsCommand extends Command
             $expiryDate   = $expiryIdx !== null ? trim($row[$expiryIdx] ?? '') : null;
 
             // Handle barcode cleaning
-            if (strtoupper($barcode) === 'NO_BARCODE' || empty($barcode)) {
-                $barcode = 'BAR-' . ($oldId ? str_pad($oldId, 6, '0', STR_PAD_LEFT) : strtoupper(Str::random(6)));
+            if (str_starts_with($barcode, '="') && str_ends_with($barcode, '"')) {
+                $barcode = substr($barcode, 2, -1);
+            }
+            $barcode = trim($barcode, " '\"\t\n\r\0\x0B");
+            if (preg_match('/^[+\-]?[0-9]+(\.[0-9]+)?[eE][+\-]?[0-9]+$/', $barcode)) {
+                $barcode = number_format((float) $barcode, 0, '', '');
+            } elseif (is_numeric($barcode) && str_contains($barcode, '.')) {
+                $parts = explode('.', $barcode);
+                if (isset($parts[1]) && ltrim($parts[1], '0') === '') {
+                    $barcode = $parts[0];
+                }
+            }
+            if (in_array(strtoupper($barcode), ['NULL', 'N/A', 'NONE', 'NO_BARCODE', 'NO-BARCODE'], true) || empty($barcode)) {
+                $barcode = null;
             }
 
             // Category lookup / creation

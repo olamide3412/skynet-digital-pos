@@ -39,6 +39,7 @@ class BranchRoleController extends Controller
     public function index(Branch $branch)
     {
         setPermissionsTeamId($branch->id);
+        $branch->ensureDefaultRoles();
 
         $roles = Role::where('team_id', $branch->id)
             ->with('permissions')

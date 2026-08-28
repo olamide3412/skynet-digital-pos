@@ -11,6 +11,7 @@ use App\Models\PosLog;
 use App\Models\Sale;
 use App\Models\User;
 use App\Services\ActivityLogger;
+use App\Services\ItemImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -92,8 +93,9 @@ class BranchController extends Controller
                 'branch_id'      => $branch->id,
             ]);
 
-            // Set Spatie team context, then assign branch-admin role
+            // Set Spatie team context, ensure default roles, then assign branch-admin role
             setPermissionsTeamId($branch->id);
+            $branch->ensureDefaultRoles();
             $admin->assignRole('branch-admin');
 
             // Create branch POS settings with defaults
@@ -122,6 +124,7 @@ class BranchController extends Controller
     {
         // Set team context for Spatie permissions query
         setPermissionsTeamId($branch->id);
+        $branch->ensureDefaultRoles();
 
         $settings = $branch->getSettings();
 
@@ -261,12 +264,14 @@ class BranchController extends Controller
             'users'           => $users,
             'roles'           => $roles,
             'all_permissions' => $allPermissions,
-            'branch_items'    => $branchItems,
-            'global_items'    => $globalItems,
-            'categories'      => $categories,
-            'recent_sales'    => $recentSales,
-            'activity_logs'   => $activityLogs,
-            'filters'         => [
+            'branch_items'         => $branchItems,
+            'global_items'         => $globalItems,
+            'import_library_files' => \App\Models\ImportLibraryFile::where('status', 'active')->orderBy('name')->get(['id', 'name', 'item_type_tag', 'file_format', 'row_count']),
+            'import_item_types'    => \App\Models\ImportItemType::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'categories'           => $categories,
+            'recent_sales'         => $recentSales,
+            'activity_logs'        => $activityLogs,
+            'filters'              => [
                 'item_search'  => $search,
                 'sales_search' => $salesSearch,
                 'log_search'   => $logSearch,
@@ -442,6 +447,23 @@ class BranchController extends Controller
         );
 
         return back()->with('success', "Offline sales mode {$status} for {$branch->name}.");
+    }
+
+    /**
+     * Export branch catalog items in CSV or Excel format with customizable quantity levels.
+     */
+    public function exportItems(Request $request, Branch $branch, ItemImportService $importService)
+    {
+        $format = $request->query('format', 'xlsx');
+        $quantityOption = $request->query('quantity_option', 'total');
+
+        ActivityLogger::log(
+            'branch',
+            "Exported catalog items for branch '{$branch->name}' ({$format}, quantity: {$quantityOption})",
+            $branch->id
+        );
+
+        return $importService->exportBranchItems($branch, $format, $quantityOption);
     }
 }
 

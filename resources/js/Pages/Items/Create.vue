@@ -9,31 +9,32 @@ const props = defineProps({
     categories:     Array,
     groupAddresses: Array,
     settings:       Object,
+    clonedItem:     Object,
 })
 
 const form = useForm({
-    category_id:            '',
-    group_address_id:       '',
-    item_name:              '',
-    barcode_number:         '',
-    front_store_qty:        0,
-    back_store_qty:         0,
-    buy_price:              '',
-    price:                  '',
-    wholesale_price:        '',
-    pack_price:             '',
-    carton_price:           '',
-    pack_wholesale_price:   '',
-    carton_wholesale_price: '',
-    unit_label:             'Unit',
-    pack_label:             'Pack',
-    carton_label:           'Carton',
-    units_per_pack:         1,
-    packs_per_carton:       1,
-    expiry_date:            '',
-    item_description:       '',
-    price_locked:           false,
-    is_imei_tracked:        false,
+    category_id:            props.clonedItem?.category_id ?? '',
+    group_address_id:       props.clonedItem?.group_address_id ?? '',
+    item_name:              props.clonedItem?.item_name ?? '',
+    barcode_number:         props.clonedItem?.barcode_number ?? '',
+    front_store_qty:        props.clonedItem?.front_store_qty ?? 0,
+    back_store_qty:         props.clonedItem?.back_store_qty ?? 0,
+    buy_price:              props.clonedItem?.buy_price ?? '',
+    price:                  props.clonedItem?.price ?? '',
+    wholesale_price:        props.clonedItem?.wholesale_price ?? '',
+    pack_price:             props.clonedItem?.pack_price ?? '',
+    carton_price:           props.clonedItem?.carton_price ?? '',
+    pack_wholesale_price:   props.clonedItem?.pack_wholesale_price ?? '',
+    carton_wholesale_price: props.clonedItem?.carton_wholesale_price ?? '',
+    unit_label:             props.clonedItem?.unit_label ?? 'Unit',
+    pack_label:             props.clonedItem?.pack_label ?? 'Pack',
+    carton_label:           props.clonedItem?.carton_label ?? 'Carton',
+    units_per_pack:         props.clonedItem?.units_per_pack ?? 1,
+    packs_per_carton:       props.clonedItem?.packs_per_carton ?? 1,
+    expiry_date:            props.clonedItem?.expiry_date ?? '',
+    item_description:       props.clonedItem?.item_description ?? '',
+    price_locked:           props.clonedItem?.price_locked ?? false,
+    is_imei_tracked:        props.clonedItem?.is_imei_tracked ?? false,
     initial_imeis:          '',
     image:                  null,
 })
@@ -91,12 +92,25 @@ function submit() {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                 </svg>
             </Link>
-            <h1 class="text-lg font-bold text-slate-900 dark:text-white">Create New Item</h1>
+            <h1 class="text-lg font-bold text-slate-900 dark:text-white">
+                {{ clonedItem ? 'Duplicate Item (Create Copy)' : 'Create New Item' }}
+            </h1>
         </div>
 
         <div class="flex-1 overflow-y-auto p-6">
             <form @submit.prevent="submit" class="max-w-3xl mx-auto space-y-6">
                 
+                <!-- Cloned Item Notice Banner -->
+                <div v-if="clonedItem" class="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-xl p-4 flex items-center justify-between shadow-xs">
+                    <div class="flex items-center gap-3">
+                        <span class="text-xl">📋</span>
+                        <div>
+                            <p class="text-xs font-bold text-indigo-900 dark:text-indigo-200">Duplicating Existing Item</p>
+                            <p class="text-xs text-indigo-700 dark:text-indigo-300">Prefilled with item attributes. Adjust any fields, barcode, or pricing below and click save.</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- 1. General Information -->
                 <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
                     <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b border-slate-200 dark:border-slate-700 pb-2">

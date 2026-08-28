@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Spatie\Permission\Models\Permission;
+use Spatie\Permission\Models\Role;
 
 class Branch extends Model
 {
@@ -81,5 +83,95 @@ class Branch extends Model
                 'out_of_stock'    => 25,
             ]
         );
+    }
+
+    /**
+     * Ensure default branch-scoped roles exist with their standard permission sets.
+     */
+    public function ensureDefaultRoles(): void
+    {
+        setPermissionsTeamId($this->id);
+
+        // 1. Branch Admin Role
+        $adminRole = Role::firstOrCreate([
+            'name'       => 'branch-admin',
+            'guard_name' => 'web',
+            'team_id'    => $this->id,
+        ]);
+        $allPerms = Permission::where('guard_name', 'web')
+            ->where('name', '!=', 'canResetPassword')
+            ->get();
+        if ($allPerms->isNotEmpty()) {
+            $adminRole->syncPermissions($allPerms);
+        }
+
+        // 2. Cashier Role
+        $cashierRole = Role::firstOrCreate([
+            'name'       => 'cashier',
+            'guard_name' => 'web',
+            'team_id'    => $this->id,
+        ]);
+        $cashierPerms = Permission::where('guard_name', 'web')
+            ->whereIn('name', [
+                'canAccessPos',
+                'canViewEndOfDay',
+                'canApplyDiscount',
+                'canProcessReturn',
+                'canManageCustomers',
+            ])->get();
+        if ($cashierPerms->isNotEmpty()) {
+            $cashierRole->syncPermissions($cashierPerms);
+        }
+
+        // 3. Store Manager Role
+        $managerRole = Role::firstOrCreate([
+            'name'       => 'manager',
+            'guard_name' => 'web',
+            'team_id'    => $this->id,
+        ]);
+        $managerPerms = Permission::where('guard_name', 'web')
+            ->whereIn('name', [
+                'canAccessPos',
+                'canViewSales',
+                'canProcessReturn',
+                'canApplyDiscount',
+                'canEditPrice',
+                'canViewBuyPrice',
+                'canViewEndOfDay',
+                'canViewReports',
+                'canViewProfitLoss',
+                'canManageDebt',
+                'canGiveDebt',
+                'canAdjustStock',
+                'canTransferStock',
+                'canViewReorderPoints',
+                'canManagePurchases',
+                'canManageItems',
+                'canManageBarcodes',
+                'canManageCustomers',
+                'canManageUsers',
+            ])->get();
+        if ($managerPerms->isNotEmpty()) {
+            $managerRole->syncPermissions($managerPerms);
+        }
+
+        // 4. Inventory Manager Role
+        $inventoryRole = Role::firstOrCreate([
+            'name'       => 'inventory-manager',
+            'guard_name' => 'web',
+            'team_id'    => $this->id,
+        ]);
+        $inventoryPerms = Permission::where('guard_name', 'web')
+            ->whereIn('name', [
+                'canAdjustStock',
+                'canTransferStock',
+                'canViewReorderPoints',
+                'canManagePurchases',
+                'canManageItems',
+                'canManageBarcodes',
+            ])->get();
+        if ($inventoryPerms->isNotEmpty()) {
+            $inventoryRole->syncPermissions($inventoryPerms);
+        }
     }
 }

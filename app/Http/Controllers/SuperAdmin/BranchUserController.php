@@ -42,6 +42,7 @@ class BranchUserController extends Controller
     {
         // ⚠ Must set team ID BEFORE loading roles and permissions
         setPermissionsTeamId($branch->id);
+        $branch->ensureDefaultRoles();
 
         $users = User::where('branch_id', $branch->id)
             ->with(['roles', 'permissions'])
@@ -91,6 +92,7 @@ class BranchUserController extends Controller
         ]);
 
         setPermissionsTeamId($branch->id);
+        $branch->ensureDefaultRoles();
         $user->assignRole($data['role']);
 
         if (isset($data['permissions'])) {
@@ -126,6 +128,7 @@ class BranchUserController extends Controller
         ]);
 
         setPermissionsTeamId($branch->id);
+        $branch->ensureDefaultRoles();
         $user->syncRoles([$data['role']]);
 
         if (isset($data['permissions'])) {

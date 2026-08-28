@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Pos;
 use App\Http\Controllers\Controller;
 use App\Models\Item;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class ItemController extends Controller
@@ -14,35 +16,81 @@ class ItemController extends Controller
     {
         $branch = current_branch();
 
+        setPermissionsTeamId($branch->id);
+        $branch->ensureDefaultRoles();
+
         $items = Item::where('branch_id', $branch->id)
-            ->with('category')
+            ->with(['category:id,name', 'groupAddress:id,name'])
             ->when($request->search, fn($q) => $q
                 ->where('item_name', 'like', '%' . $request->search . '%')
                 ->orWhere('barcode_number', 'like', '%' . $request->search . '%'))
             ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))
+            ->when($request->group_address_id, fn($q) => $q->where('group_address_id', $request->group_address_id))
             ->latest()
-            ->paginate(20)
+            ->paginate(25)
             ->withQueryString();
 
         // Total stock worth — use the pre-computed stored column (updated on every item save)
         $totalWorth = Item::where('branch_id', $branch->id)->sum('stock_worth');
 
+        $categories = \App\Models\Category::where('branch_id', $branch->id)
+            ->orWhereNull('branch_id')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $groupAddresses = \App\Models\GroupAddress::where('branch_id', $branch->id)
+            ->orWhereNull('branch_id')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         return Inertia::render('Items/Index', [
-            'items' => $items,
-            'filters' => $request->only('search', 'category_id'),
-            'totalWorth' => (float) $totalWorth,
+            'items'          => $items,
+            'categories'     => $categories,
+            'groupAddresses' => $groupAddresses,
+            'filters'        => $request->only('search', 'category_id', 'group_address_id'),
+            'totalWorth'     => (float) $totalWorth,
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         $branch = current_branch();
+
+        $clonedItem = null;
+        if ($request->has('clone_from')) {
+            $cloned = Item::where('branch_id', $branch->id)->find($request->clone_from);
+            if ($cloned) {
+                $clonedItem = [
+                    'item_name'              => $cloned->item_name . ' (Copy)',
+                    'category_id'            => $cloned->category_id,
+                    'group_address_id'       => $cloned->group_address_id,
+                    'buy_price'              => $cloned->buy_price,
+                    'price'                  => $cloned->price,
+                    'wholesale_price'        => $cloned->wholesale_price,
+                    'pack_price'             => $cloned->pack_price,
+                    'carton_price'           => $cloned->carton_price,
+                    'pack_wholesale_price'   => $cloned->pack_wholesale_price,
+                    'carton_wholesale_price' => $cloned->carton_wholesale_price,
+                    'unit_label'             => $cloned->unit_label,
+                    'pack_label'             => $cloned->pack_label,
+                    'carton_label'           => $cloned->carton_label,
+                    'units_per_pack'         => $cloned->units_per_pack,
+                    'packs_per_carton'       => $cloned->packs_per_carton,
+                    'item_description'       => $cloned->item_description,
+                    'is_imei_tracked'        => $cloned->is_imei_tracked,
+                    'price_locked'           => $cloned->price_locked,
+                    'expiry_date'            => $cloned->expiry_date?->format('Y-m-d'),
+                ];
+            }
+        }
+
         return Inertia::render('Items/Create', [
-            'categories' => \App\Models\Category::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
+            'clonedItem'     => $clonedItem,
+            'categories'     => \App\Models\Category::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),
             'groupAddresses' => \App\Models\GroupAddress::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),
-            'settings' => \App\Models\PosSettings::current(),
+            'settings'       => \App\Models\PosSettings::current(),
         ]);
     }
 
@@ -252,6 +300,127 @@ class ItemController extends Controller
             ->with('success', 'Item deleted.');
     }
 
+    /** Duplicate an item directly into the branch catalog */
+    public function duplicate(Request $request, $branchParam = null, $itemParam = null)
+    {
+        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
+        
+        $item = $itemParam instanceof Item ? $itemParam : Item::findOrFail($itemParam ?: $request->route('item'));
+        $this->authorizeBranch($item, $branch);
+
+        // Find an incremental unique name
+        $baseName = $item->item_name;
+        $copyName = $baseName . ' (Copy)';
+        $counter = 2;
+        while (Item::where('branch_id', $branch->id)->where('item_name', $copyName)->exists()) {
+            $copyName = "{$baseName} (Copy {$counter})";
+            $counter++;
+        }
+
+        $newItem = $item->replicate([
+            'barcode_number',
+            'stock_worth',
+            'created_at',
+            'updated_at',
+        ]);
+
+        $newItem->branch_id = $branch->id;
+        $newItem->item_name = $copyName;
+        $newItem->barcode_number = null; // Blank barcode to prevent collision
+        $newItem->front_store_qty = 0;
+        $newItem->back_store_qty = 0;
+        $newItem->save();
+
+        \App\Services\ActivityLogger::item("Duplicated item '{$item->item_name}' as '{$newItem->item_name}'", $branch->id);
+
+        return redirect()->route('pos.items.index', ['branch' => $branch->slug])
+            ->with('success', "Item '{$item->item_name}' duplicated as '{$newItem->item_name}'.");
+    }
+
+    /** Execute batch operations on selected items */
+    public function bulkAction(Request $request, $branchParam = null)
+    {
+        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
+
+        $data = $request->validate([
+            'action'             => 'required|string|in:delete,update_category,update_group,adjust_prices',
+            'item_ids'           => 'required|array|min:1',
+            'item_ids.*'         => 'integer|exists:items,id',
+            'category_id'        => 'nullable|required_if:action,update_category|exists:categories,id',
+            'group_address_id'   => 'nullable|required_if:action,update_group|exists:group_addresses,id',
+            'price_change_type'  => 'nullable|in:increase_percent,decrease_percent,set_fixed',
+            'price_change_value' => 'nullable|numeric|min:0',
+        ]);
+
+        $items = Item::where('branch_id', $branch->id)
+            ->whereIn('id', $data['item_ids'])
+            ->get();
+
+        if ($items->isEmpty()) {
+            return back()->with('error', 'No matching items found.');
+        }
+
+        $count = $items->count();
+
+        switch ($data['action']) {
+            case 'delete':
+                foreach ($items as $item) {
+                    if ($item->image_path) {
+                        Storage::disk('public')->delete($item->image_path);
+                    }
+                    $item->delete();
+                }
+                \App\Services\ActivityLogger::item("Bulk deleted {$count} items", $branch->id);
+                return back()->with('success', "Successfully deleted {$count} item(s).");
+
+            case 'update_category':
+                $category = \App\Models\Category::where('branch_id', $branch->id)
+                    ->orWhereNull('branch_id')
+                    ->findOrFail($data['category_id']);
+
+                Item::where('branch_id', $branch->id)
+                    ->whereIn('id', $data['item_ids'])
+                    ->update(['category_id' => $category->id]);
+
+                \App\Services\ActivityLogger::item("Bulk moved {$count} items to category '{$category->name}'", $branch->id);
+                return back()->with('success', "Successfully moved {$count} item(s) to '{$category->name}'.");
+
+            case 'update_group':
+                $group = \App\Models\GroupAddress::where('branch_id', $branch->id)
+                    ->orWhereNull('branch_id')
+                    ->findOrFail($data['group_address_id']);
+
+                Item::where('branch_id', $branch->id)
+                    ->whereIn('id', $data['item_ids'])
+                    ->update(['group_address_id' => $group->id]);
+
+                \App\Services\ActivityLogger::item("Bulk moved {$count} items to shelf location '{$group->name}'", $branch->id);
+                return back()->with('success', "Successfully moved {$count} item(s) to '{$group->name}'.");
+
+            case 'adjust_prices':
+                $val = (float) ($data['price_change_value'] ?? 0);
+                $type = $data['price_change_type'] ?? 'increase_percent';
+
+                foreach ($items as $item) {
+                    $currentPrice = (float) $item->price;
+                    if ($type === 'increase_percent') {
+                        $newPrice = round($currentPrice * (1 + ($val / 100)), 2);
+                    } elseif ($type === 'decrease_percent') {
+                        $newPrice = max(0, round($currentPrice * (1 - ($val / 100)), 2));
+                    } elseif ($type === 'set_fixed') {
+                        $newPrice = max(0, round($val, 2));
+                    } else {
+                        $newPrice = $currentPrice;
+                    }
+                    $item->update(['price' => $newPrice]);
+                }
+                \App\Services\ActivityLogger::item("Bulk updated prices for {$count} items", $branch->id);
+                return back()->with('success', "Successfully adjusted prices for {$count} item(s).");
+        }
+
+        return back();
+    }
+
     /** API: real-time item search for POS screen */
     public function search(Request $request)
     {
@@ -427,7 +596,7 @@ class ItemController extends Controller
     }
 
     /** Export all current branch items into CSV using native schema */
-    public function exportCsv()
+    public function exportCsv(Request $request)
     {
         $branch = current_branch();
         $fileName = 'skynet_items_' . \Illuminate\Support\Str::slug($branch->name) . '_' . date('Ymd_His') . '.csv';
@@ -437,7 +606,10 @@ class ItemController extends Controller
             'Content-Disposition' => "attachment; filename={$fileName}",
         ];
 
+        $selectedIds = $request->query('ids') ? explode(',', $request->query('ids')) : null;
+
         $items = Item::where('branch_id', $branch->id)
+            ->when($selectedIds, fn($q) => $q->whereIn('id', $selectedIds))
             ->with(['category', 'groupAddress'])
             ->latest()
             ->get();
@@ -547,49 +719,62 @@ class ItemController extends Controller
         $categoryCache = [];
         $groupCache = [];
 
-        while (($row = fgetcsv($handle)) !== false) {
-            $rowNumber++;
-            if (empty(array_filter($row)))
-                continue;
+        DB::beginTransaction();
+        try {
+            while (($row = fgetcsv($handle)) !== false) {
+                $rowNumber++;
+                if (empty(array_filter($row)))
+                    continue;
 
-            $itemName = $nameIdx !== null ? trim($row[$nameIdx] ?? '') : '';
-            if (!$itemName) {
-                $failedItems[] = [
-                    'line' => $rowNumber,
-                    'item_name' => 'Row ' . $rowNumber,
-                    'reason' => 'Item name is missing or empty',
-                ];
-                continue;
-            }
+                $itemName = $nameIdx !== null ? trim($row[$nameIdx] ?? '') : '';
+                if (!$itemName) {
+                    $failedItems[] = [
+                        'line' => $rowNumber,
+                        'item_name' => 'Row ' . $rowNumber,
+                        'reason' => 'Item name is missing or empty',
+                    ];
+                    continue;
+                }
 
-            $barcode = $barcodeIdx !== null ? trim($row[$barcodeIdx] ?? '') : '';
-            $categoryName = $catIdx !== null ? trim($row[$catIdx] ?? '') : '';
-            $groupName = $groupIdx !== null ? trim($row[$groupIdx] ?? '') : '';
-            $buyPrice = $buyPriceIdx !== null ? (float) ($row[$buyPriceIdx] ?? 0) : 0.0;
-            $price = $priceIdx !== null ? (float) ($row[$priceIdx] ?? 0) : 0.0;
-            $wholesale = $wholesaleIdx !== null ? (float) ($row[$wholesaleIdx] ?? 0) : $price;
-            $packPrice = $packPriceIdx !== null && ($row[$packPriceIdx] ?? '') !== '' ? (float) $row[$packPriceIdx] : null;
-            $cartonPrice = $cartonPriceIdx !== null && ($row[$cartonPriceIdx] ?? '') !== '' ? (float) $row[$cartonPriceIdx] : null;
-            $frontQty = $frontQtyIdx !== null ? (int) ($row[$frontQtyIdx] ?? 0) : 0;
-            $backQty = $backQtyIdx !== null ? (int) ($row[$backQtyIdx] ?? 0) : 0;
-            $unitLabel = $unitLabelIdx !== null ? trim($row[$unitLabelIdx] ?? '') : 'Unit';
-            $unitsPerPack = $unitsPackIdx !== null ? max(1, (int) ($row[$unitsPackIdx] ?? 1)) : 1;
-            $packsCarton = $packsCartonIdx !== null ? max(1, (int) ($row[$packsCartonIdx] ?? 1)) : 1;
-            $expiryDate = $expiryIdx !== null ? trim($row[$expiryIdx] ?? '') : null;
-            $desc = $descIdx !== null ? trim($row[$descIdx] ?? '') : null;
+                $barcode = $barcodeIdx !== null ? trim($row[$barcodeIdx] ?? '') : '';
+                $categoryName = $catIdx !== null ? trim($row[$catIdx] ?? '') : '';
+                $groupName = $groupIdx !== null ? trim($row[$groupIdx] ?? '') : '';
+                $buyPrice = $buyPriceIdx !== null ? (float) ($row[$buyPriceIdx] ?? 0) : 0.0;
+                $price = $priceIdx !== null ? (float) ($row[$priceIdx] ?? 0) : 0.0;
+                $wholesale = $wholesaleIdx !== null ? (float) ($row[$wholesaleIdx] ?? 0) : $price;
+                $packPrice = $packPriceIdx !== null && ($row[$packPriceIdx] ?? '') !== '' ? (float) $row[$packPriceIdx] : null;
+                $cartonPrice = $cartonPriceIdx !== null && ($row[$cartonPriceIdx] ?? '') !== '' ? (float) $row[$cartonPriceIdx] : null;
+                $frontQty = $frontQtyIdx !== null ? (int) ($row[$frontQtyIdx] ?? 0) : 0;
+                $backQty = $backQtyIdx !== null ? (int) ($row[$backQtyIdx] ?? 0) : 0;
+                $unitLabel = $unitLabelIdx !== null ? trim($row[$unitLabelIdx] ?? '') : 'Unit';
+                $unitsPerPack = $unitsPackIdx !== null ? max(1, (int) ($row[$unitsPackIdx] ?? 1)) : 1;
+                $packsCarton = $packsCartonIdx !== null ? max(1, (int) ($row[$packsCartonIdx] ?? 1)) : 1;
+                $expiryDate = $expiryIdx !== null ? trim($row[$expiryIdx] ?? '') : null;
+                $desc = $descIdx !== null ? trim($row[$descIdx] ?? '') : null;
 
-            if (!$barcode || strtoupper($barcode) === 'NO_BARCODE') {
-                $barcode = null;
-            }
+                if (str_starts_with($barcode, '="') && str_ends_with($barcode, '"')) {
+                    $barcode = substr($barcode, 2, -1);
+                }
+                $barcode = trim($barcode, " '\"\t\n\r\0\x0B");
+                if (preg_match('/^[+\-]?[0-9]+(\.[0-9]+)?[eE][+\-]?[0-9]+$/', $barcode)) {
+                    $barcode = number_format((float) $barcode, 0, '', '');
+                } elseif (is_numeric($barcode) && str_contains($barcode, '.')) {
+                    $parts = explode('.', $barcode);
+                    if (isset($parts[1]) && ltrim($parts[1], '0') === '') {
+                        $barcode = $parts[0];
+                    }
+                }
+                if (!$barcode || in_array(strtoupper($barcode), ['NULL', 'N/A', 'NONE', 'NO_BARCODE', 'NO-BARCODE'], true)) {
+                    $barcode = null;
+                }
 
-            try {
                 $categoryId = null;
                 if ($categoryName) {
                     $catKey = strtolower($categoryName);
                     if (!isset($categoryCache[$catKey])) {
                         $category = \App\Models\Category::firstOrCreate(
                             ['name' => $categoryName, 'branch_id' => $branch->id],
-                            ['slug' => \Illuminate\Support\Str::slug($categoryName)]
+                            ['slug' => Str::slug($categoryName) . '-' . $branch->id . '-' . rand(100, 999)]
                         );
                         $categoryCache[$catKey] = $category->id;
                     }
@@ -640,16 +825,15 @@ class ItemController extends Controller
 
                 $item->save();
                 $successCount++;
-            } catch (\Throwable $e) {
-                $failedItems[] = [
-                    'line' => $rowNumber,
-                    'item_name' => $itemName ?: 'Row ' . $rowNumber,
-                    'reason' => $e->getMessage(),
-                ];
             }
-        }
 
-        fclose($handle);
+            fclose($handle);
+            DB::commit();
+        } catch (\Throwable $fatalError) {
+            fclose($handle);
+            DB::rollBack();
+            return back()->with('error', 'Import failed and was rolled back: ' . $fatalError->getMessage());
+        }
 
         $totalProcessed = $successCount + count($failedItems);
 
