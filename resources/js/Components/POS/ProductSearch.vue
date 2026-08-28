@@ -27,6 +27,9 @@ function refocusSearch() {
 }
 
 function onBlur() {
+    // Only auto-refocus on desktop devices with physical keyboards / barcode scanners
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) return
+
     setTimeout(() => {
         const active = document.activeElement
         if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA' && active.tagName !== 'SELECT' && active.tagName !== 'BUTTON')) {
@@ -171,7 +174,7 @@ defineExpose({ focus: refocusSearch })
                 class="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 transition text-left border-b border-slate-100 dark:border-slate-700/50 last:border-0"
             >
                 <div class="flex-1 min-w-0 flex items-center gap-2.5">
-                    <div v-if="item.image_url" class="w-8 h-8 rounded bg-slate-100 dark:bg-slate-750 overflow-hidden flex items-center justify-center border border-slate-200 dark:border-slate-650 flex-shrink-0">
+                    <div v-if="item.image_url" class="w-8 h-8 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden flex items-center justify-center border border-slate-200 dark:border-slate-600 flex-shrink-0">
                         <img :src="item.image_url" class="object-cover w-full h-full" alt="Item Thumbnail" />
                     </div>
                     <div class="truncate">

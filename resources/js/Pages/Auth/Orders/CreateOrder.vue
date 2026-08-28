@@ -290,11 +290,11 @@ const submit = () => {
         <div
           v-for="product in filteredProducts"
           :key="product.id"
-          class="border p-4 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-300 bg-white"
+          class="border border-slate-200 dark:border-slate-700 p-4 rounded-lg cursor-pointer transition-all duration-200 hover:shadow-md hover:border-blue-300 bg-white dark:bg-slate-800"
           @click="addToCart(product)"
         >
-          <p class="font-medium text-gray-800">{{ product.name }}</p>
-          <p class="text-sm text-gray-600 mt-1">₦{{ formatCurrency(product.price) }}</p>
+          <p class="font-medium text-gray-800 dark:text-gray-100">{{ product.name }}</p>
+          <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">₦{{ formatCurrency(product.price) }}</p>
           <p class="text-xs text-blue-500 mt-2">Click to add to cart</p>
         </div>
       </div>
@@ -387,8 +387,8 @@ const submit = () => {
           </button>
         </div>
 
-        <div v-if="guarantors.length === 0" class="bg-gray-50 p-6 rounded-lg text-center">
-          <p class="text-gray-500">No guarantors added yet. Click "Add Guarantor" to add one.</p>
+        <div v-if="guarantors.length === 0" class="bg-gray-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-6 rounded-lg text-center">
+          <p class="text-gray-500 dark:text-slate-400">No guarantors added yet. Click "Add Guarantor" to add one.</p>
         </div>
 
         <div v-for="(guarantor, index) in guarantors" :key="index" class="border border-gray-200 p-5 rounded-lg mb-5 relative bg-white dark:bg-gray-700">

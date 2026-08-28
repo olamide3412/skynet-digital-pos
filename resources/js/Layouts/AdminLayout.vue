@@ -135,7 +135,7 @@ onMounted(() => {
                                 'flex w-full items-center rounded-lg font-medium transition-colors cursor-pointer',
                                 isCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3 gap-0',
                                 isActive(link)
-                                    ? 'bg-theme-light text-theme-dark font-bold'
+                                    ? 'bg-theme-light dark:bg-theme/20 text-theme-dark dark:text-white font-bold'
                                     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                             ]"
                         >
@@ -159,7 +159,7 @@ onMounted(() => {
                                 'flex w-full items-center rounded-lg font-medium transition-colors cursor-pointer',
                                 isCollapsed ? 'justify-center px-0 py-3' : 'px-4 py-3 gap-0',
                                 isActive(link)
-                                    ? 'bg-theme-light text-theme-dark font-bold'
+                                    ? 'bg-theme-light dark:bg-theme/20 text-theme-dark dark:text-white font-bold'
                                     : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
                             ]"
                         >
@@ -179,7 +179,7 @@ onMounted(() => {
                                 :class="[
                                     'flex items-center px-3 py-2 text-sm rounded-lg transition-colors',
                                     isChildActive(child)
-                                        ? 'bg-theme-light text-theme font-bold'
+                                        ? 'bg-theme-light dark:bg-theme/25 text-theme dark:text-white font-bold'
                                         : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white'
                                 ]"
                             >
@@ -196,7 +196,7 @@ onMounted(() => {
                                 :class="[
                                     'block px-4 py-2 text-sm transition-colors',
                                     isChildActive(child)
-                                        ? 'bg-theme-light text-theme font-bold'
+                                        ? 'bg-theme-light dark:bg-theme/25 text-theme dark:text-white font-bold'
                                         : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white'
                                 ]"
                             >

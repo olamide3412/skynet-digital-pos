@@ -76,7 +76,8 @@ function submitResolution() {
 <template>
     <Head title="Stock Conflicts Review - Inventory" />
 
-    <div class="p-6 space-y-6 max-w-7xl mx-auto">
+    <div class="flex-1 overflow-y-auto min-h-0 bg-slate-50/50 dark:bg-slate-900/50">
+        <div class="p-6 space-y-6 max-w-7xl mx-auto">
 
         <!-- ── HEADER ──────────────────────────────────────────────────────── -->
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -184,7 +185,7 @@ function submitResolution() {
                         <tr
                             v-for="c in conflicts.data"
                             :key="c.id"
-                            class="hover:bg-slate-50 dark:hover:bg-slate-750/50 transition-colors"
+                            class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                         >
                             <td class="px-5 py-4">
                                 <div class="font-bold text-slate-900 dark:text-white">
@@ -350,5 +351,6 @@ function submitResolution() {
             </div>
         </div>
 
+        </div>
     </div>
 </template>

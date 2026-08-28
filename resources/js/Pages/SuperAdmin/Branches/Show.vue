@@ -277,6 +277,7 @@ const settingsForm = useForm({
     auto_print_receipt: Boolean(props.settings?.auto_print_receipt),
     show_receipt_preview: Boolean(props.settings?.show_receipt_preview),
     is_offline_enabled: Boolean(props.settings?.is_offline_enabled),
+    is_turnstile_enabled: Boolean(props.settings?.is_turnstile_enabled ?? true),
     offline_receipt_prefix: props.settings?.offline_receipt_prefix || 'OFF',
     is_price_editable: Boolean(props.settings?.is_price_editable),
     is_qty_deduction: Boolean(props.settings?.is_qty_deduction),
@@ -1086,6 +1087,45 @@ const toggleBranchOffline = () => router.post(route('superadmin.branches.toggle-
                                     maxlength="10"
                                     class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3.5 py-2 text-sm text-slate-900 dark:text-white font-mono"
                                     placeholder="OFF"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Cloudflare Turnstile & Low-Network Security Card -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-4 lg:col-span-2">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <div>
+                                <h3 class="font-bold text-slate-900 dark:text-white text-base">Cloudflare CAPTCHA & Login Security</h3>
+                                <p class="text-xs text-slate-500">Configure login bot protection and slow network bypass for this branch.</p>
+                            </div>
+                            <span class="text-xl">🛡️</span>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                                <div class="pr-4">
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                        <span>Cloudflare Turnstile CAPTCHA</span>
+                                        <span
+                                            class="text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider"
+                                            :class="settingsForm.is_turnstile_enabled
+                                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                                                : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800'"
+                                        >
+                                            {{ settingsForm.is_turnstile_enabled ? 'Active (Protected)' : 'Bypassed (Low Network / Fast Login)' }}
+                                        </span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                        {{ settingsForm.is_turnstile_enabled
+                                            ? 'Enforces Cloudflare bot verification before staff login.'
+                                            : 'Turnstile is disabled for this branch. Cashiers and staff can log in instantly without waiting for Cloudflare challenge scripts on slow or unstable networks.' }}
+                                    </div>
+                                </div>
+                                <input
+                                    v-model="settingsForm.is_turnstile_enabled"
+                                    type="checkbox"
+                                    class="w-5 h-5 rounded text-indigo-600 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer flex-shrink-0"
                                 />
                             </div>
                         </div>

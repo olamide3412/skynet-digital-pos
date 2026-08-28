@@ -33,7 +33,7 @@ class HeldSaleController extends Controller
             'items.*.item_id'      => 'required|integer|exists:items,id',
             'items.*.qty'          => 'required|integer|min:1',
             'items.*.price'        => 'required|numeric|min:0',
-            'items.*.unit_used'    => 'nullable|string|in:unit,pack,carton',
+            'items.*.unit_used'    => 'nullable|string|max:100',
             'items.*.item_name'    => 'nullable|string',
             'items.*.purchase_type'=> 'nullable|in:Wholesale,Consumer',
         ]);

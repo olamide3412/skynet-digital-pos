@@ -356,7 +356,7 @@ function expiryClass(date) {
         </div>
 
         <!-- Search + Filters + Stock Worth Banner -->
-        <div class="px-6 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 space-y-3 bg-white dark:bg-slate-850">
+        <div class="px-6 py-3 border-b border-slate-200 dark:border-slate-700 flex-shrink-0 space-y-3 bg-white dark:bg-slate-800">
             <div class="flex flex-wrap items-center gap-2">
                 <!-- Search -->
                 <div class="flex-1 min-w-[240px] relative">
@@ -478,7 +478,7 @@ function expiryClass(date) {
                     <button
                         type="button"
                         @click="openBulkCategoryModal"
-                        class="px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-650 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                        class="px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 transition flex items-center gap-1 cursor-pointer shadow-2xs"
                         title="Change category for selected items"
                     >
                         📁 Change Category
@@ -489,7 +489,7 @@ function expiryClass(date) {
                         v-if="groupAddresses?.length"
                         type="button"
                         @click="openBulkGroupModal"
-                        class="px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-650 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                        class="px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 transition flex items-center gap-1 cursor-pointer shadow-2xs"
                         title="Change storage shelf location"
                     >
                         📍 Change Shelf Location
@@ -499,7 +499,7 @@ function expiryClass(date) {
                     <button
                         type="button"
                         @click="openBulkPriceModal"
-                        class="px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-650 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                        class="px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 transition flex items-center gap-1 cursor-pointer shadow-2xs"
                         title="Bulk increase or decrease prices"
                     >
                         💰 Adjust Prices
@@ -541,175 +541,180 @@ function expiryClass(date) {
         <!-- Items Table -->
         <div class="flex-1 overflow-y-auto px-6 py-4">
             <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
-                <table class="w-full text-xs">
-                    <thead class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
-                        <tr>
-                            <!-- Multi-Select Checkbox -->
-                            <th class="w-10 px-4 py-3 text-center">
-                                <input
-                                    type="checkbox"
-                                    :checked="isAllSelected"
-                                    :indeterminate.prop="isIndeterminate"
-                                    @change="toggleSelectAll"
-                                    class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-900 cursor-pointer"
-                                    title="Select all items on this page"
-                                />
-                            </th>
-                            <th class="text-left px-4 py-3">Item Name</th>
-                            <th class="text-left px-4 py-3">Barcode</th>
-                            <th class="text-left px-4 py-3">Category</th>
-                            <th class="text-left px-4 py-3">Location</th>
-                            <th class="text-right px-4 py-3">Price</th>
-                            <th class="text-right px-4 py-3">Cost Price</th>
-                            <th class="text-right px-4 py-3">Qty</th>
-                            <th class="text-right px-4 py-3">Stock Worth</th>
-                            <th class="text-left px-4 py-3">Expiry</th>
-                            <th class="text-right px-4 py-3">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
-                        <tr
-                            v-for="item in items.data"
-                            :key="item.id"
-                            class="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition group"
-                            :class="selectedIds.includes(item.id) ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : ''"
-                        >
-                            <!-- Checkbox -->
-                            <td class="px-4 py-3 text-center">
-                                <input
-                                    type="checkbox"
-                                    :checked="selectedIds.includes(item.id)"
-                                    @change="toggleSelect(item.id)"
-                                    class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-900 cursor-pointer"
-                                />
-                            </td>
+                <div class="overflow-x-auto min-w-full">
+                    <table class="w-full text-xs min-w-[680px] lg:min-w-full">
+                        <thead class="bg-slate-50 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-semibold uppercase tracking-wider">
+                            <tr>
+                                <!-- Multi-Select Checkbox -->
+                                <th class="w-10 px-4 py-3 text-center">
+                                    <input
+                                        type="checkbox"
+                                        :checked="isAllSelected"
+                                        :indeterminate.prop="isIndeterminate"
+                                        @change="toggleSelectAll"
+                                        class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-900 cursor-pointer"
+                                        title="Select all items on this page"
+                                    />
+                                </th>
+                                <th class="text-left px-4 py-3 min-w-[160px]">Item Name</th>
+                                <th class="text-left px-4 py-3 hidden xl:table-cell">Barcode</th>
+                                <th class="text-left px-4 py-3 hidden md:table-cell">Category</th>
+                                <th class="text-left px-4 py-3 hidden 2xl:table-cell">Location</th>
+                                <th class="text-right px-4 py-3 whitespace-nowrap">Price</th>
+                                <th class="text-right px-4 py-3 hidden lg:table-cell whitespace-nowrap">Cost Price</th>
+                                <th class="text-right px-4 py-3 whitespace-nowrap">Qty</th>
+                                <th class="text-right px-4 py-3 hidden xl:table-cell whitespace-nowrap">Stock Worth</th>
+                                <th class="text-left px-4 py-3 hidden 2xl:table-cell whitespace-nowrap">Expiry</th>
+                                <th class="text-right px-4 py-3 sticky right-0 z-10 bg-slate-50 dark:bg-slate-700 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.08)] dark:shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.3)]">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                            <tr
+                                v-for="item in items.data"
+                                :key="item.id"
+                                class="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition group"
+                                :class="selectedIds.includes(item.id) ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : ''"
+                            >
+                                <!-- Checkbox -->
+                                <td class="px-4 py-3 text-center">
+                                    <input
+                                        type="checkbox"
+                                        :checked="selectedIds.includes(item.id)"
+                                        @change="toggleSelect(item.id)"
+                                        class="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-white dark:bg-slate-900 cursor-pointer"
+                                    />
+                                </td>
 
-                            <!-- Item Name & Thumbnail -->
-                            <td class="px-4 py-3 text-slate-900 dark:text-white font-medium">
-                                <div class="flex items-center gap-2.5">
-                                    <div v-if="item.image_url" class="w-8 h-8 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden flex items-center justify-center border border-slate-200 dark:border-slate-650 flex-shrink-0">
-                                        <img :src="item.image_url" class="object-cover w-full h-full" alt="Item Thumbnail" />
+                                <!-- Item Name & Thumbnail -->
+                                <td class="px-4 py-3 text-slate-900 dark:text-white font-medium min-w-[160px]">
+                                    <div class="flex items-center gap-2.5">
+                                        <div v-if="item.image_url" class="w-8 h-8 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden flex items-center justify-center border border-slate-200 dark:border-slate-600 flex-shrink-0">
+                                            <img :src="item.image_url" class="object-cover w-full h-full" alt="Item Thumbnail" />
+                                        </div>
+                                        <div v-else class="w-8 h-8 rounded bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center border border-slate-200 dark:border-slate-700 flex-shrink-0 text-slate-400 dark:text-slate-500">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                        </div>
+                                        <div>
+                                            <span class="font-bold block">{{ item.item_name }}</span>
+                                            <span v-if="item.unit_label" class="text-[10px] text-slate-400">{{ item.unit_label }}</span>
+                                        </div>
                                     </div>
-                                    <div v-else class="w-8 h-8 rounded bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center border border-slate-200 dark:border-slate-700 flex-shrink-0 text-slate-400 dark:text-slate-500">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                                </td>
+
+                                <!-- Barcode -->
+                                <td class="px-4 py-3 font-mono text-slate-600 dark:text-slate-300 hidden xl:table-cell">
+                                    <span v-if="item.barcode_number" class="bg-slate-100 dark:bg-slate-700/60 px-1.5 py-0.5 rounded text-[11px]">
+                                        {{ item.barcode_number }}
+                                    </span>
+                                    <span v-else class="text-slate-400 text-[11px] italic">No barcode</span>
+                                </td>
+
+                                <!-- Category -->
+                                <td class="px-4 py-3 text-slate-600 dark:text-slate-300 hidden md:table-cell">
+                                    <span v-if="item.category?.name" class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-[11px]">
+                                        {{ item.category.name }}
+                                    </span>
+                                    <span v-else class="text-slate-400">—</span>
+                                </td>
+
+                                <!-- Storage / Shelf Location -->
+                                <td class="px-4 py-3 text-slate-600 dark:text-slate-300 hidden 2xl:table-cell">
+                                    <span v-if="item.group_address?.name" class="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
+                                        <span>📍</span> {{ item.group_address.name }}
+                                    </span>
+                                    <span v-else class="text-slate-400 text-[11px]">—</span>
+                                </td>
+
+                                <!-- Selling Price -->
+                                <td class="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">
+                                    {{ format(item.price) }}
+                                </td>
+
+                                <!-- Buy/Cost Price -->
+                                <td class="px-4 py-3 text-right text-slate-500 dark:text-slate-400 font-mono hidden lg:table-cell whitespace-nowrap">
+                                    {{ format(item.buy_price || 0) }}
+                                </td>
+
+                                <!-- Qty -->
+                                <td class="px-4 py-3 text-right font-medium whitespace-nowrap">
+                                    <span :class="(item.total_qty ?? item.front_store_qty ?? 0) <= 5 ? 'text-red-500 dark:text-red-400 font-bold' : 'text-slate-900 dark:text-white'">
+                                        {{ item.total_qty ?? item.front_store_qty ?? 0 }}
+                                    </span>
+                                </td>
+
+                                <!-- Stock Worth -->
+                                <td class="px-4 py-3 text-right font-mono hidden xl:table-cell whitespace-nowrap">
+                                    <span v-if="showWorth" class="text-amber-600 dark:text-amber-400 font-semibold">{{ format(item.stock_worth) }}</span>
+                                    <span v-else class="text-slate-400 dark:text-slate-600 tracking-widest select-none">&#9679;&#9679;&#9679;&#9679;</span>
+                                </td>
+
+                                <!-- Expiry Date -->
+                                <td class="px-4 py-3 font-medium hidden 2xl:table-cell whitespace-nowrap" :class="expiryClass(item.expiry_date)">
+                                    {{ item.expiry_date ? dayjs(item.expiry_date).format('DD-MMM-YYYY') : '—' }}
+                                </td>
+
+                                <!-- Actions (Edit, Quick Duplicate, Clone & Edit, Delete) - Sticky Right Column -->
+                                <td
+                                    class="px-4 py-3 text-right whitespace-nowrap sticky right-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-slate-50 dark:group-hover:bg-slate-700/80 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.08)] dark:shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.3)]"
+                                    :class="selectedIds.includes(item.id) ? 'bg-indigo-50 dark:bg-indigo-950/80' : ''"
+                                >
+                                    <div class="flex items-center justify-end gap-1">
+                                        <!-- Quick Duplicate Button -->
+                                        <button
+                                            type="button"
+                                            @click="duplicateItem(item)"
+                                            :disabled="isDuplicating === item.id"
+                                            class="p-1.5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition cursor-pointer"
+                                            title="Quick Duplicate (Create instant copy)"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                            </svg>
+                                        </button>
+
+                                        <!-- Clone & Edit (Create form with prefill) -->
+                                        <Link
+                                            :href="route('pos.items.create', { clone_from: item.id })"
+                                            class="p-1.5 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
+                                            title="Duplicate & Edit (Open form prefilled with this item)"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                            </svg>
+                                        </Link>
+
+                                        <!-- Edit -->
+                                        <Link
+                                            :href="route('pos.items.edit', item.id)"
+                                            class="px-2.5 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg font-semibold transition"
+                                        >
+                                            Edit
+                                        </Link>
+
+                                        <!-- Delete -->
+                                        <button
+                                            type="button"
+                                            @click="destroy(item.id)"
+                                            class="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition cursor-pointer"
+                                            title="Delete Item"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                            </svg>
+                                        </button>
                                     </div>
-                                    <div>
-                                        <span class="font-bold block">{{ item.item_name }}</span>
-                                        <span v-if="item.unit_label" class="text-[10px] text-slate-400">{{ item.unit_label }}</span>
-                                    </div>
-                                </div>
-                            </td>
-
-                            <!-- Barcode -->
-                            <td class="px-4 py-3 font-mono text-slate-600 dark:text-slate-300">
-                                <span v-if="item.barcode_number" class="bg-slate-100 dark:bg-slate-700/60 px-1.5 py-0.5 rounded text-[11px]">
-                                    {{ item.barcode_number }}
-                                </span>
-                                <span v-else class="text-slate-400 text-[11px] italic">No barcode</span>
-                            </td>
-
-                            <!-- Category -->
-                            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">
-                                <span v-if="item.category?.name" class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-[11px]">
-                                    {{ item.category.name }}
-                                </span>
-                                <span v-else class="text-slate-400">—</span>
-                            </td>
-
-                            <!-- Storage / Shelf Location -->
-                            <td class="px-4 py-3 text-slate-600 dark:text-slate-300">
-                                <span v-if="item.group_address?.name" class="inline-flex items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400">
-                                    <span>📍</span> {{ item.group_address.name }}
-                                </span>
-                                <span v-else class="text-slate-400 text-[11px]">—</span>
-                            </td>
-
-                            <!-- Selling Price -->
-                            <td class="px-4 py-3 text-right text-emerald-600 dark:text-emerald-400 font-bold">
-                                {{ format(item.price) }}
-                            </td>
-
-                            <!-- Buy/Cost Price -->
-                            <td class="px-4 py-3 text-right text-slate-500 dark:text-slate-400 font-mono">
-                                {{ format(item.buy_price || 0) }}
-                            </td>
-
-                            <!-- Qty -->
-                            <td class="px-4 py-3 text-right font-medium">
-                                <span :class="(item.total_qty ?? item.front_store_qty ?? 0) <= 5 ? 'text-red-500 dark:text-red-400 font-bold' : 'text-slate-900 dark:text-white'">
-                                    {{ item.total_qty ?? item.front_store_qty ?? 0 }}
-                                </span>
-                            </td>
-
-                            <!-- Stock Worth -->
-                            <td class="px-4 py-3 text-right font-mono">
-                                <span v-if="showWorth" class="text-amber-600 dark:text-amber-400 font-semibold">{{ format(item.stock_worth) }}</span>
-                                <span v-else class="text-slate-400 dark:text-slate-600 tracking-widest select-none">&#9679;&#9679;&#9679;&#9679;</span>
-                            </td>
-
-                            <!-- Expiry Date -->
-                            <td class="px-4 py-3 font-medium" :class="expiryClass(item.expiry_date)">
-                                {{ item.expiry_date ? dayjs(item.expiry_date).format('DD-MMM-YYYY') : '—' }}
-                            </td>
-
-                            <!-- Actions (Edit, Quick Duplicate, Clone & Edit, Delete) -->
-                            <td class="px-4 py-3 text-right whitespace-nowrap">
-                                <div class="flex items-center justify-end gap-1">
-                                    <!-- Quick Duplicate Button -->
-                                    <button
-                                        type="button"
-                                        @click="duplicateItem(item)"
-                                        :disabled="isDuplicating === item.id"
-                                        class="p-1.5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition cursor-pointer"
-                                        title="Quick Duplicate (Create instant copy)"
-                                    >
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                                        </svg>
-                                    </button>
-
-                                    <!-- Clone & Edit (Create form with prefill) -->
-                                    <Link
-                                        :href="route('pos.items.create', { clone_from: item.id })"
-                                        class="p-1.5 text-slate-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition"
-                                        title="Duplicate & Edit (Open form prefilled with this item)"
-                                    >
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                        </svg>
-                                    </Link>
-
-                                    <!-- Edit -->
-                                    <Link
-                                        :href="route('pos.items.edit', item.id)"
-                                        class="px-2.5 py-1 text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg font-semibold transition"
-                                    >
-                                        Edit
-                                    </Link>
-
-                                    <!-- Delete -->
-                                    <button
-                                        type="button"
-                                        @click="destroy(item.id)"
-                                        class="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition cursor-pointer"
-                                        title="Delete Item"
-                                    >
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                                        </svg>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        <tr v-if="!items.data?.length">
-                            <td colspan="11" class="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
-                                <div class="text-3xl mb-2">📦</div>
-                                <div class="font-bold">No items found</div>
-                                <div class="text-xs text-slate-400 mt-1">Try adjusting your search or filters, or add a new item.</div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                                </td>
+                            </tr>
+                            <tr v-if="!items.data?.length">
+                                <td colspan="11" class="px-4 py-12 text-center text-slate-400 dark:text-slate-500">
+                                    <div class="text-3xl mb-2">📦</div>
+                                    <div class="font-bold">No items found</div>
+                                    <div class="text-xs text-slate-400 mt-1">Try adjusting your search or filters, or add a new item.</div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
 
                 <!-- Pagination -->
                 <div v-if="items.last_page > 1" class="flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
@@ -862,7 +867,7 @@ function expiryClass(date) {
                 </div>
 
                 <!-- Import Mode Tabs -->
-                <div class="flex border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750">
+                <div class="flex border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                     <button
                         type="button"
                         @click="importType = 'native'"

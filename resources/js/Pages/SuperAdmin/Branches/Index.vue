@@ -19,6 +19,7 @@ const form = useForm({
     phone: '',
     email: '',
     is_offline_enabled: false,
+    is_turnstile_enabled: true,
     admin_name: '',
     admin_username: '',
     admin_email: '',
@@ -44,6 +45,12 @@ const toggleBranch = (branchSlug) => {
 
 const toggleOffline = (branchSlug) => {
     router.post(route('superadmin.branches.toggle-offline', { branch: branchSlug }))
+}
+
+const toggleTurnstile = (branchSlug) => {
+    router.post(route('superadmin.branches.toggle-turnstile', { branch: branchSlug }), {}, {
+        preserveScroll: true,
+    })
 }
 
 const copiedBranchSlug = ref(null)
@@ -189,6 +196,33 @@ const triggerExport = () => {
                         >
                             <span v-if="branch.settings?.is_offline_enabled">● Enabled</span>
                             <span v-else>Disabled</span>
+                        </button>
+                    </div>
+
+                    <!-- Cloudflare CAPTCHA Toggle Control (Super Admin only) -->
+                    <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">🛡️</span>
+                            <div>
+                                <div class="text-xs font-bold text-slate-800 dark:text-slate-200">Cloudflare CAPTCHA</div>
+                                <div class="text-[10px] text-slate-500 dark:text-slate-400">
+                                    {{ (branch.settings?.is_turnstile_enabled ?? true) ? 'Active on login' : 'Bypassed (Fast Login)' }}
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            @click="toggleTurnstile(branch.slug)"
+                            type="button"
+                            :class="[
+                                'px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer',
+                                (branch.settings?.is_turnstile_enabled ?? true)
+                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                                    : 'bg-amber-100 dark:bg-amber-950/60 hover:bg-amber-200 dark:hover:bg-amber-900/80 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700'
+                            ]"
+                            :title="(branch.settings?.is_turnstile_enabled ?? true) ? 'Click to bypass Cloudflare CAPTCHA for slow networks' : 'Click to enable Cloudflare CAPTCHA verification'"
+                        >
+                            <span v-if="(branch.settings?.is_turnstile_enabled ?? true)">● Enabled</span>
+                            <span v-else>⚡ Bypassed</span>
                         </button>
                     </div>
                 </div>
@@ -427,12 +461,20 @@ const triggerExport = () => {
                             <input v-model="form.address" type="text" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 transition" />
                         </div>
 
-                        <div class="pt-1">
+                        <div class="pt-1 space-y-2">
                             <label class="flex items-center gap-2.5 cursor-pointer">
                                 <input v-model="form.is_offline_enabled" type="checkbox" class="w-4 h-4 accent-indigo-600 rounded cursor-pointer" />
                                 <div>
                                     <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Enable Offline Sales Mode (PWA)</span>
                                     <p class="text-[11px] text-slate-500 dark:text-slate-400">Allows cashiers at this branch to sell and print receipts when offline</p>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center gap-2.5 cursor-pointer">
+                                <input v-model="form.is_turnstile_enabled" type="checkbox" class="w-4 h-4 accent-indigo-600 rounded cursor-pointer" />
+                                <div>
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Require Cloudflare Turnstile on Login</span>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Uncheck to bypass CAPTCHA on slow or unstable network connections</p>
                                 </div>
                             </label>
                         </div>

@@ -37,7 +37,7 @@ defineProps({
       v-model="model"
       :required="required"
       :disabled="disabled"
-      class="block w-full rounded-md border-0 px-4 py-3 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 placeholder:text-slate-500 focus:ring-2 focus:ring-inset focus:ring-blue-500 bg-white sm:text-sm"
+      class="block w-full rounded-md border-0 px-4 py-3 text-slate-900 dark:text-slate-100 shadow-sm ring-1 ring-inset ring-slate-300 dark:ring-slate-700 placeholder:text-slate-500 focus:ring-2 focus:ring-inset focus:ring-blue-500 bg-white dark:bg-slate-800 sm:text-sm"
       :class="{ '!ring-red-500': message }"
 
     >

@@ -87,6 +87,17 @@ export async function searchLocalItems(query = '', purchaseType = 'Consumer') {
             cartonPrice = parseFloat(item.carton_wholesale_price)
         }
 
+        const mappedUnits = (Array.isArray(item.units) ? item.units : []).map(u => {
+            let uPrice = parseFloat(u.selling_price || 0)
+            if (isWholesale && parseFloat(u.wholesale_price || 0) > 0) {
+                uPrice = parseFloat(u.wholesale_price)
+            }
+            return {
+                ...u,
+                display_price: uPrice,
+            }
+        })
+
         return {
             ...item,
             qty: item.front_store_qty ?? 0,
@@ -94,6 +105,7 @@ export async function searchLocalItems(query = '', purchaseType = 'Consumer') {
             display_price: displayPrice,
             pack_display_price: packPrice,
             carton_display_price: cartonPrice,
+            units: mappedUnits,
         }
     })
 }

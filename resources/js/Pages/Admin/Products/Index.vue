@@ -338,7 +338,7 @@ const deleteProduct = (id) => {
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-                            <tr v-for="p in products.data" :key="p.id" class="hover:bg-gray-50 dark:hover:bg-gray-750 transition">
+                            <tr v-for="p in products.data" :key="p.id" class="hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
                                 <td class="px-5 py-3">
                                     <div class="flex items-center gap-3">
                                         <img :src="p.image ? '/storage/'+p.image : 'https://placehold.co/60x60'" class="w-11 h-11 rounded-lg object-cover border dark:border-gray-600 flex-shrink-0"/>

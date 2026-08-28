@@ -274,37 +274,37 @@ const reports = [
             
             <!-- ── Monthly Metric Stat Cards ────────────────────────────────────── -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between">
-                    <div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Monthly Revenue</p>
-                        <p class="text-2xl font-bold text-theme font-mono">{{ format(monthlyStats?.monthly_revenue || 0) }}</p>
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1 truncate">Monthly Revenue</p>
+                        <p class="text-xl sm:text-2xl font-bold text-theme font-mono truncate" :title="format(monthlyStats?.monthly_revenue || 0)">{{ format(monthlyStats?.monthly_revenue || 0) }}</p>
                     </div>
-                    <div class="w-10 h-10 rounded-lg bg-theme-light text-theme flex items-center justify-center font-bold text-lg">₦</div>
+                    <div class="w-10 h-10 rounded-lg bg-theme-light text-theme flex-shrink-0 flex items-center justify-center font-bold text-lg">₦</div>
                 </div>
 
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between">
-                    <div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Monthly Gross Profit</p>
-                        <p class="text-2xl font-bold text-theme font-mono">{{ format(monthlyStats?.monthly_profit || 0) }}</p>
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1 truncate">Monthly Gross Profit</p>
+                        <p class="text-xl sm:text-2xl font-bold text-theme font-mono truncate" :title="format(monthlyStats?.monthly_profit || 0)">{{ format(monthlyStats?.monthly_profit || 0) }}</p>
                     </div>
-                    <div class="w-10 h-10 rounded-lg bg-theme-light text-theme flex items-center justify-center font-bold text-lg">📈</div>
+                    <div class="w-10 h-10 rounded-lg bg-theme-light text-theme flex-shrink-0 flex items-center justify-center font-bold text-lg">📈</div>
                 </div>
 
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between">
-                    <div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Returns (This Month)</p>
-                        <p class="text-2xl font-bold text-purple-600 dark:text-purple-400 font-mono">{{ returnsSummary?.total_qty || 0 }} <span class="text-xs text-slate-500 font-normal">items</span></p>
-                        <p class="text-[11px] text-red-500 font-medium font-mono mt-0.5">Worth: {{ format(returnsSummary?.refund_worth || 0) }}</p>
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1 truncate">Returns (This Month)</p>
+                        <p class="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400 font-mono">{{ returnsSummary?.total_qty || 0 }} <span class="text-xs text-slate-500 font-normal">items</span></p>
+                        <p class="text-[11px] text-red-500 font-medium font-mono mt-0.5 truncate" :title="format(returnsSummary?.refund_worth || 0)">Worth: {{ format(returnsSummary?.refund_worth || 0) }}</p>
                     </div>
-                    <div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center font-bold text-lg">↩</div>
+                    <div class="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex-shrink-0 flex items-center justify-center font-bold text-lg">↩</div>
                 </div>
 
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between">
-                    <div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Outstanding Customer Debt</p>
-                        <p class="text-2xl font-bold text-red-600 dark:text-red-400 font-mono">{{ format(monthlyStats?.outstanding_debt || 0) }}</p>
+                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between gap-3">
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1 truncate">Outstanding Customer Debt</p>
+                        <p class="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400 font-mono truncate" :title="format(monthlyStats?.outstanding_debt || 0)">{{ format(monthlyStats?.outstanding_debt || 0) }}</p>
                     </div>
-                    <div class="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 flex items-center justify-center font-bold text-lg">💳</div>
+                    <div class="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 flex-shrink-0 flex items-center justify-center font-bold text-lg">💳</div>
                 </div>
             </div>
 

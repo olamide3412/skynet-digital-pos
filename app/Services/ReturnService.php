@@ -50,16 +50,9 @@ class ReturnService
                     }
 
                     if ($baseQty > $orderLineBaseQty) {
-                        $maxInSelectedUnit = match($unitUsed) {
-                            'carton' => intdiv($orderLineBaseQty, ($item->packs_per_carton ?: 1) * ($item->units_per_pack ?: 1)),
-                            'pack'   => intdiv($orderLineBaseQty, ($item->units_per_pack ?: 1)),
-                            default  => $orderLineBaseQty,
-                        };
-                        $unitLabel = match($unitUsed) {
-                            'carton' => $item->carton_label ?: 'Carton',
-                            'pack'   => $item->pack_label ?: 'Pack',
-                            default  => $item->unit_label ?: 'Unit',
-                        };
+                        $unitFactor = max(1, $item->toBaseUnits(1, $unitUsed));
+                        $maxInSelectedUnit = intdiv($orderLineBaseQty, $unitFactor);
+                        $unitLabel = ($unitUsed === 'unit') ? ($item->unit_label ?: 'Unit') : $unitUsed;
                         throw new \InvalidArgumentException(
                             "Return quantity ({$qty} {$unitLabel}) exceeds maximum purchasable return amount ({$maxInSelectedUnit} {$unitLabel}) for '{$item->item_name}'."
                         );

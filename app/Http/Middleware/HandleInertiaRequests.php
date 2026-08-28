@@ -95,9 +95,11 @@ class HandleInertiaRequests extends Middleware
                 ? RoleService::allPermissions()
                 : [],
 
-            'theme_color'          => fn() => \App\Models\SystemSetting::get('primary_color_theme', 'skynet'),
-            'custom_primary_hex'   => fn() => \App\Models\SystemSetting::get('custom_primary_hex', '#7B00FF'),
-            'custom_secondary_hex' => fn() => \App\Models\SystemSetting::get('custom_secondary_hex', '#FBA43D'),
+            'theme_color'             => fn() => \App\Models\SystemSetting::get('primary_color_theme', 'skynet'),
+            'custom_primary_hex'      => fn() => \App\Models\SystemSetting::get('custom_primary_hex', '#7B00FF'),
+            'custom_secondary_hex'    => fn() => \App\Models\SystemSetting::get('custom_secondary_hex', '#FBA43D'),
+            'dark_mode_accent_mode'   => fn() => \App\Models\SystemSetting::get('dark_mode_accent_mode', 'white'),
+            'custom_dark_primary_hex' => fn() => \App\Models\SystemSetting::get('custom_dark_primary_hex', '#FFFFFF'),
 
             'cart_count'     => fn() => 0,
             'compare_count'  => fn() => 0,

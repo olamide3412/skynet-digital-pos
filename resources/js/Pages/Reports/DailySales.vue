@@ -61,31 +61,70 @@ function doFilter() {
         </div>
 
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
-            <!-- Summary -->
-            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Total Sales</p>
-                    <p class="text-xl font-bold text-slate-900 dark:text-white font-mono">{{ summary.total_sales }}</p>
+            <!-- Summary Cards -->
+            <div class="space-y-4">
+                <!-- Row 1: Sales Performance (4 Cards) -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Total Sales</p>
+                            <span class="text-base text-slate-400">🧾</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono">{{ summary.total_sales }}</p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 border border-emerald-200/80 dark:border-emerald-800/40 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-emerald-700 dark:text-emerald-400 font-bold">Total Revenue</p>
+                            <span class="text-base text-emerald-500">💰</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono truncate" :title="format(summary.total_revenue)">
+                            {{ format(summary.total_revenue) }}
+                        </p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 border border-blue-200/80 dark:border-blue-800/40 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-blue-700 dark:text-blue-400 font-bold">Gross Profit</p>
+                            <span class="text-base text-blue-500">📈</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400 font-mono truncate" :title="format(summary.total_profit)">
+                            {{ format(summary.total_profit) }}
+                        </p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 border border-amber-200/80 dark:border-amber-800/40 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-amber-700 dark:text-amber-400 font-bold">Discounts Given</p>
+                            <span class="text-base text-amber-500">🏷️</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono truncate" :title="format(summary.total_discount)">
+                            {{ format(summary.total_discount) }}
+                        </p>
+                    </div>
                 </div>
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Total Revenue</p>
-                    <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{{ format(summary.total_revenue) }}</p>
-                </div>
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Discounts Given</p>
-                    <p class="text-xl font-bold text-amber-600 dark:text-amber-400 font-mono">{{ format(summary.total_discount) }}</p>
-                </div>
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Gross Profit</p>
-                    <p class="text-xl font-bold text-blue-600 dark:text-blue-400 font-mono">{{ format(summary.total_profit) }}</p>
-                </div>
-                <div class="bg-white dark:bg-slate-800 border border-purple-200 dark:border-purple-800/40 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-purple-700 dark:text-purple-400 font-semibold mb-1">Returned Items</p>
-                    <p class="text-xl font-bold text-purple-600 dark:text-purple-400 font-mono">{{ summary.total_return_qty || 0 }} <span class="text-xs font-normal">({{ summary.total_return_count || 0 }} recs)</span></p>
-                </div>
-                <div class="bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800/40 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-red-700 dark:text-red-400 font-semibold mb-1">Return Refund Worth</p>
-                    <p class="text-xl font-bold text-red-600 dark:text-red-400 font-mono">{{ format(summary.total_return_worth || 0) }}</p>
+
+                <!-- Row 2: Returns & Refunds (2 Cards) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div class="bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-purple-700 dark:text-purple-400 font-semibold">Returned Items</p>
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 font-medium">
+                                {{ summary.total_return_count || 0 }} {{ (summary.total_return_count || 0) === 1 ? 'record' : 'records' }}
+                            </span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-300 font-mono">{{ summary.total_return_qty || 0 }} <span class="text-xs font-normal text-purple-500">units</span></p>
+                    </div>
+
+                    <div class="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-rose-700 dark:text-rose-400 font-semibold">Return Refund Worth</p>
+                            <span class="text-base text-rose-500">💸</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-bold text-rose-600 dark:text-rose-400 font-mono truncate" :title="format(summary.total_return_worth || 0)">
+                            {{ format(summary.total_return_worth || 0) }}
+                        </p>
+                    </div>
                 </div>
             </div>
 

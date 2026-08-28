@@ -99,7 +99,7 @@ const clearFilters = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="order in orders.data" :key="order.id" class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 transition">
+                            <tr v-for="order in orders.data" :key="order.id" class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
                                 <td class="p-4 font-mono font-bold text-gray-700 dark:text-gray-300">#{{ order.id }}</td>
                                 <td class="p-4">
                                     <span class="font-mono text-xs bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-1 rounded border border-blue-100 dark:border-blue-800">

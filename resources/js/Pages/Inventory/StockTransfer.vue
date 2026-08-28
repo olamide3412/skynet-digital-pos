@@ -101,6 +101,32 @@ const onToChange = () => {
     form.from_location = form.to_location === 'back_store' ? 'front_store' : 'back_store'
 }
 
+const availableUnits = computed(() => {
+    const list = [
+        { value: 'unit', label: selectedItem.value?.unit_label || 'Unit' }
+    ]
+
+    const itemUnits = selectedItem.value?.units || selectedItem.value?.active_units
+    if (Array.isArray(itemUnits) && itemUnits.length > 0) {
+        itemUnits.forEach(u => {
+            if (u.unit_name) {
+                list.push({
+                    value: u.unit_name,
+                    label: `${u.unit_name} (${u.quantity_in_base_units || 1} ${selectedItem.value?.unit_label || 'Units'})`
+                })
+            }
+        })
+    } else {
+        if (selectedItem.value?.pack_label) {
+            list.push({ value: 'pack', label: selectedItem.value.pack_label })
+        }
+        if (selectedItem.value?.carton_label) {
+            list.push({ value: 'carton', label: selectedItem.value.carton_label })
+        }
+    }
+    return list
+})
+
 const submit = () => {
     if (!form.item_id) return
     form.post(route('pos.inventory.transfers.store'), {
@@ -129,7 +155,7 @@ const submit = () => {
                         <h2 class="font-bold text-xs uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
                             New Stock Movement
                         </h2>
-                        <button type="button" @click="swapLocations" class="px-2.5 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded text-xs font-semibold border border-slate-300 dark:border-slate-600 flex items-center gap-1 transition">
+                        <button type="button" @click="swapLocations" class="px-2.5 py-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded text-xs font-semibold border border-slate-300 dark:border-slate-600 flex items-center gap-1 transition cursor-pointer">
                             <span>⇄</span> Swap Direction
                         </button>
                     </div>
@@ -157,7 +183,7 @@ const submit = () => {
                                     v-if="searchQuery || selectedItem"
                                     type="button"
                                     @click="clearSelection"
-                                    class="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition"
+                                    class="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700 dark:hover:text-white transition cursor-pointer"
                                 >
                                     ✕
                                 </button>
@@ -173,28 +199,24 @@ const submit = () => {
                                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
-                                    Searching items...
+                                    Searching inventory...
                                 </div>
-                                <div v-else-if="!searchResults.length" class="px-4 py-4 text-center text-xs text-slate-400">
-                                    No items found. Try searching by name or barcode.
+                                <div v-else-if="!searchResults.length" class="px-4 py-3 text-center text-xs text-slate-400">
+                                    No matching items found.
                                 </div>
                                 <ul v-else class="divide-y divide-slate-100 dark:divide-slate-800">
                                     <li
                                         v-for="item in searchResults"
                                         :key="item.id"
                                         @click="selectItem(item)"
-                                        class="px-4 py-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer transition flex items-center justify-between group"
+                                        class="px-4 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer flex items-center justify-between transition text-xs"
                                     >
                                         <div>
-                                            <div class="text-sm font-semibold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">
-                                                {{ item.item_name }}
-                                            </div>
-                                            <div v-if="item.barcode_number" class="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                                                BC: {{ item.barcode_number }}
-                                            </div>
+                                            <div class="font-bold text-slate-900 dark:text-white">{{ item.item_name }}</div>
+                                            <div class="text-[11px] text-slate-400 font-mono">{{ item.barcode_number || 'No Barcode' }}</div>
                                         </div>
-                                        <div class="text-right text-xs space-y-0.5">
-                                            <div class="text-indigo-600 dark:text-indigo-300 font-medium">
+                                        <div class="text-right text-[11px] space-y-0.5">
+                                            <div class="text-indigo-600 dark:text-indigo-400 font-medium">
                                                 Back: <span class="font-bold text-slate-900 dark:text-white">{{ item.back_store_qty }}</span>
                                             </div>
                                             <div class="text-emerald-600 dark:text-emerald-400 font-medium">
@@ -210,7 +232,7 @@ const submit = () => {
                         <div v-if="selectedItem" class="bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 p-3.5 rounded-xl text-xs space-y-2">
                             <div class="flex items-center justify-between">
                                 <span class="font-bold text-emerald-600 dark:text-emerald-400 text-sm">{{ selectedItem.item_name }}</span>
-                                <button type="button" @click="clearSelection" class="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white underline">Change</button>
+                                <button type="button" @click="clearSelection" class="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white underline cursor-pointer">Change</button>
                             </div>
                             <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200 dark:border-slate-800">
                                 <div class="bg-white dark:bg-slate-800/80 p-2 rounded-lg text-center border border-slate-200 dark:border-slate-700">
@@ -251,9 +273,9 @@ const submit = () => {
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Unit Type *</label>
                                 <select v-model="form.unit" class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white outline-none focus:border-emerald-500">
-                                    <option value="unit" class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white">{{ selectedItem?.unit_label || 'Unit' }}</option>
-                                    <option value="pack" class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white">{{ selectedItem?.pack_label || 'Pack' }}</option>
-                                    <option value="carton" class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white">{{ selectedItem?.carton_label || 'Carton' }}</option>
+                                    <option v-for="u in availableUnits" :key="u.value" :value="u.value" class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white">
+                                        {{ u.label }}
+                                    </option>
                                 </select>
                             </div>
                         </div>

@@ -27,8 +27,9 @@ class OfflineSyncController extends Controller
 
         $settings = PosSettings::forBranch($branch->id);
 
-        // All active items for this branch with unit prices and stock
+        // All active items for this branch with unit prices, variants and stock
         $items = Item::where('branch_id', $branch->id)
+            ->with(['activeUnits'])
             ->select([
                 'id', 'item_name', 'barcode_number', 'category_id',
                 'price', 'wholesale_price', 'pack_price', 'carton_price',
@@ -42,6 +43,14 @@ class OfflineSyncController extends Controller
             ->map(function ($item) {
                 return array_merge($item->toArray(), [
                     'image_url' => $item->image_url,
+                    'units'     => $item->activeUnits->map(fn($u) => [
+                        'id'                     => $u->id,
+                        'unit_name'              => $u->unit_name,
+                        'quantity_in_base_units' => (int) $u->quantity_in_base_units,
+                        'selling_price'          => (float) $u->selling_price,
+                        'wholesale_price'        => (float) $u->wholesale_price,
+                        'sort_order'             => (int) $u->sort_order,
+                    ])->values()->all(),
                 ]);
             });
 

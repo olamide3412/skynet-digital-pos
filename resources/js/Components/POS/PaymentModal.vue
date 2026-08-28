@@ -98,8 +98,8 @@ async function processOfflineSale(payload) {
             imei_or_device_id:   item.selected_imei || null,
             unit_used:           item.unit_used || 'unit',
             selling_price:       item.unit_price,
-            total_selling_price: item.lineTotal,
-            qty:                 item.quantity,
+            total_selling_price: item.line_total ?? item.lineTotal,
+            qty:                 item.qty ?? item.quantity ?? 1,
         })),
     }
 
@@ -111,7 +111,7 @@ async function processOfflineSale(payload) {
         if (item.selected_imei) {
             await consumeLocalImei(item.item_id, item.selected_imei)
         }
-        await deductLocalStock(item.item_id, item.quantity)
+        await deductLocalStock(item.item_id, item.qty ?? item.quantity ?? 1)
     }
 
     // Refresh pending count and queued list immediately so the UI updates live while offline

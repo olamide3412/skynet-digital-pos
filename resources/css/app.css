@@ -3,7 +3,7 @@
 
 @import 'tailwindcss';
 @plugin "@tailwindcss/typography";
-@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+@custom-variant dark (&:where(.dark, .dark *, [data-theme=dark], [data-theme=dark] *, [data-theme-mode=dark], [data-theme-mode=dark] *));
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -17,10 +17,12 @@
     /* Global dynamic override for sky & blue color classes */
     --color-sky-50: var(--color-theme-light, #f2e6ff);
     --color-sky-100: var(--color-theme-light, #f2e6ff);
+    --color-sky-400: var(--color-theme-dark, #FFFFFF);
     --color-sky-500: var(--color-theme, #7B00FF);
     --color-sky-600: var(--color-theme, #7B00FF);
     --color-blue-50: var(--color-theme-light, #f2e6ff);
     --color-blue-100: var(--color-theme-light, #f2e6ff);
+    --color-blue-400: var(--color-theme-dark, #FFFFFF);
     --color-blue-500: var(--color-theme, #7B00FF);
     --color-blue-600: var(--color-theme, #7B00FF);
     --color-blue-700: var(--color-theme-hover, #6200cc);
@@ -31,7 +33,8 @@
     --color-emerald-50: var(--color-theme-light, #f2e6ff);
     --color-emerald-100: var(--color-theme-light, #f2e6ff);
     --color-emerald-200: var(--color-theme-light, #f2e6ff);
-    --color-emerald-400: var(--color-theme, #7B00FF);
+    --color-emerald-300: var(--color-theme-dark, #FFFFFF);
+    --color-emerald-400: var(--color-theme-dark, #FFFFFF);
     --color-emerald-500: var(--color-theme, #7B00FF);
     --color-emerald-600: var(--color-theme, #7B00FF);
     --color-emerald-700: var(--color-theme-hover, #6200cc);
@@ -42,6 +45,7 @@
     /* Global dynamic override for indigo color classes */
     --color-indigo-50: var(--color-theme-light, #f2e6ff);
     --color-indigo-100: var(--color-theme-light, #f2e6ff);
+    --color-indigo-400: var(--color-theme-dark, #FFFFFF);
     --color-indigo-500: var(--color-theme, #7B00FF);
     --color-indigo-600: var(--color-theme, #7B00FF);
     --color-indigo-700: var(--color-theme-hover, #6200cc);
@@ -80,11 +84,14 @@
     --color-theme-light: #f2e6ff;
     --color-theme-rgb: 123, 0, 255;
     --color-theme-text: #5900b3;
+    --color-theme-dark: #ffffff;
+    --color-theme-dark-rgb: 255, 255, 255;
 
     --color-theme-secondary: #fba43d;
     --color-theme-secondary-hover: #e08b26;
     --color-theme-secondary-light: #fef5e7;
     --color-theme-secondary-rgb: 251, 164, 61;
+    --color-theme-secondary-dark: #fcd34d;
 }
 
 html[data-theme="emerald"] {
@@ -93,11 +100,14 @@ html[data-theme="emerald"] {
     --color-theme-light: #d1fae5;
     --color-theme-rgb: 16, 185, 129;
     --color-theme-text: #047857;
+    --color-theme-dark: #34d399;
+    --color-theme-dark-rgb: 52, 211, 153;
 
     --color-theme-secondary: #f59e0b;
     --color-theme-secondary-hover: #d97706;
     --color-theme-secondary-light: #fef3c7;
     --color-theme-secondary-rgb: 245, 158, 11;
+    --color-theme-secondary-dark: #fbbf24;
 }
 
 html[data-theme="blue"] {
@@ -106,11 +116,14 @@ html[data-theme="blue"] {
     --color-theme-light: #dbeafe;
     --color-theme-rgb: 59, 130, 246;
     --color-theme-text: #1d4ed8;
+    --color-theme-dark: #60a5fa;
+    --color-theme-dark-rgb: 96, 165, 250;
 
     --color-theme-secondary: #f59e0b;
     --color-theme-secondary-hover: #d97706;
     --color-theme-secondary-light: #fef3c7;
     --color-theme-secondary-rgb: 245, 158, 11;
+    --color-theme-secondary-dark: #fbbf24;
 }
 
 html[data-theme="indigo"] {
@@ -119,11 +132,14 @@ html[data-theme="indigo"] {
     --color-theme-light: #e0e7ff;
     --color-theme-rgb: 99, 102, 241;
     --color-theme-text: #4338ca;
+    --color-theme-dark: #818cf8;
+    --color-theme-dark-rgb: 129, 140, 248;
 
     --color-theme-secondary: #ec4899;
     --color-theme-secondary-hover: #db2777;
     --color-theme-secondary-light: #fce7f3;
     --color-theme-secondary-rgb: 236, 72, 153;
+    --color-theme-secondary-dark: #f472b6;
 }
 
 html[data-theme="violet"] {
@@ -132,11 +148,14 @@ html[data-theme="violet"] {
     --color-theme-light: #ede9fe;
     --color-theme-rgb: 139, 92, 246;
     --color-theme-text: #6d28d9;
+    --color-theme-dark: #a78bfa;
+    --color-theme-dark-rgb: 167, 139, 250;
 
     --color-theme-secondary: #f59e0b;
     --color-theme-secondary-hover: #d97706;
     --color-theme-secondary-light: #fef3c7;
     --color-theme-secondary-rgb: 245, 158, 11;
+    --color-theme-secondary-dark: #fbbf24;
 }
 
 html[data-theme="teal"] {
@@ -145,11 +164,14 @@ html[data-theme="teal"] {
     --color-theme-light: #ccfbf1;
     --color-theme-rgb: 20, 184, 166;
     --color-theme-text: #0f766e;
+    --color-theme-dark: #2dd4bf;
+    --color-theme-dark-rgb: 45, 212, 191;
 
     --color-theme-secondary: #f97316;
     --color-theme-secondary-hover: #ea580c;
     --color-theme-secondary-light: #ffedd5;
     --color-theme-secondary-rgb: 249, 115, 22;
+    --color-theme-secondary-dark: #fb923c;
 }
 
 html[data-theme="cyan"] {
@@ -158,11 +180,14 @@ html[data-theme="cyan"] {
     --color-theme-light: #cffafe;
     --color-theme-rgb: 6, 182, 212;
     --color-theme-text: #0e7490;
+    --color-theme-dark: #22d3ee;
+    --color-theme-dark-rgb: 34, 211, 238;
 
     --color-theme-secondary: #f59e0b;
     --color-theme-secondary-hover: #d97706;
     --color-theme-secondary-light: #fef3c7;
     --color-theme-secondary-rgb: 245, 158, 11;
+    --color-theme-secondary-dark: #fbbf24;
 }
 
 html[data-theme="amber"] {
@@ -171,11 +196,14 @@ html[data-theme="amber"] {
     --color-theme-light: #fef3c7;
     --color-theme-rgb: 245, 158, 11;
     --color-theme-text: #b45309;
+    --color-theme-dark: #fbbf24;
+    --color-theme-dark-rgb: 251, 191, 36;
 
     --color-theme-secondary: #6366f1;
     --color-theme-secondary-hover: #4f46e5;
     --color-theme-secondary-light: #e0e7ff;
     --color-theme-secondary-rgb: 99, 102, 241;
+    --color-theme-secondary-dark: #818cf8;
 }
 
 html[data-theme="rose"] {
@@ -184,32 +212,45 @@ html[data-theme="rose"] {
     --color-theme-light: #ffe4e6;
     --color-theme-rgb: 244, 63, 94;
     --color-theme-text: #be123c;
+    --color-theme-dark: #fb7185;
+    --color-theme-dark-rgb: 251, 113, 133;
 
     --color-theme-secondary: #3b82f6;
     --color-theme-secondary-hover: #2563eb;
     --color-theme-secondary-light: #dbeafe;
     --color-theme-secondary-rgb: 59, 130, 246;
+    --color-theme-secondary-dark: #60a5fa;
 }
 
 /* Primary Theme Helper Classes */
 .bg-theme { background-color: var(--color-theme) !important; }
 .bg-theme-hover:hover { background-color: var(--color-theme-hover) !important; }
 .bg-theme-light { background-color: var(--color-theme-light) !important; }
+:is(.dark, [data-theme="dark"], [data-theme-mode="dark"]) .bg-theme-light { background-color: rgba(var(--color-theme-rgb, 123, 0, 255), 0.22) !important; }
 
 .text-theme { color: var(--color-theme) !important; }
+:is(.dark, [data-theme="dark"], [data-theme-mode="dark"]) .text-theme { color: var(--color-theme-dark, #ffffff) !important; }
+
 .text-theme-hover:hover { color: var(--color-theme-hover) !important; }
 .text-theme-dark { color: var(--color-theme-text) !important; }
+:is(.dark, [data-theme="dark"], [data-theme-mode="dark"]) .text-theme-dark { color: var(--color-theme-dark, #ffffff) !important; }
 
 .border-theme { border-color: var(--color-theme) !important; }
+:is(.dark, [data-theme="dark"], [data-theme-mode="dark"]) .border-theme { border-color: var(--color-theme-dark, #ffffff) !important; }
+
 .ring-theme:focus { border-color: var(--color-theme) !important; box-shadow: 0 0 0 3px rgba(var(--color-theme-rgb), 0.25) !important; }
 
 /* Secondary Theme Helper Classes */
 .bg-theme-secondary { background-color: var(--color-theme-secondary) !important; }
 .bg-theme-secondary-hover:hover { background-color: var(--color-theme-secondary-hover) !important; }
 .bg-theme-secondary-light { background-color: var(--color-theme-secondary-light) !important; }
+:is(.dark, [data-theme="dark"], [data-theme-mode="dark"]) .bg-theme-secondary-light { background-color: rgba(var(--color-theme-secondary-rgb, 251, 164, 61), 0.22) !important; }
 
 .text-theme-secondary { color: var(--color-theme-secondary) !important; }
+:is(.dark, [data-theme="dark"], [data-theme-mode="dark"]) .text-theme-secondary { color: var(--color-theme-secondary-dark, #fcd34d) !important; }
+
 .border-theme-secondary { border-color: var(--color-theme-secondary) !important; }
+:is(.dark, [data-theme="dark"], [data-theme-mode="dark"]) .border-theme-secondary { border-color: var(--color-theme-secondary-dark, #fcd34d) !important; }
 
 @layer utilities {
     .bg-primary {

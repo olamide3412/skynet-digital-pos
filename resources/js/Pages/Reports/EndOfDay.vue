@@ -72,40 +72,90 @@ function fmtTime(val) {
         <!-- Scrollable content -->
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
 
-            <!-- ── Summary Cards ─────────────────────────────────────────────── -->
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Transactions</p>
-                    <p class="text-xl font-bold text-slate-900 dark:text-white font-mono">{{ summary.total_sales }}</p>
+            <!-- ── Summary Cards (Row 1: Sales & Collections, Row 2: Debts & Returns) ── -->
+            <div class="space-y-4">
+                <!-- Row 1: Daily Sales & Revenue (4 Columns) -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Transactions</p>
+                            <span class="text-base text-slate-400">🧾</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white font-mono">{{ summary.total_sales }}</p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 border border-emerald-200/80 dark:border-emerald-800/40 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-emerald-700 dark:text-emerald-400 font-bold">Total Revenue</p>
+                            <span class="text-base text-emerald-500">💰</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-black text-emerald-600 dark:text-emerald-400 font-mono truncate" :title="format(summary.total_revenue)">
+                            {{ format(summary.total_revenue) }}
+                        </p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Cash Collected</p>
+                            <span class="text-base text-slate-400">💵</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white font-mono truncate" :title="format(summary.cash_collected)">
+                            {{ format(summary.cash_collected) }}
+                        </p>
+                    </div>
+
+                    <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-slate-500 dark:text-slate-400 font-medium">Bank Transfers</p>
+                            <span class="text-base text-blue-500">💳</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-bold text-blue-600 dark:text-blue-400 font-mono truncate" :title="format(summary.bank_collected)">
+                            {{ format(summary.bank_collected) }}
+                        </p>
+                    </div>
                 </div>
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Total Revenue</p>
-                    <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">{{ format(summary.total_revenue) }}</p>
-                </div>
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Cash Collected</p>
-                    <p class="text-xl font-bold text-slate-900 dark:text-white font-mono">{{ format(summary.cash_collected) }}</p>
-                </div>
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Bank Transfers</p>
-                    <p class="text-xl font-bold text-blue-600 dark:text-blue-400 font-mono">{{ format(summary.bank_collected) }}</p>
-                </div>
-                <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Debt Recorded</p>
-                    <p class="text-xl font-bold text-red-600 dark:text-red-400 font-mono">{{ format(summary.debt_recorded) }}</p>
-                </div>
-                <div class="bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-700/40 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-emerald-700 dark:text-emerald-400 mb-1 font-semibold">Debt Recovered</p>
-                    <p class="text-xl font-bold text-emerald-600 dark:text-emerald-300 font-mono">{{ format(summary.debt_recovered) }}</p>
-                    <p class="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5 font-medium">{{ debtPayments.total ?? 0 }} payment{{ (debtPayments.total ?? 0) !== 1 ? 's' : '' }}</p>
-                </div>
-                <div class="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700/40 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-purple-700 dark:text-purple-400 mb-1 font-semibold">Returned Items</p>
-                    <p class="text-xl font-bold text-purple-600 dark:text-purple-300 font-mono">{{ summary.total_return_qty || 0 }}</p>
-                </div>
-                <div class="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700/40 rounded-xl p-4 shadow-xs">
-                    <p class="text-xs text-red-700 dark:text-red-400 mb-1 font-semibold">Return Worth</p>
-                    <p class="text-xl font-bold text-red-600 dark:text-red-400 font-mono">{{ format(summary.total_return_worth || 0) }}</p>
+
+                <!-- Row 2: Debts, Recoveries & Returns (4 Columns) -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-amber-700 dark:text-amber-400 font-semibold">Debt Recorded</p>
+                            <span class="text-base text-amber-500">⏳</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-bold text-amber-600 dark:text-amber-400 font-mono truncate" :title="format(summary.debt_recorded)">
+                            {{ format(summary.debt_recorded) }}
+                        </p>
+                    </div>
+
+                    <div class="bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-700/40 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-emerald-700 dark:text-emerald-400 font-semibold">Debt Recovered</p>
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-medium">
+                                {{ debtPayments.total ?? 0 }} {{ (debtPayments.total ?? 0) === 1 ? 'pmt' : 'pmts' }}
+                            </span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-300 font-mono truncate" :title="format(summary.debt_recovered)">
+                            {{ format(summary.debt_recovered) }}
+                        </p>
+                    </div>
+
+                    <div class="bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800/40 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-purple-700 dark:text-purple-400 font-semibold">Returned Items</p>
+                            <span class="text-base text-purple-500">↩️</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-300 font-mono">{{ summary.total_return_qty || 0 }}</p>
+                    </div>
+
+                    <div class="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 rounded-xl p-4 shadow-xs">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <p class="text-xs text-rose-700 dark:text-rose-400 font-semibold">Return Worth</p>
+                            <span class="text-base text-rose-500">💸</span>
+                        </div>
+                        <p class="text-xl sm:text-2xl font-bold text-rose-600 dark:text-rose-400 font-mono truncate" :title="format(summary.total_return_worth || 0)">
+                            {{ format(summary.total_return_worth || 0) }}
+                        </p>
+                    </div>
                 </div>
             </div>
 
@@ -118,24 +168,26 @@ function fmtTime(val) {
                     Items Sold Breakdown ({{ selectedUser ? (users.find(u => u.id == selectedUser)?.full_name || users.find(u => u.id == selectedUser)?.name || users.find(u => u.id == selectedUser)?.username || 'Selected Staff') : 'All Staff' }})
                 </h2>
                 <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
-                    <table class="w-full text-sm">
-                        <thead class="bg-slate-100 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
-                            <tr>
-                                <th class="text-left px-5 py-3 font-semibold">Item Name</th>
-                                <th class="text-left px-5 py-3 font-semibold">Unit Level</th>
-                                <th class="text-right px-5 py-3 font-semibold">Quantity Sold</th>
-                                <th class="text-right px-5 py-3 font-semibold">Total Amount Made</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
-                            <tr v-for="item in itemBreakdown" :key="`${item.item_id}-${item.unit_used}`" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
-                                <td class="px-5 py-3 text-slate-900 dark:text-white font-medium">{{ item.item_name }}</td>
-                                <td class="px-5 py-3 text-xs uppercase font-mono text-emerald-600 dark:text-emerald-400 font-bold">{{ item.unit_used }}</td>
-                                <td class="px-5 py-3 text-right font-mono font-bold text-slate-900 dark:text-white">{{ item.total_qty }}</td>
-                                <td class="px-5 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">{{ format(item.total_amount) }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm min-w-[500px]">
+                            <thead class="bg-slate-100 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
+                                <tr>
+                                    <th class="text-left px-5 py-3 font-semibold">Item Name</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Unit Level</th>
+                                    <th class="text-right px-5 py-3 font-semibold">Quantity Sold</th>
+                                    <th class="text-right px-5 py-3 font-semibold">Total Amount Made</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
+                                <tr v-for="item in itemBreakdown" :key="`${item.item_id}-${item.unit_used}`" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                                    <td class="px-5 py-3 text-slate-900 dark:text-white font-medium">{{ item.item_name }}</td>
+                                    <td class="px-5 py-3 text-xs uppercase font-mono text-emerald-600 dark:text-emerald-400 font-bold">{{ item.unit_used }}</td>
+                                    <td class="px-5 py-3 text-right font-mono font-bold text-slate-900 dark:text-white">{{ item.total_qty }}</td>
+                                    <td class="px-5 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">{{ format(item.total_amount) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
@@ -148,40 +200,42 @@ function fmtTime(val) {
                     Sales Transactions ({{ sales.total ?? sales.data?.length ?? 0 }})
                 </h2>
                 <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
-                    <table class="w-full text-sm">
-                        <thead class="bg-slate-100 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
-                            <tr>
-                                <th class="text-left px-5 py-3 font-semibold">Time</th>
-                                <th class="text-left px-5 py-3 font-semibold">Receipt ID</th>
-                                <th class="text-left px-5 py-3 font-semibold">Cashier / Staff</th>
-                                <th class="text-left px-5 py-3 font-semibold">Customer</th>
-                                <th class="text-right px-5 py-3 font-semibold">Amount</th>
-                                <th class="text-right px-5 py-3 font-semibold">Method</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
-                            <tr v-for="sale in sales.data" :key="sale.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
-                                <td class="px-5 py-3 text-slate-500 dark:text-slate-400 text-xs font-mono">{{ fmtTime(sale.created_at) }}</td>
-                                <td class="px-5 py-3 font-mono text-slate-900 dark:text-white font-bold">
-                                    <Link :href="route('pos.sales.show', sale.id)" class="hover:text-emerald-600 dark:hover:text-emerald-400 transition">
-                                        {{ sale.receipt_id }}
-                                    </Link>
-                                </td>
-                                <td class="px-5 py-3 text-slate-700 dark:text-slate-300 text-xs font-medium">
-                                    {{ sale.user?.full_name || sale.user?.name || sale.user?.username || '—' }}
-                                </td>
-                                <td class="px-5 py-3 text-slate-700 dark:text-slate-300 text-xs">{{ sale.customer?.name ?? 'Walk-in' }}</td>
-                                <td class="px-5 py-3 text-emerald-600 dark:text-emerald-400 font-bold font-mono text-right">{{ format(sale.final_total) }}</td>
-                                <td class="px-5 py-3 text-right">
-                                    <span v-if="sale.is_debt" class="text-red-600 dark:text-red-400 text-xs font-bold">Debt</span>
-                                    <span v-else class="text-slate-600 dark:text-slate-400 text-xs capitalize font-medium">{{ sale.payment_method }}</span>
-                                </td>
-                            </tr>
-                            <tr v-if="!sales.data?.length">
-                                <td colspan="6" class="px-5 py-10 text-center text-slate-500 dark:text-slate-400 text-sm">No sales recorded today for selected filters.</td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm min-w-[600px]">
+                            <thead class="bg-slate-100 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
+                                <tr>
+                                    <th class="text-left px-5 py-3 font-semibold">Time</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Receipt ID</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Cashier / Staff</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Customer</th>
+                                    <th class="text-right px-5 py-3 font-semibold">Amount</th>
+                                    <th class="text-right px-5 py-3 font-semibold">Method</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
+                                <tr v-for="sale in sales.data" :key="sale.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                                    <td class="px-5 py-3 text-slate-500 dark:text-slate-400 text-xs font-mono">{{ fmtTime(sale.created_at) }}</td>
+                                    <td class="px-5 py-3 font-mono text-slate-900 dark:text-white font-bold">
+                                        <Link :href="route('pos.sales.show', sale.id)" class="hover:text-emerald-600 dark:hover:text-emerald-400 transition">
+                                            {{ sale.receipt_id }}
+                                        </Link>
+                                    </td>
+                                    <td class="px-5 py-3 text-slate-700 dark:text-slate-300 text-xs font-medium">
+                                        {{ sale.user?.full_name || sale.user?.name || sale.user?.username || '—' }}
+                                    </td>
+                                    <td class="px-5 py-3 text-slate-700 dark:text-slate-300 text-xs">{{ sale.customer?.name ?? 'Walk-in' }}</td>
+                                    <td class="px-5 py-3 text-emerald-600 dark:text-emerald-400 font-bold font-mono text-right">{{ format(sale.final_total) }}</td>
+                                    <td class="px-5 py-3 text-right">
+                                        <span v-if="sale.is_debt" class="text-red-600 dark:text-red-400 text-xs font-bold">Debt</span>
+                                        <span v-else class="text-slate-600 dark:text-slate-400 text-xs capitalize font-medium">{{ sale.payment_method }}</span>
+                                    </td>
+                                </tr>
+                                <tr v-if="!sales.data?.length">
+                                    <td colspan="6" class="px-5 py-10 text-center text-slate-500 dark:text-slate-400 text-sm">No sales recorded today for selected filters.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                     <PaginationLinks :links="sales.links" :meta="sales.meta ?? sales" />
                 </div>
             </div>
@@ -198,45 +252,47 @@ function fmtTime(val) {
                     </span>
                 </h2>
                 <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-emerald-700/30 overflow-hidden shadow-xs">
-                    <table class="w-full text-sm">
-                        <thead class="bg-slate-100 dark:bg-emerald-900/20 border-b border-slate-200 dark:border-emerald-700/30 text-slate-600 dark:text-slate-400">
-                            <tr>
-                                <th class="text-left px-5 py-3 font-semibold">Time</th>
-                                <th class="text-left px-5 py-3 font-semibold">Reference</th>
-                                <th class="text-left px-5 py-3 font-semibold">Customer</th>
-                                <th class="text-left px-5 py-3 font-semibold">Processed By</th>
-                                <th class="text-left px-5 py-3 font-semibold">Narration</th>
-                                <th class="text-right px-5 py-3 font-semibold">Amount Paid</th>
-                                <th class="text-right px-5 py-3 font-semibold">Balance After</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
-                            <tr v-for="dp in debtPayments.data" :key="dp.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
-                                <td class="px-5 py-3 text-slate-500 dark:text-slate-400 text-xs font-mono">{{ fmtTime(dp.created_at) }}</td>
-                                <td class="px-5 py-3">
-                                    <span class="font-mono text-xs bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-700 dark:text-slate-300">
-                                        {{ dp.reference ?? '—' }}
-                                    </span>
-                                </td>
-                                <td class="px-5 py-3 text-slate-900 dark:text-slate-300 font-medium text-xs">{{ dp.customer?.name ?? '—' }}</td>
-                                <td class="px-5 py-3 text-slate-600 dark:text-slate-400 text-xs font-medium">
-                                    {{ dp.user?.full_name || dp.user?.name || dp.user?.username || '—' }}
-                                </td>
-                                <td class="px-5 py-3 text-slate-600 dark:text-slate-400 text-xs max-w-[200px] truncate">{{ dp.narration }}</td>
-                                <td class="px-5 py-3 text-emerald-600 dark:text-emerald-400 font-bold font-mono text-right">{{ format(dp.amount) }}</td>
-                                <td class="px-5 py-3 text-right">
-                                    <span :class="['text-xs font-mono font-bold', dp.balance_after > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-emerald-600 dark:text-emerald-400']">
-                                        {{ format(dp.balance_after) }}
-                                    </span>
-                                </td>
-                            </tr>
-                            <tr v-if="!debtPayments.data?.length">
-                                <td colspan="7" class="px-5 py-10 text-center text-slate-500 dark:text-slate-400 text-sm">
-                                    No debt recoveries recorded today for selected filters.
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm min-w-[700px]">
+                            <thead class="bg-slate-100 dark:bg-emerald-900/20 border-b border-slate-200 dark:border-emerald-700/30 text-slate-600 dark:text-slate-400">
+                                <tr>
+                                    <th class="text-left px-5 py-3 font-semibold">Time</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Reference</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Customer</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Processed By</th>
+                                    <th class="text-left px-5 py-3 font-semibold">Narration</th>
+                                    <th class="text-right px-5 py-3 font-semibold">Amount Paid</th>
+                                    <th class="text-right px-5 py-3 font-semibold">Balance After</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
+                                <tr v-for="dp in debtPayments.data" :key="dp.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                                    <td class="px-5 py-3 text-slate-500 dark:text-slate-400 text-xs font-mono">{{ fmtTime(dp.created_at) }}</td>
+                                    <td class="px-5 py-3">
+                                        <span class="font-mono text-xs bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-slate-700 dark:text-slate-300">
+                                            {{ dp.reference ?? '—' }}
+                                        </span>
+                                    </td>
+                                    <td class="px-5 py-3 text-slate-900 dark:text-slate-300 font-medium text-xs">{{ dp.customer?.name ?? '—' }}</td>
+                                    <td class="px-5 py-3 text-slate-600 dark:text-slate-400 text-xs font-medium">
+                                        {{ dp.user?.full_name || dp.user?.name || dp.user?.username || '—' }}
+                                    </td>
+                                    <td class="px-5 py-3 text-slate-600 dark:text-slate-400 text-xs max-w-[200px] truncate">{{ dp.narration }}</td>
+                                    <td class="px-5 py-3 text-emerald-600 dark:text-emerald-400 font-bold font-mono text-right">{{ format(dp.amount) }}</td>
+                                    <td class="px-5 py-3 text-right">
+                                        <span :class="['text-xs font-mono font-bold', dp.balance_after > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-emerald-600 dark:text-emerald-400']">
+                                            {{ format(dp.balance_after) }}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr v-if="!debtPayments.data?.length">
+                                    <td colspan="7" class="px-5 py-10 text-center text-slate-500 dark:text-slate-400 text-sm">
+                                        No debt recoveries recorded today for selected filters.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                     <PaginationLinks :links="debtPayments.links" :meta="debtPayments.meta ?? debtPayments" />
                 </div>
             </div>

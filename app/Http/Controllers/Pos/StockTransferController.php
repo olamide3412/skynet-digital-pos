@@ -22,6 +22,7 @@ class StockTransferController extends Controller
             ->withQueryString();
 
         $items = Item::where('branch_id', $branch->id)
+            ->with('activeUnits')
             ->select('id', 'item_name', 'barcode_number', 'back_store_qty', 'front_store_qty',
                      'unit_label', 'pack_label', 'carton_label', 'units_per_pack', 'packs_per_carton')
             ->orderBy('item_name')
@@ -41,13 +42,13 @@ class StockTransferController extends Controller
         $data = $request->validate([
             'item_id'       => 'required|exists:items,id',
             'qty'           => 'required|integer|min:1',
-            'unit'          => 'required|in:unit,pack,carton',
+            'unit'          => 'required|string|max:100',
             'from_location' => 'required|in:back_store,front_store',
             'to_location'   => 'required|in:back_store,front_store',
             'notes'         => 'nullable|string|max:500',
         ]);
 
-        $item = Item::where('branch_id', $branch->id)->findOrFail($data['item_id']);
+        $item = Item::where('branch_id', $branch->id)->with('activeUnits')->findOrFail($data['item_id']);
 
         // Convert to base units using the item's conversion rates
         $qtyBase = $item->toBaseUnits($data['qty'], $data['unit']);
@@ -79,11 +80,10 @@ class StockTransferController extends Controller
             return back()->withErrors(['qty' => $e->getMessage()]);
         }
 
-        $unitLabel = match($data['unit']) {
-            'carton' => $item->carton_label,
-            'pack'   => $item->pack_label,
-            default  => $item->unit_label,
-        };
+        $unitLabel = $data['unit'];
+        if ($data['unit'] === 'unit') {
+            $unitLabel = $item->unit_label ?: 'Unit';
+        }
 
         return back()->with('success',
             "Transferred {$data['qty']} {$unitLabel} of '{$item->item_name}' " .

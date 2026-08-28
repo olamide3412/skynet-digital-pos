@@ -17,10 +17,41 @@ const pinia = createPinia();
 
 import { FontAwesomeIcon } from './fontawesome';
 
-function applyTheme(themeColor, customPrimaryHex, customSecondaryHex) {
+const LUMINOUS_MAP = {
+    skynet: '#C084FC',
+    emerald: '#34D399',
+    blue: '#60A5FA',
+    indigo: '#818CF8',
+    violet: '#A78BFA',
+    teal: '#2DD4BF',
+    cyan: '#22D3EE',
+    amber: '#FBBF24',
+    rose: '#FB7185',
+};
+
+function applyTheme(themeColor, customPrimaryHex, customSecondaryHex, darkModeAccentMode, customDarkPrimaryHex) {
     if (typeof document === 'undefined') return;
 
     const rootStyle = document.documentElement.style;
+    const mode = darkModeAccentMode || 'white';
+    
+    let darkHex = '#FFFFFF';
+    if (mode === 'white') {
+        darkHex = '#FFFFFF';
+    } else if (mode === 'luminous') {
+        darkHex = LUMINOUS_MAP[themeColor] || customDarkPrimaryHex || customPrimaryHex || '#C084FC';
+    } else if (mode === 'custom') {
+        darkHex = customDarkPrimaryHex || '#FFFFFF';
+    }
+
+    let hexD = darkHex.replace('#', '');
+    if (hexD.length === 3) hexD = hexD.split('').map(c => c + c).join('');
+    const dr = parseInt(hexD.substring(0, 2), 16) || 255;
+    const dg = parseInt(hexD.substring(2, 4), 16) || 255;
+    const db = parseInt(hexD.substring(4, 6), 16) || 255;
+
+    rootStyle.setProperty('--color-theme-dark', darkHex);
+    rootStyle.setProperty('--color-theme-dark-rgb', `${dr}, ${dg}, ${db}`);
 
     if (themeColor === 'custom' && customPrimaryHex) {
         document.documentElement.setAttribute('data-theme', 'custom');
@@ -70,7 +101,7 @@ router.on('navigate', (event) => {
     const props = event.detail.page.props;
     const isSuperAdmin = window.location.pathname.startsWith('/superadmin');
     const branchSlug = !isSuperAdmin ? (props.current_branch?.slug || props.default_branch?.slug) : null;
-    applyTheme(props.theme_color, props.custom_primary_hex, props.custom_secondary_hex);
+    applyTheme(props.theme_color, props.custom_primary_hex, props.custom_secondary_hex, props.dark_mode_accent_mode, props.custom_dark_primary_hex);
 
     if (typeof window !== 'undefined' && window.Ziggy) {
         if (branchSlug) {

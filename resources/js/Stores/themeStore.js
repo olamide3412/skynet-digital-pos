@@ -17,7 +17,7 @@ export const useThemeStore = defineStore('theme', {
 
       const themeToApply = this.theme === 'system' ? (systemIsDark ? 'dark' : 'light') : this.theme
 
-      root.setAttribute('data-theme', themeToApply)
+      root.setAttribute('data-theme-mode', themeToApply)
       if (themeToApply === 'dark') {
         root.classList.add('dark')
       } else {

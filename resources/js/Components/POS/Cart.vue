@@ -1,16 +1,66 @@
 <script setup>
+import { ref, watch, nextTick, computed } from 'vue'
 import { useCartStore } from '@/Stores/cart'
+import { usePosSettingsStore } from '@/Stores/posSettings'
 import { useCurrency } from '@/Composables/useCurrency'
 import CartItem from './CartItem.vue'
 
-defineProps({ canEditPrice: Boolean })
+const props = defineProps({
+    canEditPrice: { type: Boolean, default: false },
+    settings:     { type: Object, default: () => ({}) },
+})
 
 const cart = useCartStore()
+const settStore = usePosSettingsStore()
 const { format } = useCurrency()
+
+const scrollContainer = ref(null)
+const highlightedKey = ref(null)
+let highlightTimer = null
+
+const isAutoScrollHighlightEnabled = computed(() => {
+    if (props.settings && typeof props.settings.is_cart_auto_scroll_highlight !== 'undefined') {
+        return !!props.settings.is_cart_auto_scroll_highlight
+    }
+    if (settStore.settings && typeof settStore.settings.is_cart_auto_scroll_highlight !== 'undefined') {
+        return !!settStore.settings.is_cart_auto_scroll_highlight
+    }
+    return true // Default: ON
+})
+
+// Watch for items being added or updated in the cart from search, barcode, or grid
+watch(() => cart.lastAddedAt, async (timestamp) => {
+    if (!timestamp || !cart.lastAddedKey || !isAutoScrollHighlightEnabled.value) return
+    const key = cart.lastAddedKey
+    highlightedKey.value = key
+
+    await nextTick()
+    setTimeout(() => {
+        if (!scrollContainer.value) return
+        
+        // 1. Locate specific row element
+        const el = document.getElementById(`cart-row-${key}`) || scrollContainer.value.querySelector(`[data-cart-key="${key}"]`)
+        if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+        } else {
+            scrollContainer.value.scrollTo({
+                top: scrollContainer.value.scrollHeight + 1000,
+                behavior: 'smooth'
+            })
+        }
+    }, 50)
+
+    if (highlightTimer) clearTimeout(highlightTimer)
+    highlightTimer = setTimeout(() => {
+        if (highlightedKey.value === key) {
+            highlightedKey.value = null
+        }
+    }, 1200)
+})
 </script>
 
 <template>
-    <div class="flex-1 overflow-y-auto min-h-0">
+    <div ref="scrollContainer" class="flex-1 overflow-y-auto min-h-0 scroll-smooth">
         <!-- Empty State -->
         <div v-if="!cart.items.length" class="flex flex-col items-center justify-center h-full text-slate-500 py-12">
             <svg class="w-12 h-12 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -22,15 +72,17 @@ const { format } = useCurrency()
         </div>
 
         <!-- Cart Items -->
-        <div v-else class="divide-y divide-slate-700/50">
+        <div v-else class="divide-y divide-slate-700/50 p-1">
             <CartItem
                 v-for="item in cart.items"
-                :key="item.item_id"
+                :key="item.cart_key"
+                :data-cart-key="item.cart_key"
                 :item="item"
+                :is-highlighted="highlightedKey === item.cart_key"
                 :can-edit-price="canEditPrice"
-                @remove="cart.removeItem(item.item_id)"
-                @update-qty="(qty) => cart.updateQty(item.item_id, qty)"
-                @update-price="(price) => cart.updatePrice(item.item_id, price)"
+                @remove="cart.removeItem(item.cart_key)"
+                @update-qty="(qty) => cart.updateQty(item.cart_key, qty)"
+                @update-price="(price) => cart.updatePrice(item.cart_key, price)"
             />
         </div>
     </div>

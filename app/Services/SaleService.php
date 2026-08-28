@@ -62,7 +62,8 @@ class SaleService
             ->when($branch, fn($q) => $q->where('branch_id', $branch->id))
             ->lockForUpdate()->get()->keyBy('id');
 
-        // Validate stock & expiry
+        // Validate stock & expiry (aggregating total base units per item for multi-row carts)
+        $requiredBaseUnitsByItem = [];
         foreach ($cartItems as $cartItem) {
             $item = $itemsMap->get($cartItem['item_id']);
             if (!$item) {
@@ -71,11 +72,7 @@ class SaleService
 
             $unitUsed = $cartItem['unit_used'] ?? 'unit';
             $baseQty = $item->toBaseUnits((int) $cartItem['qty'], $unitUsed);
-
-            if ($settings->is_qty_deduction && $item->front_store_qty < $baseQty) {
-                $stockFormatted = $item->formatBaseUnits($item->front_store_qty);
-                throw new \InvalidArgumentException("Insufficient stock for '{$item->item_name}'. Available: {$stockFormatted}.");
-            }
+            $requiredBaseUnitsByItem[$item->id] = ($requiredBaseUnitsByItem[$item->id] ?? 0) + $baseQty;
 
             if ($settings->is_check_expiration && $item->isExpired()) {
                 throw new \InvalidArgumentException("Item '{$item->item_name}' is expired.");
@@ -96,6 +93,16 @@ class SaleService
 
                 if (!$deviceUnit) {
                     throw new \InvalidArgumentException("Device with IMEI '{$imei}' for '{$item->item_name}' is not in stock or already sold.");
+                }
+            }
+        }
+
+        if ($settings->is_qty_deduction) {
+            foreach ($requiredBaseUnitsByItem as $itemId => $totalRequiredBase) {
+                $item = $itemsMap->get($itemId);
+                if ($item && $item->front_store_qty < $totalRequiredBase) {
+                    $stockFormatted = $item->formatBaseUnits($item->front_store_qty);
+                    throw new \InvalidArgumentException("Insufficient stock for '{$item->item_name}'. Total required: {$totalRequiredBase}, Available: {$stockFormatted}.");
                 }
             }
         }

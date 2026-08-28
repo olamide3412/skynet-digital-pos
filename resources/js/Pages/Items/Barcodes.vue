@@ -929,7 +929,7 @@ async function executePrint() {
                                 <tr
                                     v-for="item in items.data"
                                     :key="item.id"
-                                    class="hover:bg-slate-50 dark:hover:bg-slate-750 transition">
+                                    class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
                                     <td class="py-3 px-4 font-bold text-slate-900 dark:text-white">
                                         {{ item.item_name }}
                                     </td>
@@ -1019,7 +1019,7 @@ async function executePrint() {
                                 <tr
                                     v-for="item in items.data"
                                     :key="item.id"
-                                    class="hover:bg-slate-50 dark:hover:bg-slate-750 transition">
+                                    class="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition">
                                     <td class="py-3 px-4 font-bold text-slate-900 dark:text-white">
                                         {{ item.item_name }}
                                     </td>
@@ -1081,7 +1081,7 @@ async function executePrint() {
                                         No print history recorded yet.
                                     </td>
                                 </tr>
-                                <tr v-for="log in printLogs.data" :key="log.id" class="hover:bg-slate-50 dark:hover:bg-slate-750">
+                                <tr v-for="log in printLogs.data" :key="log.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                                     <td class="py-2.5 px-4 font-mono text-[11px] text-slate-500">
                                         {{ new Date(log.created_at).toLocaleString() }}
                                     </td>

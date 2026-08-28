@@ -1,11 +1,18 @@
 <script setup>
+import { ref, computed, onMounted, provide } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
-import { ref, computed, onMounted } from 'vue'
 import FlashMessages from '@/Components/FlashMessages.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 
 const isMobileOpen = ref(false)
 const isCollapsed  = ref(false)
+
+const toggleMobile = () => {
+    isMobileOpen.value = !isMobileOpen.value
+}
+
+provide('toggleMobileSidebar', toggleMobile)
+provide('isMobileSidebarOpen', isMobileOpen)
 
 const page = usePage()
 const perms = computed(() => page.props.pos_permissions ?? {})
@@ -180,68 +187,142 @@ onMounted(() => {
 <template>
     <div class="flex h-screen bg-slate-100 dark:bg-slate-900 overflow-hidden font-sans text-slate-800 dark:text-slate-100 transition-colors duration-300">
 
+        <!-- Mobile Overlay Backdrop -->
+        <div
+            v-if="isMobileOpen"
+            @click="isMobileOpen = false"
+            class="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-xs lg:hidden transition-opacity"
+        ></div>
+
         <!-- Sidebar -->
         <aside :class="[
-            'flex-shrink-0 flex flex-col bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transition-all duration-300',
-            isCollapsed ? 'w-14' : 'w-56',
+            'fixed inset-y-0 left-0 z-50 flex flex-col bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transition-all duration-300 select-none shadow-2xl lg:shadow-none',
+            'lg:relative lg:translate-x-0',
+            isMobileOpen ? 'translate-x-0 w-64' : '-translate-x-full lg:translate-x-0',
+            isCollapsed ? 'lg:w-16 lg:overflow-visible' : 'lg:w-56 lg:overflow-hidden',
         ]">
-            <!-- Brand -->
-            <div class="h-12 flex items-center border-b border-slate-200 dark:border-slate-700 px-3 gap-2 overflow-hidden">
-                <div class="w-7 h-7 rounded-lg bg-theme flex items-center justify-center flex-shrink-0 shadow-xs">
-                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M16 5h3m0 0v3m0-3l-5 5"/>
-                    </svg>
+            <!-- Brand & Toggle Header -->
+            <div class="h-14 flex items-center border-b border-slate-200 dark:border-slate-700 transition-all duration-300"
+                :class="isCollapsed ? 'justify-center px-1' : 'justify-between px-3.5'">
+                
+                <!-- Brand logo & title when expanded -->
+                <div v-show="!isCollapsed || isMobileOpen" class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-8 h-8 rounded-lg bg-theme flex items-center justify-center flex-shrink-0 shadow-xs">
+                        <svg class="w-4.5 h-4.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M16 5h3m0 0v3m0-3l-5 5"/>
+                        </svg>
+                    </div>
+                    <span class="font-bold text-theme text-sm whitespace-nowrap overflow-hidden truncate">
+                        {{ $page.props.system_config?.company_name || 'SkyNet POS' }}
+                    </span>
                 </div>
-                <span v-show="!isCollapsed" class="font-bold text-theme text-sm whitespace-nowrap overflow-hidden truncate">{{ $page.props.system_config?.company_name || 'SkyNet POS' }}</span>
-                <button @click="toggleCollapse" class="ml-auto text-slate-400 hover:text-slate-600 dark:hover:text-white transition flex-shrink-0">
-                    <svg class="w-4 h-4" :class="isCollapsed ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+
+                <!-- Desktop Collapse / Expand Toggle Button -->
+                <button
+                    @click="toggleCollapse"
+                    class="hidden lg:flex w-8 h-8 items-center justify-center rounded-lg text-slate-500 hover:text-theme dark:text-slate-400 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer flex-shrink-0"
+                    :title="isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'"
+                >
+                    <svg class="w-4.5 h-4.5 transition-transform duration-300" :class="isCollapsed ? 'rotate-180 text-theme' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/>
                     </svg>
                 </button>
+
+                <!-- Mobile Close Button -->
+                <button
+                    @click="isMobileOpen = false"
+                    class="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
+                >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
             </div>
 
-            <!-- Nav -->
-            <nav class="flex-1 overflow-y-auto py-2 px-2 space-y-0.5">
+            <!-- Nav Links -->
+            <nav :class="[
+                'flex-1 py-2.5 px-2 space-y-1',
+                (isCollapsed && !isMobileOpen) ? 'overflow-visible' : 'overflow-y-auto'
+            ]">
                 <template v-for="link in navLinks" :key="link.label">
                     <div class="relative group">
-                        <!-- Standalone -->
+                        <!-- Standalone Link -->
                         <Link v-if="link.route"
                             :href="safeRoute(link.route)"
-                            :title="isCollapsed ? link.label : ''"
+                            @click="isMobileOpen = false"
                             :class="[
-                                'flex items-center rounded-lg py-2 text-xs font-medium transition',
-                                isCollapsed ? 'justify-center px-2' : 'px-3 gap-2.5',
-                                isActive(link) ? 'bg-theme-light text-theme-dark font-semibold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white',
+                                'flex items-center rounded-xl text-xs font-medium transition duration-150',
+                                (isCollapsed && !isMobileOpen) ? 'justify-center p-2.5' : 'px-3 py-2 gap-2.5',
+                                isActive(link)
+                                    ? 'bg-theme-light dark:bg-theme/20 text-theme-dark dark:text-white font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700/60 dark:hover:text-white',
                             ]">
-                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-4.5 h-4.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="link.icon"/>
                             </svg>
-                            <span v-show="!isCollapsed">{{ link.label }}</span>
+                            <span v-show="!isCollapsed || isMobileOpen">{{ link.label }}</span>
                         </Link>
 
-                        <!-- Group -->
-                        <button v-else @click="toggleMenu(link.label)"
+                        <!-- Standalone Tooltip Toast on Hover when Collapsed -->
+                        <div v-if="isCollapsed && link.route"
+                            class="absolute left-full ml-3.5 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900/95 dark:bg-slate-950 text-white text-xs font-bold rounded-lg shadow-2xl whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 z-50 flex items-center gap-2 border border-slate-700/80 backdrop-blur-sm drop-shadow-lg">
+                            <span class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900 dark:border-r-slate-950"></span>
+                            <span class="w-1.5 h-1.5 rounded-full bg-theme inline-block"></span>
+                            <span>{{ link.label }}</span>
+                        </div>
+
+                        <!-- Group Button (when has children) -->
+                        <button v-if="link.children"
+                            @click="toggleMenu(link.label)"
                             :class="[
-                                'w-full flex items-center rounded-lg py-2 text-xs font-medium transition',
-                                isCollapsed ? 'justify-center px-2' : 'px-3 gap-2.5',
-                                isActive(link) ? 'bg-theme-light text-theme-dark font-semibold' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700 dark:hover:text-white',
+                                'w-full flex items-center rounded-xl text-xs font-medium transition duration-150 cursor-pointer',
+                                (isCollapsed && !isMobileOpen) ? 'justify-center p-2.5' : 'px-3 py-2 gap-2.5',
+                                isActive(link)
+                                    ? 'bg-theme-light dark:bg-theme/20 text-theme-dark dark:text-white font-bold shadow-2xs'
+                                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-700/60 dark:hover:text-white',
                             ]">
-                            <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg class="w-4.5 h-4.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="link.icon"/>
                             </svg>
-                            <span v-show="!isCollapsed" class="flex-1 text-left">{{ link.label }}</span>
-                            <svg v-show="!isCollapsed" class="w-3 h-3 transition-transform" :class="expandedMenus.includes(link.label) ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <span v-show="!isCollapsed || isMobileOpen" class="flex-1 text-left">{{ link.label }}</span>
+                            <svg v-show="!isCollapsed || isMobileOpen" class="w-3.5 h-3.5 transition-transform duration-200" :class="expandedMenus.includes(link.label) ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                             </svg>
                         </button>
 
-                        <!-- Children -->
-                        <div v-show="link.children && !isCollapsed && expandedMenus.includes(link.label)" class="pl-8 pr-2 mt-0.5 space-y-0.5">
+                        <!-- Group Flyout Popover on Hover when Collapsed -->
+                        <div v-if="isCollapsed && link.children"
+                            class="absolute left-full ml-3.5 top-0 py-2 px-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md text-slate-800 dark:text-slate-100 rounded-xl shadow-2xl min-w-[210px] border border-slate-200 dark:border-slate-700/90 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-all duration-150 z-50 space-y-1">
+                            <span class="absolute right-full top-3.5 border-4 border-transparent border-r-white dark:border-r-slate-900"></span>
+                            <div class="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-theme border-b border-slate-100 dark:border-slate-800 pb-1.5 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-theme inline-block"></span>
+                                {{ link.label }}
+                            </div>
+                            <div class="space-y-0.5 pt-0.5">
+                                <Link
+                                    v-for="child in link.children"
+                                    :key="child.label"
+                                    :href="safeRoute(child.route)"
+                                    :class="[
+                                        'block px-2.5 py-1.5 rounded-lg text-xs font-medium transition',
+                                        isChildActive(child)
+                                            ? 'bg-theme-light dark:bg-theme/25 text-theme dark:text-white font-bold'
+                                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-slate-800'
+                                    ]"
+                                >
+                                    {{ child.label }}
+                                </Link>
+                            </div>
+                        </div>
+
+                        <!-- Children (When Expanded) -->
+                        <div v-show="link.children && (!isCollapsed || isMobileOpen) && expandedMenus.includes(link.label)" class="pl-7 pr-2 mt-1 space-y-0.5 border-l-2 border-slate-200 dark:border-slate-700 ml-4">
                             <Link v-for="child in link.children" :key="child.label"
                                 :href="safeRoute(child.route)"
+                                @click="isMobileOpen = false"
                                 :class="[
                                     'block px-3 py-1.5 rounded-lg text-xs transition',
-                                    isChildActive(child) ? 'bg-theme-light text-theme font-bold shadow-2xs' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700',
+                                    isChildActive(child)
+                                        ? 'bg-theme-light dark:bg-theme/25 text-theme dark:text-white font-bold shadow-2xs'
+                                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-700/60',
                                 ]">{{ child.label }}</Link>
                         </div>
                     </div>
@@ -250,17 +331,35 @@ onMounted(() => {
 
             <!-- Theme Toggle & Logout Footer -->
             <div class="p-2 border-t border-slate-200 dark:border-slate-700 space-y-1">
-                <div :class="['flex items-center', isCollapsed ? 'justify-center px-1 py-1' : 'px-2 py-1 justify-between']">
+                <div class="relative group" :class="['flex items-center', isCollapsed ? 'justify-center p-1' : 'px-2 py-1 justify-between']">
                     <span v-show="!isCollapsed" class="text-xs text-slate-500 dark:text-slate-400 font-medium">Theme</span>
                     <ThemeToggle />
+                    
+                    <div v-if="isCollapsed"
+                        class="absolute left-full ml-3.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-slate-900/95 dark:bg-slate-950 text-white text-xs font-semibold rounded-lg shadow-2xl whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 z-50 border border-slate-700/80 backdrop-blur-sm">
+                        <span class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-900 dark:border-r-slate-950"></span>
+                        Toggle Theme
+                    </div>
                 </div>
-                <Link :href="safeRoute('pos.logout')" method="post" as="button"
-                    :class="['flex items-center rounded-lg py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition w-full', isCollapsed ? 'justify-center px-2' : 'px-3 gap-2.5']">
-                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
-                    </svg>
-                    <span v-show="!isCollapsed">Logout</span>
-                </Link>
+
+                <div class="relative group">
+                    <Link :href="safeRoute('pos.logout')" method="post" as="button"
+                        :class="[
+                            'flex items-center rounded-xl text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition w-full cursor-pointer',
+                            isCollapsed ? 'justify-center p-2.5' : 'px-3 py-2 gap-2.5'
+                        ]">
+                        <svg class="w-4.5 h-4.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
+                        </svg>
+                        <span v-show="!isCollapsed">Logout</span>
+                    </Link>
+
+                    <div v-if="isCollapsed"
+                        class="absolute left-full ml-3.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-red-900/95 text-white text-xs font-bold rounded-lg shadow-2xl whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 z-50 border border-red-700 backdrop-blur-sm">
+                        <span class="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-red-900"></span>
+                        Logout
+                    </div>
+                </div>
             </div>
         </aside>
 

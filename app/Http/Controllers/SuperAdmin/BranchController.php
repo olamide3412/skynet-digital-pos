@@ -62,7 +62,8 @@ class BranchController extends Controller
             'address'            => 'nullable|string|max:500',
             'phone'              => 'nullable|string|max:50',
             'email'              => 'nullable|email|max:255',
-            'is_offline_enabled' => 'nullable|boolean',
+            'is_offline_enabled'   => 'nullable|boolean',
+            'is_turnstile_enabled' => 'nullable|boolean',
             // Branch Admin account details
             'admin_name'         => 'required|string|max:255',
             'admin_username'     => 'required|string|max:50|unique:users,username',
@@ -100,8 +101,15 @@ class BranchController extends Controller
 
             // Create branch POS settings with defaults
             $settings = $branch->getSettings();
+            $settingsUpdates = [];
             if (!empty($data['is_offline_enabled'])) {
-                $settings->update(['is_offline_enabled' => true]);
+                $settingsUpdates['is_offline_enabled'] = true;
+            }
+            if (isset($data['is_turnstile_enabled'])) {
+                $settingsUpdates['is_turnstile_enabled'] = (bool)$data['is_turnstile_enabled'];
+            }
+            if (!empty($settingsUpdates)) {
+                $settings->update($settingsUpdates);
             }
 
             ActivityLogger::log(
@@ -366,6 +374,7 @@ class BranchController extends Controller
             'auto_print_receipt'       => 'required|boolean',
             'show_receipt_preview'     => 'required|boolean',
             'is_offline_enabled'       => 'required|boolean',
+            'is_turnstile_enabled'     => 'required|boolean',
             'offline_receipt_prefix'   => 'nullable|string|max:10',
             'is_price_editable'        => 'required|boolean',
             'is_qty_deduction'         => 'required|boolean',
@@ -447,6 +456,25 @@ class BranchController extends Controller
         );
 
         return back()->with('success', "Offline sales mode {$status} for {$branch->name}.");
+    }
+
+    /**
+     * Toggle branch Cloudflare Turnstile CAPTCHA requirement.
+     */
+    public function toggleTurnstile(Branch $branch)
+    {
+        $settings = $branch->getSettings();
+        $newState = !($settings->is_turnstile_enabled ?? true);
+        $settings->update(['is_turnstile_enabled' => $newState]);
+        $status = $newState ? 'enabled' : 'disabled (low-network mode)';
+
+        ActivityLogger::log(
+            'setting',
+            "Super Admin {$status} Cloudflare Turnstile CAPTCHA for branch '{$branch->name}'",
+            $branch->id
+        );
+
+        return back()->with('success', "Cloudflare Turnstile CAPTCHA {$status} for {$branch->name}.");
     }
 
     /**

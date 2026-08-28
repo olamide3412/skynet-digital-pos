@@ -1,22 +1,24 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useForm } from '@inertiajs/vue3'
 import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
 
 defineOptions({ layout: SuperAdminLayout })
 
 const props = defineProps({
-    currentTheme:       String,
-    customPrimaryHex:   String,
-    customSecondaryHex: String,
-    companyName:        String,
-    companyShortName:   String,
-    appTagline:         String,
-    currencySymbol:     String,
-    supportPhone:       String,
-    supportEmail:       String,
-    companyLogoUrl:     String,
-    themePalettes:      Array,
+    currentTheme:         String,
+    customPrimaryHex:     String,
+    customSecondaryHex:   String,
+    darkModeAccentMode:   String,
+    customDarkPrimaryHex: String,
+    companyName:          String,
+    companyShortName:     String,
+    appTagline:           String,
+    currencySymbol:       String,
+    supportPhone:         String,
+    supportEmail:         String,
+    companyLogoUrl:       String,
+    themePalettes:        Array,
 })
 
 const activeTab        = ref('branding')
@@ -25,23 +27,60 @@ const customPrimary   = ref(props.customPrimaryHex || '#7B00FF')
 const customSecondary = ref(props.customSecondaryHex || '#FBA43D')
 const logoPreview      = ref(props.companyLogoUrl || null)
 
+const LUMINOUS_MAP = {
+    skynet: '#C084FC',
+    emerald: '#34D399',
+    blue: '#60A5FA',
+    indigo: '#818CF8',
+    violet: '#A78BFA',
+    teal: '#2DD4BF',
+    cyan: '#22D3EE',
+    amber: '#FBBF24',
+    rose: '#FB7185',
+}
+
 const form = useForm({
-    primary_color_theme:  props.currentTheme || 'skynet',
-    custom_primary_hex:   props.customPrimaryHex || '#7B00FF',
-    custom_secondary_hex: props.customSecondaryHex || '#FBA43D',
-    company_name:         props.companyName || 'Skynet POS',
-    company_short_name:   props.companyShortName || 'Skynet',
-    app_tagline:          props.appTagline || 'Digital POS & Inventory Terminal',
-    currency_symbol:      props.currencySymbol || '₦',
-    support_phone:        props.supportPhone || '+234 803 207 2831',
-    support_email:        props.supportEmail || 'support@skynetdigitalltd.com',
-    company_logo:         null,
+    primary_color_theme:    props.currentTheme || 'skynet',
+    custom_primary_hex:     props.customPrimaryHex || '#7B00FF',
+    custom_secondary_hex:   props.customSecondaryHex || '#FBA43D',
+    dark_mode_accent_mode:  props.darkModeAccentMode || 'white',
+    custom_dark_primary_hex: props.customDarkPrimaryHex || '#FFFFFF',
+    company_name:           props.companyName || 'Skynet POS',
+    company_short_name:     props.companyShortName || 'Skynet',
+    app_tagline:            props.appTagline || 'Digital POS & Inventory Terminal',
+    currency_symbol:        props.currencySymbol || '₦',
+    support_phone:          props.supportPhone || '+234 803 207 2831',
+    support_email:          props.supportEmail || 'support@skynetdigitalltd.com',
+    company_logo:           null,
 })
 
-function applyDynamicPreview(themeKey, hexPVal, hexSVal) {
+const currentLuminousHex = computed(() => {
+    return LUMINOUS_MAP[selectedTheme.value] || customPrimary.value || '#C084FC'
+})
+
+function applyDynamicPreview(themeKey, hexPVal, hexSVal, darkAccMode, darkHexVal) {
     if (typeof document === 'undefined') return
 
     const rootStyle = document.documentElement.style
+    const mode = darkAccMode || form.dark_mode_accent_mode || 'white'
+
+    let computedDarkHex = '#FFFFFF'
+    if (mode === 'white') {
+        computedDarkHex = '#FFFFFF'
+    } else if (mode === 'luminous') {
+        computedDarkHex = LUMINOUS_MAP[themeKey] || darkHexVal || hexPVal || '#C084FC'
+    } else if (mode === 'custom') {
+        computedDarkHex = darkHexVal || form.custom_dark_primary_hex || '#FFFFFF'
+    }
+
+    let hexD = computedDarkHex.replace('#', '')
+    if (hexD.length === 3) hexD = hexD.split('').map(c => c + c).join('')
+    const dr = parseInt(hexD.substring(0, 2), 16) || 255
+    const dg = parseInt(hexD.substring(2, 4), 16) || 255
+    const db = parseInt(hexD.substring(4, 6), 16) || 255
+
+    rootStyle.setProperty('--color-theme-dark', computedDarkHex)
+    rootStyle.setProperty('--color-theme-dark-rgb', `${dr}, ${dg}, ${db}`)
 
     if (themeKey === 'custom' && hexPVal) {
         document.documentElement.setAttribute('data-theme', 'custom')
@@ -89,7 +128,7 @@ function applyDynamicPreview(themeKey, hexPVal, hexSVal) {
 function selectPalette(themeKey) {
     selectedTheme.value = themeKey
     form.primary_color_theme = themeKey
-    applyDynamicPreview(themeKey, customPrimary.value, customSecondary.value)
+    applyDynamicPreview(themeKey, customPrimary.value, customSecondary.value, form.dark_mode_accent_mode, form.custom_dark_primary_hex)
 }
 
 function updateCustomPrimary(hexVal) {
@@ -97,7 +136,7 @@ function updateCustomPrimary(hexVal) {
     customPrimary.value = hexVal
     form.primary_color_theme = 'custom'
     form.custom_primary_hex  = hexVal
-    applyDynamicPreview('custom', hexVal, customSecondary.value)
+    applyDynamicPreview('custom', hexVal, customSecondary.value, form.dark_mode_accent_mode, form.custom_dark_primary_hex)
 }
 
 function updateCustomSecondary(hexVal) {
@@ -105,7 +144,18 @@ function updateCustomSecondary(hexVal) {
     customSecondary.value = hexVal
     form.primary_color_theme  = 'custom'
     form.custom_secondary_hex = hexVal
-    applyDynamicPreview('custom', customPrimary.value, hexVal)
+    applyDynamicPreview('custom', customPrimary.value, hexVal, form.dark_mode_accent_mode, form.custom_dark_primary_hex)
+}
+
+function setDarkModeAccentMode(mode) {
+    form.dark_mode_accent_mode = mode
+    applyDynamicPreview(selectedTheme.value, customPrimary.value, customSecondary.value, mode, form.custom_dark_primary_hex)
+}
+
+function updateCustomDarkPrimary(hexVal) {
+    form.dark_mode_accent_mode   = 'custom'
+    form.custom_dark_primary_hex = hexVal
+    applyDynamicPreview(selectedTheme.value, customPrimary.value, customSecondary.value, 'custom', hexVal)
 }
 
 function handleLogoFile(e) {
@@ -121,7 +171,7 @@ function submit() {
         preserveScroll: true,
         forceFormData: true,
         onSuccess: () => {
-            applyDynamicPreview(form.primary_color_theme, form.custom_primary_hex, form.custom_secondary_hex)
+            applyDynamicPreview(form.primary_color_theme, form.custom_primary_hex, form.custom_secondary_hex, form.dark_mode_accent_mode, form.custom_dark_primary_hex)
         }
     })
 }
@@ -295,6 +345,111 @@ function submit() {
                         <div class="h-2 w-full rounded-full overflow-hidden flex gap-1">
                             <div class="h-full flex-1 rounded-full" :style="{ backgroundColor: customPrimary }"></div>
                             <div class="h-full flex-1 rounded-full" :style="{ backgroundColor: customSecondary }"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dark Mode Accent Configuration -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-slate-900 dark:bg-white inline-block"></span>
+                        Dark Mode Theme & Text Legibility
+                    </h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Configure how brand names, total headers, price labels, and accents display when Dark Mode is active for high readability.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <!-- Option 1: Crisp Pure White -->
+                    <div
+                        @click="setDarkModeAccentMode('white')"
+                        :class="[
+                            'p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3',
+                            form.dark_mode_accent_mode === 'white'
+                                ? 'border-slate-900 dark:border-white ring-2 ring-slate-900/20 dark:ring-white/20 bg-slate-50 dark:bg-slate-800/80 shadow-md'
+                                : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 bg-white dark:bg-slate-900'
+                        ]"
+                    >
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="w-6 h-6 rounded-lg bg-white border border-slate-300 shadow-sm flex items-center justify-center text-slate-900 font-bold text-xs">
+                                    ⚪
+                                </div>
+                                <h3 class="text-xs font-bold text-slate-900 dark:text-white">Crisp Pure White</h3>
+                            </div>
+                            <div v-if="form.dark_mode_accent_mode === 'white'" class="w-4 h-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center text-[10px] font-bold">✓</div>
+                        </div>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                            Ultra-high contrast (<strong>#FFFFFF</strong>) for the highest readability of totals, headings, and prices on dark backgrounds.
+                        </p>
+                        <div class="px-2.5 py-1.5 rounded-lg bg-slate-950 text-white font-bold text-xs flex justify-between items-center border border-slate-800">
+                            <span class="text-slate-400">Sample Total:</span>
+                            <span class="text-white">₦24,500.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Option 2: Luminous Brand Tint -->
+                    <div
+                        @click="setDarkModeAccentMode('luminous')"
+                        :class="[
+                            'p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3',
+                            form.dark_mode_accent_mode === 'luminous'
+                                ? 'border-slate-900 dark:border-white ring-2 ring-slate-900/20 dark:ring-white/20 bg-slate-50 dark:bg-slate-800/80 shadow-md'
+                                : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 bg-white dark:bg-slate-900'
+                        ]"
+                    >
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="w-6 h-6 rounded-lg shadow-sm flex items-center justify-center text-slate-900 font-bold text-xs" :style="{ backgroundColor: currentLuminousHex }">
+                                    🟣
+                                </div>
+                                <h3 class="text-xs font-bold text-slate-900 dark:text-white">Luminous Brand Tint</h3>
+                            </div>
+                            <div v-if="form.dark_mode_accent_mode === 'luminous'" class="w-4 h-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center text-[10px] font-bold">✓</div>
+                        </div>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                            Bright neon/pastel tint (<strong>{{ currentLuminousHex }}</strong>) tuned for vibrant brand presence in Dark Mode.
+                        </p>
+                        <div class="px-2.5 py-1.5 rounded-lg bg-slate-950 text-slate-300 font-bold text-xs flex justify-between items-center border border-slate-800">
+                            <span class="text-slate-400">Sample Total:</span>
+                            <span :style="{ color: currentLuminousHex }">₦24,500.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Option 3: Custom Dark Hex -->
+                    <div
+                        @click="setDarkModeAccentMode('custom')"
+                        :class="[
+                            'p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3',
+                            form.dark_mode_accent_mode === 'custom'
+                                ? 'border-slate-900 dark:border-white ring-2 ring-slate-900/20 dark:ring-white/20 bg-slate-50 dark:bg-slate-800/80 shadow-md'
+                                : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 bg-white dark:bg-slate-900'
+                        ]"
+                    >
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <div class="w-6 h-6 rounded-lg shadow-sm flex items-center justify-center text-slate-900 font-bold text-xs border border-slate-300" :style="{ backgroundColor: form.custom_dark_primary_hex || '#FFFFFF' }">
+                                    🎨
+                                </div>
+                                <h3 class="text-xs font-bold text-slate-900 dark:text-white">Custom Dark Color</h3>
+                            </div>
+                            <div v-if="form.dark_mode_accent_mode === 'custom'" class="w-4 h-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center text-[10px] font-bold">✓</div>
+                        </div>
+
+                        <div class="space-y-1" @click.stop>
+                            <label class="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Dark Mode Text Color:</label>
+                            <div class="flex items-center gap-1.5">
+                                <input type="color" :value="form.custom_dark_primary_hex || '#FFFFFF'" @input="updateCustomDarkPrimary($event.target.value)" class="w-6 h-6 rounded border-0 cursor-pointer bg-transparent p-0" />
+                                <input type="text" :value="form.custom_dark_primary_hex || '#FFFFFF'" @input="updateCustomDarkPrimary($event.target.value)" class="px-2 py-0.5 text-[11px] font-mono rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white w-full uppercase" placeholder="#FFFFFF" />
+                            </div>
+                        </div>
+
+                        <div class="px-2.5 py-1.5 rounded-lg bg-slate-950 text-slate-300 font-bold text-xs flex justify-between items-center border border-slate-800">
+                            <span class="text-slate-400">Sample Total:</span>
+                            <span :style="{ color: form.custom_dark_primary_hex || '#FFFFFF' }">₦24,500.00</span>
                         </div>
                     </div>
                 </div>

@@ -324,7 +324,7 @@ function copyImei(imei) {
             class="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4"
         >
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 max-w-lg w-full overflow-hidden shadow-2xl space-y-4">
-                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-750">
+                <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800">
                     <div class="flex items-center gap-2">
                         <span class="text-lg">📱</span>
                         <h3 class="text-sm font-bold text-slate-900 dark:text-white">Device Lifecycle & Warranty Audit</h3>
@@ -398,7 +398,7 @@ function copyImei(imei) {
                     </div>
                 </div>
 
-                <div class="px-6 py-3.5 bg-slate-50 dark:bg-slate-750 border-t border-slate-200 dark:border-slate-700 flex justify-end">
+                <div class="px-6 py-3.5 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 flex justify-end">
                     <button
                         @click="showDetailModal = false"
                         class="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 text-xs font-semibold rounded-xl transition"

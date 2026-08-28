@@ -30,7 +30,7 @@ async function discardCart(held) {
             <div class="max-h-80 overflow-y-auto">
                 <div v-if="!heldSales.length" class="text-center text-slate-500 py-10 text-sm">No held carts.</div>
                 <div v-for="held in heldSales" :key="held.id"
-                    class="flex items-center justify-between px-5 py-3 border-b border-slate-700 hover:bg-slate-750 transition">
+                    class="flex items-center justify-between px-5 py-3 border-b border-slate-700 hover:bg-slate-700/60 transition">
                     <div>
                         <p class="text-sm font-medium text-white">{{ held.hold_name || 'Unnamed Hold' }}</p>
                         <p class="text-xs text-slate-400">{{ held.items?.length }} item(s)
@@ -39,7 +39,7 @@ async function discardCart(held) {
                     </div>
                     <div class="flex gap-2">
                         <button @click="discardCart(held)"
-                            class="px-3 py-1.5 bg-red-650 hover:bg-red-650 text-white text-xs rounded-lg transition">
+                            class="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-lg transition cursor-pointer">
                             Discard
                         </button>
                         <button @click="resumeCart(held)"

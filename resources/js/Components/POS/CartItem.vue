@@ -7,8 +7,9 @@ import { getLocalAvailableImeis } from '@/Services/offlineDb'
 import axios from 'axios'
 
 const props = defineProps({
-    item:         { type: Object, required: true },
-    canEditPrice: { type: Boolean, default: false },
+    item:          { type: Object, required: true },
+    canEditPrice:  { type: Boolean, default: false },
+    isHighlighted: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['remove', 'update-qty', 'update-price'])
@@ -80,24 +81,55 @@ function onImeiSelected(val) {
     cartStore.setItemImei(props.item.cart_key || props.item.item_id, val || null)
 }
 
-const currentUnitLabel = computed(() => {
-    switch (props.item.unit_used) {
-        case 'carton': return props.item.carton_label || 'Carton'
-        case 'pack':   return props.item.pack_label || 'Pack'
-        default:       return props.item.unit_label || 'Unit'
+const availableUnits = computed(() => {
+    const list = [
+        { key: 'unit', label: props.item.unit_label || 'Unit', multiplier: 1 }
+    ]
+
+    const itemUnits = props.item.units || props.item.raw_item?.units
+    if (Array.isArray(itemUnits) && itemUnits.length > 0) {
+        itemUnits.forEach(u => {
+            if (u.unit_name) {
+                list.push({
+                    key:        u.unit_name,
+                    label:      u.unit_name,
+                    multiplier: Number(u.quantity_in_base_units) || 1,
+                })
+            }
+        })
+    } else {
+        // Fallback to legacy pack & carton
+        if (Number(props.item.units_per_pack) > 1) {
+            list.push({
+                key:        'pack',
+                label:      props.item.pack_label || 'Pack',
+                multiplier: Number(props.item.units_per_pack),
+            })
+        }
+        if (Number(props.item.packs_per_carton) > 1) {
+            const upp = Number(props.item.units_per_pack) || 1
+            const ppc = Number(props.item.packs_per_carton) || 1
+            list.push({
+                key:        'carton',
+                label:      props.item.carton_label || 'Carton',
+                multiplier: upp * ppc,
+            })
+        }
     }
+    return list
+})
+
+const currentUnitLabel = computed(() => {
+    const uUsed = (props.item.unit_used || 'unit').toLowerCase().trim()
+    const found = availableUnits.value.find(u => u.key.toLowerCase().trim() === uUsed || u.label.toLowerCase().trim() === uUsed)
+    return found ? found.label : (props.item.unit_used || props.item.unit_label || 'Unit')
 })
 
 const baseUnitsDeducted = computed(() => {
-    const qty = Number(props.item.qty) || 1
-    const upp = Number(props.item.units_per_pack) || 1
-    const ppc = Number(props.item.packs_per_carton) || 1
-
-    switch (props.item.unit_used) {
-        case 'carton': return qty * ppc * upp
-        case 'pack':   return qty * upp
-        default:       return qty
-    }
+    const qty   = Number(props.item.qty) || 1
+    const uUsed = (props.item.unit_used || 'unit').toLowerCase().trim()
+    const found = availableUnits.value.find(u => u.key.toLowerCase().trim() === uUsed || u.label.toLowerCase().trim() === uUsed)
+    return qty * (found?.multiplier || 1)
 })
 
 function startEditPrice() {
@@ -117,7 +149,15 @@ function onUnitChange(newUnit) {
 </script>
 
 <template>
-    <div class="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/60 transition group space-y-2 border-b border-slate-200 dark:border-slate-700/50">
+    <div
+        :id="'cart-row-' + item.cart_key"
+        :class="[
+            isHighlighted 
+                ? 'cart-item-flash shadow-lg' 
+                : 'hover:bg-slate-50 dark:hover:bg-slate-800/60'
+        ]"
+        class="p-3 group space-y-2 border-b border-slate-200 dark:border-slate-700/50 rounded-lg mx-1 my-0.5 transition-colors duration-500"
+    >
         <!-- Top Row: Name, Badge & Remove -->
         <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-1.5 min-w-0">
@@ -133,7 +173,7 @@ function onUnitChange(newUnit) {
             <!-- Remove Button -->
             <button
                 @click="emit('remove')"
-                class="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10 transition"
+                class="w-5 h-5 flex items-center justify-center rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-400/10 transition cursor-pointer"
                 title="Remove item"
             >
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -166,7 +206,7 @@ function onUnitChange(newUnit) {
                 <select
                     :value="item.selected_imei || ''"
                     @change="onImeiSelected($event.target.value)"
-                    class="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-2.5 py-1.5 rounded border border-indigo-200 dark:border-indigo-700 text-xs font-mono outline-none focus:border-indigo-500 shadow-xs"
+                    class="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-2.5 py-1.5 rounded border border-indigo-200 dark:border-indigo-700 text-xs font-mono outline-none focus:border-indigo-500 shadow-xs cursor-pointer"
                 >
                     <option value="">-- Select In-Stock IMEI ({{ selectableImeis.length }} available) --</option>
                     <option v-if="item.selected_imei && !selectableImeis.includes(item.selected_imei)" :value="item.selected_imei">
@@ -179,32 +219,18 @@ function onUnitChange(newUnit) {
             </div>
         </div>
 
-        <!-- Unit Level Selector Pills (Only for non-IMEI items) -->
-        <div v-if="!isImeiItem" class="flex items-center gap-1 text-[11px]">
-            <span class="text-slate-500 dark:text-slate-400 mr-1">Unit Level:</span>
+        <!-- Unit Level Selector Pills (Only for non-IMEI items when variants available) -->
+        <div v-if="!isImeiItem && availableUnits.length > 1" class="flex flex-wrap items-center gap-1 text-[11px]">
+            <span class="text-slate-500 dark:text-slate-400 mr-1 font-medium">Unit Level:</span>
             <button
+                v-for="u in availableUnits"
+                :key="u.key"
                 type="button"
-                @click="onUnitChange('unit')"
-                :class="item.unit_used === 'unit' ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-650'"
-                class="px-2 py-0.5 rounded transition text-[11px]"
+                @click="onUnitChange(u.key)"
+                :class="((item.unit_used || 'unit').toLowerCase() === u.key.toLowerCase() || (item.unit_used || 'unit').toLowerCase() === u.label.toLowerCase()) ? 'bg-emerald-600 text-white font-bold shadow-2xs' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'"
+                class="px-2 py-0.5 rounded transition text-[11px] cursor-pointer"
             >
-                {{ item.unit_label || 'Unit' }}
-            </button>
-            <button
-                type="button"
-                @click="onUnitChange('pack')"
-                :class="item.unit_used === 'pack' ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-650'"
-                class="px-2 py-0.5 rounded transition text-[11px]"
-            >
-                {{ item.pack_label || 'Pack' }}
-            </button>
-            <button
-                type="button"
-                @click="onUnitChange('carton')"
-                :class="item.unit_used === 'carton' ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-650'"
-                class="px-2 py-0.5 rounded transition text-[11px]"
-            >
-                {{ item.carton_label || 'Carton' }}
+                {{ u.label }}
             </button>
         </div>
 
@@ -248,7 +274,7 @@ function onUnitChange(newUnit) {
                     @change="emit('update-qty', parseInt($event.target.value) || 1)"
                     type="number"
                     min="1"
-                    class="w-14 text-center bg-white dark:bg-slate-750 text-slate-900 dark:text-white text-xs font-bold font-mono rounded-lg py-1 px-1 outline-none border border-slate-300 dark:border-slate-600 focus:border-emerald-500 transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    class="w-14 text-center bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-xs font-bold font-mono rounded-lg py-1 px-1 outline-none border border-slate-300 dark:border-slate-600 focus:border-emerald-500 transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                 />
                 <button
                     type="button"
@@ -270,3 +296,28 @@ function onUnitChange(newUnit) {
         </div>
     </div>
 </template>
+
+<style scoped>
+@keyframes cartFlashAnim {
+    0% {
+        background-color: var(--color-theme-light, rgba(123, 0, 255, 0.35));
+        transform: scale(1.02);
+        box-shadow: 0 0 18px var(--color-theme-light, rgba(123, 0, 255, 0.5));
+    }
+    40% {
+        background-color: var(--color-theme-light, rgba(123, 0, 255, 0.2));
+        transform: scale(1.01);
+        box-shadow: 0 0 10px var(--color-theme-light, rgba(123, 0, 255, 0.3));
+    }
+    100% {
+        background-color: transparent;
+        transform: scale(1);
+    }
+}
+
+.cart-item-flash {
+    animation: cartFlashAnim 1.15s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    outline: 2px solid var(--color-theme, #7B00FF);
+    outline-offset: -1px;
+}
+</style>

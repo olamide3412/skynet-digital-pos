@@ -49,7 +49,7 @@ defineProps({
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="order in recentOrders" :key="order.id" class="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 transition">
+                            <tr v-for="order in recentOrders" :key="order.id" class="border-t dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
                                 <td class="p-4 font-mono">#{{ order.id }}</td>
                                 <td class="p-4">{{ order.customer ? order.customer.name : order.guest_email }}</td>
                                 <td class="p-4 font-medium">₦{{ parseFloat(order.total_amount).toLocaleString() }}</td>

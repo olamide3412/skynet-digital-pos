@@ -94,7 +94,7 @@ function getBaseUnits(rItem) {
                 </div>
                 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs">
                     <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1">Total Refund Worth</p>
-                    <p class="text-2xl font-bold text-red-600 dark:text-red-400 font-mono">{{ format(summary.total_refund_worth) }}</p>
+                    <p class="text-2xl font-bold text-red-600 dark:text-red-400 font-mono truncate" :title="format(summary.total_refund_worth)">{{ format(summary.total_refund_worth) }}</p>
                 </div>
             </div>
 

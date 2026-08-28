@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Pos;
 
 use App\Http\Controllers\Controller;
 use App\Models\Item;
+use App\Models\ItemUnit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -20,7 +21,7 @@ class ItemController extends Controller
         $branch->ensureDefaultRoles();
 
         $items = Item::where('branch_id', $branch->id)
-            ->with(['category:id,name', 'groupAddress:id,name'])
+            ->with(['category:id,name', 'groupAddress:id,name', 'units'])
             ->when($request->search, fn($q) => $q
                 ->where('item_name', 'like', '%' . $request->search . '%')
                 ->orWhere('barcode_number', 'like', '%' . $request->search . '%'))
@@ -58,7 +59,7 @@ class ItemController extends Controller
 
         $clonedItem = null;
         if ($request->has('clone_from')) {
-            $cloned = Item::where('branch_id', $branch->id)->find($request->clone_from);
+            $cloned = Item::where('branch_id', $branch->id)->with('units')->find($request->clone_from);
             if ($cloned) {
                 $clonedItem = [
                     'item_name'              => $cloned->item_name . ' (Copy)',
@@ -80,6 +81,14 @@ class ItemController extends Controller
                     'is_imei_tracked'        => $cloned->is_imei_tracked,
                     'price_locked'           => $cloned->price_locked,
                     'expiry_date'            => $cloned->expiry_date?->format('Y-m-d'),
+                    'units'                  => $cloned->units->map(fn($u) => [
+                        'unit_name'              => $u->unit_name,
+                        'quantity_in_base_units' => (int) $u->quantity_in_base_units,
+                        'selling_price'          => (float) $u->selling_price,
+                        'wholesale_price'        => (float) $u->wholesale_price,
+                        'sort_order'             => (int) $u->sort_order,
+                        'status'                 => $u->status,
+                    ])->values()->all(),
                 ];
             }
         }
@@ -100,32 +109,38 @@ class ItemController extends Controller
         if (!$branch && auth()->check() && auth()->user()->branch_id) {
             $branch = \App\Models\Branch::find(auth()->user()->branch_id);
         }
-
         $data = $request->validate([
-            'item_name' => 'required|string|max:255',
-            'barcode_number' => 'nullable|string|max:100',
-            'category_id' => 'required|exists:categories,id',
-            'group_address_id' => 'nullable|exists:group_addresses,id',
-            'buy_price' => 'required|numeric|min:0',
-            'price' => 'required|numeric|min:0',
-            'wholesale_price' => 'nullable|numeric|min:0',
-            'pack_price' => 'nullable|numeric|min:0',
-            'carton_price' => 'nullable|numeric|min:0',
-            'pack_wholesale_price' => 'nullable|numeric|min:0',
+            'item_name'              => 'required|string|max:255',
+            'barcode_number'         => 'nullable|string|max:100',
+            'category_id'            => 'required|exists:categories,id',
+            'group_address_id'       => 'nullable|exists:group_addresses,id',
+            'buy_price'              => 'required|numeric|min:0',
+            'price'                  => 'required|numeric|min:0',
+            'wholesale_price'        => 'nullable|numeric|min:0',
+            'pack_price'             => 'nullable|numeric|min:0',
+            'carton_price'           => 'nullable|numeric|min:0',
+            'pack_wholesale_price'   => 'nullable|numeric|min:0',
             'carton_wholesale_price' => 'nullable|numeric|min:0',
-            'price_locked' => 'boolean',
-            'is_imei_tracked' => 'nullable|boolean',
-            'initial_imeis' => 'nullable|string',
-            'back_store_qty' => 'nullable|integer|min:0',
-            'front_store_qty' => 'nullable|integer|min:0',
-            'unit_label' => 'nullable|string|max:50',
-            'pack_label' => 'nullable|string|max:50',
-            'carton_label' => 'nullable|string|max:50',
-            'units_per_pack' => 'nullable|integer|min:1',
-            'packs_per_carton' => 'nullable|integer|min:1',
-            'expiry_date' => 'nullable|date',
-            'item_description' => 'nullable|string|max:500',
-            'image' => 'nullable|image|max:2048',
+            'price_locked'           => 'boolean',
+            'is_imei_tracked'        => 'nullable|boolean',
+            'initial_imeis'          => 'nullable|string',
+            'back_store_qty'         => 'nullable|integer|min:0',
+            'front_store_qty'        => 'nullable|integer|min:0',
+            'unit_label'             => 'nullable|string|max:50',
+            'pack_label'             => 'nullable|string|max:50',
+            'carton_label'           => 'nullable|string|max:50',
+            'units_per_pack'         => 'nullable|integer|min:1',
+            'packs_per_carton'       => 'nullable|integer|min:1',
+            'expiry_date'            => 'nullable|date',
+            'item_description'       => 'nullable|string|max:500',
+            'image'                  => 'nullable|image|max:2048',
+            'units'                          => 'nullable|array',
+            'units.*.unit_name'              => 'required_with:units|string|max:100',
+            'units.*.quantity_in_base_units' => 'required_with:units|integer|min:1',
+            'units.*.selling_price'          => 'required_with:units|numeric|min:0',
+            'units.*.wholesale_price'        => 'nullable|numeric|min:0',
+            'units.*.sort_order'             => 'nullable|integer',
+            'units.*.status'                 => 'nullable|string|in:active,inactive',
         ]);
 
         // Barcode handling: leave null if blank or 'NO_BARCODE' (do not auto-generate)
@@ -144,6 +159,9 @@ class ItemController extends Controller
         } else {
             $data['barcode_number'] = null;
         }
+
+        $units = $data['units'] ?? [];
+        unset($data['units']);
 
         $data['branch_id'] = $branch->id;
         $data['wholesale_price'] = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? (float) $data['wholesale_price'] : (float) $data['price'];
@@ -168,6 +186,23 @@ class ItemController extends Controller
         unset($data['image'], $data['initial_imeis']);
 
         $newItem = Item::create($data);
+
+        // Save custom item units / variants
+        if (!empty($units)) {
+            foreach ($units as $idx => $u) {
+                if (empty($u['unit_name'])) continue;
+                ItemUnit::create([
+                    'item_id'                => $newItem->id,
+                    'branch_id'              => $branch->id,
+                    'unit_name'              => trim($u['unit_name']),
+                    'quantity_in_base_units' => max(1, (int) ($u['quantity_in_base_units'] ?? 1)),
+                    'selling_price'          => (float) ($u['selling_price'] ?? 0),
+                    'wholesale_price'        => (float) ($u['wholesale_price'] ?? 0),
+                    'sort_order'             => (int) ($u['sort_order'] ?? $idx),
+                    'status'                 => $u['status'] ?? 'active',
+                ]);
+            }
+        }
 
         // If IMEI tracked and initial IMEIs were entered, create device units
         if ($newItem->is_imei_tracked && !empty($initialImeisRaw)) {
@@ -204,7 +239,7 @@ class ItemController extends Controller
         $this->authorizeBranch($item, $branch);
 
         return Inertia::render('Items/Edit', [
-            'item' => $item->load('category'),
+            'item' => $item->load(['category', 'units']),
             'categories' => \App\Models\Category::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),
             'groupAddresses' => \App\Models\GroupAddress::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
@@ -219,29 +254,37 @@ class ItemController extends Controller
         $this->authorizeBranch($item, $branch);
 
         $data = $request->validate([
-            'item_name' => 'required|string|max:255',
-            'barcode_number' => 'nullable|string|max:100',
-            'category_id' => 'required|exists:categories,id',
-            'group_address_id' => 'nullable|exists:group_addresses,id',
-            'buy_price' => 'required|numeric|min:0',
-            'price' => 'required|numeric|min:0',
-            'wholesale_price' => 'nullable|numeric|min:0',
-            'pack_price' => 'nullable|numeric|min:0',
-            'carton_price' => 'nullable|numeric|min:0',
-            'pack_wholesale_price' => 'nullable|numeric|min:0',
+            'item_name'              => 'required|string|max:255',
+            'barcode_number'         => 'nullable|string|max:100',
+            'category_id'            => 'required|exists:categories,id',
+            'group_address_id'       => 'nullable|exists:group_addresses,id',
+            'buy_price'              => 'required|numeric|min:0',
+            'price'                  => 'required|numeric|min:0',
+            'wholesale_price'        => 'nullable|numeric|min:0',
+            'pack_price'             => 'nullable|numeric|min:0',
+            'carton_price'           => 'nullable|numeric|min:0',
+            'pack_wholesale_price'   => 'nullable|numeric|min:0',
             'carton_wholesale_price' => 'nullable|numeric|min:0',
-            'price_locked' => 'nullable|boolean',
-            'is_imei_tracked' => 'nullable|boolean',
-            'unit_label' => 'nullable|string|max:50',
-            'pack_label' => 'nullable|string|max:50',
-            'carton_label' => 'nullable|string|max:50',
-            'units_per_pack' => 'nullable|integer|min:1',
-            'packs_per_carton' => 'nullable|integer|min:1',
-            'front_store_qty' => 'nullable|integer|min:0',
-            'back_store_qty' => 'nullable|integer|min:0',
-            'expiry_date' => 'nullable|date',
-            'item_description' => 'nullable|string|max:500',
-            'image' => 'nullable|image|max:2048',
+            'price_locked'           => 'nullable|boolean',
+            'is_imei_tracked'        => 'nullable|boolean',
+            'unit_label'             => 'nullable|string|max:50',
+            'pack_label'             => 'nullable|string|max:50',
+            'carton_label'           => 'nullable|string|max:50',
+            'units_per_pack'         => 'nullable|integer|min:1',
+            'packs_per_carton'       => 'nullable|integer|min:1',
+            'front_store_qty'        => 'nullable|integer|min:0',
+            'back_store_qty'         => 'nullable|integer|min:0',
+            'expiry_date'            => 'nullable|date',
+            'item_description'       => 'nullable|string|max:500',
+            'image'                  => 'nullable|image|max:2048',
+            'units'                          => 'nullable|array',
+            'units.*.id'                     => 'nullable|integer',
+            'units.*.unit_name'              => 'required_with:units|string|max:100',
+            'units.*.quantity_in_base_units' => 'required_with:units|integer|min:1',
+            'units.*.selling_price'          => 'required_with:units|numeric|min:0',
+            'units.*.wholesale_price'        => 'nullable|numeric|min:0',
+            'units.*.sort_order'             => 'nullable|integer',
+            'units.*.status'                 => 'nullable|string|in:active,inactive',
         ]);
 
         $barcode = trim($data['barcode_number'] ?? '');
@@ -257,6 +300,9 @@ class ItemController extends Controller
         } else {
             $data['barcode_number'] = null;
         }
+
+        $units = $data['units'] ?? null;
+        unset($data['units']);
 
         $data['wholesale_price'] = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? (float) $data['wholesale_price'] : (float) $data['price'];
         $data['pack_price'] = (!empty($data['pack_price']) && $data['pack_price'] > 0) ? (float) $data['pack_price'] : null;
@@ -280,6 +326,41 @@ class ItemController extends Controller
         unset($data['image']);
 
         $item->update($data);
+
+        // Sync custom item units / variants if provided
+        if (is_array($units)) {
+            $retainedUnitIds = [];
+            foreach ($units as $idx => $u) {
+                if (empty($u['unit_name'])) continue;
+                $unitId   = !empty($u['id']) ? (int) $u['id'] : null;
+                $unitData = [
+                    'item_id'                => $item->id,
+                    'branch_id'              => $branch->id,
+                    'unit_name'              => trim($u['unit_name']),
+                    'quantity_in_base_units' => max(1, (int) ($u['quantity_in_base_units'] ?? 1)),
+                    'selling_price'          => (float) ($u['selling_price'] ?? 0),
+                    'wholesale_price'        => (float) ($u['wholesale_price'] ?? 0),
+                    'sort_order'             => (int) ($u['sort_order'] ?? $idx),
+                    'status'                 => $u['status'] ?? 'active',
+                ];
+
+                if ($unitId) {
+                    $existingUnit = ItemUnit::where('item_id', $item->id)->where('id', $unitId)->first();
+                    if ($existingUnit) {
+                        $existingUnit->update($unitData);
+                        $retainedUnitIds[] = $existingUnit->id;
+                        continue;
+                    }
+                }
+
+                $created = ItemUnit::create($unitData);
+                $retainedUnitIds[] = $created->id;
+            }
+
+            // Delete removed units
+            ItemUnit::where('item_id', $item->id)->whereNotIn('id', $retainedUnitIds)->delete();
+        }
+
         \App\Services\ActivityLogger::item("Updated details for item '{$item->item_name}'", $branch->id);
         return redirect()->route('pos.items.index', ['branch' => $branch->slug])
             ->with('success', 'Item updated successfully.');
@@ -305,7 +386,7 @@ class ItemController extends Controller
     {
         $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
         
-        $item = $itemParam instanceof Item ? $itemParam : Item::findOrFail($itemParam ?: $request->route('item'));
+        $item = $itemParam instanceof Item ? $itemParam : Item::with('units')->findOrFail($itemParam ?: $request->route('item'));
         $this->authorizeBranch($item, $branch);
 
         // Find an incremental unique name
@@ -330,6 +411,14 @@ class ItemController extends Controller
         $newItem->front_store_qty = 0;
         $newItem->back_store_qty = 0;
         $newItem->save();
+
+        // Duplicate associated item_units
+        foreach ($item->units as $u) {
+            $newUnit = $u->replicate(['created_at', 'updated_at']);
+            $newUnit->item_id = $newItem->id;
+            $newUnit->branch_id = $branch->id;
+            $newUnit->save();
+        }
 
         \App\Services\ActivityLogger::item("Duplicated item '{$item->item_name}' as '{$newItem->item_name}'", $branch->id);
 
@@ -374,28 +463,18 @@ class ItemController extends Controller
                 return back()->with('success', "Successfully deleted {$count} item(s).");
 
             case 'update_category':
-                $category = \App\Models\Category::where('branch_id', $branch->id)
-                    ->orWhereNull('branch_id')
-                    ->findOrFail($data['category_id']);
-
                 Item::where('branch_id', $branch->id)
                     ->whereIn('id', $data['item_ids'])
-                    ->update(['category_id' => $category->id]);
-
-                \App\Services\ActivityLogger::item("Bulk moved {$count} items to category '{$category->name}'", $branch->id);
-                return back()->with('success', "Successfully moved {$count} item(s) to '{$category->name}'.");
+                    ->update(['category_id' => $data['category_id']]);
+                \App\Services\ActivityLogger::item("Bulk moved {$count} items to category ID {$data['category_id']}", $branch->id);
+                return back()->with('success', "Successfully updated category for {$count} item(s).");
 
             case 'update_group':
-                $group = \App\Models\GroupAddress::where('branch_id', $branch->id)
-                    ->orWhereNull('branch_id')
-                    ->findOrFail($data['group_address_id']);
-
                 Item::where('branch_id', $branch->id)
                     ->whereIn('id', $data['item_ids'])
-                    ->update(['group_address_id' => $group->id]);
-
-                \App\Services\ActivityLogger::item("Bulk moved {$count} items to shelf location '{$group->name}'", $branch->id);
-                return back()->with('success', "Successfully moved {$count} item(s) to '{$group->name}'.");
+                    ->update(['group_address_id' => $data['group_address_id']]);
+                \App\Services\ActivityLogger::item("Bulk moved {$count} items to shelf location ID {$data['group_address_id']}", $branch->id);
+                return back()->with('success', "Successfully updated shelf location for {$count} item(s).");
 
             case 'adjust_prices':
                 $val = (float) ($data['price_change_value'] ?? 0);
@@ -464,6 +543,7 @@ class ItemController extends Controller
                 'packs_per_carton'
             )
             ->with([
+                'activeUnits',
                 'inStockDeviceUnits' => function ($query) use ($branch) {
                     $query->where('branch_id', $branch->id)->select('id', 'item_id', 'imei_or_device_id', 'location', 'status');
                 }
@@ -476,6 +556,14 @@ class ItemController extends Controller
                 'display_price' => $item->getPriceForUnitLevel('unit', $purchaseType),
                 'pack_display_price' => $item->getPriceForUnitLevel('pack', $purchaseType),
                 'carton_display_price' => $item->getPriceForUnitLevel('carton', $purchaseType),
+                'units' => $item->activeUnits->map(fn($u) => [
+                    'id'                     => $u->id,
+                    'unit_name'              => $u->unit_name,
+                    'quantity_in_base_units' => (int) $u->quantity_in_base_units,
+                    'selling_price'          => (float) $u->selling_price,
+                    'wholesale_price'        => (float) $u->wholesale_price,
+                    'display_price'          => $item->getPriceForUnitLevel($u->unit_name, $purchaseType, $u->id),
+                ])->values()->all(),
                 'image_url' => $item->image_url,
                 'available_imeis' => $item->is_imei_tracked
                     ? $item->inStockDeviceUnits->pluck('imei_or_device_id')->values()->all()

@@ -179,7 +179,7 @@ const deleteUser = (id) => {
                                 </thead>
                                 <tbody>
                                     <tr v-for="user in users.data" :key="user.id"
-                                        class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-750 transition">
+                                        class="border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/60 transition">
                                         <td class="px-5 py-4">
                                             <p class="font-bold text-gray-900 dark:text-white truncate max-w-[200px]">{{ user.name }}</p>
                                             <p class="text-sm text-gray-500 dark:text-gray-400 truncate max-w-[200px]">{{ user.email }}</p>

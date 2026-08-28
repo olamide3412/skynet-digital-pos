@@ -470,7 +470,7 @@ class ItemImportService
                 $backStoreQty  = $defaultStockLocation === 'back_store'  ? (int) ($row['initial_stock_quantity'] ?? 0) : 0;
 
                 // Create the Item (Explicitly assigned to target branch)
-                Item::create([
+                $newItem = Item::create([
                     'branch_id'              => $branch->id,
                     'category_id'            => $categoryId,
                     'group_address_id'       => $groupId,
@@ -494,6 +494,36 @@ class ItemImportService
                     'expiry_date'            => $row['expiry_date'] ?? null,
                     'item_description'       => $row['description'] ?? null,
                 ]);
+
+                // Also populate ItemUnit records for flexible variant system
+                $packQty = max(1, (int) ($row['pack_quantity'] ?? 1));
+                if ((float) ($row['pack_price'] ?? 0) > 0 || $packQty > 1) {
+                    \App\Models\ItemUnit::create([
+                        'item_id'                => $newItem->id,
+                        'branch_id'              => $branch->id,
+                        'unit_name'              => !empty($row['pack_unit_name']) ? $row['pack_unit_name'] : 'Pack',
+                        'quantity_in_base_units' => $packQty,
+                        'selling_price'          => (float) ($row['pack_price'] ?? 0),
+                        'wholesale_price'        => (float) ($row['pack_wholesale_price'] ?? 0),
+                        'sort_order'             => 1,
+                        'status'                 => 'active',
+                    ]);
+                }
+
+                $cartonQty = max(1, (int) ($row['carton_quantity'] ?? 1));
+                if ((float) ($row['carton_price'] ?? 0) > 0 || $cartonQty > 1) {
+                    $cartonBaseQty = $packQty * $cartonQty;
+                    \App\Models\ItemUnit::create([
+                        'item_id'                => $newItem->id,
+                        'branch_id'              => $branch->id,
+                        'unit_name'              => !empty($row['carton_unit_name']) ? $row['carton_unit_name'] : 'Carton',
+                        'quantity_in_base_units' => $cartonBaseQty,
+                        'selling_price'          => (float) ($row['carton_price'] ?? 0),
+                        'wholesale_price'        => (float) ($row['carton_wholesale_price'] ?? 0),
+                        'sort_order'             => 2,
+                        'status'                 => 'active',
+                    ]);
+                }
 
                 $importedCount++;
             }

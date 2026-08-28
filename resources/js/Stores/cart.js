@@ -11,6 +11,8 @@ export const useCartStore = defineStore('cart', () => {
     const discount     = ref({ type: null, value: 0, applied_id: null })
     const consultationFee = ref(0)
     const payment      = ref({ method: 'Cash', cash: 0, bank_transfer: 0, amount_paid: 0 })
+    const lastAddedKey = ref(null)
+    const lastAddedAt  = ref(0)
 
     // ── Computed ───────────────────────────────────────────────────────────
     const subtotal = computed(() => {
@@ -48,9 +50,26 @@ export const useCartStore = defineStore('cart', () => {
     // ── Price Resolver Helper ──────────────────────────────────────────────
     function getPriceForUnit(item, unit = 'unit', pType = purchaseType.value) {
         const isWholesale = pType === 'Wholesale'
-        const u = (unit || 'unit').toLowerCase()
+        const u = (unit || 'unit').toLowerCase().trim()
+        const baseUnit = (item.unit_label || 'unit').toLowerCase().trim()
 
-        if (u === 'carton') {
+        if (u === 'unit' || u === baseUnit) {
+            return parseFloat(isWholesale && Number(item.wholesale_price) > 0 ? item.wholesale_price : (item.price || 0))
+        }
+
+        // 1. Check custom units / variants array
+        if (Array.isArray(item.units) && item.units.length > 0) {
+            const matched = item.units.find(un => (un.unit_name || '').toLowerCase().trim() === u || String(un.id) === String(unit))
+            if (matched) {
+                if (isWholesale && Number(matched.wholesale_price) > 0) {
+                    return parseFloat(matched.wholesale_price)
+                }
+                return parseFloat(matched.selling_price || 0)
+            }
+        }
+
+        // 2. Fallback to legacy pack / carton
+        if (u === 'carton' || u === (item.carton_label || '').toLowerCase().trim()) {
             if (isWholesale && Number(item.carton_wholesale_price) > 0) return parseFloat(item.carton_wholesale_price)
             if (Number(item.carton_price) > 0) return parseFloat(item.carton_price)
             if (Number(item.carton_display_price) > 0) return parseFloat(item.carton_display_price)
@@ -58,7 +77,7 @@ export const useCartStore = defineStore('cart', () => {
             return parseFloat(base * (item.packs_per_carton || 1) * (item.units_per_pack || 1))
         }
 
-        if (u === 'pack') {
+        if (u === 'pack' || u === (item.pack_label || '').toLowerCase().trim()) {
             if (isWholesale && Number(item.pack_wholesale_price) > 0) return parseFloat(item.pack_wholesale_price)
             if (Number(item.pack_price) > 0) return parseFloat(item.pack_price)
             if (Number(item.pack_display_price) > 0) return parseFloat(item.pack_display_price)
@@ -74,7 +93,7 @@ export const useCartStore = defineStore('cart', () => {
     })
 
     // ── Actions ────────────────────────────────────────────────────────────
-    function addItem(item, unit = 'unit', preselectedImei = null) {
+    function addItem(item, unit = 'unit', preselectedImei = null, forceNewRow = false) {
         const unitUsed  = unit || 'unit'
         const isImei    = !!(item.is_imei_tracked || item.raw_item?.is_imei_tracked)
         const unitPrice = getPriceForUnit(item, unitUsed, purchaseType.value)
@@ -99,11 +118,45 @@ export const useCartStore = defineStore('cart', () => {
                 carton_label:     item.carton_label || 'Carton',
                 units_per_pack:   item.units_per_pack || 1,
                 packs_per_carton: item.packs_per_carton || 1,
+                units:            item.units || [],
                 is_imei_tracked:  true,
                 available_imeis:  item.available_imeis || [],
                 selected_imei:    preselectedImei || null,
                 raw_item:         item,
             })
+            lastAddedKey.value = key
+            lastAddedAt.value  = Date.now()
+            return
+        }
+
+        // When forceNewRow is true (e.g. eatery/restaurant grid view mode)
+        if (forceNewRow) {
+            const key = `${item.id}_${unitUsed}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+            items.value.push({
+                cart_key:         key,
+                item_id:          item.id,
+                item_name:        item.item_name,
+                qty:              1,
+                unit_used:        unitUsed,
+                unit_price:       unitPrice,
+                buy_price:        parseFloat(item.buy_price || 0),
+                purchase_type:    purchaseType.value,
+                line_total:       Math.round(unitPrice * 100) / 100,
+                price_locked:     item.price_locked || false,
+                max_qty:          item.front_store_qty ?? item.qty ?? 9999,
+                unit_label:       item.unit_label || 'Unit',
+                pack_label:       item.pack_label || 'Pack',
+                carton_label:     item.carton_label || 'Carton',
+                units_per_pack:   item.units_per_pack || 1,
+                packs_per_carton: item.packs_per_carton || 1,
+                units:            item.units || [],
+                is_imei_tracked:  false,
+                available_imeis:  [],
+                selected_imei:    null,
+                raw_item:         item,
+            })
+            lastAddedKey.value = key
+            lastAddedAt.value  = Date.now()
             return
         }
 
@@ -112,6 +165,8 @@ export const useCartStore = defineStore('cart', () => {
         if (existing) {
             existing.qty++
             existing.line_total = Math.round(existing.unit_price * existing.qty * 100) / 100
+            lastAddedKey.value  = existing.cart_key
+            lastAddedAt.value   = Date.now()
         } else {
             items.value.push({
                 cart_key:         key,
@@ -130,37 +185,54 @@ export const useCartStore = defineStore('cart', () => {
                 carton_label:     item.carton_label || 'Carton',
                 units_per_pack:   item.units_per_pack || 1,
                 packs_per_carton: item.packs_per_carton || 1,
+                units:            item.units || [],
                 is_imei_tracked:  false,
                 available_imeis:  [],
                 selected_imei:    null,
                 raw_item:         item,
             })
+            lastAddedKey.value = key
+            lastAddedAt.value  = Date.now()
         }
     }
 
     function setItemImei(cartKey, imei) {
-        const item = items.value.find(i => i.cart_key === cartKey || i.item_id === cartKey)
+        const item = items.value.find(i => i.cart_key === cartKey)
         if (item) {
             item.selected_imei = imei
         }
     }
 
     function switchUnit(cartKey, newUnit) {
-        const item = items.value.find(i => i.cart_key === cartKey)
-        if (!item) return
+        const idx = items.value.findIndex(i => i.cart_key === cartKey)
+        if (idx === -1) return
+
+        const item       = items.value[idx]
+        const newKey     = `${item.item_id}_${newUnit}`
+        const newPrice   = getPriceForUnit(item.raw_item || item, newUnit, purchaseType.value)
+
+        // If a row for the new unit already exists, merge qty into it and remove current row
+        const existingIdx = items.value.findIndex((i, j) => j !== idx && i.cart_key === newKey)
+        if (existingIdx !== -1) {
+            const existing = items.value[existingIdx]
+            existing.qty       += item.qty
+            existing.line_total = Math.round(existing.unit_price * existing.qty * 100) / 100
+            items.value.splice(idx, 1)
+            return
+        }
 
         item.unit_used  = newUnit
-        item.cart_key   = `${item.item_id}_${newUnit}`
-        item.unit_price = getPriceForUnit(item.raw_item || item, newUnit, purchaseType.value)
-        item.line_total = Math.round(item.unit_price * item.qty * 100) / 100
+        item.cart_key   = newKey
+        item.unit_price = newPrice
+        item.line_total = Math.round(newPrice * item.qty * 100) / 100
     }
 
     function removeItem(cartKey) {
-        items.value = items.value.filter(i => i.cart_key !== cartKey && i.item_id !== cartKey)
+        items.value = items.value.filter(i => i.cart_key !== cartKey)
     }
 
     function updateQty(cartKey, qty) {
-        const item = items.value.find(i => i.cart_key === cartKey || i.item_id === cartKey)
+        const item = items.value.find(i => i.cart_key === cartKey)
         if (!item) return
         const clamped   = Math.max(1, Math.min(qty, 99999))
         item.qty        = clamped
@@ -168,7 +240,7 @@ export const useCartStore = defineStore('cart', () => {
     }
 
     function updatePrice(cartKey, price) {
-        const item = items.value.find(i => i.cart_key === cartKey || i.item_id === cartKey)
+        const item = items.value.find(i => i.cart_key === cartKey)
         if (!item) return
         item.unit_price = parseFloat(price)
         item.line_total = Math.round(item.unit_price * item.qty * 100) / 100
@@ -260,6 +332,7 @@ export const useCartStore = defineStore('cart', () => {
 
     return {
         items, customer, purchaseType, discount, consultationFee, payment,
+        lastAddedKey, lastAddedAt,
         subtotal, discountAmount, taxAmount, grandTotal, itemCount, hasUnassignedImeis,
         addItem, switchUnit, removeItem, updateQty, updatePrice, setItemImei,
         setPurchaseType, applyDiscount, clearDiscount,

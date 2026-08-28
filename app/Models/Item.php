@@ -77,15 +77,39 @@ class Item extends Model
     }
 
     /**
-     * Get configured price for a unit level ('unit'|'pack'|'carton') and purchase type ('Consumer'|'Wholesale').
-     * If explicit pack/carton price is not configured, falls back to linear calculation.
+     * Get configured price for a unit level and purchase type ('Consumer'|'Wholesale').
+     * Checks item_units variants first, then falls back to legacy pack/carton/base pricing.
      */
-    public function getPriceForUnitLevel(string $unit = 'unit', string $purchaseType = 'Consumer'): float
+    public function getPriceForUnitLevel(string $unit = 'unit', string $purchaseType = 'Consumer', ?int $unitId = null): float
     {
         $isWholesale = strtolower($purchaseType) === 'wholesale';
+        $normalizedUnit = strtolower(trim($unit));
 
-        switch (strtolower($unit)) {
+        // 1. Try finding in active item_units
+        $itemUnit = null;
+        if ($unitId) {
+            $itemUnit = $this->relationLoaded('units')
+                ? $this->units->firstWhere('id', $unitId)
+                : $this->units()->where('id', $unitId)->first();
+        }
+
+        if (!$itemUnit && $normalizedUnit !== 'unit' && $normalizedUnit !== strtolower($this->unit_label ?? 'unit')) {
+            $itemUnit = $this->relationLoaded('units')
+                ? $this->units->first(fn($u) => strtolower($u->unit_name) === $normalizedUnit && $u->status === 'active')
+                : $this->units()->whereRaw('LOWER(unit_name) = ?', [$normalizedUnit])->where('status', 'active')->first();
+        }
+
+        if ($itemUnit) {
+            if ($isWholesale && (float) $itemUnit->wholesale_price > 0) {
+                return (float) $itemUnit->wholesale_price;
+            }
+            return (float) $itemUnit->selling_price;
+        }
+
+        // 2. Fallback to legacy pack / carton fields if applicable
+        switch ($normalizedUnit) {
             case 'carton':
+            case strtolower($this->carton_label ?? 'carton'):
                 if ($isWholesale && $this->carton_wholesale_price > 0) {
                     return (float) $this->carton_wholesale_price;
                 }
@@ -96,6 +120,7 @@ class Item extends Model
                 return (float) ($basePrice * ($this->packs_per_carton ?: 1) * ($this->units_per_pack ?: 1));
 
             case 'pack':
+            case strtolower($this->pack_label ?? 'pack'):
                 if ($isWholesale && $this->pack_wholesale_price > 0) {
                     return (float) $this->pack_wholesale_price;
                 }
@@ -114,47 +139,103 @@ class Item extends Model
     // ── Unit conversion helpers ────────────────────────────────────────────────
     /**
      * Convert a quantity in the given unit to base units.
-     * @param int    $qty
-     * @param string $unit  'unit'|'pack'|'carton'
+     * @param int         $qty
+     * @param string      $unit   Unit name or 'unit'|'pack'|'carton'
+     * @param int|null    $unitId Optional ItemUnit PK
      */
-    public function toBaseUnits(int $qty, string $unit = 'unit'): int
+    public function toBaseUnits(int $qty, string $unit = 'unit', ?int $unitId = null): int
     {
+        $normalizedUnit = strtolower(trim($unit));
+
+        // Base unit is always 1:1
+        if ($normalizedUnit === 'unit' || $normalizedUnit === strtolower($this->unit_label ?? 'unit')) {
+            return $qty;
+        }
+
+        // 1. Try finding in item_units
+        $itemUnit = null;
+        if ($unitId) {
+            $itemUnit = $this->relationLoaded('units')
+                ? $this->units->firstWhere('id', $unitId)
+                : $this->units()->where('id', $unitId)->first();
+        }
+
+        if (!$itemUnit) {
+            $itemUnit = $this->relationLoaded('units')
+                ? $this->units->first(fn($u) => strtolower($u->unit_name) === $normalizedUnit)
+                : $this->units()->whereRaw('LOWER(unit_name) = ?', [$normalizedUnit])->first();
+        }
+
+        if ($itemUnit) {
+            return $qty * max(1, (int) $itemUnit->quantity_in_base_units);
+        }
+
+        // 2. Fallback to legacy pack / carton math
         $unitsPerPack   = max(1, (int) ($this->units_per_pack ?: 1));
         $packsPerCarton = max(1, (int) ($this->packs_per_carton ?: 1));
 
-        return match (strtolower($unit)) {
-            'carton' => $qty * $packsPerCarton * $unitsPerPack,
-            'pack'   => $qty * $unitsPerPack,
-            default  => $qty,
+        return match ($normalizedUnit) {
+            'carton', strtolower($this->carton_label ?? 'carton') => $qty * $packsPerCarton * $unitsPerPack,
+            'pack', strtolower($this->pack_label ?? 'pack')       => $qty * $unitsPerPack,
+            default                                               => $qty,
         };
     }
 
     /**
-     * Format a base-unit quantity as human-readable (e.g., "2 cartons 1 pack 3 units").
+     * Format a base-unit quantity as human-readable.
      */
     public function formatBaseUnits(int $baseQty): string
     {
-        $cartonUnits = $this->packs_per_carton * $this->units_per_pack;
         $parts = [];
+        $remaining = $baseQty;
 
-        if ($cartonUnits > 1 && $baseQty >= $cartonUnits) {
-            $cartons = intdiv($baseQty, $cartonUnits);
-            $baseQty %= $cartonUnits;
-            $parts[] = "{$cartons} {$this->carton_label}";
+        // If custom units exist in descending order of size
+        $units = $this->relationLoaded('units')
+            ? $this->units->where('status', 'active')->sortByDesc('quantity_in_base_units')
+            : $this->activeUnits()->orderByDesc('quantity_in_base_units')->get();
+
+        if ($units->isNotEmpty()) {
+            foreach ($units as $u) {
+                $multiplier = (int) $u->quantity_in_base_units;
+                if ($multiplier > 1 && $remaining >= $multiplier) {
+                    $count = intdiv($remaining, $multiplier);
+                    $remaining %= $multiplier;
+                    $parts[] = "{$count} {$u->unit_name}";
+                }
+            }
+        } else {
+            // Legacy pack/carton formatting
+            $cartonUnits = (int) ($this->packs_per_carton ?: 1) * (int) ($this->units_per_pack ?: 1);
+            if ($cartonUnits > 1 && $remaining >= $cartonUnits) {
+                $cartons = intdiv($remaining, $cartonUnits);
+                $remaining %= $cartonUnits;
+                $parts[] = "{$cartons} {$this->carton_label}";
+            }
+            if ((int) $this->units_per_pack > 1 && $remaining >= (int) $this->units_per_pack) {
+                $packs = intdiv($remaining, (int) $this->units_per_pack);
+                $remaining %= (int) $this->units_per_pack;
+                $parts[] = "{$packs} {$this->pack_label}";
+            }
         }
-        if ($this->units_per_pack > 1 && $baseQty >= $this->units_per_pack) {
-            $packs = intdiv($baseQty, $this->units_per_pack);
-            $baseQty %= $this->units_per_pack;
-            $parts[] = "{$packs} {$this->pack_label}";
-        }
-        if ($baseQty > 0 || empty($parts)) {
-            $parts[] = "{$baseQty} {$this->unit_label}";
+
+        if ($remaining > 0 || empty($parts)) {
+            $parts[] = "{$remaining} {$this->unit_label}";
         }
 
         return implode(' ', $parts);
     }
 
     // ── Relations ─────────────────────────────────────────────────────────────
+    public function units(): HasMany
+    {
+        return $this->hasMany(ItemUnit::class)->orderBy('sort_order', 'asc');
+    }
+
+    public function activeUnits(): HasMany
+    {
+        return $this->hasMany(ItemUnit::class)->where('status', 'active')->orderBy('sort_order', 'asc');
+    }
+
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);

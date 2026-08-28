@@ -18,8 +18,10 @@ const form = useForm({
     is_qty_deduction:         !!props.settings.is_qty_deduction,
     out_of_stock:             props.settings.out_of_stock ?? 25,
     is_check_expiration:      !!props.settings.is_check_expiration,
-    is_imei_enabled:          !!props.settings.is_imei_enabled,
-    is_show_buy_price:        !!props.settings.is_show_buy_price,
+    is_imei_enabled:               !!props.settings.is_imei_enabled,
+    is_grid_separate_rows:         !!props.settings.is_grid_separate_rows,
+    is_cart_auto_scroll_highlight: props.settings.is_cart_auto_scroll_highlight !== false && props.settings.is_cart_auto_scroll_highlight !== 0,
+    is_show_buy_price:             !!props.settings.is_show_buy_price,
     is_use_profit_percentage: !!props.settings.is_use_profit_percentage,
     is_tax_enabled:           !!props.settings.is_tax_enabled,
     tax_percentage:           props.settings.tax_percentage ?? 7.5,
@@ -195,12 +197,28 @@ function submit() {
                                 <p class="text-xs text-slate-500 dark:text-slate-400">Allows unit-level serial & IMEI tracking for gadgets, phones, laptops, and electronics</p>
                             </div>
                         </label>
+
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" v-model="form.is_grid_separate_rows" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                            <div>
+                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Separate Rows for Grid View Selections (Eateries & Restaurants)</span>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">When clicking an item in Grid View, add it as a new separate line in the cart instead of incrementing existing quantity (e.g. for individual portions/diners)</p>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" v-model="form.is_cart_auto_scroll_highlight" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                            <div>
+                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Auto-Scroll & 1-Second Highlight on Added Cart Items</span>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Automatically scroll down to focus on added/updated cart items and flash a 1-second pulse animation (from search bar, barcode, or grid)</p>
+                            </div>
+                        </label>
                     </div>
                 </div>
 
                 <div class="flex justify-end pt-2">
                     <button type="submit" :disabled="form.processing"
-                        class="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-900/20 transition disabled:opacity-40">
+                        class="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-900/20 transition disabled:opacity-40 cursor-pointer">
                         {{ form.processing ? 'Saving Settings…' : 'Save POS Settings' }}
                     </button>
                 </div>

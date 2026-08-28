@@ -126,6 +126,8 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.toggle');
         Route::post('/branches/{branch}/toggle-offline', [BranchController::class, 'toggleOffline'])
             ->name('branches.toggle-offline');
+        Route::post('/branches/{branch}/toggle-turnstile', [BranchController::class, 'toggleTurnstile'])
+            ->name('branches.toggle-turnstile');
         Route::put('/branches/{branch}/settings', [BranchController::class, 'updateSettings'])
             ->name('branches.settings.update');
         Route::post('/branches/{branch}/logo', [BranchController::class, 'updateLogo'])

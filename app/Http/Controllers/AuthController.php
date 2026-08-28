@@ -30,9 +30,10 @@ class AuthController extends Controller
 
         return inertia('Auth/Login', [
             'branch' => $branch ? [
-                'name'    => $branch->name,
-                'slug'    => $branch->slug,
-                'logo_url'=> $branch->logo_path ? asset('storage/' . $branch->logo_path) : null,
+                'name'                 => $branch->name,
+                'slug'                 => $branch->slug,
+                'logo_url'             => $branch->logo_path ? asset('storage/' . $branch->logo_path) : null,
+                'is_turnstile_enabled' => (bool) ($branch->getSettings()->is_turnstile_enabled ?? true),
             ] : null,
         ]);
     }
@@ -40,11 +41,18 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $branch = current_branch();
+        $isTurnstileEnabled = $branch ? (bool) ($branch->getSettings()->is_turnstile_enabled ?? true) : true;
 
-        $attributes = $request->validate([
+        $validationRules = [
             'login'    => ['required', 'string'],
             'password' => ['required'],
-        ]);
+        ];
+
+        if ($isTurnstileEnabled && config('services.turnstile.site_key')) {
+            $validationRules['cf_turnstile_response'] = [new Turnstile()];
+        }
+
+        $attributes = $request->validate($validationRules);
 
         $login = $attributes['login'];
         $key   = 'branch-login:' . ($branch?->slug ?? 'none') . ':' . Str::lower($login) . '|' . $request->ip();

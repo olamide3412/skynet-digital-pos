@@ -17,7 +17,7 @@ class StoreSaleRequest extends FormRequest
             $items = $this->items;
             foreach ($items as &$item) {
                 if (isset($item['unit_used'])) {
-                    $item['unit_used'] = strtolower($item['unit_used']);
+                    $item['unit_used'] = trim((string) $item['unit_used']);
                 }
             }
             $this->merge(['items' => $items]);
@@ -27,21 +27,22 @@ class StoreSaleRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'items'                    => ['required', 'array', 'min:1'],
-            'items.*.item_id'          => ['required', 'integer', 'exists:items,id'],
-            'items.*.qty'              => ['required', 'integer', 'min:1'],
-            'items.*.price'            => ['required', 'numeric', 'min:0'],
-            'items.*.unit_used'        => ['nullable', 'string', 'in:unit,pack,carton'],
-            'payment_method'           => ['required', 'string'],
-            'amount_paid'              => ['required', 'numeric', 'min:0'],
-            'purchase_type'            => ['nullable', 'in:Wholesale,Consumer'],
-            'customer_id'              => ['nullable', 'integer', 'exists:pos_customers,id'],
-            'consultation_fee'         => ['nullable', 'numeric', 'min:0'],
-            'discount_amount'          => ['nullable', 'numeric', 'min:0'],
-            'sale_discount_id'         => ['nullable', 'integer', 'exists:sale_discounts,id'],
-            'bank_transfer'            => ['nullable', 'numeric', 'min:0'],
-            'cash'                     => ['nullable', 'numeric', 'min:0'],
-            'is_debt'                  => ['nullable', 'boolean'],
+            'items'                         => ['required', 'array', 'min:1'],
+            'items.*.item_id'               => ['required', 'integer', 'exists:items,id'],
+            'items.*.qty'                   => ['required', 'integer', 'min:1'],
+            'items.*.price'                 => ['required', 'numeric', 'min:0'],
+            'items.*.unit_used'             => ['nullable', 'string', 'max:100'],
+            'items.*.imei_or_device_id'     => ['nullable', 'string', 'max:100'],
+            'payment_method'                => ['required', 'string'],
+            'amount_paid'                   => ['required', 'numeric', 'min:0'],
+            'purchase_type'                 => ['nullable', 'in:Wholesale,Consumer'],
+            'customer_id'                   => ['nullable', 'integer', 'exists:pos_customers,id'],
+            'consultation_fee'              => ['nullable', 'numeric', 'min:0'],
+            'discount_amount'               => ['nullable', 'numeric', 'min:0'],
+            'sale_discount_id'              => ['nullable', 'integer', 'exists:sale_discounts,id'],
+            'bank_transfer'                 => ['nullable', 'numeric', 'min:0'],
+            'cash'                          => ['nullable', 'numeric', 'min:0'],
+            'is_debt'                       => ['nullable', 'boolean'],
         ];
     }
 }

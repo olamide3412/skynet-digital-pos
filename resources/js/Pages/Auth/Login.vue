@@ -39,11 +39,16 @@ const branchLogo = computed(() => {
     return Logo
 })
 
+const isTurnstileActive = computed(() => {
+    return (props.branch?.is_turnstile_enabled !== false) && !!page.props.turnstileSiteKey
+})
+
 const turnstileWidgetId = ref(null)
 const isTurnstileLoaded = ref(false)
 const turnstileError = ref('')
 
 const loadTurnstile = () => {
+    if (!isTurnstileActive.value) return
     if (window.turnstile) {
         renderTurnstile()
         return
@@ -67,6 +72,7 @@ const loadTurnstile = () => {
 }
 
 const renderTurnstile = () => {
+    if (!isTurnstileActive.value) return
     const sitekey = page.props.turnstileSiteKey
     if (window.turnstile && document.getElementById('cf-turnstile-widget') && sitekey) {
         turnstileWidgetId.value = window.turnstile.render('#cf-turnstile-widget', {
@@ -102,13 +108,13 @@ const reloadTurnstile = () => {
 }
 
 onMounted(() => {
-    if (page.props.turnstileSiteKey) {
+    if (isTurnstileActive.value) {
         loadTurnstile()
     }
 })
 
 const handleLogin = () => {
-    if (page.props.turnstileSiteKey && !form.cf_turnstile_response) {
+    if (isTurnstileActive.value && !form.cf_turnstile_response) {
         turnstileError.value = 'Please complete the CAPTCHA verification'
         return
     }
@@ -116,7 +122,9 @@ const handleLogin = () => {
     form.post(route('pos.login.submit', { branch: branchSlug.value }), {
         onFinish: () => {
             form.reset('password')
-            resetTurnstile()
+            if (isTurnstileActive.value) {
+                resetTurnstile()
+            }
         },
         onError: () => {
             form.reset("password")
@@ -128,7 +136,7 @@ const handleLogin = () => {
         },
         onSuccess: () => {
             if (flashMsg) {
-                toast.error(flashMsg)
+                toast.success(flashMsg)
             }
             form.reset()
         }
@@ -192,8 +200,8 @@ const handleLogin = () => {
                     autocomplete="current-password"
                 />
 
-                <!-- Cloudflare Turnstile Widget (If enabled) -->
-                <div v-if="page.props.turnstileSiteKey" class="flex flex-col items-center gap-1">
+                <!-- Cloudflare Turnstile Widget (If enabled for branch) -->
+                <div v-if="isTurnstileActive" class="flex flex-col items-center gap-1">
                     <div id="cf-turnstile-widget" class="cf-turnstile"></div>
                     <div v-if="turnstileError" class="text-red-600 dark:text-red-400 text-xs text-center font-medium">
                         {{ turnstileError }}
