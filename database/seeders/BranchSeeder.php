@@ -18,12 +18,12 @@ class BranchSeeder extends Seeder
 
         // ── Sample branch: Felix Enterprise ──────────────────────────────────
         $branch = Branch::firstOrCreate(
-            ['slug' => 'eewtech-enterprise'],
+            ['slug' => 'hub-enterprise'],
             [
-                'name' => 'EEWTECH Enterprise',
+                'name' => 'HUB Enterprise',
                 'address' => '12 Commercial Road, Asaba, Delta State',
                 'phone' => '+2348012345678',
-                'email' => 'digital@eewtechpos.com',
+                'email' => 'hub@gmail.com',
                 'is_active' => true,
             ]
         );
@@ -53,12 +53,12 @@ class BranchSeeder extends Seeder
 
         // ── Branch Admin user ─────────────────────────────────────────────────
         $admin = User::updateOrCreate(
-            ['username' => 'eew-admin'],
+            ['username' => 'admin'],
             [
-                'name' => 'EEW Admin',
-                'full_name' => 'EEW Enterprise Admin',
-                'username' => 'eew-digital-admin',
-                'email' => 'admin@eew.com',
+                'name' => 'Hub Admin',
+                'full_name' => 'Hub Enterprise Admin',
+                'username' => 'admin',
+                'email' => 'admin@hub.com',
                 'password' => Hash::make('admin123'),
                 'is_active' => true,
                 'is_super_admin' => false,
@@ -70,12 +70,12 @@ class BranchSeeder extends Seeder
 
         // ── Sample Cashier ────────────────────────────────────────────────────
         $cashier = User::updateOrCreate(
-            ['username' => 'eew-cashier1'],
+            ['username' => 'cashier1'],
             [
                 'name' => 'Jane Cashier',
                 'full_name' => 'Jane Cashier',
-                'username' => 'eew-cashier1',
-                'email' => 'cashier@eew.com',
+                'username' => 'cashier1',
+                'email' => 'cashier@gmail.com',
                 'password' => Hash::make('cashier123'),
                 'is_active' => true,
                 'is_super_admin' => false,
