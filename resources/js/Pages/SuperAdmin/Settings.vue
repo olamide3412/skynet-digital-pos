@@ -19,6 +19,7 @@ const props = defineProps({
     supportEmail:         String,
     companyLogoUrl:       String,
     themePalettes:        Array,
+    mailSettings:         Object,
 })
 
 const activeTab        = ref('branding')
@@ -26,6 +27,7 @@ const selectedTheme    = ref(props.currentTheme || 'skynet')
 const customPrimary   = ref(props.customPrimaryHex || '#7B00FF')
 const customSecondary = ref(props.customSecondaryHex || '#FBA43D')
 const logoPreview      = ref(props.companyLogoUrl || null)
+const isTestingEmail   = ref(false)
 
 const LUMINOUS_MAP = {
     skynet: '#C084FC',
@@ -53,6 +55,36 @@ const form = useForm({
     support_email:          props.supportEmail || 'support@skynetdigitalltd.com',
     company_logo:           null,
 })
+
+const mailForm = useForm({
+    mail_enabled:      props.mailSettings?.mail_enabled ?? false,
+    mail_host:         props.mailSettings?.mail_host || '',
+    mail_port:         props.mailSettings?.mail_port || 587,
+    mail_username:     props.mailSettings?.mail_username || '',
+    mail_password:     '',
+    mail_encryption:   props.mailSettings?.mail_encryption || 'tls',
+    mail_from_address: props.mailSettings?.mail_from_address || '',
+    mail_from_name:    props.mailSettings?.mail_from_name || 'Skynet POS System',
+})
+
+const testEmailForm = useForm({
+    test_email: '',
+})
+
+function saveMailSettings() {
+    mailForm.post(route('superadmin.settings.mail'), {
+        preserveScroll: true,
+    })
+}
+
+function sendTestEmail() {
+    testEmailForm.post(route('superadmin.settings.mail.test'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            testEmailForm.reset()
+        }
+    })
+}
 
 const currentLuminousHex = computed(() => {
     return LUMINOUS_MAP[selectedTheme.value] || customPrimary.value || '#C084FC'
@@ -235,6 +267,19 @@ function submit() {
             >
                 <span>🔐</span>
                 <span>Security & Maintenance</span>
+            </button>
+
+            <button
+                @click="activeTab = 'mail'"
+                :class="[
+                    'px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 whitespace-nowrap cursor-pointer',
+                    activeTab === 'mail'
+                        ? 'bg-theme text-white shadow-md'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                ]"
+            >
+                <span>✉️</span>
+                <span>Email & SMTP Server</span>
             </button>
         </div>
 
@@ -573,6 +618,159 @@ function submit() {
                     <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Security Index</span>
                     <p class="text-sm font-bold text-theme">Spatie Permissions Enabled</p>
                 </div>
+            </div>
+        </div>
+
+        <!-- ── TAB 4: EMAIL & SMTP SERVER CONFIGURATION ───────────────────── -->
+        <div v-show="activeTab === 'mail'" class="space-y-6">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-6">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-theme inline-block"></span>
+                        Outgoing Mail (SMTP) Configuration
+                    </h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        Configure the system-wide SMTP mail server used for sending broadcast announcements and email notifications. Credentials are securely encrypted at rest.
+                    </p>
+                </div>
+
+                <form @submit.prevent="saveMailSettings" class="space-y-5">
+                    <!-- Master Toggle -->
+                    <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 flex items-center justify-between">
+                        <div>
+                            <span class="text-xs font-bold text-slate-900 dark:text-white block">Enable Outgoing Email Delivery</span>
+                            <span class="text-[11px] text-slate-500 dark:text-slate-400">Master switch. When disabled, broadcast notifications will only deliver in-app.</span>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" v-model="mailForm.mail_enabled" class="sr-only peer">
+                            <div class="w-11 h-6 bg-slate-300 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:bg-slate-700 peer-checked:bg-theme"></div>
+                        </label>
+                    </div>
+
+                    <!-- SMTP Fields Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">SMTP Host</label>
+                            <input
+                                type="text"
+                                v-model="mailForm.mail_host"
+                                placeholder="smtp.gmail.com or smtp.mailgun.org"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">SMTP Port</label>
+                            <input
+                                type="number"
+                                v-model="mailForm.mail_port"
+                                placeholder="587"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">SMTP Username / Email</label>
+                            <input
+                                type="text"
+                                v-model="mailForm.mail_username"
+                                placeholder="notifications@skynetdigitalltd.com"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                                <span>SMTP Password</span>
+                                <span v-if="mailSettings?.has_password" class="text-emerald-600 dark:text-emerald-400 font-normal ml-1">
+                                    (Password is securely stored. Leave blank to keep)
+                                </span>
+                            </label>
+                            <input
+                                type="password"
+                                v-model="mailForm.mail_password"
+                                :placeholder="mailSettings?.has_password ? '••••••••••••••••' : 'Enter SMTP password or App Password'"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Encryption Protocol</label>
+                            <select
+                                v-model="mailForm.mail_encryption"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                            >
+                                <option value="tls">TLS (Recommended - Port 587)</option>
+                                <option value="ssl">SSL (Port 465)</option>
+                                <option value="none">None (Plaintext - Port 25)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">From Sender Address</label>
+                            <input
+                                type="email"
+                                v-model="mailForm.mail_from_address"
+                                placeholder="notifications@skynetdigitalltd.com"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                            />
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">From Sender Display Name</label>
+                            <input
+                                type="text"
+                                v-model="mailForm.mail_from_name"
+                                placeholder="Skynet POS Notifications"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end pt-2">
+                        <button
+                            type="submit"
+                            :disabled="mailForm.processing"
+                            class="px-6 py-2.5 rounded-xl bg-theme hover:bg-theme-dark text-white text-xs font-bold shadow-md transition cursor-pointer disabled:opacity-50"
+                        >
+                            {{ mailForm.processing ? 'Saving...' : 'Save Mail Configuration' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Test Email Section -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-4">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                        <span>🧪</span>
+                        <span>Send Test Email</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Verify your SMTP credentials by sending a test message before broadcasting to branches.
+                    </p>
+                </div>
+
+                <form @submit.prevent="sendTestEmail" class="flex flex-col sm:flex-row gap-3 max-w-xl">
+                    <input
+                        type="email"
+                        v-model="testEmailForm.test_email"
+                        required
+                        placeholder="Enter your email (e.g. admin@example.com)"
+                        class="flex-1 px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm"
+                    />
+                    <button
+                        type="submit"
+                        :disabled="testEmailForm.processing"
+                        class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 dark:bg-slate-700 dark:hover:bg-slate-600 text-white text-xs font-bold shadow-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                        <svg v-if="testEmailForm.processing" class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <span>{{ testEmailForm.processing ? 'Sending...' : 'Send Test' }}</span>
+                    </button>
+                </form>
             </div>
         </div>
 

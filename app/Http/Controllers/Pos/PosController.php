@@ -9,6 +9,7 @@ use App\Models\PosSettings;
 use App\Models\PosCustomer;
 use App\Models\SaleDiscount;
 use App\Models\HeldSale;
+use App\Services\QuickAccessService;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
@@ -24,6 +25,15 @@ class PosController extends Controller
             ->where('start_date_time', '<=', now())
             ->where('end_date_time',   '>=', now())
             ->first() : null;
+
+        // Quick Access Widget data (capped at 10 items)
+        $quickAccess = $branch ? QuickAccessService::getQuickAccessData($branch) : [
+            'mode'       => 'none',
+            'title'      => '',
+            'subtitle'   => '',
+            'items'      => [],
+            'categories' => [],
+        ];
 
         // Grid items for gallery mode (strictly scoped to this branch)
         $itemGrids = $branch ? ItemGrid::whereHas('item', fn($q) => $q->where('branch_id', $branch->id))
@@ -54,6 +64,7 @@ class PosController extends Controller
 
         return Inertia::render('Pos/Index', [
             'settings'         => $settingsData,
+            'quickAccess'      => $quickAccess,
             'itemGrids'        => $itemGrids,
             'heldSales'        => $heldSales,
             'activeDiscount'   => $activeDiscount,

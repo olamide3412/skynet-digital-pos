@@ -1,5 +1,5 @@
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useCurrency } from '@/Composables/useCurrency'
 import { searchLocalItems } from '@/Services/offlineDb'
@@ -13,12 +13,30 @@ const emit = defineEmits(['select'])
 
 const { format } = useCurrency()
 const { isOnline } = useOfflineSync()
-const searchInput = ref(null)   // template ref for reliable focus
-const query       = ref('')
-const results     = ref([])
-const loading     = ref(false)
-let   debounce    = null
-let   lastInput   = 0
+
+const rootContainer  = ref(null)
+const searchInput    = ref(null)   // template ref for reliable focus
+const query          = ref('')
+const results        = ref([])
+const loading        = ref(false)
+const selectedIndex  = ref(-1)
+
+let debounce               = null
+let searchSeq              = 0
+let activeAbortController  = null
+
+function cancelPendingSearches() {
+    clearTimeout(debounce)
+    debounce = null
+    if (activeAbortController) {
+        try {
+            activeAbortController.abort()
+        } catch (e) {}
+        activeAbortController = null
+    }
+    searchSeq++
+    loading.value = false
+}
 
 function refocusSearch() {
     nextTick(() => {
@@ -26,42 +44,97 @@ function refocusSearch() {
     })
 }
 
-function onBlur() {
-    // Only auto-refocus on desktop devices with physical keyboards / barcode scanners
-    if (typeof window !== 'undefined' && window.innerWidth < 1024) return
-
-    setTimeout(() => {
-        const active = document.activeElement
-        if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA' && active.tagName !== 'SELECT' && active.tagName !== 'BUTTON')) {
-            refocusSearch()
-        }
-    }, 120)
-}
-
 function onInput(e) {
     const val = e.target.value
     query.value = val
-    clearTimeout(debounce)
-    if (!val) { results.value = []; return }
-    debounce = setTimeout(() => doSearch(val), 150)
+    selectedIndex.value = -1
+
+    cancelPendingSearches()
+
+    if (!val || !val.trim()) {
+        results.value = []
+        return
+    }
+
+    const currentSeq = ++searchSeq
+
+    // Instant local cache peek (0ms latency)
+    searchLocalItems(val.trim(), props.purchaseType).then((local) => {
+        if (currentSeq === searchSeq && query.value.trim() && local && local.length > 0) {
+            results.value = local
+        }
+    }).catch(() => {})
+
+    debounce = setTimeout(() => {
+        doSearch(val.trim())
+    }, 150)
+}
+
+function onKeyDown(e) {
+    if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (results.value.length > 0) {
+            selectedIndex.value = (selectedIndex.value + 1) % results.value.length
+            scrollToSelected()
+        }
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        if (results.value.length > 0) {
+            selectedIndex.value = (selectedIndex.value - 1 + results.value.length) % results.value.length
+            scrollToSelected()
+        }
+    } else if (e.key === 'Enter') {
+        e.preventDefault()
+        onEnter()
+    } else if (e.key === 'Escape') {
+        e.preventDefault()
+        cancelPendingSearches()
+        results.value = []
+        query.value = ''
+    }
+}
+
+function scrollToSelected() {
+    nextTick(() => {
+        const activeEl = rootContainer.value?.querySelector('[data-selected="true"]')
+        if (activeEl) {
+            activeEl.scrollIntoView({ block: 'nearest' })
+        }
+    })
 }
 
 async function onEnter() {
-    clearTimeout(debounce)
+    cancelPendingSearches()
+
+    // If an item in the list is highlighted with Arrow keys
+    if (selectedIndex.value >= 0 && results.value[selectedIndex.value]) {
+        selectItem(results.value[selectedIndex.value])
+        return
+    }
+
+    // If results are already loaded, select the first one
     if (results.value.length > 0) {
         selectItem(results.value[0])
         return
     }
+
+    // If query is present but results not yet ready (e.g. fast barcode scan), do search and auto-select
     if (query.value.trim()) {
         await doSearch(query.value.trim(), true)
     }
 }
 
 async function doSearch(q, autoSelectFirst = false) {
-    if (!q) { results.value = []; return }
+    if (!q || !q.trim()) {
+        results.value = []
+        loading.value = false
+        return
+    }
+
+    const thisSeq = ++searchSeq
     loading.value = true
 
-    // 1. Instant local search from IndexedDB (0ms latency)
+    // 1. Instant local search from IndexedDB
     let localResults = []
     try {
         localResults = await searchLocalItems(q, props.purchaseType)
@@ -69,14 +142,21 @@ async function doSearch(q, autoSelectFirst = false) {
         console.warn('Local search error:', e)
     }
 
-    // If offline or offline mode active without confirmed online connection, immediately use local results
+    // If outdated request or user cleared input while waiting, discard
+    if (thisSeq !== searchSeq || !query.value.trim()) {
+        loading.value = false
+        return
+    }
+
     const isDeviceOffline = !isOnline.value || (typeof navigator !== 'undefined' && !navigator.onLine)
     if (isDeviceOffline || (props.settings?.is_offline_enabled && localResults.length > 0)) {
-        results.value = localResults
-        if (autoSelectFirst && localResults.length > 0) {
-            selectItem(localResults[0])
-            loading.value = false
-            return
+        if (thisSeq === searchSeq && query.value.trim()) {
+            results.value = localResults
+            if (autoSelectFirst && localResults.length > 0) {
+                selectItem(localResults[0])
+                loading.value = false
+                return
+            }
         }
         if (isDeviceOffline) {
             loading.value = false
@@ -84,34 +164,73 @@ async function doSearch(q, autoSelectFirst = false) {
         }
     }
 
-    // 2. If online, fetch fresh server data with fast 2.5s timeout
+    // 2. Online Server Query with AbortController signal
     try {
+        activeAbortController = new AbortController()
         const res = await axios.get(route('pos.api.items.search'), {
             params: { q, purchase_type: props.purchaseType },
             timeout: 2500,
+            signal: activeAbortController.signal,
         })
-        if (res.data && Array.isArray(res.data)) {
-            results.value = res.data
-            if (autoSelectFirst && res.data.length > 0) {
-                selectItem(res.data[0])
+
+        // Verify that this is still the active search query
+        if (thisSeq === searchSeq && query.value.trim()) {
+            if (res.data && Array.isArray(res.data)) {
+                results.value = res.data
+                selectedIndex.value = -1
+
+                if (autoSelectFirst && res.data.length > 0) {
+                    selectItem(res.data[0])
+                    return
+                }
             }
         }
     } catch (err) {
-        // Fallback already displayed localResults
-        if (localResults.length > 0) {
+        if (axios.isCancel(err) || err.name === 'CanceledError' || err.name === 'AbortError') {
+            // Request was cancelled cleanly
+            return
+        }
+        // Fallback to localResults if server failed
+        if (thisSeq === searchSeq && query.value.trim() && localResults.length > 0) {
             results.value = localResults
         }
     } finally {
-        loading.value = false
+        if (thisSeq === searchSeq) {
+            loading.value = false
+        }
     }
 }
 
 function selectItem(item) {
+    if (!item) return
+
+    // Immediately cancel and invalidate any pending searches or responses
+    cancelPendingSearches()
+
     emit('select', item)
-    query.value   = ''
-    results.value = []
+    query.value         = ''
+    results.value       = []
+    selectedIndex.value = -1
+
     refocusSearch()
 }
+
+// Click-outside listener to close dropdown
+function handleDocumentClick(e) {
+    if (rootContainer.value && !rootContainer.value.contains(e.target)) {
+        results.value = []
+        selectedIndex.value = -1
+    }
+}
+
+onMounted(() => {
+    document.addEventListener('click', handleDocumentClick, true)
+})
+
+onUnmounted(() => {
+    document.removeEventListener('click', handleDocumentClick, true)
+    cancelPendingSearches()
+})
 
 function isExpired(item) {
     if (!item.expiry_date) return false
@@ -144,7 +263,7 @@ defineExpose({ focus: refocusSearch })
 </script>
 
 <template>
-    <div class="relative">
+    <div ref="rootContainer" class="relative">
         <div class="flex items-center gap-2 bg-slate-100 dark:bg-slate-700 rounded-lg px-3 py-2 border border-slate-200 dark:border-slate-600 transition-colors">
             <svg class="w-4 h-4 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -154,9 +273,7 @@ defineExpose({ focus: refocusSearch })
                 ref="searchInput"
                 v-model="query"
                 @input="onInput"
-                @blur="onBlur"
-                @keydown.enter="onEnter"
-                @keydown.escape="results = []; query = ''"
+                @keydown="onKeyDown"
                 type="text"
                 placeholder="Search item name or scan barcode…"
                 class="flex-1 bg-transparent text-slate-900 dark:text-white placeholder-slate-400 text-sm outline-none"
@@ -166,19 +283,29 @@ defineExpose({ focus: refocusSearch })
         </div>
 
         <!-- Dropdown Results -->
-        <div v-if="results.length" class="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-2xl max-h-72 overflow-y-auto">
+        <div
+            v-if="results.length && query.trim()"
+            class="absolute top-full left-0 right-0 z-50 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-2xl max-h-72 overflow-y-auto"
+        >
             <button
-                v-for="item in results"
+                v-for="(item, idx) in results"
                 :key="item.id"
-                @click="selectItem(item)"
-                class="w-full flex items-center justify-between px-3 py-2 hover:bg-slate-100 dark:hover:bg-slate-700 transition text-left border-b border-slate-100 dark:border-slate-700/50 last:border-0"
+                :data-selected="selectedIndex === idx"
+                @mousedown.prevent="selectItem(item)"
+                type="button"
+                :class="[
+                    'w-full flex items-center justify-between px-3 py-2 transition text-left border-b border-slate-100 dark:border-slate-700/50 last:border-0 cursor-pointer',
+                    selectedIndex === idx
+                        ? 'bg-emerald-50 dark:bg-slate-700 text-emerald-900 dark:text-emerald-300'
+                        : 'hover:bg-slate-100 dark:hover:bg-slate-700/80 text-slate-900 dark:text-white'
+                ]"
             >
                 <div class="flex-1 min-w-0 flex items-center gap-2.5">
                     <div v-if="item.image_url" class="w-8 h-8 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden flex items-center justify-center border border-slate-200 dark:border-slate-600 flex-shrink-0">
                         <img :src="item.image_url" class="object-cover w-full h-full" alt="Item Thumbnail" />
                     </div>
                     <div class="truncate">
-                        <p class="text-sm font-medium text-slate-900 dark:text-white truncate">{{ item.item_name }}</p>
+                        <p class="text-sm font-medium truncate">{{ item.item_name }}</p>
                         <p class="text-xs text-slate-500 dark:text-slate-400">
                             {{ item.barcode_number }} · {{ item.category?.name }}
                             <span v-if="settings.is_check_expiration && item.expiry_date" class="text-amber-600 dark:text-amber-400 font-medium ml-1.5">

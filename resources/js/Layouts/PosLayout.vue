@@ -105,6 +105,23 @@ const allNavLinks = [
         ],
     },
     {
+        label: 'AI Intelligence',
+        icon:  'M13 10V3L4 14h7v7l9-11h-7z',
+        perm:  'canViewReports',
+        children: [
+            { label: 'Ask-Your-Business AI', route: 'pos.ai.chat',    match: 'AI/ChatAssistant' },
+            { label: 'Reorder Predictions',  route: 'pos.ai.reorder', match: 'AI/ReorderPredictions' },
+        ],
+    },
+    {
+        label: 'Notifications',
+        route: 'pos.notifications.index',
+        match: 'Notifications/Index',
+        icon:  'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
+        badgeKey: 'unread_notifications_count',
+        always: true,
+    },
+    {
         label: 'Printer Setup',
         route: 'pos.printer-setup',
         match: 'Printer/Index',
@@ -249,7 +266,7 @@ onMounted(() => {
                             :href="safeRoute(link.route)"
                             @click="isMobileOpen = false"
                             :class="[
-                                'flex items-center rounded-xl text-xs font-medium transition duration-150',
+                                'flex items-center rounded-xl text-xs font-medium transition duration-150 relative',
                                 (isCollapsed && !isMobileOpen) ? 'justify-center p-2.5' : 'px-3 py-2 gap-2.5',
                                 isActive(link)
                                     ? 'bg-theme-light dark:bg-theme/20 text-theme-dark dark:text-white font-bold shadow-2xs'
@@ -258,7 +275,17 @@ onMounted(() => {
                             <svg class="w-4.5 h-4.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="link.icon"/>
                             </svg>
-                            <span v-show="!isCollapsed || isMobileOpen">{{ link.label }}</span>
+                            <span v-show="!isCollapsed || isMobileOpen" class="flex-1 truncate">{{ link.label }}</span>
+                            <span
+                                v-if="link.badgeKey && $page.props[link.badgeKey] > 0 && (!isCollapsed || isMobileOpen)"
+                                class="px-1.5 py-0.5 text-[10px] font-black rounded-full bg-rose-500 text-white leading-none shadow-xs ml-auto"
+                            >
+                                {{ $page.props[link.badgeKey] }}
+                            </span>
+                            <span
+                                v-if="link.badgeKey && $page.props[link.badgeKey] > 0 && isCollapsed && !isMobileOpen"
+                                class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900 animate-pulse"
+                            ></span>
                         </Link>
 
                         <!-- Standalone Tooltip Toast on Hover when Collapsed -->

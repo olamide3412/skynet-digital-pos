@@ -102,6 +102,7 @@ class SystemSettingController extends Controller
             'supportEmail'         => SystemSetting::get('support_email', 'support@skynetdigitalltd.com'),
             'companyLogoUrl'       => $logoPath ? asset('storage/' . $logoPath) : null,
             'themePalettes'        => self::THEME_PALETTES,
+            'mailSettings'         => \App\Services\MailConfigService::getSettings(),
         ]);
     }
 
@@ -140,5 +141,40 @@ class SystemSettingController extends Controller
         \App\Services\ActivityLogger::setting('Updated system branding, custom theme colors, and company configuration');
 
         return back()->with('success', 'Global system branding and parameters saved successfully.');
+    }
+
+    public function updateMail(Request $request)
+    {
+        $data = $request->validate([
+            'mail_enabled'      => 'required|boolean',
+            'mail_host'         => 'nullable|string|max:255',
+            'mail_port'         => 'nullable|integer|min:1|max:65535',
+            'mail_username'     => 'nullable|string|max:255',
+            'mail_password'     => 'nullable|string|max:500',
+            'mail_encryption'   => 'nullable|string|in:tls,ssl,none',
+            'mail_from_address' => 'nullable|email|max:255',
+            'mail_from_name'    => 'nullable|string|max:255',
+        ]);
+
+        \App\Services\MailConfigService::saveSettings($data);
+
+        \App\Services\ActivityLogger::setting('Updated SMTP mail server configuration and parameters');
+
+        return back()->with('success', 'Mail delivery configuration saved successfully.');
+    }
+
+    public function testMail(Request $request)
+    {
+        $data = $request->validate([
+            'test_email' => 'required|email|max:255',
+        ]);
+
+        $result = \App\Services\MailConfigService::sendTestEmail($data['test_email']);
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
+
+        return back()->with('success', $result['message']);
     }
 }

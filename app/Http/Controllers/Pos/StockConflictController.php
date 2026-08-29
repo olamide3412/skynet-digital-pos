@@ -77,6 +77,13 @@ class StockConflictController extends Controller
             'resolved_at'      => now(),
         ]);
 
+        // Mark associated notifications as resolved
+        \App\Services\NotificationService::resolveForReference(
+            StockConflict::class,
+            $conflict->id,
+            Auth::id()
+        );
+
         \App\Services\ActivityLogger::stock(
             "Marked stock conflict #{$conflict->id} ({$conflict->item_name}) as {$data['status']}",
             $branch?->id

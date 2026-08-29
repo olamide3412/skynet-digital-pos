@@ -24,8 +24,27 @@ class SettingsController extends Controller
             $settingsData['logo_url']                = $branch->logo_path ? asset('storage/' . $branch->logo_path) : null;
         }
 
+        $branchItems = $branch ? \App\Models\Item::where('branch_id', $branch->id)
+            ->select(['id', 'item_name', 'barcode_number', 'price', 'front_store_qty', 'image_path'])
+            ->orderBy('item_name')
+            ->get()
+            ->map(fn($item) => [
+                'id'              => $item->id,
+                'item_name'       => $item->item_name,
+                'barcode_number'  => $item->barcode_number,
+                'price'           => (float) $item->price,
+                'front_store_qty' => (int) $item->front_store_qty,
+                'image_url'       => $item->image_url,
+            ]) : [];
+
+        $categories = $branch ? \App\Models\Category::where(function ($q) use ($branch) {
+            $q->where('branch_id', $branch->id)->orWhereNull('branch_id');
+        })->orderBy('name')->get(['id', 'name']) : [];
+
         return Inertia::render('Settings/Index', [
-            'settings' => $settingsData,
+            'settings'    => $settingsData,
+            'branchItems' => $branchItems,
+            'categories'  => $categories,
         ]);
     }
 
@@ -42,6 +61,11 @@ class SettingsController extends Controller
             'business_email'           => 'nullable|email|max:100',
             'logo'                     => 'nullable|image|max:2048',
             'sell_interface'           => 'required|in:classic,gallery',
+            'quick_access_mode'        => 'required|string|in:none,top_sellers,recently_sold,pinned_items,category_shortcuts',
+            'pinned_quick_access_items'=> 'nullable|array|max:10',
+            'pinned_quick_access_items.*' => 'integer',
+            'quick_access_category_ids'=> 'nullable|array|max:6',
+            'quick_access_category_ids.*' => 'integer',
             'is_price_editable'        => 'nullable|boolean',
             'is_qty_deduction'         => 'nullable|boolean',
             'out_of_stock'             => 'required|integer|min:0',
@@ -92,6 +116,10 @@ class SettingsController extends Controller
 
         $settings = PosSettings::current();
         $settings->update($settingsData);
+
+        if ($branch) {
+            \App\Services\QuickAccessService::clearBranchCache($branch->id);
+        }
 
         // ── 3. Recalculate item prices if auto profit percentage is enabled ────
         if (!empty($data['is_use_profit_percentage'])) {

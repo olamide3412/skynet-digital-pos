@@ -128,6 +128,8 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.toggle-offline');
         Route::post('/branches/{branch}/toggle-turnstile', [BranchController::class, 'toggleTurnstile'])
             ->name('branches.toggle-turnstile');
+        Route::post('/branches/{branch}/toggle-ai', [BranchController::class, 'toggleAi'])
+            ->name('branches.toggle-ai');
         Route::put('/branches/{branch}/settings', [BranchController::class, 'updateSettings'])
             ->name('branches.settings.update');
         Route::post('/branches/{branch}/logo', [BranchController::class, 'updateLogo'])
@@ -199,6 +201,17 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             Route::put('/{itemType}',    [\App\Http\Controllers\SuperAdmin\ImportItemTypeController::class, 'update'])->name('update');
             Route::delete('/{itemType}', [\App\Http\Controllers\SuperAdmin\ImportItemTypeController::class, 'destroy'])->name('destroy');
         });
+
+        // Super Admin Broadcast Notifications
+        Route::prefix('broadcasts')->name('broadcasts.')->group(function () {
+            Route::get('/',            [\App\Http\Controllers\SuperAdmin\BroadcastController::class, 'index'])->name('index');
+            Route::post('/',           [\App\Http\Controllers\SuperAdmin\BroadcastController::class, 'store'])->name('store');
+            Route::get('/{broadcast}', [\App\Http\Controllers\SuperAdmin\BroadcastController::class, 'show'])->name('show');
+        });
+
+        // Mail Server Configuration
+        Route::post('settings/mail',      [\App\Http\Controllers\SuperAdmin\SystemSettingController::class, 'updateMail'])->name('settings.mail');
+        Route::post('settings/mail/test', [\App\Http\Controllers\SuperAdmin\SystemSettingController::class, 'testMail'])->name('settings.mail.test');
     });
 });
 
@@ -307,6 +320,16 @@ Route::prefix('{branch}')
             Route::post('/conflicts/{conflict}/resolve', [\App\Http\Controllers\Pos\StockConflictController::class, 'resolve'])
                 ->name('conflicts.resolve')
                 ->middleware('pos.role:canAdjustStock');
+        });
+
+        // Notifications Center
+        Route::prefix('notifications')->name('notifications.')->group(function () {
+            Route::get('/',                        [\App\Http\Controllers\Pos\NotificationController::class, 'index'])->name('index');
+            Route::get('/preview',                [\App\Http\Controllers\Pos\NotificationController::class, 'preview'])->name('preview');
+            Route::post('/mark-all-read',          [\App\Http\Controllers\Pos\NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+            Route::post('/{notification}/read',    [\App\Http\Controllers\Pos\NotificationController::class, 'markAsRead'])->name('read');
+            Route::post('/{notification}/resolve', [\App\Http\Controllers\Pos\NotificationController::class, 'resolve'])->name('resolve');
+            Route::delete('/{notification}',       [\App\Http\Controllers\Pos\NotificationController::class, 'destroy'])->name('destroy');
         });
 
         // Reports

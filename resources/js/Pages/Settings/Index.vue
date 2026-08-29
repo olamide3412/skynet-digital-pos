@@ -1,41 +1,108 @@
 <script setup>
+import { ref, computed } from 'vue'
 import { useForm, Link } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
+import { useCurrency } from '@/Composables/useCurrency'
 
 defineOptions({ layout: PosLayout })
 
-const props = defineProps({ settings: Object })
+const props = defineProps({
+    settings:    Object,
+    branchItems: { type: Array, default: () => [] },
+    categories:  { type: Array, default: () => [] },
+})
+
+const { format } = useCurrency()
 
 const form = useForm({
-    _method:                  'PUT',
-    business_name:            props.settings.business_name ?? '',
-    business_address:         props.settings.business_address ?? '',
-    business_contact_number:  props.settings.business_contact_number ?? '',
-    business_email:           props.settings.business_email ?? '',
-    logo:                     null,
-    sell_interface:           props.settings.sell_interface ?? 'classic',
-    is_price_editable:        !!props.settings.is_price_editable,
-    is_qty_deduction:         !!props.settings.is_qty_deduction,
-    out_of_stock:             props.settings.out_of_stock ?? 25,
-    is_check_expiration:      !!props.settings.is_check_expiration,
+    _method:                       'PUT',
+    business_name:                 props.settings.business_name ?? '',
+    business_address:              props.settings.business_address ?? '',
+    business_contact_number:       props.settings.business_contact_number ?? '',
+    business_email:                props.settings.business_email ?? '',
+    logo:                          null,
+    sell_interface:                props.settings.sell_interface ?? 'classic',
+    quick_access_mode:             props.settings.quick_access_mode ?? 'top_sellers',
+    pinned_quick_access_items:     Array.isArray(props.settings.pinned_quick_access_items) ? [...props.settings.pinned_quick_access_items] : [],
+    quick_access_category_ids:     Array.isArray(props.settings.quick_access_category_ids) ? [...props.settings.quick_access_category_ids] : [],
+    is_price_editable:             !!props.settings.is_price_editable,
+    is_qty_deduction:              !!props.settings.is_qty_deduction,
+    out_of_stock:                  props.settings.out_of_stock ?? 25,
+    is_check_expiration:           !!props.settings.is_check_expiration,
     is_imei_enabled:               !!props.settings.is_imei_enabled,
     is_grid_separate_rows:         !!props.settings.is_grid_separate_rows,
     is_cart_auto_scroll_highlight: props.settings.is_cart_auto_scroll_highlight !== false && props.settings.is_cart_auto_scroll_highlight !== 0,
     is_show_buy_price:             !!props.settings.is_show_buy_price,
-    is_use_profit_percentage: !!props.settings.is_use_profit_percentage,
-    is_tax_enabled:           !!props.settings.is_tax_enabled,
-    tax_percentage:           props.settings.tax_percentage ?? 7.5,
-    wholesale_profit_percent: props.settings.wholesale_profit_percent ?? 10,
-    consumer_profit_percent:  props.settings.consumer_profit_percent ?? 15,
-    business_sector:          props.settings.business_sector ?? 'commerce',
-    receipt_paper_size:       props.settings.receipt_paper_size ?? '80mm',
-    receipt_printer_name:     props.settings.receipt_printer_name ?? 'Default POS Printer',
-    printer_type:             props.settings.printer_type ?? 'thermal_80mm',
-    printer_connection:       props.settings.printer_connection ?? 'kiosk_direct',
-    printer_ip_address:       props.settings.printer_ip_address ?? '',
-    auto_print_receipt:       !!props.settings.auto_print_receipt,
-    show_receipt_preview:     props.settings.show_receipt_preview !== false && props.settings.show_receipt_preview !== 0,
+    is_use_profit_percentage:      !!props.settings.is_use_profit_percentage,
+    is_tax_enabled:                !!props.settings.is_tax_enabled,
+    tax_percentage:                props.settings.tax_percentage ?? 7.5,
+    wholesale_profit_percent:      props.settings.wholesale_profit_percent ?? 10,
+    consumer_profit_percent:       props.settings.consumer_profit_percent ?? 15,
+    business_sector:               props.settings.business_sector ?? 'commerce',
+    receipt_paper_size:            props.settings.receipt_paper_size ?? '80mm',
+    receipt_printer_name:          props.settings.receipt_printer_name ?? 'Default POS Printer',
+    printer_type:                  props.settings.printer_type ?? 'thermal_80mm',
+    printer_connection:            props.settings.printer_connection ?? 'kiosk_direct',
+    printer_ip_address:            props.settings.printer_ip_address ?? '',
+    auto_print_receipt:            !!props.settings.auto_print_receipt,
+    show_receipt_preview:          props.settings.show_receipt_preview !== false && props.settings.show_receipt_preview !== 0,
 })
+
+// Pinned Items Search State
+const itemSearchQuery = ref('')
+const isSearchDropdownOpen = ref(false)
+
+const filteredBranchItems = computed(() => {
+    const q = itemSearchQuery.value.trim().toLowerCase()
+    const pinned = new Set(form.pinned_quick_access_items)
+    return (props.branchItems || []).filter(item => {
+        if (pinned.has(item.id)) return false
+        if (!q) return true
+        return (item.item_name || '').toLowerCase().includes(q) ||
+               (item.barcode_number || '').includes(q)
+    }).slice(0, 10)
+})
+
+function getItemById(id) {
+    return (props.branchItems || []).find(i => i.id === id) || {
+        id,
+        item_name: `Item #${id}`,
+        price: 0,
+        front_store_qty: 0,
+    }
+}
+
+function pinItem(item) {
+    if (form.pinned_quick_access_items.length >= 10) return
+    if (!form.pinned_quick_access_items.includes(item.id)) {
+        form.pinned_quick_access_items.push(item.id)
+    }
+    itemSearchQuery.value = ''
+    isSearchDropdownOpen.value = false
+}
+
+function unpinItem(id) {
+    form.pinned_quick_access_items = form.pinned_quick_access_items.filter(itemId => itemId !== id)
+}
+
+function movePinnedItem(index, direction) {
+    const newIndex = index + direction
+    if (newIndex < 0 || newIndex >= form.pinned_quick_access_items.length) return
+    const arr = [...form.pinned_quick_access_items]
+    const temp = arr[index]
+    arr[index] = arr[newIndex]
+    arr[newIndex] = temp
+    form.pinned_quick_access_items = arr
+}
+
+function toggleCategory(catId) {
+    const exists = form.quick_access_category_ids.includes(catId)
+    if (exists) {
+        form.quick_access_category_ids = form.quick_access_category_ids.filter(id => id !== catId)
+    } else if (form.quick_access_category_ids.length < 6) {
+        form.quick_access_category_ids.push(catId)
+    }
+}
 
 function submit() {
     form.post(route('pos.settings.update'), {
@@ -121,6 +188,269 @@ function submit() {
                         <span>Open Printer Setup</span>
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
                     </Link>
+                </div>
+
+                <!-- ══ QUICK ACCESS WIDGET (CHECKOUT EMPTY SCREEN) ═══════════════ -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                            <span>⚡</span>
+                            <span>Quick Access Shortcut Panel (Checkout Screen)</span>
+                        </h2>
+                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">Max 10 Items Cap</span>
+                    </div>
+
+                    <p class="text-xs text-slate-600 dark:text-slate-400">
+                        Populates the checkout screen with a fast, capped list of shortcut items before any search/barcode scan happens. Choose only one active mode for this branch:
+                    </p>
+
+                    <!-- Mode Select Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <!-- Mode 1: Top Sellers (Default) -->
+                        <label
+                            @click="form.quick_access_mode = 'top_sellers'"
+                            :class="[
+                                'p-3 rounded-xl border transition cursor-pointer flex items-start gap-2.5',
+                                form.quick_access_mode === 'top_sellers'
+                                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-400'
+                                    : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                            ]"
+                        >
+                            <input type="radio" v-model="form.quick_access_mode" value="top_sellers" class="mt-0.5 accent-emerald-600" />
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                                    <span>⚡</span> Top Sellers (Rolling 7 Days)
+                                    <span class="text-[9px] bg-emerald-500 text-white font-bold px-1.5 py-0.2 rounded-full">Default</span>
+                                </span>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Automatically ranks and shows this branch's most purchased items over the past 7 days.
+                                </p>
+                            </div>
+                        </label>
+
+                        <!-- Mode 2: Recently Sold -->
+                        <label
+                            @click="form.quick_access_mode = 'recently_sold'"
+                            :class="[
+                                'p-3 rounded-xl border transition cursor-pointer flex items-start gap-2.5',
+                                form.quick_access_mode === 'recently_sold'
+                                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-400'
+                                    : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                            ]"
+                        >
+                            <input type="radio" v-model="form.quick_access_mode" value="recently_sold" class="mt-0.5 accent-emerald-600" />
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                                    <span>🕒</span> Recently Sold Items
+                                </span>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Live chronological stream of the latest items checked out at this branch.
+                                </p>
+                            </div>
+                        </label>
+
+                        <!-- Mode 3: Pinned Items -->
+                        <label
+                            @click="form.quick_access_mode = 'pinned_items'"
+                            :class="[
+                                'p-3 rounded-xl border transition cursor-pointer flex items-start gap-2.5',
+                                form.quick_access_mode === 'pinned_items'
+                                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-400'
+                                    : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                            ]"
+                        >
+                            <input type="radio" v-model="form.quick_access_mode" value="pinned_items" class="mt-0.5 accent-emerald-600" />
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                                    <span>📌</span> Branch Pinned Items
+                                </span>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Curate and arrange a custom hand-picked list of high-speed items (up to 10).
+                                </p>
+                            </div>
+                        </label>
+
+                        <!-- Mode 4: Category Shortcuts -->
+                        <label
+                            @click="form.quick_access_mode = 'category_shortcuts'"
+                            :class="[
+                                'p-3 rounded-xl border transition cursor-pointer flex items-start gap-2.5',
+                                form.quick_access_mode === 'category_shortcuts'
+                                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-400'
+                                    : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                            ]"
+                        >
+                            <input type="radio" v-model="form.quick_access_mode" value="category_shortcuts" class="mt-0.5 accent-emerald-600" />
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                                    <span>🏷️</span> Category Shortcuts
+                                </span>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Shows category shortcut pills with mini quick-item grids for each category.
+                                </p>
+                            </div>
+                        </label>
+
+                        <!-- Mode 5: None / Disabled -->
+                        <label
+                            @click="form.quick_access_mode = 'none'"
+                            :class="[
+                                'p-3 rounded-xl border transition cursor-pointer flex items-start gap-2.5 sm:col-span-2',
+                                form.quick_access_mode === 'none'
+                                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-400'
+                                    : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                            ]"
+                        >
+                            <input type="radio" v-model="form.quick_access_mode" value="none" class="mt-0.5 accent-emerald-600" />
+                            <div class="min-w-0">
+                                <span class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                                    <span>🚫</span> Disabled (Classic Search-Only Placeholder)
+                                </span>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Shows the clean standard search prompt without shortcut items.
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- ── Pinned Items Manager Sub-panel ── -->
+                    <div v-if="form.quick_access_mode === 'pinned_items'" class="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                <span>📌</span> Manage Pinned Shortcut Items
+                            </span>
+                            <span
+                                :class="form.pinned_quick_access_items.length >= 10 ? 'text-amber-600 dark:text-amber-400 font-black' : 'text-slate-500 dark:text-slate-400'"
+                                class="text-xs font-mono"
+                            >
+                                {{ form.pinned_quick_access_items.length }} / 10 Pinned (Max 10)
+                            </span>
+                        </div>
+
+                        <!-- Item Search Input to Add -->
+                        <div v-if="form.pinned_quick_access_items.length < 10" class="relative">
+                            <input
+                                v-model="itemSearchQuery"
+                                @focus="isSearchDropdownOpen = true"
+                                type="text"
+                                placeholder="Type item name or barcode to add to shortcuts..."
+                                class="w-full bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none transition"
+                            />
+                            
+                            <!-- Search Dropdown Results -->
+                            <div
+                                v-if="isSearchDropdownOpen && filteredBranchItems.length > 0"
+                                class="absolute top-full left-0 right-0 mt-1 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1 divide-y divide-slate-100 dark:divide-slate-700/60"
+                            >
+                                <button
+                                    v-for="item in filteredBranchItems"
+                                    :key="item.id"
+                                    type="button"
+                                    @click="pinItem(item)"
+                                    class="w-full p-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700/70 rounded-lg transition flex items-center justify-between cursor-pointer"
+                                >
+                                    <div class="min-w-0 pr-2">
+                                        <div class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{{ item.item_name }}</div>
+                                        <div class="text-[10px] text-slate-400 font-mono">#{{ item.barcode_number || 'No Barcode' }} • Stock: {{ item.front_store_qty }}</div>
+                                    </div>
+                                    <div class="flex items-center gap-2 flex-shrink-0">
+                                        <span class="text-xs font-black text-emerald-600 dark:text-emerald-400">{{ format(item.price) }}</span>
+                                        <span class="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold">+ Pin</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Pinned Items List -->
+                        <div v-if="form.pinned_quick_access_items.length > 0" class="space-y-1.5">
+                            <div
+                                v-for="(itemId, idx) in form.pinned_quick_access_items"
+                                :key="itemId"
+                                class="flex items-center justify-between p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs"
+                            >
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <span class="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] font-bold flex items-center justify-center font-mono">
+                                        {{ idx + 1 }}
+                                    </span>
+                                    <div class="min-w-0">
+                                        <div class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate leading-tight">
+                                            {{ getItemById(itemId).item_name }}
+                                        </div>
+                                        <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                                            {{ format(getItemById(itemId).price) }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-1 flex-shrink-0">
+                                    <!-- Move Up -->
+                                    <button
+                                        type="button"
+                                        :disabled="idx === 0"
+                                        @click="movePinnedItem(idx, -1)"
+                                        class="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 cursor-pointer"
+                                        title="Move Up"
+                                    >
+                                        ▲
+                                    </button>
+                                    <!-- Move Down -->
+                                    <button
+                                        type="button"
+                                        :disabled="idx === form.pinned_quick_access_items.length - 1"
+                                        @click="movePinnedItem(idx, 1)"
+                                        class="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 cursor-pointer"
+                                        title="Move Down"
+                                    >
+                                        ▼
+                                    </button>
+                                    <!-- Remove -->
+                                    <button
+                                        type="button"
+                                        @click="unpinItem(itemId)"
+                                        class="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer ml-1"
+                                        title="Remove shortcut"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <p v-else class="text-xs text-slate-400 dark:text-slate-500 text-center py-2">
+                            No shortcut items pinned yet. Use the search bar above to pin items.
+                        </p>
+                    </div>
+
+                    <!-- ── Category Shortcuts Picker Sub-panel ── -->
+                    <div v-if="form.quick_access_mode === 'category_shortcuts'" class="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                                <span>🏷️</span> Select Categories for Shortcut Tabs
+                            </span>
+                            <span class="text-xs font-mono text-slate-500 dark:text-slate-400">
+                                {{ form.quick_access_category_ids.length }} / 6 Selected (Max 6)
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                            Leave empty to automatically display top categories with available stock.
+                        </p>
+                        <div class="flex flex-wrap gap-2">
+                            <button
+                                v-for="cat in categories"
+                                :key="cat.id"
+                                type="button"
+                                @click="toggleCategory(cat.id)"
+                                :class="[
+                                    'px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5',
+                                    form.quick_access_category_ids.includes(cat.id)
+                                        ? 'bg-emerald-600 text-white shadow-xs'
+                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                ]"
+                            >
+                                <span>{{ cat.name }}</span>
+                                <span v-if="form.quick_access_category_ids.includes(cat.id)" class="text-[10px]">✓</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- POS Behaviour -->

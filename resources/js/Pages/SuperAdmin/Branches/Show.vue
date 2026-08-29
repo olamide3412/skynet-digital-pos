@@ -510,6 +510,7 @@ const submitCsvImport = () => {
 const formatNaira = (val) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(val || 0)
 const toggleBranchStatus = () => router.post(route('superadmin.branches.toggle', { branch: props.branch.slug }))
 const toggleBranchOffline = () => router.post(route('superadmin.branches.toggle-offline', { branch: props.branch.slug }))
+const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', { branch: props.branch.slug }))
 </script>
 
 <template>
@@ -634,6 +635,14 @@ const toggleBranchOffline = () => router.post(route('superadmin.branches.toggle-
                         class="px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer"
                     >
                         {{ settings.is_offline_enabled ? 'Disable Offline' : 'Enable Offline' }}
+                    </button>
+                    <button
+                        type="button"
+                        @click="toggleBranchAi"
+                        :class="branch.is_ai_enabled ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900 hover:bg-emerald-100' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'"
+                        class="px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer"
+                    >
+                        {{ branch.is_ai_enabled ? 'Disable AI' : 'Enable AI' }}
                     </button>
                 </div>
             </div>

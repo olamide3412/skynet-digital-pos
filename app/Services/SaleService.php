@@ -267,6 +267,10 @@ class SaleService
                 ]
             );
 
+            if ($branch) {
+                QuickAccessService::clearBranchCache($branch->id);
+            }
+
             return $sale->load('saleOrders');
         });
     }

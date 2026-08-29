@@ -7,6 +7,7 @@ import { useCurrency } from '@/Composables/useCurrency'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import ProductSearch from '@/Components/POS/ProductSearch.vue'
 import ProductGrid from '@/Components/POS/ProductGrid.vue'
+import QuickAccessWidget from '@/Components/POS/QuickAccessWidget.vue'
 import Cart from '@/Components/POS/Cart.vue'
 import PaymentModal from '@/Components/POS/PaymentModal.vue'
 import ReceiptModal from '@/Components/POS/ReceiptModal.vue'
@@ -15,13 +16,16 @@ import HeldCartsList from '@/Components/POS/HeldCartsList.vue'
 import ReturnModal from '@/Components/POS/ReturnModal.vue'
 import CustomerSelector from '@/Components/POS/CustomerSelector.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
+import NotificationBell from '@/Components/Notifications/NotificationBell.vue'
 import { useBarcodeScanner } from '@/Composables/useBarcodeScanner'
 import { useOfflineSync } from '@/Composables/useOfflineSync'
+import { getLocalQuickAccessData } from '@/Services/offlineDb'
 
 defineOptions({ layout: PosLayout })
 
 const props = defineProps({
     settings:         Object,
+    quickAccess:      Object,
     itemGrids:        Array,
     heldSales:        Array,
     activeDiscount:   Object,
@@ -43,6 +47,30 @@ const cart          = useCartStore()
 const settStore     = usePosSettingsStore()
 const productSearch = ref(null)   // ref to ProductSearch component
 settStore.set(props.settings)
+
+// Reactive Quick Access dataset (with offline Dexie fallback)
+const localQuickAccess = ref(props.quickAccess || null)
+const currentQuickAccess = computed(() => {
+    if (!isOnline.value && localQuickAccess.value) {
+        return localQuickAccess.value
+    }
+    return props.quickAccess || localQuickAccess.value || {
+        mode:       'top_sellers',
+        title:      '⚡ Top Sellers',
+        subtitle:   'Most purchased items this week',
+        items:      [],
+        categories: [],
+    }
+})
+
+onMounted(async () => {
+    if (!props.quickAccess || props.quickAccess.mode === 'none') {
+        const cached = await getLocalQuickAccessData()
+        if (cached && cached.mode && cached.mode !== 'none') {
+            localQuickAccess.value = cached
+        }
+    }
+})
 
 // Offline synchronization composable
 const {
@@ -249,6 +277,7 @@ const productSearchMobile = ref(null)
                     </div>
 
                     <span class="text-slate-500 dark:text-slate-400 text-xs hidden sm:inline">{{ formattedTime }}</span>
+                    <NotificationBell />
                     <ThemeToggle />
                     <div class="flex items-center gap-2">
                         <button
@@ -289,7 +318,7 @@ const productSearchMobile = ref(null)
                             ref="productSearch"
                             :purchase-type="cart.purchaseType"
                             :settings="settings"
-                            @select="(item) => { cart.addItem(item); productSearch.value?.focus() }"
+                            @select="(item) => { cart.addItem(item); productSearch?.focus?.() }"
                         />
                     </div>
                     <div class="flex-1 overflow-y-auto p-3">
@@ -299,13 +328,14 @@ const productSearchMobile = ref(null)
                             :settings="settings"
                             @select="(item) => cart.addItem(item, 'unit', null, !!(settStore.settings?.is_grid_separate_rows ?? settings?.is_grid_separate_rows))"
                         />
-                        <!-- Classic mode shows recent/top items -->
-                        <div v-else class="text-center text-slate-400 dark:text-slate-500 mt-16">
-                            <svg class="w-16 h-16 mx-auto mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                            </svg>
-                            <p class="text-sm text-slate-600 dark:text-slate-300">Search or scan a barcode to add items to cart</p>
-                            <p class="text-xs mt-1 text-slate-400 dark:text-slate-500">Press <kbd class="bg-slate-200 dark:bg-slate-700 px-1 rounded text-slate-700 dark:text-slate-300">F2</kbd> to focus search</p>
+                        <!-- Classic mode shows Quick Access Widget -->
+                        <div v-else class="p-1">
+                            <QuickAccessWidget
+                                :quick-access="currentQuickAccess"
+                                :settings="settings"
+                                :purchase-type="cart.purchaseType"
+                                @select="(item) => { cart.addItem(item); productSearch?.focus?.() }"
+                            />
                         </div>
                     </div>
                 </div>
@@ -435,6 +465,9 @@ const productSearchMobile = ref(null)
                         </span>
                     </button>
 
+                    <!-- Notifications Bell -->
+                    <NotificationBell />
+
                     <!-- Held Carts Quick Button with Badge -->
                     <button
                         @click="showHeld = true"
@@ -532,14 +565,14 @@ const productSearchMobile = ref(null)
                         @select="(item) => cart.addItem(item, 'unit', null, !!(settStore.settings?.is_grid_separate_rows ?? settings?.is_grid_separate_rows))"
                     />
                     
-                    <div v-else class="text-center text-slate-500 py-12 px-4 space-y-3">
-                        <div class="w-14 h-14 mx-auto rounded-2xl bg-slate-800 flex items-center justify-center text-2xl">
-                            🔍
-                        </div>
-                        <p class="text-sm font-medium text-slate-300">Type product name or scan barcode</p>
-                        <p class="text-xs text-slate-500 max-w-xs mx-auto">
-                            Items will appear in the instant search dropdown above. Tap any item to add it to your order.
-                        </p>
+                    <!-- Mobile Classic mode shows Quick Access Widget -->
+                    <div v-else class="p-1">
+                        <QuickAccessWidget
+                            :quick-access="currentQuickAccess"
+                            :settings="settings"
+                            :purchase-type="cart.purchaseType"
+                            @select="(item) => cart.addItem(item)"
+                        />
                     </div>
                 </div>
 

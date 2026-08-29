@@ -20,7 +20,7 @@ class PosSettings extends Model
         'is_show_buy_price', 'is_use_profit_percentage',
         'is_tax_enabled', 'tax_percentage',
         'item_icon_preview', 'is_grid_separate_rows', 'is_cart_auto_scroll_highlight', 'wholesale_profit_percent', 'consumer_profit_percent',
-        'sell_interface', 'business_sector',
+        'sell_interface', 'quick_access_mode', 'pinned_quick_access_items', 'quick_access_category_ids', 'business_sector',
         'receipt_paper_size', 'receipt_printer_name', 'printer_type', 'printer_connection', 'printer_ip_address',
         'receipt_copies',
         'auto_print_receipt', 'show_receipt_preview',
@@ -48,7 +48,23 @@ class PosSettings extends Model
             'receipt_copies'                => 'integer',
             'auto_print_receipt'            => 'boolean',
             'show_receipt_preview'          => 'boolean',
+            'pinned_quick_access_items'     => 'array',
+            'quick_access_category_ids'     => 'array',
         ];
+    }
+
+    public function getPinnedQuickAccessItemsAttribute($value): array
+    {
+        if (is_array($value)) return $value;
+        if (is_string($value)) return json_decode($value, true) ?: [];
+        return [];
+    }
+
+    public function getQuickAccessCategoryIdsAttribute($value): array
+    {
+        if (is_array($value)) return $value;
+        if (is_string($value)) return json_decode($value, true) ?: [];
+        return [];
     }
 
     public function branch(): BelongsTo
@@ -64,17 +80,20 @@ class PosSettings extends Model
         return static::firstOrCreate(
             ['branch_id' => $branchId],
             [
-                'sell_interface'       => 'classic',
-                'business_sector'      => 'commerce',
-                'out_of_stock'         => 25,
-                'receipt_paper_size'   => '80mm',
-                'receipt_printer_name' => 'Default POS Printer',
-                'printer_type'         => 'thermal_80mm',
-                'printer_connection'   => 'kiosk_direct',
-                'printer_ip_address'   => null,
-                'receipt_copies'       => 1,
-                'auto_print_receipt'   => false,
-                'show_receipt_preview' => true,
+                'sell_interface'             => 'classic',
+                'quick_access_mode'          => 'top_sellers',
+                'pinned_quick_access_items'   => [],
+                'quick_access_category_ids'   => [],
+                'business_sector'            => 'commerce',
+                'out_of_stock'               => 25,
+                'receipt_paper_size'         => '80mm',
+                'receipt_printer_name'       => 'Default POS Printer',
+                'printer_type'               => 'thermal_80mm',
+                'printer_connection'         => 'kiosk_direct',
+                'printer_ip_address'         => null,
+                'receipt_copies'             => 1,
+                'auto_print_receipt'         => false,
+                'show_receipt_preview'       => true,
             ]
         );
     }
@@ -88,20 +107,23 @@ class PosSettings extends Model
         if (!$branch) {
             // Super Admin context or no branch — return a dummy in-memory settings object
             return new static([
-                'is_price_editable'    => false,
-                'is_qty_deduction'     => true,
-                'is_check_expiration'  => true,
-                'is_show_buy_price'    => false,
-                'out_of_stock'         => 25,
-                'sell_interface'       => 'classic',
-                'business_sector'      => 'commerce',
-                'receipt_paper_size'   => '80mm',
-                'receipt_printer_name' => 'Default POS Printer',
-                'printer_type'         => 'thermal_80mm',
-                'printer_connection'   => 'kiosk_direct',
-                'printer_ip_address'   => null,
-                'auto_print_receipt'   => false,
-                'show_receipt_preview' => true,
+                'is_price_editable'          => false,
+                'is_qty_deduction'           => true,
+                'is_check_expiration'        => true,
+                'is_show_buy_price'          => false,
+                'out_of_stock'               => 25,
+                'sell_interface'             => 'classic',
+                'quick_access_mode'          => 'top_sellers',
+                'pinned_quick_access_items'   => [],
+                'quick_access_category_ids'   => [],
+                'business_sector'            => 'commerce',
+                'receipt_paper_size'         => '80mm',
+                'receipt_printer_name'       => 'Default POS Printer',
+                'printer_type'               => 'thermal_80mm',
+                'printer_connection'         => 'kiosk_direct',
+                'printer_ip_address'         => null,
+                'auto_print_receipt'         => false,
+                'show_receipt_preview'       => true,
             ]);
         }
         return static::forBranch($branch->id);

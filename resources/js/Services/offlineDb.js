@@ -50,8 +50,26 @@ export async function saveBootstrapData(payload) {
             await db.settings.put({ key: 'active_discount', value: payload.activeDiscount })
         }
 
+        if (payload.quick_access) {
+            await db.settings.put({ key: 'quick_access', value: payload.quick_access })
+        }
+
         await db.settings.put({ key: 'last_sync_time', value: new Date().toISOString() })
     })
+}
+
+/**
+ * Retrieve cached quick access widget data from IndexedDB.
+ */
+export async function getLocalQuickAccessData() {
+    const record = await db.settings.get('quick_access')
+    return record?.value || {
+        mode:       'none',
+        title:      '',
+        subtitle:   '',
+        items:      [],
+        categories: [],
+    }
 }
 
 /**

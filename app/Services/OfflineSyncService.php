@@ -51,6 +51,10 @@ class OfflineSyncService
             }
         }
 
+        if (!empty($results)) {
+            QuickAccessService::clearBranchCache($branch->id);
+        }
+
         return $results;
     }
 
@@ -273,9 +277,12 @@ class OfflineSyncService
                 }
             }
 
-            // Insert logged conflicts if any
+            // Insert logged conflicts and dispatch notifications
             if (!empty($conflictsToRecord)) {
-                StockConflict::insert($conflictsToRecord);
+                foreach ($conflictsToRecord as $conflictData) {
+                    $conflict = StockConflict::create($conflictData);
+                    \App\Services\NotificationService::notifyConflict($conflict, $branch, $user);
+                }
                 $sale->update(['has_conflict' => true]);
             }
 

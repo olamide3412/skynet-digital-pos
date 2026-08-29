@@ -53,6 +53,12 @@ const toggleTurnstile = (branchSlug) => {
     })
 }
 
+const toggleAi = (branchSlug) => {
+    router.post(route('superadmin.branches.toggle-ai', { branch: branchSlug }), {}, {
+        preserveScroll: true,
+    })
+}
+
 const copiedBranchSlug = ref(null)
 const copyBranchUrl = (slug) => {
     const fullUrl = typeof window !== 'undefined' && window.location?.origin
@@ -223,6 +229,33 @@ const triggerExport = () => {
                         >
                             <span v-if="(branch.settings?.is_turnstile_enabled ?? true)">● Enabled</span>
                             <span v-else>⚡ Bypassed</span>
+                        </button>
+                    </div>
+
+                    <!-- AI Intelligence Toggle Control -->
+                    <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">✨</span>
+                            <div>
+                                <div class="text-xs font-bold text-slate-800 dark:text-slate-200">AI Intelligence</div>
+                                <div class="text-[10px] text-slate-500 dark:text-slate-400">
+                                    {{ (branch.is_ai_enabled ?? true) ? 'Forecasting & Chat Active' : 'AI Features Disabled' }}
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            @click="toggleAi(branch.slug)"
+                            type="button"
+                            :class="[
+                                'px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer',
+                                (branch.is_ai_enabled ?? true)
+                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                                    : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-slate-700 dark:text-slate-300'
+                            ]"
+                            :title="(branch.is_ai_enabled ?? true) ? 'Click to disable AI for this branch' : 'Click to enable AI for this branch'"
+                        >
+                            <span v-if="(branch.is_ai_enabled ?? true)">● Enabled</span>
+                            <span v-else>○ Disabled</span>
                         </button>
                     </div>
                 </div>

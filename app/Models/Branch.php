@@ -12,13 +12,14 @@ class Branch extends Model
 {
     protected $fillable = [
         'name', 'slug', 'address', 'logo_path',
-        'phone', 'email', 'is_active',
+        'phone', 'email', 'is_active', 'is_ai_enabled',
     ];
 
     protected function casts(): array
     {
         return [
-            'is_active' => 'boolean',
+            'is_active'     => 'boolean',
+            'is_ai_enabled' => 'boolean',
         ];
     }
 

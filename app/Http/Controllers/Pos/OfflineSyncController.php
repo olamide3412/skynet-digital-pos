@@ -32,11 +32,9 @@ class OfflineSyncController extends Controller
             ->with(['activeUnits'])
             ->select([
                 'id', 'item_name', 'barcode_number', 'category_id',
-                'price', 'wholesale_price', 'pack_price', 'carton_price',
-                'pack_wholesale_price', 'carton_wholesale_price', 'buy_price',
+                'price', 'wholesale_price', 'buy_price',
                 'front_store_qty', 'back_store_qty',
-                'unit_label', 'pack_label', 'carton_label',
-                'units_per_pack', 'packs_per_carton',
+                'unit_label',
                 'is_imei_tracked', 'price_locked', 'expiry_date', 'image_path',
             ])
             ->get()
@@ -106,6 +104,7 @@ class OfflineSyncController extends Controller
             'customers'      => $customers,
             'categories'     => $categories,
             'activeDiscount' => $activeDiscount,
+            'quick_access'   => \App\Services\QuickAccessService::getQuickAccessData($branch),
             'server_time'    => now()->toIso8601String(),
         ]);
     }

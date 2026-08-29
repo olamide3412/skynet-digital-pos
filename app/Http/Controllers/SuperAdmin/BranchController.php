@@ -36,6 +36,7 @@ class BranchController extends Controller
                 'phone'              => $b->phone,
                 'email'              => $b->email,
                 'is_active'          => (bool) $b->is_active,
+                'is_ai_enabled'      => (bool) ($b->is_ai_enabled ?? true),
                 'logo_url'           => $b->logo_path ? asset('storage/' . $b->logo_path) : null,
                 'users_count'        => $b->users_count,
                 'items_count'        => $b->items_count,
@@ -254,11 +255,12 @@ class BranchController extends Controller
                 'slug'       => $branch->slug,
                 'address'    => $branch->address,
                 'phone'      => $branch->phone,
-                'email'      => $branch->email,
-                'is_active'  => (bool) $branch->is_active,
-                'logo_url'   => $branch->logo_path ? asset('storage/' . $branch->logo_path) : null,
-                'created_at' => $branch->created_at?->format('d M Y, h:i A'),
-                'updated_at' => $branch->updated_at?->format('d M Y, h:i A'),
+                'email'         => $branch->email,
+                'is_active'     => (bool) $branch->is_active,
+                'is_ai_enabled' => (bool) ($branch->is_ai_enabled ?? true),
+                'logo_url'      => $branch->logo_path ? asset('storage/' . $branch->logo_path) : null,
+                'created_at'    => $branch->created_at?->format('d M Y, h:i A'),
+                'updated_at'    => $branch->updated_at?->format('d M Y, h:i A'),
             ],
             'settings' => $settings,
             'stats' => [
@@ -475,6 +477,25 @@ class BranchController extends Controller
         );
 
         return back()->with('success', "Cloudflare Turnstile CAPTCHA {$status} for {$branch->name}.");
+    }
+
+    /**
+     * Toggle branch AI capabilities.
+     */
+    public function toggleAi(Branch $branch)
+    {
+        $newState = !($branch->is_ai_enabled ?? true);
+        $branch->is_ai_enabled = $newState;
+        $branch->save();
+        $status = $newState ? 'enabled' : 'disabled';
+
+        ActivityLogger::log(
+            'setting',
+            "Super Admin {$status} AI intelligence features for branch '{$branch->name}'",
+            $branch->id
+        );
+
+        return back()->with('success', "AI intelligence features {$status} for {$branch->name}.");
     }
 
     /**
