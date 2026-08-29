@@ -9,9 +9,7 @@ class GlobalItem extends Model
     protected $fillable = [
         'item_name', 'barcode_number',
         'buy_price', 'price', 'wholesale_price',
-        'pack_price', 'carton_price', 'pack_wholesale_price', 'carton_wholesale_price',
-        'unit_label', 'pack_label', 'carton_label',
-        'units_per_pack', 'packs_per_carton',
+        'unit_label',
         'item_description', 'image_path', 'category_hint',
     ];
 
@@ -23,12 +21,6 @@ class GlobalItem extends Model
             'buy_price'              => 'decimal:2',
             'price'                  => 'decimal:2',
             'wholesale_price'        => 'decimal:2',
-            'pack_price'             => 'decimal:2',
-            'carton_price'           => 'decimal:2',
-            'pack_wholesale_price'   => 'decimal:2',
-            'carton_wholesale_price' => 'decimal:2',
-            'units_per_pack'         => 'integer',
-            'packs_per_carton'       => 'integer',
         ];
     }
 
@@ -52,15 +44,7 @@ class GlobalItem extends Model
             'buy_price'              => $this->buy_price,
             'price'                  => $this->price,
             'wholesale_price'        => $this->wholesale_price,
-            'pack_price'             => $this->pack_price,
-            'carton_price'           => $this->carton_price,
-            'pack_wholesale_price'   => $this->pack_wholesale_price,
-            'carton_wholesale_price' => $this->carton_wholesale_price,
             'unit_label'             => $this->unit_label,
-            'pack_label'             => $this->pack_label,
-            'carton_label'           => $this->carton_label,
-            'units_per_pack'         => $this->units_per_pack,
-            'packs_per_carton'       => $this->packs_per_carton,
             'item_description'       => $this->item_description,
             'image_path'             => $this->image_path,
             'back_store_qty'         => rand(30, 150),

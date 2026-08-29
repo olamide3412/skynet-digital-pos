@@ -77,16 +77,6 @@ export async function searchLocalItems(query = '', purchaseType = 'Consumer') {
             displayPrice = parseFloat(item.wholesale_price)
         }
 
-        let packPrice = parseFloat(item.pack_price || 0)
-        if (isWholesale && parseFloat(item.pack_wholesale_price || 0) > 0) {
-            packPrice = parseFloat(item.pack_wholesale_price)
-        }
-
-        let cartonPrice = parseFloat(item.carton_price || 0)
-        if (isWholesale && parseFloat(item.carton_wholesale_price || 0) > 0) {
-            cartonPrice = parseFloat(item.carton_wholesale_price)
-        }
-
         const mappedUnits = (Array.isArray(item.units) ? item.units : []).map(u => {
             let uPrice = parseFloat(u.selling_price || 0)
             if (isWholesale && parseFloat(u.wholesale_price || 0) > 0) {
@@ -103,8 +93,6 @@ export async function searchLocalItems(query = '', purchaseType = 'Consumer') {
             qty: item.front_store_qty ?? 0,
             total_qty: (item.front_store_qty ?? 0) + (item.back_store_qty ?? 0),
             display_price: displayPrice,
-            pack_display_price: packPrice,
-            carton_display_price: cartonPrice,
             units: mappedUnits,
         }
     })

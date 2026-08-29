@@ -116,7 +116,7 @@ class SaleService
         foreach ($cartItems as $cartItem) {
             $item = $itemsMap->get($cartItem['item_id']);
             $unitUsed = $cartItem['unit_used'] ?? 'unit';
-            $price = (float) $cartItem['price'];
+            $price = (float) ($cartItem['price'] ?? $cartItem['unit_price'] ?? 0);
             $qty = (int) $cartItem['qty'];
             $baseQty = $item->toBaseUnits($qty, $unitUsed);
             $buyPrice = (float) $item->buy_price;
@@ -180,7 +180,7 @@ class SaleService
                 $item = $itemsMap->get($cartItem['item_id']);
                 $qty = (int) $cartItem['qty'];
                 $unitUsed = $cartItem['unit_used'] ?? 'unit';
-                $price = (float) $cartItem['price'];
+                $price = (float) ($cartItem['price'] ?? $cartItem['unit_price'] ?? 0);
                 $baseQty = $item->toBaseUnits($qty, $unitUsed);
                 $imei = $cartItem['imei_or_device_id'] ?? null;
 

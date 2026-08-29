@@ -23,9 +23,8 @@ class ReturnService
     public static function process(?int $saleId, array $items, User $user): void
     {
         $sale = $saleId ? Sale::with('saleOrders.item')->find($saleId) : null;
-        $originalOrders = $sale ? $sale->saleOrders->keyBy('item_id') : collect();
 
-        DB::transaction(function () use ($sale, $items, $originalOrders, $user) {
+        DB::transaction(function () use ($sale, $items, $user) {
             foreach ($items as $returnItem) {
                 $itemId   = $returnItem['item_id'];
                 $qty      = (int) $returnItem['qty'];
@@ -34,11 +33,20 @@ class ReturnService
 
                 if ($qty <= 0) continue;
 
-                $item    = Item::findOrFail($itemId);
+                $item    = Item::with('units')->findOrFail($itemId);
                 $baseQty = $item->toBaseUnits($qty, $unitUsed);
 
                 if ($sale) {
-                    $orderLine = $originalOrders->get($itemId);
+                    // Match order line by explicit ID, or by unit match, or by item ID
+                    $orderLine = null;
+                    if (!empty($returnItem['sale_order_id'])) {
+                        $orderLine = $sale->saleOrders->firstWhere('id', $returnItem['sale_order_id']);
+                    }
+                    if (!$orderLine) {
+                        $orderLine = $sale->saleOrders->first(fn($ol) => $ol->item_id === $itemId && strtolower($ol->unit_used ?? 'unit') === $unitUsed)
+                            ?? $sale->saleOrders->firstWhere('item_id', $itemId);
+                    }
+
                     if (!$orderLine) {
                         throw new \InvalidArgumentException("Item '{$item->item_name}' was not part of sale #{$sale->receipt_id}.");
                     }
@@ -103,12 +111,10 @@ class ReturnService
                 }
 
                 // Format friendly inventory log note
-                $unitLabel = match($unitUsed) {
-                    'carton' => $item->carton_label ?: 'Carton',
-                    'pack'   => $item->pack_label ?: 'Pack',
-                    default  => $item->unit_label ?: 'Unit',
-                };
-                $logNote = "Returned {$qty} {$unitLabel}(s) ({$baseQty} base units) into front store. Reason: {$reason}";
+                $resolvedUnitName = ($unitUsed === 'unit' || $unitUsed === strtolower($item->unit_label ?? 'unit'))
+                    ? ($item->unit_label ?: 'Unit')
+                    : (optional($item->units->first(fn($u) => strtolower($u->unit_name) === $unitUsed))->unit_name ?: ucfirst($unitUsed));
+                $logNote = "Returned {$qty} {$resolvedUnitName}(s) ({$baseQty} base units) into front store. Reason: {$reason}";
 
                 // Restock base units into front_store
                 InventoryService::restock(

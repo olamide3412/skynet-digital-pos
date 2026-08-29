@@ -25,29 +25,29 @@ const submitting   = ref(false)
 const success      = ref('')
 
 // Helpers for Unit Conversions & Pricing
-function getUnitsPerPack(item) {
-    return Math.max(1, Number(item?.units_per_pack || 1))
-}
-
-function getPacksPerCarton(item) {
-    return Math.max(1, Number(item?.packs_per_carton || 1))
-}
-
 function getUnitsPerUnitLevel(item, unitUsed = 'unit') {
     if (!item) return 1
-    const u = String(unitUsed).toLowerCase()
-    if (u === 'carton') return getPacksPerCarton(item) * getUnitsPerPack(item)
-    if (u === 'pack') return getUnitsPerPack(item)
+    const u = String(unitUsed).toLowerCase().trim()
+    const baseUnit = String(item.unit_label || 'unit').toLowerCase().trim()
+    if (u === 'unit' || u === baseUnit) return 1
+
+    if (Array.isArray(item.units) && item.units.length > 0) {
+        const found = item.units.find(un => (un.unit_name || '').toLowerCase().trim() === u || String(un.id) === String(unitUsed))
+        if (found) return Math.max(1, Number(found.quantity_in_base_units || 1))
+    }
     return 1
 }
 
 function getUnitPrice(item, unitUsed = 'unit') {
     if (!item) return 0
-    const u = String(unitUsed).toLowerCase()
-    if (u === 'carton' && item.carton_price > 0) return Number(item.carton_price)
-    if (u === 'pack' && item.pack_price > 0) return Number(item.pack_price)
-    if (u === 'carton') return Number(item.price || 0) * getPacksPerCarton(item) * getUnitsPerPack(item)
-    if (u === 'pack') return Number(item.price || 0) * getUnitsPerPack(item)
+    const u = String(unitUsed).toLowerCase().trim()
+    const baseUnit = String(item.unit_label || 'unit').toLowerCase().trim()
+    if (u === 'unit' || u === baseUnit) return Number(item.price || 0)
+
+    if (Array.isArray(item.units) && item.units.length > 0) {
+        const found = item.units.find(un => (un.unit_name || '').toLowerCase().trim() === u || String(un.id) === String(unitUsed))
+        if (found && Number(found.selling_price) > 0) return Number(found.selling_price)
+    }
     return Number(item.price || 0)
 }
 
@@ -58,9 +58,11 @@ function getBaseUnits(item, qty = 1, unitUsed = 'unit') {
 
 function getUnitName(item, unitUsed = 'unit') {
     if (!item) return 'Unit'
-    const u = String(unitUsed).toLowerCase()
-    if (u === 'carton') return item.carton_label || 'Carton'
-    if (u === 'pack') return item.pack_label || 'Pack'
+    const u = String(unitUsed).toLowerCase().trim()
+    if (Array.isArray(item.units) && item.units.length > 0) {
+        const found = item.units.find(un => (un.unit_name || '').toLowerCase().trim() === u || String(un.id) === String(unitUsed))
+        if (found) return found.unit_name
+    }
     return item.unit_label || 'Unit'
 }
 

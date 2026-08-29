@@ -367,9 +367,10 @@ function getStatusBadge(item) {
                             v-model="editForm.reorder_unit"
                             class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-sm"
                         >
-                            <option value="unit">{{ editingItem.unit_label || 'Unit' }}</option>
-                            <option value="pack">{{ editingItem.pack_label || 'Pack' }} ({{ editingItem.units_per_pack }} units)</option>
-                            <option value="carton">{{ editingItem.carton_label || 'Carton' }} ({{ (editingItem.units_per_pack || 1) * (editingItem.packs_per_carton || 1) }} units)</option>
+                            <option value="unit">{{ editingItem.unit_label || 'Base Unit' }} (1 base unit)</option>
+                            <option v-for="u in (editingItem.units || [])" :key="u.id || u.unit_name" :value="u.unit_name">
+                                {{ u.unit_name }} ({{ u.quantity_in_base_units }} base units)
+                            </option>
                         </select>
                     </div>
                 </div>

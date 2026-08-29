@@ -68,15 +68,7 @@ class ItemController extends Controller
                     'buy_price'              => $cloned->buy_price,
                     'price'                  => $cloned->price,
                     'wholesale_price'        => $cloned->wholesale_price,
-                    'pack_price'             => $cloned->pack_price,
-                    'carton_price'           => $cloned->carton_price,
-                    'pack_wholesale_price'   => $cloned->pack_wholesale_price,
-                    'carton_wholesale_price' => $cloned->carton_wholesale_price,
                     'unit_label'             => $cloned->unit_label,
-                    'pack_label'             => $cloned->pack_label,
-                    'carton_label'           => $cloned->carton_label,
-                    'units_per_pack'         => $cloned->units_per_pack,
-                    'packs_per_carton'       => $cloned->packs_per_carton,
                     'item_description'       => $cloned->item_description,
                     'is_imei_tracked'        => $cloned->is_imei_tracked,
                     'price_locked'           => $cloned->price_locked,
@@ -117,20 +109,12 @@ class ItemController extends Controller
             'buy_price'              => 'required|numeric|min:0',
             'price'                  => 'required|numeric|min:0',
             'wholesale_price'        => 'nullable|numeric|min:0',
-            'pack_price'             => 'nullable|numeric|min:0',
-            'carton_price'           => 'nullable|numeric|min:0',
-            'pack_wholesale_price'   => 'nullable|numeric|min:0',
-            'carton_wholesale_price' => 'nullable|numeric|min:0',
             'price_locked'           => 'boolean',
             'is_imei_tracked'        => 'nullable|boolean',
             'initial_imeis'          => 'nullable|string',
             'back_store_qty'         => 'nullable|integer|min:0',
             'front_store_qty'        => 'nullable|integer|min:0',
             'unit_label'             => 'nullable|string|max:50',
-            'pack_label'             => 'nullable|string|max:50',
-            'carton_label'           => 'nullable|string|max:50',
-            'units_per_pack'         => 'nullable|integer|min:1',
-            'packs_per_carton'       => 'nullable|integer|min:1',
             'expiry_date'            => 'nullable|date',
             'item_description'       => 'nullable|string|max:500',
             'image'                  => 'nullable|image|max:2048',
@@ -165,19 +149,11 @@ class ItemController extends Controller
 
         $data['branch_id'] = $branch->id;
         $data['wholesale_price'] = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? (float) $data['wholesale_price'] : (float) $data['price'];
-        $data['pack_price'] = (!empty($data['pack_price']) && $data['pack_price'] > 0) ? (float) $data['pack_price'] : null;
-        $data['carton_price'] = (!empty($data['carton_price']) && $data['carton_price'] > 0) ? (float) $data['carton_price'] : null;
-        $data['pack_wholesale_price'] = (!empty($data['pack_wholesale_price']) && $data['pack_wholesale_price'] > 0) ? (float) $data['pack_wholesale_price'] : null;
-        $data['carton_wholesale_price'] = (!empty($data['carton_wholesale_price']) && $data['carton_wholesale_price'] > 0) ? (float) $data['carton_wholesale_price'] : null;
         $data['price_locked'] = !empty($data['price_locked']);
         $data['is_imei_tracked'] = !empty($data['is_imei_tracked']);
         $data['front_store_qty'] = $data['front_store_qty'] ?? 0;
         $data['back_store_qty'] = $data['back_store_qty'] ?? 0;
         $data['unit_label'] = !empty($data['unit_label']) ? $data['unit_label'] : 'Unit';
-        $data['pack_label'] = !empty($data['pack_label']) ? $data['pack_label'] : 'Pack';
-        $data['carton_label'] = !empty($data['carton_label']) ? $data['carton_label'] : 'Carton';
-        $data['units_per_pack'] = !empty($data['units_per_pack']) ? (int) $data['units_per_pack'] : 1;
-        $data['packs_per_carton'] = !empty($data['packs_per_carton']) ? (int) $data['packs_per_carton'] : 1;
 
         if ($request->hasFile('image')) {
             $data['image_path'] = $request->file('image')->store('items', 'public');
@@ -261,17 +237,9 @@ class ItemController extends Controller
             'buy_price'              => 'required|numeric|min:0',
             'price'                  => 'required|numeric|min:0',
             'wholesale_price'        => 'nullable|numeric|min:0',
-            'pack_price'             => 'nullable|numeric|min:0',
-            'carton_price'           => 'nullable|numeric|min:0',
-            'pack_wholesale_price'   => 'nullable|numeric|min:0',
-            'carton_wholesale_price' => 'nullable|numeric|min:0',
             'price_locked'           => 'nullable|boolean',
             'is_imei_tracked'        => 'nullable|boolean',
             'unit_label'             => 'nullable|string|max:50',
-            'pack_label'             => 'nullable|string|max:50',
-            'carton_label'           => 'nullable|string|max:50',
-            'units_per_pack'         => 'nullable|integer|min:1',
-            'packs_per_carton'       => 'nullable|integer|min:1',
             'front_store_qty'        => 'nullable|integer|min:0',
             'back_store_qty'         => 'nullable|integer|min:0',
             'expiry_date'            => 'nullable|date',
@@ -305,17 +273,9 @@ class ItemController extends Controller
         unset($data['units']);
 
         $data['wholesale_price'] = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? (float) $data['wholesale_price'] : (float) $data['price'];
-        $data['pack_price'] = (!empty($data['pack_price']) && $data['pack_price'] > 0) ? (float) $data['pack_price'] : null;
-        $data['carton_price'] = (!empty($data['carton_price']) && $data['carton_price'] > 0) ? (float) $data['carton_price'] : null;
-        $data['pack_wholesale_price'] = (!empty($data['pack_wholesale_price']) && $data['pack_wholesale_price'] > 0) ? (float) $data['pack_wholesale_price'] : null;
-        $data['carton_wholesale_price'] = (!empty($data['carton_wholesale_price']) && $data['carton_wholesale_price'] > 0) ? (float) $data['carton_wholesale_price'] : null;
         $data['price_locked'] = !empty($data['price_locked']);
         $data['is_imei_tracked'] = !empty($data['is_imei_tracked']);
         $data['unit_label'] = !empty($data['unit_label']) ? $data['unit_label'] : 'Unit';
-        $data['pack_label'] = !empty($data['pack_label']) ? $data['pack_label'] : 'Pack';
-        $data['carton_label'] = !empty($data['carton_label']) ? $data['carton_label'] : 'Carton';
-        $data['units_per_pack'] = !empty($data['units_per_pack']) ? (int) $data['units_per_pack'] : 1;
-        $data['packs_per_carton'] = !empty($data['packs_per_carton']) ? (int) $data['packs_per_carton'] : 1;
 
         if ($request->hasFile('image')) {
             if ($item->image_path) {
@@ -526,21 +486,13 @@ class ItemController extends Controller
                 'front_store_qty',
                 'price',
                 'wholesale_price',
-                'pack_price',
-                'carton_price',
-                'pack_wholesale_price',
-                'carton_wholesale_price',
                 'buy_price',
                 'expiry_date',
                 'price_locked',
                 'is_imei_tracked',
                 'category_id',
                 'image_path',
-                'unit_label',
-                'pack_label',
-                'carton_label',
-                'units_per_pack',
-                'packs_per_carton'
+                'unit_label'
             )
             ->with([
                 'activeUnits',
@@ -554,8 +506,6 @@ class ItemController extends Controller
                 'qty' => $item->front_store_qty,
                 'total_qty' => $item->total_qty,
                 'display_price' => $item->getPriceForUnitLevel('unit', $purchaseType),
-                'pack_display_price' => $item->getPriceForUnitLevel('pack', $purchaseType),
-                'carton_display_price' => $item->getPriceForUnitLevel('carton', $purchaseType),
                 'units' => $item->activeUnits->map(fn($u) => [
                     'id'                     => $u->id,
                     'unit_name'              => $u->unit_name,
@@ -625,13 +575,9 @@ class ItemController extends Controller
             'buy_price',
             'price',
             'wholesale_price',
-            'pack_price',
-            'carton_price',
             'front_store_qty',
             'back_store_qty',
             'unit_label',
-            'units_per_pack',
-            'packs_per_carton',
             'expiry_date',
             'item_description'
         ];
@@ -648,13 +594,9 @@ class ItemController extends Controller
                 '250.00',
                 '350.00',
                 '320.00',
-                '3200.00',
-                '30000.00',
                 '50',
                 '200',
                 'Tablet',
-                '10',
-                '10',
                 '2027-12-31',
                 'Pain relief tablets'
             ]);
@@ -666,13 +608,9 @@ class ItemController extends Controller
                 '1200.00',
                 '1500.00',
                 '1400.00',
-                '14000.00',
-                '130000.00',
                 '30',
                 '100',
                 'Capsule',
-                '10',
-                '10',
                 '2026-10-15',
                 'Broad spectrum antibiotic'
             ]);
@@ -710,13 +648,9 @@ class ItemController extends Controller
             'buy_price',
             'price',
             'wholesale_price',
-            'pack_price',
-            'carton_price',
             'front_store_qty',
             'back_store_qty',
             'unit_label',
-            'units_per_pack',
-            'packs_per_carton',
             'expiry_date',
             'item_description'
         ];
@@ -734,13 +668,9 @@ class ItemController extends Controller
                     $item->buy_price,
                     $item->price,
                     $item->wholesale_price,
-                    $item->pack_price,
-                    $item->carton_price,
                     $item->front_store_qty,
                     $item->back_store_qty,
                     $item->unit_label,
-                    $item->units_per_pack,
-                    $item->packs_per_carton,
                     $item->expiry_date ? $item->expiry_date->format('Y-m-d') : '',
                     $item->item_description,
                 ]);
@@ -791,13 +721,9 @@ class ItemController extends Controller
         $buyPriceIdx = $getColIndex(['buy_price', 'buying_price', 'cost']);
         $priceIdx = $getColIndex(['price', 'selling_price']);
         $wholesaleIdx = $getColIndex(['wholesale_price', 'wholesale']);
-        $packPriceIdx = $getColIndex(['pack_price']);
-        $cartonPriceIdx = $getColIndex(['carton_price']);
         $frontQtyIdx = $getColIndex(['front_store_qty', 'qty', 'front_qty']);
         $backQtyIdx = $getColIndex(['back_store_qty', 'back_qty']);
         $unitLabelIdx = $getColIndex(['unit_label']);
-        $unitsPackIdx = $getColIndex(['units_per_pack']);
-        $packsCartonIdx = $getColIndex(['packs_per_carton']);
         $expiryIdx = $getColIndex(['expiry_date', 'expiry']);
         $descIdx = $getColIndex(['item_description', 'description']);
 
@@ -830,13 +756,9 @@ class ItemController extends Controller
                 $buyPrice = $buyPriceIdx !== null ? (float) ($row[$buyPriceIdx] ?? 0) : 0.0;
                 $price = $priceIdx !== null ? (float) ($row[$priceIdx] ?? 0) : 0.0;
                 $wholesale = $wholesaleIdx !== null ? (float) ($row[$wholesaleIdx] ?? 0) : $price;
-                $packPrice = $packPriceIdx !== null && ($row[$packPriceIdx] ?? '') !== '' ? (float) $row[$packPriceIdx] : null;
-                $cartonPrice = $cartonPriceIdx !== null && ($row[$cartonPriceIdx] ?? '') !== '' ? (float) $row[$cartonPriceIdx] : null;
                 $frontQty = $frontQtyIdx !== null ? (int) ($row[$frontQtyIdx] ?? 0) : 0;
                 $backQty = $backQtyIdx !== null ? (int) ($row[$backQtyIdx] ?? 0) : 0;
                 $unitLabel = $unitLabelIdx !== null ? trim($row[$unitLabelIdx] ?? '') : 'Unit';
-                $unitsPerPack = $unitsPackIdx !== null ? max(1, (int) ($row[$unitsPackIdx] ?? 1)) : 1;
-                $packsCarton = $packsCartonIdx !== null ? max(1, (int) ($row[$packsCartonIdx] ?? 1)) : 1;
                 $expiryDate = $expiryIdx !== null ? trim($row[$expiryIdx] ?? '') : null;
                 $desc = $descIdx !== null ? trim($row[$descIdx] ?? '') : null;
 
@@ -897,13 +819,9 @@ class ItemController extends Controller
                 $item->buy_price = $buyPrice;
                 $item->price = $price;
                 $item->wholesale_price = $wholesale;
-                $item->pack_price = $packPrice;
-                $item->carton_price = $cartonPrice;
                 $item->front_store_qty = $frontQty;
                 $item->back_store_qty = $backQty;
                 $item->unit_label = $unitLabel ?: 'Unit';
-                $item->units_per_pack = $unitsPerPack;
-                $item->packs_per_carton = $packsCarton;
                 $item->item_description = $desc;
                 $item->price_locked = true;
 

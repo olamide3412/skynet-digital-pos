@@ -12,12 +12,10 @@ class Item extends Model
         'branch_id', 'category_id', 'group_address_id',
         'item_name', 'barcode_number',
         'buy_price', 'stock_worth', 'price', 'wholesale_price',
-        'pack_price', 'carton_price', 'pack_wholesale_price', 'carton_wholesale_price',
         'price_locked', 'is_imei_tracked',
         'back_store_qty', 'front_store_qty',
         'reorder_point', 'reorder_unit',
-        'unit_label', 'pack_label', 'carton_label',
-        'units_per_pack', 'packs_per_carton',
+        'unit_label',
         'expiry_date', 'item_description', 'image_path',
     ];
 
@@ -32,16 +30,10 @@ class Item extends Model
             'stock_worth'            => 'decimal:2',
             'price'                  => 'decimal:2',
             'wholesale_price'        => 'decimal:2',
-            'pack_price'             => 'decimal:2',
-            'carton_price'           => 'decimal:2',
-            'pack_wholesale_price'   => 'decimal:2',
-            'carton_wholesale_price' => 'decimal:2',
             'expiry_date'            => 'date',
             'back_store_qty'         => 'integer',
             'front_store_qty'        => 'integer',
             'reorder_point'          => 'integer',
-            'units_per_pack'         => 'integer',
-            'packs_per_carton'       => 'integer',
         ];
     }
 
@@ -78,7 +70,7 @@ class Item extends Model
 
     /**
      * Get configured price for a unit level and purchase type ('Consumer'|'Wholesale').
-     * Checks item_units variants first, then falls back to legacy pack/carton/base pricing.
+     * Checks item_units variants first, then falls back to base pricing.
      */
     public function getPriceForUnitLevel(string $unit = 'unit', string $purchaseType = 'Consumer', ?int $unitId = null): float
     {
@@ -106,41 +98,14 @@ class Item extends Model
             return (float) $itemUnit->selling_price;
         }
 
-        // 2. Fallback to legacy pack / carton fields if applicable
-        switch ($normalizedUnit) {
-            case 'carton':
-            case strtolower($this->carton_label ?? 'carton'):
-                if ($isWholesale && $this->carton_wholesale_price > 0) {
-                    return (float) $this->carton_wholesale_price;
-                }
-                if ($this->carton_price > 0) {
-                    return (float) $this->carton_price;
-                }
-                $basePrice = ($isWholesale && $this->wholesale_price > 0) ? $this->wholesale_price : $this->price;
-                return (float) ($basePrice * ($this->packs_per_carton ?: 1) * ($this->units_per_pack ?: 1));
-
-            case 'pack':
-            case strtolower($this->pack_label ?? 'pack'):
-                if ($isWholesale && $this->pack_wholesale_price > 0) {
-                    return (float) $this->pack_wholesale_price;
-                }
-                if ($this->pack_price > 0) {
-                    return (float) $this->pack_price;
-                }
-                $basePrice = ($isWholesale && $this->wholesale_price > 0) ? $this->wholesale_price : $this->price;
-                return (float) ($basePrice * ($this->units_per_pack ?: 1));
-
-            case 'unit':
-            default:
-                return (float) (($isWholesale && $this->wholesale_price > 0) ? $this->wholesale_price : $this->price);
-        }
+        return (float) (($isWholesale && $this->wholesale_price > 0) ? $this->wholesale_price : $this->price);
     }
 
     // ── Unit conversion helpers ────────────────────────────────────────────────
     /**
      * Convert a quantity in the given unit to base units.
      * @param int         $qty
-     * @param string      $unit   Unit name or 'unit'|'pack'|'carton'
+     * @param string      $unit   Unit name or 'unit'
      * @param int|null    $unitId Optional ItemUnit PK
      */
     public function toBaseUnits(int $qty, string $unit = 'unit', ?int $unitId = null): int
@@ -152,7 +117,7 @@ class Item extends Model
             return $qty;
         }
 
-        // 1. Try finding in item_units
+        // Try finding in item_units
         $itemUnit = null;
         if ($unitId) {
             $itemUnit = $this->relationLoaded('units')
@@ -170,15 +135,7 @@ class Item extends Model
             return $qty * max(1, (int) $itemUnit->quantity_in_base_units);
         }
 
-        // 2. Fallback to legacy pack / carton math
-        $unitsPerPack   = max(1, (int) ($this->units_per_pack ?: 1));
-        $packsPerCarton = max(1, (int) ($this->packs_per_carton ?: 1));
-
-        return match ($normalizedUnit) {
-            'carton', strtolower($this->carton_label ?? 'carton') => $qty * $packsPerCarton * $unitsPerPack,
-            'pack', strtolower($this->pack_label ?? 'pack')       => $qty * $unitsPerPack,
-            default                                               => $qty,
-        };
+        return $qty;
     }
 
     /**

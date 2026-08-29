@@ -68,23 +68,6 @@ export const useCartStore = defineStore('cart', () => {
             }
         }
 
-        // 2. Fallback to legacy pack / carton
-        if (u === 'carton' || u === (item.carton_label || '').toLowerCase().trim()) {
-            if (isWholesale && Number(item.carton_wholesale_price) > 0) return parseFloat(item.carton_wholesale_price)
-            if (Number(item.carton_price) > 0) return parseFloat(item.carton_price)
-            if (Number(item.carton_display_price) > 0) return parseFloat(item.carton_display_price)
-            const base = (isWholesale && item.wholesale_price > 0) ? item.wholesale_price : item.price
-            return parseFloat(base * (item.packs_per_carton || 1) * (item.units_per_pack || 1))
-        }
-
-        if (u === 'pack' || u === (item.pack_label || '').toLowerCase().trim()) {
-            if (isWholesale && Number(item.pack_wholesale_price) > 0) return parseFloat(item.pack_wholesale_price)
-            if (Number(item.pack_price) > 0) return parseFloat(item.pack_price)
-            if (Number(item.pack_display_price) > 0) return parseFloat(item.pack_display_price)
-            const base = (isWholesale && item.wholesale_price > 0) ? item.wholesale_price : item.price
-            return parseFloat(base * (item.units_per_pack || 1))
-        }
-
         return parseFloat(isWholesale && Number(item.wholesale_price) > 0 ? item.wholesale_price : item.price)
     }
 
@@ -114,10 +97,6 @@ export const useCartStore = defineStore('cart', () => {
                 price_locked:     item.price_locked || false,
                 max_qty:          item.front_store_qty ?? item.qty ?? 9999,
                 unit_label:       item.unit_label || 'Unit',
-                pack_label:       item.pack_label || 'Pack',
-                carton_label:     item.carton_label || 'Carton',
-                units_per_pack:   item.units_per_pack || 1,
-                packs_per_carton: item.packs_per_carton || 1,
                 units:            item.units || [],
                 is_imei_tracked:  true,
                 available_imeis:  item.available_imeis || [],
@@ -145,10 +124,6 @@ export const useCartStore = defineStore('cart', () => {
                 price_locked:     item.price_locked || false,
                 max_qty:          item.front_store_qty ?? item.qty ?? 9999,
                 unit_label:       item.unit_label || 'Unit',
-                pack_label:       item.pack_label || 'Pack',
-                carton_label:     item.carton_label || 'Carton',
-                units_per_pack:   item.units_per_pack || 1,
-                packs_per_carton: item.packs_per_carton || 1,
                 units:            item.units || [],
                 is_imei_tracked:  false,
                 available_imeis:  [],
@@ -181,10 +156,6 @@ export const useCartStore = defineStore('cart', () => {
                 price_locked:     item.price_locked || false,
                 max_qty:          item.front_store_qty ?? item.qty ?? 9999,
                 unit_label:       item.unit_label || 'Unit',
-                pack_label:       item.pack_label || 'Pack',
-                carton_label:     item.carton_label || 'Carton',
-                units_per_pack:   item.units_per_pack || 1,
-                packs_per_carton: item.packs_per_carton || 1,
                 units:            item.units || [],
                 is_imei_tracked:  false,
                 available_imeis:  [],

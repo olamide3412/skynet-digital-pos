@@ -479,15 +479,7 @@ class ItemImportService
                     'buy_price'              => (float) ($row['cost_price'] ?? 0),
                     'price'                  => (float) $row['base_unit_price'],
                     'wholesale_price'        => !empty($row['wholesale_price']) ? (float) $row['wholesale_price'] : (float) $row['base_unit_price'],
-                    'pack_price'             => !empty($row['pack_price']) ? (float) $row['pack_price'] : null,
-                    'carton_price'           => !empty($row['carton_price']) ? (float) $row['carton_price'] : null,
-                    'pack_wholesale_price'   => !empty($row['pack_wholesale_price']) ? (float) $row['pack_wholesale_price'] : null,
-                    'carton_wholesale_price' => !empty($row['carton_wholesale_price']) ? (float) $row['carton_wholesale_price'] : null,
                     'unit_label'             => !empty($row['base_unit_name']) ? $row['base_unit_name'] : 'Unit',
-                    'pack_label'             => !empty($row['pack_unit_name']) ? $row['pack_unit_name'] : 'Pack',
-                    'carton_label'           => !empty($row['carton_unit_name']) ? $row['carton_unit_name'] : 'Carton',
-                    'units_per_pack'         => max(1, (int) ($row['pack_quantity'] ?? 1)),
-                    'packs_per_carton'       => max(1, (int) ($row['carton_quantity'] ?? 1)),
                     'is_imei_tracked'        => !empty($row['track_by_imei']),
                     'front_store_qty'        => $frontStoreQty,
                     'back_store_qty'         => $backStoreQty,
@@ -852,6 +844,13 @@ class ItemImportService
                 default       => (int) (($item->front_store_qty ?? 0) + ($item->back_store_qty ?? 0)),
             };
 
+            $packUnit = $item->relationLoaded('units')
+                ? $item->units->first(fn($u) => $u->sort_order === 1 || str_contains(strtolower($u->unit_name), 'pack'))
+                : $item->units()->where('sort_order', 1)->first();
+            $cartonUnit = $item->relationLoaded('units')
+                ? $item->units->first(fn($u) => $u->sort_order === 2 || str_contains(strtolower($u->unit_name), 'carton'))
+                : $item->units()->where('sort_order', 2)->first();
+
             $rowData = [
                 $item->item_name,
                 $item->category?->name ?? '',
@@ -861,14 +860,16 @@ class ItemImportService
                 $item->unit_label ?: 'Unit',
                 (float) ($item->price ?? 0),
                 (float) ($item->wholesale_price ?? $item->price ?? 0),
-                $item->pack_label ?: 'Pack',
-                (int) ($item->units_per_pack ?? 1),
-                $item->pack_price !== null ? (float) $item->pack_price : null,
-                $item->pack_wholesale_price !== null ? (float) $item->pack_wholesale_price : null,
-                $item->carton_label ?: 'Carton',
-                (int) ($item->packs_per_carton ?? 1),
-                $item->carton_price !== null ? (float) $item->carton_price : null,
-                $item->carton_wholesale_price !== null ? (float) $item->carton_wholesale_price : null,
+                $packUnit ? $packUnit->unit_name : 'Pack',
+                $packUnit ? (int) $packUnit->quantity_in_base_units : 1,
+                $packUnit ? (float) $packUnit->selling_price : null,
+                $packUnit ? (float) $packUnit->wholesale_price : null,
+                $cartonUnit ? $cartonUnit->unit_name : 'Carton',
+                $cartonUnit && $packUnit && $packUnit->quantity_in_base_units > 0 
+                    ? max(1, (int) round($cartonUnit->quantity_in_base_units / $packUnit->quantity_in_base_units))
+                    : ($cartonUnit ? (int) $cartonUnit->quantity_in_base_units : 1),
+                $cartonUnit ? (float) $cartonUnit->selling_price : null,
+                $cartonUnit ? (float) $cartonUnit->wholesale_price : null,
                 $item->is_imei_tracked ? 'Yes' : 'No',
                 $qty,
                 $item->expiry_date ? $item->expiry_date->format('Y-m-d') : '',
