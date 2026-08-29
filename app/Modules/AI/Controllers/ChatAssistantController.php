@@ -12,19 +12,17 @@ use Inertia\Inertia;
 
 class ChatAssistantController extends Controller
 {
-    /**
-     * Ask-Your-Business AI Assistant Dashboard.
-     */
     public function index(Request $request, $branchParam = null)
     {
-        $branch = current_branch() ?? ($branchParam ? Branch::where('slug', $branchParam)->first() : null);
-
-        // If Super Admin has selected a specific branch
-        if (!$branch && $request->has('branch_id')) {
-            $branch = Branch::find($request->get('branch_id'));
-        }
-
         $user = auth()->user();
+        if (!$user->is_super_admin) {
+            $branch = current_branch() ?: ($user->branch_id ? Branch::find($user->branch_id) : null);
+        } else {
+            $branch = current_branch() ?? ($branchParam ? Branch::where('slug', $branchParam)->first() : null);
+            if (!$branch && $request->has('branch_id')) {
+                $branch = Branch::find($request->get('branch_id'));
+            }
+        }
         $sessionId = $request->get('session_id') ?: ('sess_' . $user->id . '_' . date('Ymd'));
 
         $logs = AiConversationLog::where('user_id', $user->id)
@@ -40,6 +38,9 @@ class ChatAssistantController extends Controller
                 'detected_intent'    => $l->detected_intent,
                 'structured_payload' => $l->structured_payload,
                 'provider_used'      => $l->provider_used,
+                'model_used'         => $l->model_used,
+                'is_ai_generated'    => !in_array($l->provider_used, ['template_fallback', 'local_database_summary', 'local_rules', null, '']),
+                'execution_time_ms'  => $l->execution_time_ms,
                 'created_at'         => $l->created_at->format('h:i A'),
             ]);
 
@@ -76,12 +77,15 @@ class ChatAssistantController extends Controller
             'branch_id'  => 'nullable|integer',
         ]);
 
-        $branch = current_branch() ?? ($branchParam ? Branch::where('slug', $branchParam)->first() : null);
-        if (!$branch && !empty($data['branch_id'])) {
-            $branch = Branch::find($data['branch_id']);
-        }
-
         $user = auth()->user();
+        if (!$user->is_super_admin) {
+            $branch = current_branch() ?: ($user->branch_id ? Branch::find($user->branch_id) : null);
+        } else {
+            $branch = current_branch() ?? ($branchParam ? Branch::where('slug', $branchParam)->first() : null);
+            if (!$branch && !empty($data['branch_id'])) {
+                $branch = Branch::find($data['branch_id']);
+            }
+        }
 
         // Save user message to log
         $sessionId = $data['session_id'] ?: ('sess_' . $user->id . '_' . date('Ymd'));

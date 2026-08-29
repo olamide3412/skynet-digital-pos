@@ -273,8 +273,6 @@ export const useCartStore = defineStore('cart', () => {
                 price_locked:  false,
                 max_qty:       heldItem.item?.front_store_qty ?? 9999,
                 unit_label:    heldItem.item?.unit_label || 'Unit',
-                pack_label:    heldItem.item?.pack_label || 'Pack',
-                carton_label:  heldItem.item?.carton_label || 'Carton',
                 raw_item:      heldItem.item || {},
             })
         })

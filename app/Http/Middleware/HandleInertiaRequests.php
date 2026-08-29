@@ -101,10 +101,10 @@ class HandleInertiaRequests extends Middleware
             'dark_mode_accent_mode'   => fn() => \App\Models\SystemSetting::get('dark_mode_accent_mode', 'white'),
             'custom_dark_primary_hex' => fn() => \App\Models\SystemSetting::get('custom_dark_primary_hex', '#FFFFFF'),
 
-            // ── Branch Notifications ──────────────────────────────────────────
+            // ── Branch Notifications (User Scoped) ─────────────────────────────
             'unread_notifications_count' => fn() => $branch ? \App\Services\NotificationService::getUnreadCount($branch->id, $user?->id) : 0,
-            'unresolved_conflicts_count' => fn() => $branch ? \App\Models\AppNotification::forBranch($branch->id)->whereIn('type', ['stock_conflict', 'imei_conflict'])->where('is_resolved', false)->count() : 0,
-            'recent_notifications'       => fn() => $branch ? \App\Services\NotificationService::getRecentPreview($branch->id, 6) : [],
+            'unresolved_conflicts_count' => fn() => $branch ? \App\Models\AppNotification::forBranch($branch->id)->forUser($user?->id)->whereIn('type', ['stock_conflict', 'imei_conflict'])->where('is_resolved', false)->count() : 0,
+            'recent_notifications'       => fn() => $branch ? \App\Services\NotificationService::getRecentPreview($branch->id, 6, $user?->id) : [],
 
             'cart_count'     => fn() => 0,
             'compare_count'  => fn() => 0,

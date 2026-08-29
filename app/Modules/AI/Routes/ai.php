@@ -24,6 +24,7 @@ Route::prefix('superadmin/ai')
 
         // Cross-Branch Reorder Insights
         Route::get('/reorder',                  [ReorderPredictionController::class, 'index'])->name('reorder');
+        Route::post('/reorder/insight',         [ReorderPredictionController::class, 'generateInsight'])->name('reorder.insight');
 
         // Cross-Branch Chat Assistant
         Route::get('/chat',                     [ChatAssistantController::class, 'index'])->name('chat');
@@ -38,6 +39,7 @@ Route::prefix('{branch}/ai')
     ->group(function () {
         // Reorder Predictions
         Route::get('/reorder',          [ReorderPredictionController::class, 'index'])->name('reorder');
+        Route::post('/reorder/insight', [ReorderPredictionController::class, 'generateInsight'])->name('reorder.insight');
         Route::post('/reorder/notify',  [ReorderPredictionController::class, 'notify'])->name('reorder.notify');
 
         // Ask-Your-Business Chat Assistant

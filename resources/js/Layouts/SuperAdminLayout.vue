@@ -1,11 +1,18 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, provide } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 import FlashMessages from '@/Components/FlashMessages.vue'
 
 const isMobileOpen = ref(false)
 const isCollapsed  = ref(false)
+
+const toggleMobile = () => {
+    isMobileOpen.value = !isMobileOpen.value
+}
+
+provide('toggleMobileSidebar', toggleMobile)
+provide('isMobileSidebarOpen', isMobileOpen)
 
 const page = usePage()
 
@@ -80,10 +87,6 @@ const navLinks = [
 
 function isActive(link) {
     return page.component.startsWith(link.match)
-}
-
-function toggleMobile() {
-    isMobileOpen.value = !isMobileOpen.value
 }
 
 function toggleCollapse() {
@@ -207,8 +210,8 @@ function toggleCollapse() {
 
         <!-- ── Main Content Area ─────────────────────────────────────────── -->
         <main class="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
-            <!-- Top Header -->
-            <header class="h-16 flex-shrink-0 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6">
+            <!-- Top Header (Hidden on Chat Assistant page for immersive standalone experience) -->
+            <header v-if="page.component !== 'AI/ChatAssistant'" class="h-16 flex-shrink-0 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 sm:px-6">
                 <div class="flex items-center gap-3 min-w-0">
                     <!-- Mobile Hamburger Toggle Button -->
                     <button @click="toggleMobile" class="lg:hidden text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white focus:outline-none p-1 flex-shrink-0">
@@ -237,7 +240,10 @@ function toggleCollapse() {
             </header>
 
             <!-- Page Content -->
-            <div class="flex-1 min-h-0 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 lg:p-8">
+            <div :class="[
+                'flex-1 min-h-0 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950',
+                page.component === 'AI/ChatAssistant' ? 'p-0 flex flex-col' : 'p-4 sm:p-6 lg:p-8'
+            ]">
                 <slot/>
             </div>
 

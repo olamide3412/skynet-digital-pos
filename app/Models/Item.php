@@ -160,23 +160,10 @@ class Item extends Model
                     $parts[] = "{$count} {$u->unit_name}";
                 }
             }
-        } else {
-            // Legacy pack/carton formatting
-            $cartonUnits = (int) ($this->packs_per_carton ?: 1) * (int) ($this->units_per_pack ?: 1);
-            if ($cartonUnits > 1 && $remaining >= $cartonUnits) {
-                $cartons = intdiv($remaining, $cartonUnits);
-                $remaining %= $cartonUnits;
-                $parts[] = "{$cartons} {$this->carton_label}";
-            }
-            if ((int) $this->units_per_pack > 1 && $remaining >= (int) $this->units_per_pack) {
-                $packs = intdiv($remaining, (int) $this->units_per_pack);
-                $remaining %= (int) $this->units_per_pack;
-                $parts[] = "{$packs} {$this->pack_label}";
-            }
         }
 
         if ($remaining > 0 || empty($parts)) {
-            $parts[] = "{$remaining} {$this->unit_label}";
+            $parts[] = "{$remaining} " . ($this->unit_label ?: 'Unit');
         }
 
         return implode(' ', $parts);

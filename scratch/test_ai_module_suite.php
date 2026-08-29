@@ -61,6 +61,7 @@ try {
     // ── 2. Testing AiSetting Model & Encryption ──────────────────────────────
     echo "\n--- 2. Testing AiSetting Model & Encrypted Key Storage ---\n";
     $setting = AiSetting::current();
+    $setting->update(['is_system_enabled' => true]);
     assertTest('AiSetting singleton instance retrieved', $setting->exists);
 
     $testKey = 'sk-test-secret-key-12345';
@@ -241,12 +242,40 @@ try {
     assertTest('Chat intent detected: imei_lookup', $chatRes4['intent'] === 'imei_lookup');
     assertTest('IMEI device record found in grounding', $chatRes4['structured_data']['found'] === true);
 
+    // Test E: Suspicious Activity & Risk Audit query
+    $chatRes5 = ChatQueryTranslationService::process('Check if there is any suspicious activity or fraud going on', $branch, $adminUser);
+    assertTest('Chat intent detected: suspicious_activity_audit', $chatRes5['intent'] === 'suspicious_activity_audit');
+    assertTest('Suspicious audit contains risk assessment', isset($chatRes5['structured_data']['overall_risk_level']));
+    assertTest('Suspicious audit isolated to branch', $chatRes5['structured_data']['scope'] === $branch->name);
+
+    // Test F: Staff Performance Ranking ("Who perform most")
+    $chatRes6 = ChatQueryTranslationService::process('Who performed most among our cashiers and staff?', $branch, $adminUser);
+    assertTest('Chat intent detected: staff_performance_ranking', $chatRes6['intent'] === 'staff_performance_ranking');
+    assertTest('Staff leaderboard list populated', isset($chatRes6['structured_data']['leaderboard']));
+
+    // Test G: Growth Trajectory & Forecast
+    $chatRes7 = ChatQueryTranslationService::process('Is our business growing and at what rate?', $branch, $adminUser);
+    assertTest('Chat intent detected: growth_trajectory_prediction', $chatRes7['intent'] === 'growth_trajectory_prediction');
+    assertTest('Growth rate metrics calculated', isset($chatRes7['structured_data']['month_on_month_growth']));
+
+    // Test H: Sales Velocity & Peak Rush
+    $chatRes8 = ChatQueryTranslationService::process('Analyze our rate of sale, peak rush hours, and payment methods', $branch, $adminUser);
+    assertTest('Chat intent detected: sales_velocity_and_basket_rate', $chatRes8['intent'] === 'sales_velocity_and_basket_rate');
+    assertTest('Payment mix breakdown populated', isset($chatRes8['structured_data']['payment_mix']));
+
+    // Test I: Super Admin Cross-Branch Comparison (branch is null)
+    $chatRes9 = ChatQueryTranslationService::process('Compare sales across all stores and branches', null, $adminUser);
+    assertTest('Chat intent detected: cross_branch_benchmarking', $chatRes9['intent'] === 'cross_branch_benchmarking');
+    assertTest('Cross-branch leaderboard includes branches', isset($chatRes9['structured_data']['branch_leaderboard']));
+
     // ── 8. Testing Per-Branch AI Access Toggle & Controller Endpoints ────────
     echo "\n--- 8. Testing Per-Branch AI Toggle & Controller Endpoints ---\n";
     $branch->update(['is_ai_enabled' => false]);
+    $branch->refresh();
     assertTest('Branch AI is disabled via Eloquent', $aiManager->isBranchEnabled($branch) === false);
 
     $branch->update(['is_ai_enabled' => true]);
+    $branch->refresh();
     assertTest('Branch AI re-enabled via Eloquent', $aiManager->isBranchEnabled($branch) === true);
 
     // Test AiSettingsController@toggleBranch

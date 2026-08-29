@@ -20,8 +20,10 @@ class NotificationController extends Controller
     {
         $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
         $branchId = $branch?->id;
+        $userId = Auth::id();
 
         $query = AppNotification::forBranch($branchId)
+            ->forUser($userId)
             ->with(['user:id,name', 'resolver:id,name']);
 
         // Search query
@@ -52,12 +54,14 @@ class NotificationController extends Controller
 
         $notifications = $query->latest()->paginate(20)->withQueryString();
 
+        $baseScope = AppNotification::forBranch($branchId)->forUser($userId);
+
         $stats = [
-            'total'           => AppNotification::forBranch($branchId)->count(),
-            'unresolved'      => AppNotification::forBranch($branchId)->where('is_resolved', false)->count(),
-            'unread'          => AppNotification::forBranch($branchId)->where('is_read', false)->count(),
-            'stock_conflicts' => AppNotification::forBranch($branchId)->whereIn('type', ['stock_conflict', 'imei_conflict'])->where('is_resolved', false)->count(),
-            'resolved'        => AppNotification::forBranch($branchId)->where('is_resolved', true)->count(),
+            'total'           => (clone $baseScope)->count(),
+            'unresolved'      => (clone $baseScope)->where('is_resolved', false)->count(),
+            'unread'          => (clone $baseScope)->where('is_read', false)->count(),
+            'stock_conflicts' => (clone $baseScope)->whereIn('type', ['stock_conflict', 'imei_conflict'])->where('is_resolved', false)->count(),
+            'resolved'        => (clone $baseScope)->where('is_resolved', true)->count(),
         ];
 
         return Inertia::render('Notifications/Index', [
@@ -74,10 +78,11 @@ class NotificationController extends Controller
     {
         $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
         $branchId = $branch?->id;
+        $userId   = Auth::id();
 
-        $unreadCount     = NotificationService::getUnreadCount($branchId, Auth::id());
-        $unresolvedCount = NotificationService::getUnresolvedCount($branchId);
-        $preview         = NotificationService::getRecentPreview($branchId, 8);
+        $unreadCount     = NotificationService::getUnreadCount($branchId, $userId);
+        $unresolvedCount = NotificationService::getUnresolvedCount($branchId, $userId);
+        $preview         = NotificationService::getRecentPreview($branchId, 8, $userId);
 
         return response()->json([
             'unread_count'     => $unreadCount,

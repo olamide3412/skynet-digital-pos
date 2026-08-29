@@ -2,6 +2,13 @@
 import { ref, onMounted, computed } from 'vue'
 import { useThemeStore } from '@/Stores/themeStore'
 
+const props = defineProps({
+  showLabel: {
+    type: Boolean,
+    default: false,
+  },
+})
+
 const themeStore = useThemeStore()
 const theme = ref('light')
 
@@ -56,7 +63,7 @@ const toggleTheme = () => {
           <line x1="12" y1="17" x2="12" y2="21" stroke-width="2"/>
         </svg>
 
-        <span class="hidden sm:inline text-xs font-medium">{{ themeLabel }}</span>
+        <span v-if="showLabel" class="hidden sm:inline text-xs font-medium">{{ themeLabel }}</span>
       </button>
     </div>
 </template>

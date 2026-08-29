@@ -377,6 +377,7 @@ class BranchController extends Controller
             'show_receipt_preview'     => 'required|boolean',
             'is_offline_enabled'       => 'required|boolean',
             'is_turnstile_enabled'     => 'required|boolean',
+            'is_auto_fullscreen_enabled' => 'required|boolean',
             'offline_receipt_prefix'   => 'nullable|string|max:10',
             'is_price_editable'        => 'required|boolean',
             'is_qty_deduction'         => 'required|boolean',
@@ -496,6 +497,25 @@ class BranchController extends Controller
         );
 
         return back()->with('success', "AI intelligence features {$status} for {$branch->name}.");
+    }
+
+    /**
+     * Toggle branch auto-fullscreen on login requirement.
+     */
+    public function toggleAutoFullscreen(Branch $branch)
+    {
+        $settings = $branch->getSettings();
+        $newState = !($settings->is_auto_fullscreen_enabled ?? false);
+        $settings->update(['is_auto_fullscreen_enabled' => $newState]);
+        $status = $newState ? 'enabled' : 'disabled';
+
+        ActivityLogger::log(
+            'setting',
+            "Super Admin {$status} auto-fullscreen on POS login for branch '{$branch->name}'",
+            $branch->id
+        );
+
+        return back()->with('success', "Auto-fullscreen on POS login {$status} for {$branch->name}.");
     }
 
     /**

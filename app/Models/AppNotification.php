@@ -74,6 +74,17 @@ class AppNotification extends Model
         });
     }
 
+    public function scopeForUser(Builder $query, ?int $userId): Builder
+    {
+        if (!$userId) {
+            return $query;
+        }
+        return $query->where(function ($q) use ($userId) {
+            $q->where('user_id', $userId)
+              ->orWhereNull('user_id');
+        });
+    }
+
     public function scopeUnread(Builder $query): Builder
     {
         return $query->where('is_read', false);

@@ -255,40 +255,46 @@ class ReorderPredictionService
     public static function generateAiInsight(array $predictionData, ?Branch $branch = null): string
     {
         $aiManager = app(AiManager::class);
+        $summary = $predictionData['summary'];
 
         if (!$aiManager->isBranchEnabled($branch)) {
-            return "AI provider is not configured. Rule-based velocity forecasting is active above.";
+            return "### Executive Summary\n\nBased on rolling sales velocity across **{$summary['total_items_analyzed']} items**, there are **{$summary['critical_items_count']} critical stockouts** (≤ 2 days remaining) and **{$summary['warning_items_count']} items** approaching threshold.\n\n### Strategic Purchasing Actions\n- **Immediate Replenishment**: Order **{$summary['critical_items_count']} critical items** immediately to prevent stockouts.\n- **Recommended Volume**: Total suggested replenishment volume is **" . number_format($summary['total_suggested_units']) . " base units**.\n- AI provider is not currently configured for narrative generation; rule-based velocity data is active.";
         }
 
-        $summary = $predictionData['summary'];
-        $criticalItems = array_slice(array_filter($predictionData['predictions'], fn($p) => $p['urgency'] === 'critical'), 0, 5);
+        $criticalItems = array_slice(array_filter($predictionData['predictions'], fn($p) => $p['urgency'] === 'critical'), 0, 6);
 
-        $promptItems = array_map(fn($i) => "- {$i['item_name']}: Stock={$i['front_store_qty']}, Daily Sales={$i['avg_daily_sales']}, Days Left={$i['days_left']}, Suggested Reorder={$i['suggested_reorder_display']}", $criticalItems);
-        $itemsText = implode("\n", $promptItems);
+        $promptItems = array_map(fn($i) => "- **{$i['item_name']}**: Current Stock={$i['front_store_qty']}, Daily Sales={$i['avg_daily_sales']}/day, Days Left={$i['days_left']}d, Suggested Reorder={$i['suggested_reorder_display']}", $criticalItems);
+        $itemsText = !empty($promptItems) ? implode("\n", $promptItems) : "No items currently in critical stockout status.";
+
+        $scopeTitle = $branch ? "branch \"{$branch->name}\"" : "all company branches";
 
         $prompt = <<<PROMPT
-You are an expert retail inventory forecasting consultant.
-Provide a concise, high-impact 2-paragraph executive recommendation for a branch manager based on this stock velocity data:
+You are an expert retail inventory optimization and supply chain strategist.
+Provide a high-impact, actionable executive reorder recommendation for {$scopeTitle} based on the following real-time sales velocity data:
 
-Summary:
-- Total Products Analyzed: {$summary['total_items_analyzed']}
-- Critical Stockouts: {$summary['critical_items_count']}
-- Warning Thresholds: {$summary['warning_items_count']}
-- Total Suggested Reorder Base Units: {$summary['total_suggested_units']}
+Inventory Metrics:
+- Total Catalog Analyzed: {$summary['total_items_analyzed']} SKUs
+- Critical Stockouts (≤ 2 Days): {$summary['critical_items_count']} SKUs
+- Warning Zone (≤ {$summary['threshold_days']} Days): {$summary['warning_items_count']} SKUs
+- Total Suggested Replenishment: {$summary['total_suggested_units']} base units
 
-Most Critical Items:
+Top Urgent / Stockout Items:
 {$itemsText}
 
-Format your answer with bullet points for the top 3 immediate purchasing actions.
+Output Guidelines:
+- Use clean Markdown format.
+- Start with a concise **Executive Summary** paragraph explaining the inventory health status and immediate financial risks.
+- Provide a section titled **Strategic Observations** highlighting demand velocity, supplier lead time risks, and category stockout patterns.
+- Conclude with a numbered action list titled **Immediate Purchasing Action Plan** detailing the top 3-4 specific purchase orders to execute today.
 PROMPT;
 
         try {
             return $aiManager->generateText($prompt, [
-                'temperature' => 0.5,
-                'max_tokens'  => 500,
+                'temperature' => 0.4,
+                'max_tokens'  => 650,
             ]);
         } catch (\Throwable $e) {
-            return "Rule-based analysis active: {$summary['critical_items_count']} critical items and {$summary['warning_items_count']} items approaching stockout within {$summary['threshold_days']} days.";
+            return "### Executive Summary\n\nAcross **{$summary['total_items_analyzed']} catalog SKUs**, **{$summary['critical_items_count']} items** have reached critical stockout (≤ 2 days remaining) and **{$summary['warning_items_count']} items** are in the warning zone (≤ {$summary['threshold_days']} days).\n\n### Immediate Purchasing Action Plan\n- **Action 1 (Critical Replenishment)**: Immediately submit purchase orders for the **{$summary['critical_items_count']} zero/low-stock SKUs** to avoid missed sales opportunities.\n- **Action 2 (Buffer Optimization)**: Reorder a total of **" . number_format($summary['total_suggested_units']) . " units** across active packaging variants to maintain a 14-day safety cushion.\n- **Action 3 (Supplier Lead Times)**: Contact suppliers for high-velocity items to verify fulfillment lead times.";
         }
     }
 }

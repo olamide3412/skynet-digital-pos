@@ -35,7 +35,7 @@ class NotificationService
 
         return AppNotification::create([
             'branch_id'      => $branchId,
-            'user_id'        => $user?->id,
+            'user_id'        => null, // Branch-wide notification: visible to Branch Admin and Cashiers
             'type'           => $type,
             'title'          => $title,
             'message'        => $message,
@@ -52,6 +52,8 @@ class NotificationService
                 'imei_or_device_id'     => $conflict->imei_or_device_id,
                 'offline_sale_id'       => $conflict->offline_sale_id,
                 'sale_id'               => $conflict->sale_id,
+                'synced_by_user_id'     => $user?->id,
+                'synced_by_user_name'   => $user?->name,
             ],
             'is_read'        => false,
             'is_resolved'    => false,
@@ -89,7 +91,7 @@ class NotificationService
     }
 
     /**
-     * Get unread notification count for a branch.
+     * Get unread notification count for a branch and optionally specific user.
      */
     public static function getUnreadCount(Branch|int|null $branch, ?int $userId = null): int
     {
@@ -97,33 +99,35 @@ class NotificationService
         if (!$branchId) return 0;
 
         return AppNotification::forBranch($branchId)
-            ->when($userId, fn($q) => $q->where(fn($sub) => $sub->where('user_id', $userId)->orWhereNull('user_id')))
+            ->forUser($userId)
             ->unread()
             ->count();
     }
 
     /**
-     * Get unresolved notification count for a branch.
+     * Get unresolved notification count for a branch and optionally specific user.
      */
-    public static function getUnresolvedCount(Branch|int|null $branch): int
+    public static function getUnresolvedCount(Branch|int|null $branch, ?int $userId = null): int
     {
         $branchId = $branch instanceof Branch ? $branch->id : $branch;
         if (!$branchId) return 0;
 
         return AppNotification::forBranch($branchId)
+            ->forUser($userId)
             ->unresolved()
             ->count();
     }
 
     /**
-     * Get recent notifications preview for dropdowns.
+     * Get recent notifications preview for dropdowns scoped to user.
      */
-    public static function getRecentPreview(Branch|int|null $branch, int $limit = 5): array
+    public static function getRecentPreview(Branch|int|null $branch, int $limit = 5, ?int $userId = null): array
     {
         $branchId = $branch instanceof Branch ? $branch->id : $branch;
         if (!$branchId) return [];
 
         return AppNotification::forBranch($branchId)
+            ->forUser($userId)
             ->latest()
             ->limit($limit)
             ->get()
@@ -143,14 +147,14 @@ class NotificationService
     }
 
     /**
-     * Mark all unread notifications as read for a branch.
+     * Mark all unread notifications as read for a branch and user.
      */
     public static function markAllRead(Branch|int $branch, ?int $userId = null): int
     {
         $branchId = $branch instanceof Branch ? $branch->id : $branch;
 
         return AppNotification::forBranch($branchId)
-            ->when($userId, fn($q) => $q->where(fn($sub) => $sub->where('user_id', $userId)->orWhereNull('user_id')))
+            ->forUser($userId)
             ->unread()
             ->update([
                 'is_read' => true,

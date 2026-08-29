@@ -116,13 +116,6 @@ const availableUnits = computed(() => {
                 })
             }
         })
-    } else {
-        if (selectedItem.value?.pack_label) {
-            list.push({ value: 'pack', label: selectedItem.value.pack_label })
-        }
-        if (selectedItem.value?.carton_label) {
-            list.push({ value: 'carton', label: selectedItem.value.carton_label })
-        }
     }
     return list
 })

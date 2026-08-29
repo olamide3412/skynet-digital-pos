@@ -130,6 +130,8 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.toggle-turnstile');
         Route::post('/branches/{branch}/toggle-ai', [BranchController::class, 'toggleAi'])
             ->name('branches.toggle-ai');
+        Route::post('/branches/{branch}/toggle-auto-fullscreen', [BranchController::class, 'toggleAutoFullscreen'])
+            ->name('branches.toggle-auto-fullscreen');
         Route::put('/branches/{branch}/settings', [BranchController::class, 'updateSettings'])
             ->name('branches.settings.update');
         Route::post('/branches/{branch}/logo', [BranchController::class, 'updateLogo'])

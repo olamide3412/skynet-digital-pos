@@ -29,20 +29,21 @@ function doFilter() {
     }, { preserveState: true, replace: true })
 }
 
-function getUnitsPerUnitLevel(item, unitUsed = 'unit') {
+function getUnitsPerUnitLevel(item, unitUsed = 'unit', rItem = null) {
+    if (rItem && rItem.unit_multiplier) return Number(rItem.unit_multiplier) || 1
     if (!item) return 1
     const u = String(unitUsed).toLowerCase()
-    const unitsPerPack = Math.max(1, Number(item.units_per_pack || 1))
-    const packsPerCarton = Math.max(1, Number(item.packs_per_carton || 1))
-    if (u === 'carton') return packsPerCarton * unitsPerPack
-    if (u === 'pack') return unitsPerPack
+    if (item.units && Array.isArray(item.units)) {
+        const found = item.units.find(unit => unit.unit_name && unit.unit_name.toLowerCase() === u)
+        if (found) return Number(found.quantity_in_base_units) || 1
+    }
     return 1
 }
 
 function getBaseUnits(rItem) {
     if (!rItem) return 0
     const qty = Number(rItem.qty || 0)
-    const multiplier = getUnitsPerUnitLevel(rItem.item, rItem.unit_used)
+    const multiplier = getUnitsPerUnitLevel(rItem.item, rItem.unit_used, rItem)
     return qty * multiplier
 }
 </script>

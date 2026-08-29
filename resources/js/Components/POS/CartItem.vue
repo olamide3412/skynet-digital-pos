@@ -86,7 +86,7 @@ const availableUnits = computed(() => {
         { key: 'unit', label: props.item.unit_label || 'Unit', multiplier: 1 }
     ]
 
-    const itemUnits = props.item.units || props.item.raw_item?.units
+    const itemUnits = props.item.units || props.item.raw_item?.units || props.item.raw_item?.active_units
     if (Array.isArray(itemUnits) && itemUnits.length > 0) {
         itemUnits.forEach(u => {
             if (u.unit_name) {
@@ -97,24 +97,6 @@ const availableUnits = computed(() => {
                 })
             }
         })
-    } else {
-        // Fallback to legacy pack & carton
-        if (Number(props.item.units_per_pack) > 1) {
-            list.push({
-                key:        'pack',
-                label:      props.item.pack_label || 'Pack',
-                multiplier: Number(props.item.units_per_pack),
-            })
-        }
-        if (Number(props.item.packs_per_carton) > 1) {
-            const upp = Number(props.item.units_per_pack) || 1
-            const ppc = Number(props.item.packs_per_carton) || 1
-            list.push({
-                key:        'carton',
-                label:      props.item.carton_label || 'Carton',
-                multiplier: upp * ppc,
-            })
-        }
     }
     return list
 })

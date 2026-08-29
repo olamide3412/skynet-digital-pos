@@ -30,7 +30,6 @@ class ReorderPredictionController extends Controller
 
         $aiManager = app(AiManager::class);
         $isAiConfigured = $aiManager->isBranchEnabled($branch);
-        $aiInsight = $isAiConfigured ? ReorderPredictionService::generateAiInsight($predictionData, $branch) : null;
 
         $branches = auth()->user()->is_super_admin
             ? Branch::select(['id', 'name', 'slug'])->orderBy('name')->get()
@@ -41,7 +40,7 @@ class ReorderPredictionController extends Controller
             'branches'       => $branches,
             'summary'        => $predictionData['summary'],
             'predictions'    => $predictionData['predictions'],
-            'aiInsight'      => $aiInsight,
+            'aiInsight'      => null, // Loaded asynchronously on client
             'isAiConfigured' => $isAiConfigured,
             'filters'        => [
                 'velocity_days'  => $velocityDays,
@@ -51,6 +50,34 @@ class ReorderPredictionController extends Controller
                 'search'         => $request->get('search', ''),
                 'branch_id'      => $branch?->id,
             ],
+        ]);
+    }
+
+    /**
+     * Generate AI insight narrative asynchronously via API.
+     */
+    public function generateInsight(Request $request, $branchParam = null)
+    {
+        $branch = current_branch() ?? ($branchParam ? Branch::where('slug', $branchParam)->first() : null);
+
+        if (!$branch && $request->has('branch_id') && $request->get('branch_id')) {
+            $branch = Branch::find($request->get('branch_id'));
+        }
+
+        $velocityDays  = (int) $request->get('velocity_days', 14);
+        $thresholdDays = (int) $request->get('threshold_days', 7);
+
+        $predictionData = ReorderPredictionService::getPredictions($branch, $velocityDays, $thresholdDays);
+
+        $aiManager = app(AiManager::class);
+        $isAiConfigured = $aiManager->isBranchEnabled($branch);
+
+        $insight = ReorderPredictionService::generateAiInsight($predictionData, $branch);
+
+        return response()->json([
+            'insight'       => $insight,
+            'is_configured' => $isAiConfigured,
+            'summary'       => $predictionData['summary'],
         ]);
     }
 

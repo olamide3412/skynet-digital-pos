@@ -559,7 +559,7 @@ class ItemController extends Controller
         ]);
     }
 
-    /** Export sample CSV template matching current items table schema */
+    /** Export sample CSV template matching multi-row variant items schema */
     public function exportTemplate()
     {
         $headers = [
@@ -568,16 +568,19 @@ class ItemController extends Controller
         ];
 
         $columns = [
+            'item_ref',
             'item_name',
-            'barcode_number',
             'category_name',
             'group_address_name',
-            'buy_price',
-            'price',
+            'barcode_number',
+            'cost_price',
+            'unit_name',
+            'quantity_in_base_units',
+            'selling_price',
             'wholesale_price',
+            'is_base_unit',
             'front_store_qty',
             'back_store_qty',
-            'unit_label',
             'expiry_date',
             'item_description'
         ];
@@ -586,33 +589,131 @@ class ItemController extends Controller
             $file = fopen('php://output', 'w');
             fputcsv($file, $columns);
 
+            // Group 1: Peak Milk Sachet with Roll & Carton variants
             fputcsv($file, [
+                'P001',
+                'Peak Milk Sachet',
+                'Dairy & Provisions',
+                'Shelf A1',
+                '8901234567890',
+                '200.00',
+                'Unit',
+                '1',
+                '250.00',
+                '220.00',
+                'Yes',
+                '100',
+                '500',
+                '2028-12-31',
+                'Instant full cream milk powder sachet'
+            ]);
+            fputcsv($file, [
+                'P001',
+                'Peak Milk Sachet',
+                'Dairy & Provisions',
+                'Shelf A1',
+                '8901234567890',
+                '',
+                'Roll (10-in-1)',
+                '10',
+                '2350.00',
+                '2100.00',
+                'No',
+                '',
+                '',
+                '',
+                ''
+            ]);
+            fputcsv($file, [
+                'P001',
+                'Peak Milk Sachet',
+                'Dairy & Provisions',
+                'Shelf A1',
+                '8901234567890',
+                '',
+                'Carton (100-in-1)',
+                '100',
+                '22500.00',
+                '20000.00',
+                'No',
+                '',
+                '',
+                '',
+                ''
+            ]);
+
+            // Group 2: Coca-Cola 50cl with Pack variant
+            fputcsv($file, [
+                'P002',
+                'Coca-Cola 50cl',
+                'Beverages',
+                'Cooler 1',
+                '5449000000996',
+                '150.00',
+                'Bottle',
+                '1',
+                '250.00',
+                '220.00',
+                'Yes',
+                '48',
+                '240',
+                '2027-06-30',
+                'Carbonated soft drink bottle'
+            ]);
+            fputcsv($file, [
+                'P002',
+                'Coca-Cola 50cl',
+                'Beverages',
+                'Cooler 1',
+                '5449000000996',
+                '',
+                'Pack (12-in-1)',
+                '12',
+                '2800.00',
+                '2500.00',
+                'No',
+                '',
+                '',
+                '',
+                ''
+            ]);
+
+            // Group 3: Paracetamol 500mg (Base unit only)
+            fputcsv($file, [
+                'P003',
                 'Paracetamol 500mg',
-                'BAR-100201',
                 'Analgesics',
                 'Shelf A1',
-                '250.00',
-                '350.00',
-                '320.00',
+                '6001234987654',
+                '150.00',
+                'Tablet',
+                '1',
+                '200.00',
+                '180.00',
+                'Yes',
                 '50',
                 '200',
-                'Tablet',
                 '2027-12-31',
                 'Pain relief tablets'
             ]);
+
+            // Group 4: Golden Penny Semovita 2kg (Base unit only, no barcode)
             fputcsv($file, [
-                'Amoxicillin 250mg',
-                'BAR-100202',
-                'Antibiotics',
-                'Shelf B2',
-                '1200.00',
-                '1500.00',
+                'P004',
+                'Golden Penny Semovita 2kg',
+                'Groceries',
+                'Aisle 3',
+                '',
                 '1400.00',
-                '30',
+                'Bag',
+                '1',
+                '1800.00',
+                '1650.00',
+                'Yes',
+                '25',
                 '100',
-                'Capsule',
-                '2026-10-15',
-                'Broad spectrum antibiotic'
+                '2028-06-30',
+                'Premium wheat semovita flour'
             ]);
 
             fclose($file);
@@ -621,11 +722,12 @@ class ItemController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
-    /** Export all current branch items into CSV using native schema */
+    /** Export all current branch items into CSV matching multi-row variant schema */
     public function exportCsv(Request $request)
     {
-        $branch = current_branch();
-        $fileName = 'skynet_items_' . \Illuminate\Support\Str::slug($branch->name) . '_' . date('Ymd_His') . '.csv';
+        $branch = current_branch() ?: \App\Models\Branch::first();
+        $branchName = $branch ? $branch->name : 'branch';
+        $fileName = 'skynet_items_' . \Illuminate\Support\Str::slug($branchName) . '_' . date('Ymd_His') . '.csv';
 
         $headers = [
             'Content-Type' => 'text/csv; charset=utf-8',
@@ -634,23 +736,26 @@ class ItemController extends Controller
 
         $selectedIds = $request->query('ids') ? explode(',', $request->query('ids')) : null;
 
-        $items = Item::where('branch_id', $branch->id)
+        $items = Item::when($branch, fn($q) => $q->where('branch_id', $branch->id))
             ->when($selectedIds, fn($q) => $q->whereIn('id', $selectedIds))
-            ->with(['category', 'groupAddress'])
+            ->with(['category', 'groupAddress', 'units'])
             ->latest()
             ->get();
 
         $columns = [
+            'item_ref',
             'item_name',
             'barcode_number',
             'category_name',
             'group_address_name',
-            'buy_price',
-            'price',
+            'cost_price',
+            'unit_name',
+            'quantity_in_base_units',
+            'selling_price',
             'wholesale_price',
+            'is_base_unit',
             'front_store_qty',
             'back_store_qty',
-            'unit_label',
             'expiry_date',
             'item_description'
         ];
@@ -660,20 +765,49 @@ class ItemController extends Controller
             fputcsv($file, $columns);
 
             foreach ($items as $item) {
+                $itemRef = 'REF-' . str_pad($item->id, 5, '0', STR_PAD_LEFT);
+
+                // Base Unit Row
                 fputcsv($file, [
+                    $itemRef,
                     $item->item_name,
-                    $item->barcode_number,
+                    $item->barcode_number ?? '',
                     $item->category?->name ?? '',
                     $item->groupAddress?->name ?? '',
                     $item->buy_price,
+                    $item->unit_label ?: 'Unit',
+                    1,
                     $item->price,
                     $item->wholesale_price,
+                    'Yes',
                     $item->front_store_qty,
                     $item->back_store_qty,
-                    $item->unit_label,
                     $item->expiry_date ? $item->expiry_date->format('Y-m-d') : '',
                     $item->item_description,
                 ]);
+
+                // Variant Rows
+                if ($item->units && $item->units->count() > 0) {
+                    foreach ($item->units as $unit) {
+                        fputcsv($file, [
+                            $itemRef,
+                            $item->item_name,
+                            $item->barcode_number ?? '',
+                            $item->category?->name ?? '',
+                            '',
+                            '',
+                            $unit->unit_name,
+                            (int) $unit->quantity_in_base_units,
+                            (float) $unit->selling_price,
+                            (float) ($unit->wholesale_price ?? $unit->selling_price),
+                            'No',
+                            '',
+                            '',
+                            '',
+                            '',
+                        ]);
+                    }
+                }
             }
 
             fclose($file);
@@ -682,14 +816,14 @@ class ItemController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
-    /** Import items using current schema & return detailed success / fail report */
+    /** Import items using multi-row item_ref / is_base_unit format with accurate duplicate reporting */
     public function importNativeCsv(Request $request)
     {
         $request->validate([
             'csv_file' => 'required|file|mimes:csv,txt|max:10240',
         ]);
 
-        $branch = current_branch();
+        $branch = current_branch() ?: \App\Models\Branch::first();
         $file = $request->file('csv_file');
         $handle = fopen($file->getRealPath(), 'r');
 
@@ -714,20 +848,172 @@ class ItemController extends Controller
             return null;
         };
 
-        $nameIdx = $getColIndex(['item_name', 'name', 'title']);
-        $barcodeIdx = $getColIndex(['barcode_number', 'barcode', 'code']);
-        $catIdx = $getColIndex(['category_name', 'category']);
-        $groupIdx = $getColIndex(['group_address_name', 'storage_location', 'group_address']);
-        $buyPriceIdx = $getColIndex(['buy_price', 'buying_price', 'cost']);
-        $priceIdx = $getColIndex(['price', 'selling_price']);
-        $wholesaleIdx = $getColIndex(['wholesale_price', 'wholesale']);
-        $frontQtyIdx = $getColIndex(['front_store_qty', 'qty', 'front_qty']);
-        $backQtyIdx = $getColIndex(['back_store_qty', 'back_qty']);
-        $unitLabelIdx = $getColIndex(['unit_label']);
-        $expiryIdx = $getColIndex(['expiry_date', 'expiry']);
-        $descIdx = $getColIndex(['item_description', 'description']);
+        $refIdx       = $getColIndex(['item_ref', 'item ref', 'ref', 'item_code', 'group_ref', 'reference', 'item_id']);
+        $nameIdx      = $getColIndex(['item_name', 'name', 'title', 'product_name', 'product']);
+        $barcodeIdx   = $getColIndex(['barcode_number', 'barcode', 'code', 'sku', 'upc']);
+        $catIdx       = $getColIndex(['category_name', 'category', 'dept']);
+        $groupIdx     = $getColIndex(['group_address_name', 'storage_location', 'group_address', 'shelf', 'location']);
+        $buyPriceIdx  = $getColIndex(['buy_price', 'cost_price', 'buying_price', 'cost']);
+        $priceIdx     = $getColIndex(['selling_price', 'price', 'retail_price', 'base_unit_price', 'unit_price']);
+        $wholesaleIdx = $getColIndex(['wholesale_price', 'wholesale', 'ws_price', 'base_wholesale_price', 'unit_wholesale_price']);
+        $unitLabelIdx = $getColIndex(['unit_name', 'unit_label', 'base_unit_name', 'unit', 'variant_name']);
+        $qtyInBaseIdx = $getColIndex(['quantity_in_base_units', 'quantity in base units', 'base_quantity', 'qty_in_base', 'multiplier', 'units_per_pack', 'pack_quantity', 'carton_quantity', 'conversion_qty']);
+        $isBaseIdx    = $getColIndex(['is_base_unit', 'is base unit', 'base_unit', 'is_base', 'base', 'is base', 'is_based_unit']);
+        $frontQtyIdx  = $getColIndex(['front_store_qty', 'qty', 'front_qty', 'initial_stock_quantity', 'stock_qty', 'quantity']);
+        $backQtyIdx   = $getColIndex(['back_store_qty', 'back_qty', 'back_store_quantity']);
+        $expiryIdx    = $getColIndex(['expiry_date', 'expiry', 'expiration_date']);
+        $descIdx      = $getColIndex(['item_description', 'description', 'notes']);
+
+        // Legacy pack/carton aliases for backwards compatibility with old CSV files
+        $packNameIdx      = $getColIndex(['pack_unit_name', 'pack_name', 'pack_label']);
+        $packQtyIdx       = $getColIndex(['pack_quantity', 'units_per_pack', 'pack_qty', 'pack_size']);
+        $packPriceIdx     = $getColIndex(['pack_price', 'pack_selling_price']);
+        $packWholesaleIdx = $getColIndex(['pack_wholesale_price', 'pack_ws_price']);
+        $cartonNameIdx      = $getColIndex(['carton_unit_name', 'carton_name', 'carton_label']);
+        $cartonQtyIdx       = $getColIndex(['carton_quantity', 'packs_per_carton', 'carton_qty', 'carton_size']);
+        $cartonPriceIdx     = $getColIndex(['carton_price', 'carton_selling_price']);
+        $cartonWholesaleIdx = $getColIndex(['carton_wholesale_price', 'carton_ws_price']);
 
         $rowNumber = 1;
+        $rawRows = [];
+        while (($row = fgetcsv($handle)) !== false) {
+            $rowNumber++;
+            if (empty(array_filter($row))) {
+                continue;
+            }
+            $rawRows[] = ['line' => $rowNumber, 'data' => $row];
+        }
+        fclose($handle);
+
+        if (empty($rawRows)) {
+            return back()->with('error', 'CSV file does not contain any data rows.');
+        }
+
+        // Group rows by item_ref in-memory
+        $itemGroups = [];
+        $seenRefs = [];
+
+        foreach ($rawRows as $itemRow) {
+            $r = $itemRow['data'];
+            $line = $itemRow['line'];
+
+            $rawRef = $refIdx !== null ? trim($r[$refIdx] ?? '') : '';
+            $itemName = $nameIdx !== null ? trim($r[$nameIdx] ?? '') : '';
+
+            $refKey = $rawRef !== '' ? $rawRef : ($itemName !== '' ? 'AUTO_' . Str::slug($itemName) : 'ROW_' . $line);
+
+            // Determine is_base_unit
+            $isBaseVal = $isBaseIdx !== null ? strtolower(trim($r[$isBaseIdx] ?? '')) : '';
+            $isBase = null;
+            if (in_array($isBaseVal, ['yes', 'y', 'true', '1', 'base'], true)) {
+                $isBase = true;
+            } elseif (in_array($isBaseVal, ['no', 'n', 'false', '0'], true)) {
+                $isBase = false;
+            } else {
+                // If not explicitly set, first row of refKey is base
+                $isBase = !isset($seenRefs[$refKey]);
+            }
+            $seenRefs[$refKey] = true;
+
+            $barcode = $barcodeIdx !== null ? trim($r[$barcodeIdx] ?? '') : '';
+            if (str_starts_with($barcode, '="') && str_ends_with($barcode, '"')) {
+                $barcode = substr($barcode, 2, -1);
+            }
+            $barcode = trim($barcode, " '\"\t\n\r\0\x0B");
+            if (preg_match('/^[+\-]?[0-9]+(\.[0-9]+)?[eE][+\-]?[0-9]+$/', $barcode)) {
+                $barcode = number_format((float) $barcode, 0, '', '');
+            } elseif (is_numeric($barcode) && str_contains($barcode, '.')) {
+                $parts = explode('.', $barcode);
+                if (isset($parts[1]) && ltrim($parts[1], '0') === '') {
+                    $barcode = $parts[0];
+                }
+            }
+            if (!$barcode || in_array(strtoupper($barcode), ['NULL', 'N/A', 'NONE', 'NO_BARCODE', 'NO-BARCODE'], true)) {
+                $barcode = null;
+            }
+
+            $categoryName = $catIdx !== null ? trim($r[$catIdx] ?? '') : '';
+            $groupName = $groupIdx !== null ? trim($r[$groupIdx] ?? '') : '';
+            $buyPrice = $buyPriceIdx !== null && trim($r[$buyPriceIdx] ?? '') !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$buyPriceIdx]) : 0.0;
+            $price = $priceIdx !== null && trim($r[$priceIdx] ?? '') !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$priceIdx]) : 0.0;
+            $wholesale = $wholesaleIdx !== null && trim($r[$wholesaleIdx] ?? '') !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$wholesaleIdx]) : $price;
+            $unitName = $unitLabelIdx !== null && trim($r[$unitLabelIdx] ?? '') !== '' ? trim($r[$unitLabelIdx]) : ($isBase ? 'Unit' : 'Variant');
+            $qtyInBase = $qtyInBaseIdx !== null && trim($r[$qtyInBaseIdx] ?? '') !== '' ? max(1, (int) preg_replace('/[^\d]/', '', $r[$qtyInBaseIdx])) : 1;
+            $frontQty = $frontQtyIdx !== null && trim($r[$frontQtyIdx] ?? '') !== '' ? max(0, (int) preg_replace('/[^\d]/', '', $r[$frontQtyIdx])) : 0;
+            $backQty = $backQtyIdx !== null && trim($r[$backQtyIdx] ?? '') !== '' ? max(0, (int) preg_replace('/[^\d]/', '', $r[$backQtyIdx])) : 0;
+            $expiryDate = $expiryIdx !== null ? trim($r[$expiryIdx] ?? '') : null;
+            $desc = $descIdx !== null ? trim($r[$descIdx] ?? '') : null;
+
+            // Legacy pack/carton support for single-row files
+            $legacyPack = null;
+            if ($packQtyIdx !== null || $packPriceIdx !== null) {
+                $pQty = $packQtyIdx !== null ? max(1, (int) preg_replace('/[^\d]/', '', (string)($r[$packQtyIdx] ?? '1'))) : 1;
+                $pPrice = $packPriceIdx !== null && trim((string)($r[$packPriceIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$packPriceIdx]) : null;
+                $pWholesale = $packWholesaleIdx !== null && trim((string)($r[$packWholesaleIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$packWholesaleIdx]) : null;
+                $pName = $packNameIdx !== null && trim((string)($r[$packNameIdx] ?? '')) !== '' ? trim($r[$packNameIdx]) : 'Pack';
+                if (($pPrice !== null && $pPrice > 0) || $pQty > 1) {
+                    $legacyPack = [
+                        'unit_name'              => $pName,
+                        'quantity_in_base_units' => $pQty,
+                        'selling_price'          => $pPrice ?? ($price * $pQty),
+                        'wholesale_price'        => $pWholesale ?? ($wholesale * $pQty),
+                    ];
+                }
+            }
+
+            $legacyCarton = null;
+            if ($cartonQtyIdx !== null || $cartonPriceIdx !== null) {
+                $cQty = $cartonQtyIdx !== null ? max(1, (int) preg_replace('/[^\d]/', '', (string)($r[$cartonQtyIdx] ?? '1'))) : 1;
+                $cPrice = $cartonPriceIdx !== null && trim((string)($r[$cartonPriceIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$cartonPriceIdx]) : null;
+                $cWholesale = $cartonWholesaleIdx !== null && trim((string)($r[$cartonWholesaleIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$cartonWholesaleIdx]) : null;
+                $cName = $cartonNameIdx !== null && trim((string)($r[$cartonNameIdx] ?? '')) !== '' ? trim($r[$cartonNameIdx]) : 'Carton';
+                if (($cPrice !== null && $cPrice > 0) || $cQty > 1) {
+                    $pMultiplier = $legacyPack ? $legacyPack['quantity_in_base_units'] : 1;
+                    $cBaseQty = $pMultiplier * $cQty;
+                    $legacyCarton = [
+                        'unit_name'              => $cName,
+                        'quantity_in_base_units' => $cBaseQty,
+                        'selling_price'          => $cPrice ?? ($price * $cBaseQty),
+                        'wholesale_price'        => $cWholesale ?? ($wholesale * $cBaseQty),
+                    ];
+                }
+            }
+
+            $rowObj = [
+                'line'                   => $line,
+                'item_name'              => $itemName,
+                'barcode'                => $barcode,
+                'category_name'          => $categoryName,
+                'group_address_name'     => $groupName,
+                'buy_price'              => $buyPrice,
+                'price'                  => $price,
+                'wholesale_price'        => $wholesale,
+                'unit_name'              => $unitName,
+                'quantity_in_base_units' => $qtyInBase,
+                'is_base_unit'           => $isBase,
+                'front_store_qty'        => $frontQty,
+                'back_store_qty'         => $backQty,
+                'expiry_date'            => $expiryDate,
+                'item_description'       => $desc,
+                'legacy_pack'            => $legacyPack,
+                'legacy_carton'          => $legacyCarton,
+            ];
+
+            if (!isset($itemGroups[$refKey])) {
+                $itemGroups[$refKey] = [
+                    'ref'          => $refKey,
+                    'base_row'     => null,
+                    'variant_rows' => [],
+                ];
+            }
+
+            if ($isBase) {
+                $itemGroups[$refKey]['base_row'] = $rowObj;
+            } else {
+                $itemGroups[$refKey]['variant_rows'][] = $rowObj;
+            }
+        }
+
         $successCount = 0;
         $failedItems = [];
         $categoryCache = [];
@@ -735,108 +1021,147 @@ class ItemController extends Controller
 
         DB::beginTransaction();
         try {
-            while (($row = fgetcsv($handle)) !== false) {
-                $rowNumber++;
-                if (empty(array_filter($row)))
-                    continue;
+            foreach ($itemGroups as $refKey => $group) {
+                $baseRow = $group['base_row'];
+                if (!$baseRow && !empty($group['variant_rows'])) {
+                    $baseRow = array_shift($group['variant_rows']);
+                }
 
-                $itemName = $nameIdx !== null ? trim($row[$nameIdx] ?? '') : '';
-                if (!$itemName) {
+                if (!$baseRow || empty($baseRow['item_name'])) {
                     $failedItems[] = [
-                        'line' => $rowNumber,
-                        'item_name' => 'Row ' . $rowNumber,
-                        'reason' => 'Item name is missing or empty',
+                        'line'      => $baseRow['line'] ?? 0,
+                        'item_name' => 'Ref: ' . $refKey,
+                        'reason'    => 'Item name is missing or empty',
                     ];
                     continue;
                 }
 
-                $barcode = $barcodeIdx !== null ? trim($row[$barcodeIdx] ?? '') : '';
-                $categoryName = $catIdx !== null ? trim($row[$catIdx] ?? '') : '';
-                $groupName = $groupIdx !== null ? trim($row[$groupIdx] ?? '') : '';
-                $buyPrice = $buyPriceIdx !== null ? (float) ($row[$buyPriceIdx] ?? 0) : 0.0;
-                $price = $priceIdx !== null ? (float) ($row[$priceIdx] ?? 0) : 0.0;
-                $wholesale = $wholesaleIdx !== null ? (float) ($row[$wholesaleIdx] ?? 0) : $price;
-                $frontQty = $frontQtyIdx !== null ? (int) ($row[$frontQtyIdx] ?? 0) : 0;
-                $backQty = $backQtyIdx !== null ? (int) ($row[$backQtyIdx] ?? 0) : 0;
-                $unitLabel = $unitLabelIdx !== null ? trim($row[$unitLabelIdx] ?? '') : 'Unit';
-                $expiryDate = $expiryIdx !== null ? trim($row[$expiryIdx] ?? '') : null;
-                $desc = $descIdx !== null ? trim($row[$descIdx] ?? '') : null;
+                $itemName = $baseRow['item_name'];
+                $barcode = $baseRow['barcode'];
 
-                if (str_starts_with($barcode, '="') && str_ends_with($barcode, '"')) {
-                    $barcode = substr($barcode, 2, -1);
-                }
-                $barcode = trim($barcode, " '\"\t\n\r\0\x0B");
-                if (preg_match('/^[+\-]?[0-9]+(\.[0-9]+)?[eE][+\-]?[0-9]+$/', $barcode)) {
-                    $barcode = number_format((float) $barcode, 0, '', '');
-                } elseif (is_numeric($barcode) && str_contains($barcode, '.')) {
-                    $parts = explode('.', $barcode);
-                    if (isset($parts[1]) && ltrim($parts[1], '0') === '') {
-                        $barcode = $parts[0];
-                    }
-                }
-                if (!$barcode || in_array(strtoupper($barcode), ['NULL', 'N/A', 'NONE', 'NO_BARCODE', 'NO-BARCODE'], true)) {
-                    $barcode = null;
+                // Duplicate Check strictly within this branch
+                $duplicateQuery = Item::where('branch_id', $branch->id)
+                    ->where(function ($q) use ($barcode, $itemName) {
+                        if ($barcode) {
+                            $q->where('barcode_number', $barcode);
+                        }
+                        $q->orWhere('item_name', $itemName);
+                    });
+
+                if ($duplicateQuery->exists()) {
+                    $failedItems[] = [
+                        'line'      => $baseRow['line'],
+                        'item_name' => $itemName,
+                        'reason'    => 'Duplicate item (barcode or name already exists in this branch)',
+                    ];
+                    continue; // Skip duplicate items
                 }
 
+                // Category Resolution
                 $categoryId = null;
-                if ($categoryName) {
-                    $catKey = strtolower($categoryName);
+                if (!empty($baseRow['category_name'])) {
+                    $catKey = strtolower($baseRow['category_name']);
                     if (!isset($categoryCache[$catKey])) {
                         $category = \App\Models\Category::firstOrCreate(
-                            ['name' => $categoryName, 'branch_id' => $branch->id],
-                            ['slug' => Str::slug($categoryName) . '-' . $branch->id . '-' . rand(100, 999)]
+                            ['name' => $baseRow['category_name'], 'branch_id' => $branch->id],
+                            ['slug' => Str::slug($baseRow['category_name']) . '-' . $branch->id . '-' . rand(100, 999)]
                         );
                         $categoryCache[$catKey] = $category->id;
                     }
                     $categoryId = $categoryCache[$catKey];
                 }
 
+                // Group Address Resolution
                 $groupId = null;
-                if ($groupName) {
-                    $grpKey = strtolower($groupName);
+                if (!empty($baseRow['group_address_name'])) {
+                    $grpKey = strtolower($baseRow['group_address_name']);
                     if (!isset($groupCache[$grpKey])) {
                         $group = \App\Models\GroupAddress::firstOrCreate(
-                            ['name' => $groupName, 'branch_id' => $branch->id]
+                            ['name' => $baseRow['group_address_name'], 'branch_id' => $branch->id]
                         );
                         $groupCache[$grpKey] = $group->id;
                     }
                     $groupId = $groupCache[$grpKey];
                 }
 
-                $item = Item::where('branch_id', $branch->id)
-                    ->where(fn($q) => $q->where('barcode_number', $barcode)->orWhere('item_name', $itemName))
-                    ->first();
-
-                if (!$item) {
-                    $item = new Item();
-                    $item->branch_id = $branch->id;
-                    $item->barcode_number = $barcode;
-                }
-
+                // Create base item on items table (No item_ref or is_base_unit in DB!)
+                $item = new Item();
+                $item->branch_id = $branch->id;
+                $item->barcode_number = $barcode;
                 $item->item_name = $itemName;
                 $item->category_id = $categoryId;
                 $item->group_address_id = $groupId;
-                $item->buy_price = $buyPrice;
-                $item->price = $price;
-                $item->wholesale_price = $wholesale;
-                $item->front_store_qty = $frontQty;
-                $item->back_store_qty = $backQty;
-                $item->unit_label = $unitLabel ?: 'Unit';
-                $item->item_description = $desc;
+                $item->buy_price = $baseRow['buy_price'];
+                $item->price = $baseRow['price'];
+                $item->wholesale_price = $baseRow['wholesale_price'];
+                $item->front_store_qty = $baseRow['front_store_qty'];
+                $item->back_store_qty = $baseRow['back_store_qty'];
+                $item->unit_label = $baseRow['unit_name'] ?: 'Unit';
+                $item->item_description = $baseRow['item_description'];
                 $item->price_locked = true;
 
-                if ($expiryDate && strtotime($expiryDate)) {
-                    $item->expiry_date = date('Y-m-d', strtotime($expiryDate));
+                if (!empty($baseRow['expiry_date']) && strtotime($baseRow['expiry_date'])) {
+                    $item->expiry_date = date('Y-m-d', strtotime($baseRow['expiry_date']));
                 }
 
                 $item->save();
+
+                // Create ItemUnit records for variant rows
+                $variantIndex = 1;
+                $variantRows = $group['variant_rows'] ?? [];
+                if (is_array($variantRows)) {
+                    foreach ($variantRows as $vRow) {
+                        $vUnitName = !empty($vRow['unit_name']) ? trim($vRow['unit_name']) : 'Variant ' . $variantIndex;
+                        $vQtyInBase = max(1, (int) ($vRow['quantity_in_base_units'] ?? 1));
+                        $vPrice = (float) ($vRow['price'] > 0 ? $vRow['price'] : ($item->price * $vQtyInBase));
+                        $vWholesale = (float) ($vRow['wholesale_price'] > 0 ? $vRow['wholesale_price'] : ($item->wholesale_price * $vQtyInBase));
+
+                        ItemUnit::create([
+                            'item_id'                => $item->id,
+                            'branch_id'              => $branch->id,
+                            'unit_name'              => $vUnitName,
+                            'quantity_in_base_units' => $vQtyInBase,
+                            'selling_price'          => $vPrice,
+                            'wholesale_price'        => $vWholesale,
+                            'sort_order'             => $variantIndex,
+                            'status'                 => 'active',
+                        ]);
+                        $variantIndex++;
+                    }
+                }
+
+                // If legacy pack / carton columns were present on base row, create them as ItemUnits
+                if (!empty($baseRow['legacy_pack'])) {
+                    ItemUnit::create([
+                        'item_id'                => $item->id,
+                        'branch_id'              => $branch->id,
+                        'unit_name'              => $baseRow['legacy_pack']['unit_name'],
+                        'quantity_in_base_units' => $baseRow['legacy_pack']['quantity_in_base_units'],
+                        'selling_price'          => $baseRow['legacy_pack']['selling_price'],
+                        'wholesale_price'        => $baseRow['legacy_pack']['wholesale_price'],
+                        'sort_order'             => $variantIndex++,
+                        'status'                 => 'active',
+                    ]);
+                }
+
+                if (!empty($baseRow['legacy_carton'])) {
+                    ItemUnit::create([
+                        'item_id'                => $item->id,
+                        'branch_id'              => $branch->id,
+                        'unit_name'              => $baseRow['legacy_carton']['unit_name'],
+                        'quantity_in_base_units' => $baseRow['legacy_carton']['quantity_in_base_units'],
+                        'selling_price'          => $baseRow['legacy_carton']['selling_price'],
+                        'wholesale_price'        => $baseRow['legacy_carton']['wholesale_price'],
+                        'sort_order'             => $variantIndex++,
+                        'status'                 => 'active',
+                    ]);
+                }
+
                 $successCount++;
             }
 
-            fclose($handle);
             DB::commit();
         } catch (\Throwable $fatalError) {
-            fclose($handle);
             DB::rollBack();
             return back()->with('error', 'Import failed and was rolled back: ' . $fatalError->getMessage());
         }

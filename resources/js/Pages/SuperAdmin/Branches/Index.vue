@@ -171,6 +171,10 @@ const triggerExport = () => {
                         <div v-if="branch.address" class="line-clamp-1"><span class="text-slate-400 dark:text-slate-500 font-medium">📍</span> {{ branch.address }}</div>
                         <div v-if="branch.phone"><span class="text-slate-400 dark:text-slate-500 font-medium">📞</span> {{ branch.phone }}</div>
                         <div v-if="branch.email"><span class="text-slate-400 dark:text-slate-500 font-medium">✉️</span> {{ branch.email }}</div>
+                        <div v-if="branch.created_at" class="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 text-[11px] pt-0.5">
+                            <span class="text-slate-400 dark:text-slate-500 font-medium">📅</span>
+                            <span>Created: <strong class="text-slate-700 dark:text-slate-300 font-semibold">{{ branch.created_at }}</strong></span>
+                        </div>
                         <div class="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
                             <span>Staff: <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ branch.users_count }}</strong></span>
                             <span>Items: <strong class="text-slate-800 dark:text-slate-200 font-mono">{{ branch.items_count }}</strong></span>

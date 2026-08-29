@@ -1,6 +1,6 @@
 <script setup>
 import { ref } from 'vue'
-import { Head, router } from '@inertiajs/vue3'
+import { Head, Link, router } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import { useCurrency } from '@/Composables/useCurrency'
 import debounce from 'lodash/debounce'
@@ -87,8 +87,24 @@ function submitResolution() {
                     Stock Conflicts & Offline Reconciliation
                 </h1>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                    Review and resolve inventory shortfalls and duplicate IMEI sales that occurred while cashier terminals were offline.
+                    Review and reconcile inventory shortfalls and duplicate IMEI sales recorded while cashier terminals were offline.
                 </p>
+            </div>
+            <div class="flex items-center gap-2">
+                <Link
+                    :href="route('pos.inventory.adjust')"
+                    class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition inline-flex items-center gap-1.5 shadow-xs"
+                >
+                    <span>📊</span>
+                    <span>Adjust Stock</span>
+                </Link>
+                <Link
+                    :href="route('pos.inventory.transfer')"
+                    class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition inline-flex items-center gap-1.5 shadow-xs"
+                >
+                    <span>🔄</span>
+                    <span>Stock Transfer</span>
+                </Link>
             </div>
         </div>
 
@@ -169,6 +185,7 @@ function submitResolution() {
                         <tr>
                             <th class="px-5 py-3.5">Conflict Detail</th>
                             <th class="px-5 py-3.5">Type</th>
+                            <th class="px-5 py-3.5">Live Stock</th>
                             <th class="px-5 py-3.5">Sale & Cashier</th>
                             <th class="px-5 py-3.5">Status</th>
                             <th class="px-5 py-3.5">Date Synced</th>
@@ -177,7 +194,7 @@ function submitResolution() {
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700/60">
                         <tr v-if="conflicts.data.length === 0">
-                            <td colspan="6" class="px-5 py-12 text-center text-slate-400">
+                            <td colspan="7" class="px-5 py-12 text-center text-slate-400">
                                 <span class="text-3xl block mb-2">🎉</span>
                                 No inventory conflicts found matching your filter criteria.
                             </td>
@@ -196,8 +213,8 @@ function submitResolution() {
                                         IMEI: {{ c.imei_or_device_id }}
                                     </span>
                                     <span v-else>
-                                        Required: <strong class="text-rose-600 dark:text-rose-400">{{ c.requested_qty }}</strong> base units
-                                        (Available: {{ c.available_qty_at_sync }})
+                                        Sold: <strong class="text-rose-600 dark:text-rose-400">{{ c.requested_qty }}</strong> base units
+                                        (Available at sync: {{ c.available_qty_at_sync }})
                                     </span>
                                 </div>
                             </td>
@@ -212,6 +229,23 @@ function submitResolution() {
                                 >
                                     <span>{{ c.conflict_type === 'stock_shortfall' ? '📉 Stock Shortfall' : '📱 Duplicate IMEI' }}</span>
                                 </span>
+                            </td>
+                            <td class="px-5 py-4">
+                                <div class="text-xs space-y-0.5" v-if="c.item">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-slate-400">Front:</span>
+                                        <strong :class="c.item.front_store_qty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'">
+                                            {{ c.item.front_store_qty }}
+                                        </strong>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-slate-400">Back:</span>
+                                        <strong class="text-slate-700 dark:text-slate-300">
+                                            {{ c.item.back_store_qty }}
+                                        </strong>
+                                    </div>
+                                </div>
+                                <span v-else class="text-xs text-slate-400">—</span>
                             </td>
                             <td class="px-5 py-4">
                                 <div class="font-medium text-slate-800 dark:text-slate-200">
@@ -286,13 +320,20 @@ function submitResolution() {
                         <span class="text-slate-500">Item:</span>
                         <strong class="text-slate-800 dark:text-slate-200">{{ selectedConflict.item_name }}</strong>
                     </div>
+                    <div class="flex justify-between" v-if="selectedConflict.item">
+                        <span class="text-slate-500">Live Stock Now:</span>
+                        <span class="font-semibold text-slate-800 dark:text-slate-200">
+                            Front: <strong :class="selectedConflict.item.front_store_qty > 0 ? 'text-emerald-600' : 'text-rose-600'">{{ selectedConflict.item.front_store_qty }}</strong>
+                            | Back: <strong class="text-indigo-600">{{ selectedConflict.item.back_store_qty }}</strong>
+                        </span>
+                    </div>
                     <div class="flex justify-between" v-if="selectedConflict.imei_or_device_id">
                         <span class="text-slate-500">IMEI / Serial:</span>
                         <strong class="font-mono text-purple-600 dark:text-purple-400">{{ selectedConflict.imei_or_device_id }}</strong>
                     </div>
                     <div class="flex justify-between" v-else>
                         <span class="text-slate-500">Units Shortfall:</span>
-                        <strong class="text-rose-600">{{ selectedConflict.requested_qty }} required ({{ selectedConflict.available_qty_at_sync }} was in stock)</strong>
+                        <strong class="text-rose-600">{{ selectedConflict.requested_qty }} required ({{ selectedConflict.available_qty_at_sync }} was available at sync)</strong>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-slate-500">Receipt Ref:</span>
@@ -301,6 +342,37 @@ function submitResolution() {
                     <div class="flex justify-between">
                         <span class="text-slate-500">Offline Sale Ref:</span>
                         <span class="font-mono text-slate-400 text-[11px] truncate max-w-[200px]">{{ selectedConflict.offline_sale_id }}</span>
+                    </div>
+                    <div class="flex justify-between pt-1 border-t border-slate-200/60 dark:border-slate-700/60" v-if="selectedConflict.resolver">
+                        <span class="text-slate-500">Last Reviewed By:</span>
+                        <span class="text-emerald-600 font-semibold">{{ selectedConflict.resolver.name }} ({{ new Date(selectedConflict.resolved_at).toLocaleDateString() }})</span>
+                    </div>
+                </div>
+
+                <!-- Action helper tips for Admin -->
+                <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-xs text-amber-800 dark:text-amber-300 space-y-1.5">
+                    <div class="font-semibold flex items-center gap-1.5">
+                        <span>💡</span>
+                        <span>Inventory Reconciliation Guide:</span>
+                    </div>
+                    <p class="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300/90">
+                        The physical sale has already completed and revenue was recorded. Resolving this conflict logs your administrative sign-off.
+                        If physical stock needs replenishment or adjustments, use the tools below:
+                    </p>
+                    <div class="flex flex-wrap gap-2 pt-1">
+                        <Link
+                            :href="route('pos.inventory.transfer')"
+                            v-if="selectedConflict.item && selectedConflict.item.back_store_qty > 0"
+                            class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-bold text-[11px] hover:bg-indigo-500 transition"
+                        >
+                            Transfer from Back Store ({{ selectedConflict.item.back_store_qty }} avail) →
+                        </Link>
+                        <Link
+                            :href="route('pos.inventory.adjust')"
+                            class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-600 font-semibold text-[11px] hover:bg-slate-50 transition"
+                        >
+                            Perform Stock Adjustment →
+                        </Link>
                     </div>
                 </div>
 
@@ -313,8 +385,8 @@ function submitResolution() {
                             v-model="resolutionStatus"
                             class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none"
                         >
-                            <option value="resolved">Resolved (Action taken, stock reconciled)</option>
-                            <option value="dismissed">Dismissed (Ignored / Logged as acceptable)</option>
+                            <option value="resolved">Resolved (Action taken, stock reconciled & verified)</option>
+                            <option value="dismissed">Dismissed (Ignored / Logged as acceptable difference)</option>
                         </select>
                     </div>
 
@@ -325,7 +397,7 @@ function submitResolution() {
                         <textarea
                             v-model="resolutionNotes"
                             rows="3"
-                            placeholder="Enter notes on how this discrepancy was handled (e.g. physical stock count adjusted, supplier restock received)..."
+                            placeholder="Enter notes on how this discrepancy was handled (e.g. physical stock count adjusted, stock transferred from back store, supplier restock received)..."
                             class="w-full px-3 py-2 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
                         ></textarea>
                     </div>

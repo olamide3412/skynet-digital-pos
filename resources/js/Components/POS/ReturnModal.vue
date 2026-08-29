@@ -66,6 +66,25 @@ function getUnitName(item, unitUsed = 'unit') {
     return item.unit_label || 'Unit'
 }
 
+function getItemUnitsList(item) {
+    if (!item) return [{ value: 'unit', label: 'Unit (1 unit)' }]
+    const list = [
+        { value: 'unit', label: `${item.unit_label || 'Unit'} (1 unit)` }
+    ]
+    const itemUnits = item.units || item.active_units || item.activeUnits
+    if (Array.isArray(itemUnits) && itemUnits.length > 0) {
+        itemUnits.forEach(u => {
+            if (u.unit_name) {
+                list.push({
+                    value: u.unit_name,
+                    label: `${u.unit_name} (${u.quantity_in_base_units || 1} ${item.unit_label || 'units'})`
+                })
+            }
+        })
+    }
+    return list
+}
+
 function getMaxReturnQty(itemRow) {
     if (!itemRow || !itemRow.purchased_base_units) return itemRow?.max_qty || 1
     const multiplier = getUnitsPerUnitLevel(itemRow.item, itemRow.unit_used)
@@ -309,10 +328,8 @@ async function submitReturn() {
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <!-- Unit Level Selection -->
-                                            <select v-model="item.unit_used" @change="onUnitChange(item)" class="bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 outline-none font-medium">
-                                                <option value="unit">{{ item.item?.unit_label || 'Unit' }} (1 unit)</option>
-                                                <option value="pack">{{ item.item?.pack_label || 'Pack' }} ({{ getUnitsPerPack(item.item) }} units/pack)</option>
-                                                <option value="carton">{{ item.item?.carton_label || 'Carton' }} ({{ getPacksPerCarton(item.item) * getUnitsPerPack(item.item) }} units/carton)</option>
+                                            <select v-model="item.unit_used" @change="onUnitChange(item)" class="bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 outline-none font-medium cursor-pointer">
+                                                <option v-for="u in getItemUnitsList(item.item)" :key="u.value" :value="u.value">{{ u.label }}</option>
                                             </select>
                                             
                                             <!-- Clean Stepper Controls without ugly browser arrows -->
@@ -365,7 +382,7 @@ async function submitReturn() {
                                     class="w-full text-left px-3 py-2 text-xs hover:bg-slate-100 dark:hover:bg-slate-700 flex justify-between items-center border-b border-slate-100 dark:border-slate-700/50 last:border-0">
                                     <div>
                                         <p class="font-bold text-slate-900 dark:text-white">{{ resItem.item_name }}</p>
-                                        <p class="text-[10px] text-slate-500 dark:text-slate-400">{{ resItem.barcode_number }} (Pack: {{ resItem.units_per_pack || 1 }} units)</p>
+                                        <p class="text-[10px] text-slate-500 dark:text-slate-400">{{ resItem.barcode_number || 'No Barcode' }}{{ resItem.unit_label ? ' · ' + resItem.unit_label : '' }}</p>
                                     </div>
                                     <span class="font-mono font-bold text-emerald-600 dark:text-emerald-400">{{ format(resItem.display_price || resItem.price) }}</span>
                                 </button>
@@ -390,10 +407,8 @@ async function submitReturn() {
                                         </div>
                                         <div class="flex items-center gap-2">
                                             <!-- Unit Selection -->
-                                            <select v-model="item.unit_used" @change="onUnitChange(item)" class="bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 outline-none font-medium">
-                                                <option value="unit">{{ item.item?.unit_label || 'Unit' }} (1 unit)</option>
-                                                <option value="pack">{{ item.item?.pack_label || 'Pack' }} ({{ getUnitsPerPack(item.item) }} units/pack)</option>
-                                                <option value="carton">{{ item.item?.carton_label || 'Carton' }} ({{ getPacksPerCarton(item.item) * getUnitsPerPack(item.item) }} units/carton)</option>
+                                            <select v-model="item.unit_used" @change="onUnitChange(item)" class="bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs px-2 py-1 rounded border border-slate-300 dark:border-slate-600 outline-none font-medium cursor-pointer">
+                                                <option v-for="u in getItemUnitsList(item.item)" :key="u.value" :value="u.value">{{ u.label }}</option>
                                             </select>
 
                                             <!-- Clean Stepper Controls without ugly browser arrows -->

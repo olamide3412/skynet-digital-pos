@@ -27,11 +27,7 @@ const form = useForm({
     buy_price: 0,
     price: 0,
     wholesale_price: 0,
-    unit_label: 'unit',
-    pack_label: 'pack',
-    carton_label: 'carton',
-    units_per_pack: 1,
-    packs_per_carton: 1,
+    unit_label: 'Pcs',
     item_description: '',
 })
 
@@ -187,7 +183,12 @@ const deleteItem = (item) => {
                             />
                         </td>
                         <td class="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">
-                            <div>{{ item.item_name }}</div>
+                            <div class="flex items-center gap-2">
+                                <span>{{ item.item_name }}</span>
+                                <span v-if="item.unit_label" class="text-[10px] font-medium px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700 capitalize">
+                                    {{ item.unit_label }}
+                                </span>
+                            </div>
                             <div v-if="item.item_description" class="text-xs text-slate-400 dark:text-slate-500 font-normal line-clamp-1">{{ item.item_description }}</div>
                         </td>
                         <td class="px-6 py-4 text-xs">
@@ -278,18 +279,20 @@ const deleteItem = (item) => {
                     </div>
                 </div>
 
-                <div class="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
-                    <h4 class="text-xs font-bold text-theme uppercase">Unit Conversion Setup</h4>
-                    <div class="grid grid-cols-2 gap-2 text-xs">
-                        <div>
-                            <label class="text-slate-600 dark:text-slate-400">Packs per Carton</label>
-                            <input v-model="form.packs_per_carton" type="number" min="1" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-2 py-1 mt-1 text-slate-900 dark:text-slate-100" />
-                        </div>
-                        <div>
-                            <label class="text-slate-600 dark:text-slate-400">Units per Pack</label>
-                            <input v-model="form.units_per_pack" type="number" min="1" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-lg px-2 py-1 mt-1 text-slate-900 dark:text-slate-100" />
-                        </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-400 mb-1">Wholesale Price (₦)</label>
+                        <input v-model="form.wholesale_price" type="number" step="0.01" placeholder="Optional" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-theme transition" />
                     </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-400 mb-1">Base Unit Label</label>
+                        <input v-model="form.unit_label" type="text" placeholder="e.g. Pcs, Bottles, Kg" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-theme transition" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-400 mb-1">Item Description</label>
+                    <textarea v-model="form.item_description" rows="2" placeholder="Optional product description..." class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-theme transition"></textarea>
                 </div>
 
                 <div class="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end space-x-3">

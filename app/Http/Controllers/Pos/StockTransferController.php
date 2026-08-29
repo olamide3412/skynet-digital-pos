@@ -23,8 +23,7 @@ class StockTransferController extends Controller
 
         $items = Item::where('branch_id', $branch->id)
             ->with('activeUnits')
-            ->select('id', 'item_name', 'barcode_number', 'back_store_qty', 'front_store_qty',
-                     'unit_label', 'pack_label', 'carton_label', 'units_per_pack', 'packs_per_carton')
+            ->select('id', 'item_name', 'barcode_number', 'back_store_qty', 'front_store_qty', 'unit_label')
             ->orderBy('item_name')
             ->limit(25)
             ->get();

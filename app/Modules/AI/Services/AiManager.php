@@ -70,7 +70,8 @@ class AiManager
      */
     public function isBranchEnabled(?Branch $branch): bool
     {
-        if (!$this->isConfigured()) {
+        $setting = AiSetting::current();
+        if (!$setting->is_system_enabled) {
             return false;
         }
 

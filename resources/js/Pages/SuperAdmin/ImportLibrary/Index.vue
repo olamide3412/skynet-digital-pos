@@ -971,7 +971,7 @@ const submitImportToBranch = () => {
                                             <th class="px-3 py-2">Item Name</th>
                                             <th class="px-3 py-2">Category</th>
                                             <th class="px-3 py-2">Unit Price</th>
-                                            <th class="px-3 py-2">Pack Info</th>
+                                            <th class="px-3 py-2">Packaging Units</th>
                                             <th class="px-3 py-2">IMEI</th>
                                         </tr>
                                     </thead>
@@ -980,8 +980,14 @@ const submitImportToBranch = () => {
                                             <td class="px-3 py-2 font-bold text-slate-900 dark:text-white">{{ row.data.item_name }}</td>
                                             <td class="px-3 py-2 text-slate-500">{{ row.data.category || '—' }}</td>
                                             <td class="px-3 py-2 font-mono font-bold text-emerald-600 dark:text-emerald-400">₦{{ Number(row.data.base_unit_price).toLocaleString() }}</td>
-                                            <td class="px-3 py-2 font-mono text-slate-500">
-                                                {{ row.data.pack_price ? `₦${Number(row.data.pack_price).toLocaleString()} (${row.data.pack_quantity}/pk)` : '—' }}
+                                            <td class="px-3 py-2 font-mono text-slate-500 text-[10px]">
+                                                <span v-if="row.data.pack_price">
+                                                    {{ row.data.pack_unit_name || 'Pack' }}: ₦{{ Number(row.data.pack_price).toLocaleString() }} ({{ row.data.pack_quantity }})
+                                                </span>
+                                                <span v-else-if="row.data.carton_price">
+                                                    {{ row.data.carton_unit_name || 'Carton' }}: ₦{{ Number(row.data.carton_price).toLocaleString() }}
+                                                </span>
+                                                <span v-else class="text-slate-400">—</span>
                                             </td>
                                             <td class="px-3 py-2">
                                                 <span v-if="row.data.track_by_imei" class="px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 rounded font-bold text-[9px]">IMEI</span>

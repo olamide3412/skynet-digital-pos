@@ -130,7 +130,17 @@ createInertiaApp({
                     return module;
                 }
 
-                if (name.startsWith('Admin/') || name.startsWith('SuperAdmin/') || name.startsWith('Auth/') || name === 'Home' || name === 'Error' || name === 'BranchUnavailable') {
+                if (
+                    name.startsWith('Admin/') ||
+                    name.startsWith('SuperAdmin/') ||
+                    name.startsWith('AI/') ||
+                    name.startsWith('Auth/') ||
+                    name.startsWith('Notifications/') ||
+                    name.startsWith('Printer/') ||
+                    name === 'Home' ||
+                    name === 'Error' ||
+                    name === 'BranchUnavailable'
+                ) {
                     // Handled inside page components with explicit layout or standalone
                     return module;
                 }
@@ -195,6 +205,21 @@ createInertiaApp({
             .component('font-awesome-icon', FontAwesomeIcon);
 
         app.mount(el);
+
+        // ── Dismiss Pre-Login Splash Screen smoothly on app mount ──
+        if (typeof document !== 'undefined') {
+            const preSplash = document.getElementById('pre-login-splash');
+            if (preSplash) {
+                requestAnimationFrame(() => {
+                    preSplash.classList.add('splash-fade-out');
+                    setTimeout(() => {
+                        if (preSplash.parentNode) {
+                            preSplash.parentNode.removeChild(preSplash);
+                        }
+                    }, 400);
+                });
+            }
+        }
 
         // ✅ Dynamically import AOS to split the chunk (Non-critical)
         import('aos').then((AOS) => {

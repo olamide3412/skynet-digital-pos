@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, provide } from 'vue'
-import { Link, usePage } from '@inertiajs/vue3'
+import { Link, usePage, router } from '@inertiajs/vue3'
 import FlashMessages from '@/Components/FlashMessages.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 
@@ -16,6 +16,20 @@ provide('isMobileSidebarOpen', isMobileOpen)
 
 const page = usePage()
 const perms = computed(() => page.props.pos_permissions ?? {})
+
+function handleLogout() {
+    if (typeof document !== 'undefined' && (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement)) {
+        try {
+            if (document.exitFullscreen) document.exitFullscreen()
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen()
+            else if (document.mozCancelFullScreen) document.mozCancelFullScreen()
+            else if (document.msExitFullscreen) document.msExitFullscreen()
+        } catch (e) {
+            console.warn('Exit fullscreen on logout error:', e)
+        }
+    }
+    router.post(safeRoute('pos.logout'))
+}
 
 const allNavLinks = [
     {
@@ -370,16 +384,19 @@ onMounted(() => {
                 </div>
 
                 <div class="relative group">
-                    <Link :href="safeRoute('pos.logout')" method="post" as="button"
+                    <button
+                        @click="handleLogout"
+                        type="button"
                         :class="[
                             'flex items-center rounded-xl text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-400/10 transition w-full cursor-pointer',
                             isCollapsed ? 'justify-center p-2.5' : 'px-3 py-2 gap-2.5'
-                        ]">
+                        ]"
+                    >
                         <svg class="w-4.5 h-4.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
                         </svg>
                         <span v-show="!isCollapsed">Logout</span>
-                    </Link>
+                    </button>
 
                     <div v-if="isCollapsed"
                         class="absolute left-full ml-3.5 top-1/2 -translate-y-1/2 px-2.5 py-1 bg-red-900/95 text-white text-xs font-bold rounded-lg shadow-2xl whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 z-50 border border-red-700 backdrop-blur-sm">

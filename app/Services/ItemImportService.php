@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\GroupAddress;
 use App\Models\ImportLibraryFile;
 use App\Models\Item;
+use App\Models\ItemUnit;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -30,30 +31,26 @@ class ItemImportService
      * Standard column key definitions and possible header aliases.
      */
     protected static array $headerAliases = [
-        'item_name' => ['item_name', 'item name', 'name', 'product_name', 'product name', 'item', 'title', 'product'],
-        'category'  => ['category', 'category_name', 'category name', 'category_hint', 'dept', 'department'],
-        'group_address' => ['group_address_name', 'group_address', 'group address', 'group', 'storage_location', 'storage location', 'shelf', 'shelf_location', 'shelf location', 'rack'],
-        'barcode'   => ['barcode', 'barcode_number', 'barcode number', 'sku', 'upc', 'ean', 'code'],
-        'description' => ['description', 'item_description', 'details', 'item description', 'notes'],
-        'cost_price'  => ['cost_price', 'cost price', 'cost', 'buy_price', 'buy price', 'purchase_price', 'buying_price'],
-        'base_unit_name' => ['base_unit_name', 'base unit name', 'unit_name', 'unit name', 'unit_label', 'unit label', 'unit', 'base_unit'],
-        'base_unit_price' => ['base_unit_price', 'base unit price', 'price', 'selling_price', 'selling price', 'unit_price', 'retail_price', 'retail price'],
-        'wholesale_price' => ['wholesale_price', 'wholesale price', 'ws_price', 'wholesale', 'base_wholesale_price'],
-        'pack_unit_name' => ['pack_unit_name', 'pack unit name', 'pack_name', 'pack name', 'pack_label', 'pack label', 'pack_unit'],
-        'pack_quantity'  => ['pack_quantity', 'pack quantity', 'units_per_pack', 'units per pack', 'pack_qty', 'pack size', 'pack_size'],
-        'pack_price'     => ['pack_price', 'pack price', 'pack_selling_price', 'pack selling price'],
-        'pack_wholesale_price' => ['pack_wholesale_price', 'pack wholesale price', 'pack_ws_price'],
-        'carton_unit_name' => ['carton_unit_name', 'carton unit name', 'carton_name', 'carton name', 'carton_label', 'carton label', 'carton_unit'],
-        'carton_quantity'  => ['carton_quantity', 'carton quantity', 'packs_per_carton', 'packs per carton', 'carton_qty', 'carton size', 'carton_size'],
-        'carton_price'     => ['carton_price', 'carton price', 'carton_selling_price', 'carton selling price'],
-        'carton_wholesale_price' => ['carton_wholesale_price', 'carton wholesale price', 'carton_ws_price'],
-        'track_by_imei' => ['track_by_imei', 'track by imei', 'is_imei_tracked', 'imei_tracked', 'imei tracking', 'imei', 'track_imei'],
-        'initial_stock_quantity' => ['initial_stock_quantity', 'initial stock quantity', 'initial_stock', 'initial stock', 'stock', 'stock_qty', 'qty', 'quantity', 'front_store_qty'],
-        'expiry_date' => ['expiry_date', 'expiry date', 'expiration_date', 'expiration date', 'expiry', 'exp_date'],
+        'item_ref'               => ['item_ref', 'item ref', 'ref', 'item_code', 'group_ref', 'reference', 'item_id'],
+        'item_name'              => ['item_name', 'item name', 'name', 'product_name', 'product name', 'item', 'title', 'product'],
+        'category'               => ['category', 'category_name', 'category name', 'category_hint', 'dept', 'department'],
+        'group_address'          => ['group_address_name', 'group_address', 'group address', 'group', 'storage_location', 'storage location', 'shelf', 'shelf_location', 'shelf location', 'rack', 'location'],
+        'barcode'                => ['barcode', 'barcode_number', 'barcode number', 'sku', 'upc', 'ean', 'code'],
+        'description'            => ['description', 'item_description', 'details', 'item description', 'notes'],
+        'cost_price'             => ['cost_price', 'cost price', 'cost', 'buy_price', 'buy price', 'purchase_price', 'buying_price'],
+        'unit_name'              => ['unit_name', 'unit name', 'unit_label', 'unit label', 'unit', 'base_unit_name', 'base_unit', 'variant_name', 'variant name', 'packaging_name', 'pack_unit_name', 'carton_unit_name'],
+        'quantity_in_base_units' => ['quantity_in_base_units', 'quantity in base units', 'base_quantity', 'qty_in_base', 'multiplier', 'units_per_pack', 'pack_quantity', 'carton_quantity', 'conversion_qty', 'unit_quantity'],
+        'selling_price'          => ['selling_price', 'selling price', 'price', 'retail_price', 'retail price', 'base_unit_price', 'unit_price', 'pack_price', 'carton_price'],
+        'wholesale_price'        => ['wholesale_price', 'wholesale price', 'ws_price', 'wholesale', 'base_wholesale_price', 'unit_wholesale_price', 'pack_wholesale_price', 'carton_wholesale_price'],
+        'is_base_unit'           => ['is_base_unit', 'is base unit', 'base_unit', 'is_base', 'base', 'is base', 'is_based_unit'],
+        'track_by_imei'          => ['track_by_imei', 'track by imei', 'is_imei_tracked', 'imei_tracked', 'imei tracking', 'imei', 'track_imei'],
+        'initial_stock_quantity' => ['initial_stock_quantity', 'initial stock quantity', 'initial_stock', 'initial stock', 'stock', 'stock_qty', 'qty', 'quantity', 'front_store_qty', 'front_qty'],
+        'back_store_quantity'    => ['back_store_qty', 'back_store_quantity', 'back store quantity', 'back_qty', 'warehouse_qty'],
+        'expiry_date'            => ['expiry_date', 'expiry date', 'expiration_date', 'expiration date', 'expiry', 'exp_date'],
     ];
 
     /**
-     * Parse an uploaded file or stored path into structured row items.
+     * Parse an uploaded file or stored path into structured row items with multi-row item_ref grouping.
      */
     public function parseFile(string|UploadedFile $file, ?string $extension = null): array
     {
@@ -78,6 +75,7 @@ class ItemImportService
                 'valid_rows'   => 0,
                 'invalid_rows' => 0,
                 'rows'         => [],
+                'groups'       => [],
             ];
         }
 
@@ -99,24 +97,34 @@ class ItemImportService
                 'valid_rows'   => 0,
                 'invalid_rows' => 0,
                 'rows'         => [],
+                'groups'       => [],
             ];
         }
 
         // Map column letter -> normalized key
         $columnMap = [];
+        $hasItemRefCol = false;
+        $hasIsBaseUnitCol = false;
+
         foreach ($headerRow as $colLetter => $headerText) {
             $normalizedHeader = strtolower(trim(preg_replace('/[\s\-_]+/', ' ', (string) $headerText)));
             foreach (self::$headerAliases as $standardKey => $aliases) {
                 if (in_array($normalizedHeader, $aliases, true)) {
                     $columnMap[$colLetter] = $standardKey;
+                    if ($standardKey === 'item_ref') {
+                        $hasItemRefCol = true;
+                    }
+                    if ($standardKey === 'is_base_unit') {
+                        $hasIsBaseUnitCol = true;
+                    }
                     break;
                 }
             }
         }
 
         $parsedRows = [];
-        $validCount = 0;
-        $invalidCount = 0;
+        $seenRefs = [];
+        $itemGroups = [];
 
         // Process data rows
         foreach ($rawRows as $idx => $row) {
@@ -137,24 +145,21 @@ class ItemImportService
             }
 
             $mappedData = [
+                'item_ref'               => null,
                 'item_name'              => '',
                 'category'               => null,
+                'group_address'          => null,
                 'barcode'                => null,
                 'description'            => null,
-                'cost_price'             => 0.0,
-                'base_unit_name'         => 'Unit',
-                'base_unit_price'        => 0.0,
+                'cost_price'             => null,
+                'unit_name'              => 'Unit',
+                'quantity_in_base_units' => 1,
+                'selling_price'          => null,
                 'wholesale_price'        => null,
-                'pack_unit_name'         => 'Pack',
-                'pack_quantity'          => 1,
-                'pack_price'             => null,
-                'pack_wholesale_price'   => null,
-                'carton_unit_name'       => 'Carton',
-                'carton_quantity'        => 1,
-                'carton_price'           => null,
-                'carton_wholesale_price' => null,
+                'is_base_unit'           => null,
                 'track_by_imei'          => false,
                 'initial_stock_quantity' => 0,
+                'back_store_quantity'    => 0,
                 'expiry_date'            => null,
             ];
 
@@ -166,13 +171,12 @@ class ItemImportService
                 $val = trim((string) $cellValue);
 
                 switch ($key) {
+                    case 'item_ref':
                     case 'item_name':
                     case 'category':
                     case 'group_address':
                     case 'description':
-                    case 'base_unit_name':
-                    case 'pack_unit_name':
-                    case 'carton_unit_name':
+                    case 'unit_name':
                         $mappedData[$key] = $val !== '' ? $val : null;
                         break;
 
@@ -184,11 +188,10 @@ class ItemImportService
                         }
                         $valStr = trim($valStr, " '\"\t\n\r\0\x0B");
 
-                        // Fix scientific notation e.g. 6.154E+12, 7.14085E+11, 6.154e+12
+                        // Fix scientific notation e.g. 6.154E+12
                         if (preg_match('/^[+\-]?[0-9]+(\.[0-9]+)?[eE][+\-]?[0-9]+$/', $valStr)) {
                             $valStr = number_format((float) $valStr, 0, '', '');
                         } elseif (is_numeric($valStr) && str_contains($valStr, '.')) {
-                            // If it's a numeric float with zero decimal part e.g. 6154000123456.0
                             $parts = explode('.', $valStr);
                             if (isset($parts[1]) && ltrim($parts[1], '0') === '') {
                                 $valStr = $parts[0];
@@ -196,7 +199,7 @@ class ItemImportService
                         }
 
                         $valUpper = strtoupper($valStr);
-                        if ($valStr === '' || $valUpper === 'NULL' || $valUpper === 'N/A' || $valUpper === 'NONE' || $valUpper === 'NO_BARCODE' || $valUpper === 'NO-BARCODE') {
+                        if ($valStr === '' || in_array($valUpper, ['NULL', 'N/A', 'NONE', 'NO_BARCODE', 'NO-BARCODE'], true)) {
                             $mappedData[$key] = null;
                         } else {
                             $mappedData[$key] = $valStr;
@@ -204,21 +207,32 @@ class ItemImportService
                         break;
 
                     case 'cost_price':
-                    case 'base_unit_price':
+                    case 'selling_price':
                     case 'wholesale_price':
-                    case 'pack_price':
-                    case 'pack_wholesale_price':
-                    case 'carton_price':
-                    case 'carton_wholesale_price':
                         $cleanedNum = preg_replace('/[^\d.]/', '', $val);
                         $mappedData[$key] = is_numeric($cleanedNum) ? (float) $cleanedNum : null;
                         break;
 
-                    case 'pack_quantity':
-                    case 'carton_quantity':
+                    case 'quantity_in_base_units':
+                        $cleanedInt = preg_replace('/[^\d]/', '', $val);
+                        $mappedData[$key] = is_numeric($cleanedInt) ? max(1, (int) $cleanedInt) : 1;
+                        break;
+
                     case 'initial_stock_quantity':
+                    case 'back_store_quantity':
                         $cleanedInt = preg_replace('/[^\d]/', '', $val);
                         $mappedData[$key] = is_numeric($cleanedInt) ? max(0, (int) $cleanedInt) : 0;
+                        break;
+
+                    case 'is_base_unit':
+                        $lower = strtolower($val);
+                        if (in_array($lower, ['yes', 'y', 'true', '1', 'base'], true)) {
+                            $mappedData[$key] = true;
+                        } elseif (in_array($lower, ['no', 'n', 'false', '0'], true)) {
+                            $mappedData[$key] = false;
+                        } else {
+                            $mappedData[$key] = null;
+                        }
                         break;
 
                     case 'track_by_imei':
@@ -232,56 +246,167 @@ class ItemImportService
                 }
             }
 
-            // Defaults
-            if (empty($mappedData['base_unit_name'])) {
-                $mappedData['base_unit_name'] = 'Unit';
-            }
-            if (empty($mappedData['pack_unit_name'])) {
-                $mappedData['pack_unit_name'] = 'Pack';
-            }
-            if (empty($mappedData['carton_unit_name'])) {
-                $mappedData['carton_unit_name'] = 'Carton';
-            }
-            if (($mappedData['pack_quantity'] ?? 0) <= 0) {
-                $mappedData['pack_quantity'] = 1;
-            }
-            if (($mappedData['carton_quantity'] ?? 0) <= 0) {
-                $mappedData['carton_quantity'] = 1;
-            }
-
-            // Validation
-            $errors = [];
-            $warnings = [];
-
-            if (empty($mappedData['item_name'])) {
-                $errors[] = 'Item Name is required.';
-            }
-
-            if ($mappedData['base_unit_price'] === null || $mappedData['base_unit_price'] < 0) {
-                $errors[] = 'Base Unit Price must be a valid positive number.';
-            }
-
-            $isValid = empty($errors);
-            if ($isValid) {
-                $validCount++;
+            // Establish item_ref
+            $rawRef = $mappedData['item_ref'];
+            if (!empty($rawRef)) {
+                $itemRefKey = trim((string) $rawRef);
             } else {
-                $invalidCount++;
+                // If no item_ref column or empty, fallback to item name or unique row ref
+                $itemRefKey = !empty($mappedData['item_name']) ? 'AUTO_' . Str::slug($mappedData['item_name']) : 'ROW_' . $idx;
+                $mappedData['item_ref'] = $itemRefKey;
+            }
+
+            // Infer is_base_unit if not specified
+            if ($mappedData['is_base_unit'] === null) {
+                if (!isset($seenRefs[$itemRefKey])) {
+                    $mappedData['is_base_unit'] = true;
+                } else {
+                    $mappedData['is_base_unit'] = false;
+                }
+            }
+            $seenRefs[$itemRefKey] = true;
+
+            // Defaults
+            if (empty($mappedData['unit_name'])) {
+                $mappedData['unit_name'] = $mappedData['is_base_unit'] ? 'Unit' : 'Variant';
+            }
+            if ($mappedData['is_base_unit']) {
+                $mappedData['quantity_in_base_units'] = 1;
             }
 
             $parsedRows[] = [
                 'row_number' => $idx,
-                'is_valid'   => $isValid,
-                'errors'     => $errors,
-                'warnings'   => $warnings,
+                'is_valid'   => true, // will be evaluated in group validation
+                'errors'     => [],
+                'warnings'   => [],
                 'data'       => $mappedData,
             ];
+
+            if (!isset($itemGroups[$itemRefKey])) {
+                $itemGroups[$itemRefKey] = [
+                    'item_ref'     => $itemRefKey,
+                    'rows'         => [],
+                    'base_row'     => null,
+                    'variant_rows' => [],
+                    'errors'       => [],
+                    'warnings'     => [],
+                    'is_valid'     => true,
+                ];
+            }
+            $itemGroups[$itemRefKey]['rows'][] = count($parsedRows) - 1; // store index in $parsedRows
         }
+
+        // Validate Groups
+        $validCount = 0;
+        $invalidCount = 0;
+
+        foreach ($itemGroups as $refKey => &$group) {
+            $baseRowIndices = [];
+            $variantRowIndices = [];
+            $inheritedName = null;
+            $inheritedCategory = null;
+            $inheritedBarcode = null;
+
+            foreach ($group['rows'] as $rIdx) {
+                $rData = $parsedRows[$rIdx]['data'];
+                if ($rData['is_base_unit']) {
+                    $baseRowIndices[] = $rIdx;
+                } else {
+                    $variantRowIndices[] = $rIdx;
+                }
+                if (!empty($rData['item_name']) && !$inheritedName) {
+                    $inheritedName = $rData['item_name'];
+                }
+                if (!empty($rData['category']) && !$inheritedCategory) {
+                    $inheritedCategory = $rData['category'];
+                }
+                if (!empty($rData['barcode']) && !$inheritedBarcode) {
+                    $inheritedBarcode = $rData['barcode'];
+                }
+            }
+
+            $groupErrors = [];
+
+            if (count($baseRowIndices) === 0) {
+                $groupErrors[] = "Item group '{$refKey}' is missing a Base Unit row. Exactly one row must have is_base_unit = Yes.";
+            } elseif (count($baseRowIndices) > 1) {
+                $groupErrors[] = "Item group '{$refKey}' has multiple Base Unit rows. Exactly one row must have is_base_unit = Yes.";
+            } else {
+                $baseIdx = $baseRowIndices[0];
+                $baseRow = &$parsedRows[$baseIdx];
+
+                // Propagate inherited name/category/barcode to base row if missing
+                if (empty($baseRow['data']['item_name']) && $inheritedName) {
+                    $baseRow['data']['item_name'] = $inheritedName;
+                }
+                if (empty($baseRow['data']['category']) && $inheritedCategory) {
+                    $baseRow['data']['category'] = $inheritedCategory;
+                }
+                if (empty($baseRow['data']['barcode']) && $inheritedBarcode) {
+                    $baseRow['data']['barcode'] = $inheritedBarcode;
+                }
+
+                if (empty($baseRow['data']['item_name'])) {
+                    $baseRow['errors'][] = "Item Name is required on base unit row.";
+                    $groupErrors[] = "Item Name is required.";
+                }
+
+                if ($baseRow['data']['selling_price'] === null || $baseRow['data']['selling_price'] < 0) {
+                    $baseRow['errors'][] = "Base Unit Selling Price must be a valid positive number.";
+                    $groupErrors[] = "Base Unit Selling Price must be a valid positive number.";
+                }
+
+                $group['base_row'] = $baseRow['data'];
+
+                // Validate variant rows
+                foreach ($variantRowIndices as $vIdx) {
+                    $vRow = &$parsedRows[$vIdx];
+                    if (empty($vRow['data']['item_name']) && $inheritedName) {
+                        $vRow['data']['item_name'] = $inheritedName;
+                    }
+                    if (empty($vRow['data']['unit_name'])) {
+                        $vRow['errors'][] = "Variant Unit Name is required.";
+                        $groupErrors[] = "Variant Unit Name is required.";
+                    }
+                    if (($vRow['data']['quantity_in_base_units'] ?? 0) <= 0) {
+                        $vRow['errors'][] = "Variant quantity_in_base_units must be a whole number greater than 0.";
+                        $groupErrors[] = "Variant conversion quantity must be > 0.";
+                    }
+                    if ($vRow['data']['selling_price'] === null || $vRow['data']['selling_price'] < 0) {
+                        $vRow['errors'][] = "Variant Selling Price must be a valid positive number.";
+                        $groupErrors[] = "Variant Selling Price must be a valid positive number.";
+                    }
+                    $group['variant_rows'][] = $vRow['data'];
+                }
+            }
+
+            $isGroupValid = empty($groupErrors);
+            $group['is_valid'] = $isGroupValid;
+            $group['errors'] = $groupErrors;
+
+            foreach ($group['rows'] as $rIdx) {
+                if (!$isGroupValid) {
+                    $parsedRows[$rIdx]['is_valid'] = false;
+                    $parsedRows[$rIdx]['errors'] = array_unique(array_merge($parsedRows[$rIdx]['errors'], $groupErrors));
+                    $invalidCount++;
+                } else {
+                    $parsedRows[$rIdx]['is_valid'] = empty($parsedRows[$rIdx]['errors']);
+                    if ($parsedRows[$rIdx]['is_valid']) {
+                        $validCount++;
+                    } else {
+                        $invalidCount++;
+                    }
+                }
+            }
+        }
+        unset($group);
 
         return [
             'total_rows'   => count($parsedRows),
             'valid_rows'   => $validCount,
             'invalid_rows' => $invalidCount,
             'rows'         => $parsedRows,
+            'groups'       => array_values($itemGroups),
         ];
     }
 
@@ -366,7 +491,7 @@ class ItemImportService
         ?ImportLibraryFile $sourceFile = null,
         ?int $userId = null
     ): array {
-        $onDuplicateBarcode = $options['on_duplicate_barcode'] ?? 'skip'; // 'skip', 'generate_new', or 'overwrite'
+        $onDuplicateBarcode = $options['on_duplicate_barcode'] ?? 'skip'; // 'skip', 'leave_empty', or 'generate_new'
         $defaultStockLocation = $options['default_stock_location'] ?? 'front_store'; // 'front_store' or 'back_store'
 
         $importedCount = 0;
@@ -389,21 +514,43 @@ class ItemImportService
             $groupCache[strtolower(trim($grp->name))] = $grp->id;
         }
 
+        // Group rows in-memory by item_ref
+        $itemGroups = [];
+        foreach ($rows as $rowWrapper) {
+            $rowData = isset($rowWrapper['data']) ? $rowWrapper['data'] : $rowWrapper;
+            $ref = !empty($rowData['item_ref']) ? trim((string)$rowData['item_ref']) : (!empty($rowData['item_name']) ? 'AUTO_' . Str::slug($rowData['item_name']) : 'ROW_' . rand(1000, 9999));
+            if (!isset($itemGroups[$ref])) {
+                $itemGroups[$ref] = [
+                    'base_row'     => null,
+                    'variant_rows' => [],
+                ];
+            }
+            if (!empty($rowData['is_base_unit'])) {
+                $itemGroups[$ref]['base_row'] = $rowData;
+            } else {
+                $itemGroups[$ref]['variant_rows'][] = $rowData;
+            }
+        }
+
         DB::beginTransaction();
         try {
-            foreach ($rows as $rowWrapper) {
-                $row = isset($rowWrapper['data']) ? $rowWrapper['data'] : $rowWrapper;
+            foreach ($itemGroups as $refKey => $group) {
+                $baseRow = $group['base_row'];
+                if (!$baseRow && !empty($group['variant_rows'])) {
+                    // Fallback to first row as base
+                    $baseRow = array_shift($group['variant_rows']);
+                }
 
-                if (empty($row['item_name']) || !isset($row['base_unit_price']) || $row['base_unit_price'] < 0) {
+                if (!$baseRow || empty($baseRow['item_name']) || !isset($baseRow['selling_price']) || $baseRow['selling_price'] < 0) {
                     $skippedCount++;
-                    $errors[] = "Row with empty item name or invalid price skipped.";
+                    $errors[] = "Item ref '{$refKey}' skipped: Missing base item name or invalid price.";
                     continue;
                 }
 
                 // Category Resolution (Auto-create exclusively for this branch if missing)
                 $categoryId = null;
-                if (!empty($row['category'])) {
-                    $catName = trim($row['category']);
+                if (!empty($baseRow['category'])) {
+                    $catName = trim($baseRow['category']);
                     $catKey = strtolower($catName);
 
                     if (isset($categoryCache[$catKey])) {
@@ -420,10 +567,10 @@ class ItemImportService
                     }
                 }
 
-                // Group Address / Storage Location Resolution (Auto-create exclusively for this branch if missing)
+                // Group Address / Storage Location Resolution
                 $groupId = null;
-                if (!empty($row['group_address'])) {
-                    $grpName = trim($row['group_address']);
+                if (!empty($baseRow['group_address'])) {
+                    $grpName = trim($baseRow['group_address']);
                     $grpKey = strtolower($grpName);
 
                     if (isset($groupCache[$grpKey])) {
@@ -440,16 +587,15 @@ class ItemImportService
                 }
 
                 // Barcode handling: strictly leave as null if empty or null, never auto-generate
-                $barcode = !empty($row['barcode']) ? trim((string) $row['barcode']) : null;
+                $barcode = !empty($baseRow['barcode']) ? trim((string) $baseRow['barcode']) : null;
                 if ($barcode !== null) {
                     $valUpper = strtoupper($barcode);
-                    if ($valUpper === '' || $valUpper === 'NULL' || $valUpper === 'N/A' || $valUpper === 'NONE' || $valUpper === 'NO_BARCODE' || $valUpper === 'NO-BARCODE') {
+                    if ($valUpper === '' || in_array($valUpper, ['NULL', 'N/A', 'NONE', 'NO_BARCODE', 'NO-BARCODE'], true)) {
                         $barcode = null;
                     }
                 }
 
                 if ($barcode !== null) {
-                    // Strict branch isolation check: only check duplicate barcodes within this branch
                     $barcodeExists = Item::where('branch_id', $branch->id)
                         ->where('barcode_number', $barcode)
                         ->exists();
@@ -457,64 +603,67 @@ class ItemImportService
                     if ($barcodeExists) {
                         if ($onDuplicateBarcode === 'skip') {
                             $skippedCount++;
-                            $errors[] = "Skipped '{$row['item_name']}': Barcode '{$barcode}' already exists in this branch.";
+                            $errors[] = "Skipped '{$baseRow['item_name']}': Barcode '{$barcode}' already exists in this branch.";
                             continue;
                         } elseif ($onDuplicateBarcode === 'leave_empty' || $onDuplicateBarcode === 'generate_new') {
-                            // Keep the item, but leave barcode empty / null
                             $barcode = null;
                         }
                     }
                 }
 
-                $frontStoreQty = $defaultStockLocation === 'front_store' ? (int) ($row['initial_stock_quantity'] ?? 0) : 0;
-                $backStoreQty  = $defaultStockLocation === 'back_store'  ? (int) ($row['initial_stock_quantity'] ?? 0) : 0;
+                // Exact Item Name duplication check in branch
+                $nameExists = Item::where('branch_id', $branch->id)
+                    ->where('item_name', $baseRow['item_name'])
+                    ->exists();
+                if ($nameExists) {
+                    $skippedCount++;
+                    $errors[] = "Skipped '{$baseRow['item_name']}': Item name already exists in this branch.";
+                    continue;
+                }
 
-                // Create the Item (Explicitly assigned to target branch)
+                $frontStoreQty = $defaultStockLocation === 'front_store' ? (int) ($baseRow['initial_stock_quantity'] ?? 0) : 0;
+                $backStoreQty  = $defaultStockLocation === 'back_store'  ? (int) ($baseRow['initial_stock_quantity'] ?? 0) : (int) ($baseRow['back_store_quantity'] ?? 0);
+
+                // Create the Item in database (No item_ref or is_base_unit columns in DB!)
                 $newItem = Item::create([
                     'branch_id'              => $branch->id,
                     'category_id'            => $categoryId,
                     'group_address_id'       => $groupId,
-                    'item_name'              => $row['item_name'],
+                    'item_name'              => $baseRow['item_name'],
                     'barcode_number'         => $barcode,
-                    'buy_price'              => (float) ($row['cost_price'] ?? 0),
-                    'price'                  => (float) $row['base_unit_price'],
-                    'wholesale_price'        => !empty($row['wholesale_price']) ? (float) $row['wholesale_price'] : (float) $row['base_unit_price'],
-                    'unit_label'             => !empty($row['base_unit_name']) ? $row['base_unit_name'] : 'Unit',
-                    'is_imei_tracked'        => !empty($row['track_by_imei']),
+                    'buy_price'              => (float) ($baseRow['cost_price'] ?? 0),
+                    'price'                  => (float) $baseRow['selling_price'],
+                    'wholesale_price'        => !empty($baseRow['wholesale_price']) ? (float) $baseRow['wholesale_price'] : (float) $baseRow['selling_price'],
+                    'unit_label'             => !empty($baseRow['unit_name']) ? $baseRow['unit_name'] : 'Unit',
+                    'is_imei_tracked'        => !empty($baseRow['track_by_imei']),
                     'front_store_qty'        => $frontStoreQty,
                     'back_store_qty'         => $backStoreQty,
-                    'expiry_date'            => $row['expiry_date'] ?? null,
-                    'item_description'       => $row['description'] ?? null,
+                    'expiry_date'            => $baseRow['expiry_date'] ?? null,
+                    'item_description'       => $baseRow['description'] ?? null,
+                    'price_locked'           => true,
                 ]);
 
-                // Also populate ItemUnit records for flexible variant system
-                $packQty = max(1, (int) ($row['pack_quantity'] ?? 1));
-                if ((float) ($row['pack_price'] ?? 0) > 0 || $packQty > 1) {
-                    \App\Models\ItemUnit::create([
-                        'item_id'                => $newItem->id,
-                        'branch_id'              => $branch->id,
-                        'unit_name'              => !empty($row['pack_unit_name']) ? $row['pack_unit_name'] : 'Pack',
-                        'quantity_in_base_units' => $packQty,
-                        'selling_price'          => (float) ($row['pack_price'] ?? 0),
-                        'wholesale_price'        => (float) ($row['pack_wholesale_price'] ?? 0),
-                        'sort_order'             => 1,
-                        'status'                 => 'active',
-                    ]);
-                }
+                // Create ItemUnit records for each variant row in this item group
+                $variantIndex = 1;
+                foreach ($group['variant_rows'] as $vRow) {
+                    $unitName = !empty($vRow['unit_name']) ? trim($vRow['unit_name']) : 'Variant ' . $variantIndex;
+                    $qtyInBase = max(1, (int) ($vRow['quantity_in_base_units'] ?? 1));
+                    $vPrice = isset($vRow['selling_price']) ? (float) $vRow['selling_price'] : ($newItem->price * $qtyInBase);
+                    $vWholesale = isset($vRow['wholesale_price']) && (float) $vRow['wholesale_price'] > 0
+                        ? (float) $vRow['wholesale_price']
+                        : ($newItem->wholesale_price * $qtyInBase);
 
-                $cartonQty = max(1, (int) ($row['carton_quantity'] ?? 1));
-                if ((float) ($row['carton_price'] ?? 0) > 0 || $cartonQty > 1) {
-                    $cartonBaseQty = $packQty * $cartonQty;
-                    \App\Models\ItemUnit::create([
+                    ItemUnit::create([
                         'item_id'                => $newItem->id,
                         'branch_id'              => $branch->id,
-                        'unit_name'              => !empty($row['carton_unit_name']) ? $row['carton_unit_name'] : 'Carton',
-                        'quantity_in_base_units' => $cartonBaseQty,
-                        'selling_price'          => (float) ($row['carton_price'] ?? 0),
-                        'wholesale_price'        => (float) ($row['carton_wholesale_price'] ?? 0),
-                        'sort_order'             => 2,
+                        'unit_name'              => $unitName,
+                        'quantity_in_base_units' => $qtyInBase,
+                        'selling_price'          => $vPrice,
+                        'wholesale_price'        => $vWholesale,
+                        'sort_order'             => $variantIndex,
                         'status'                 => 'active',
                     ]);
+                    $variantIndex++;
                 }
 
                 $importedCount++;
@@ -569,22 +718,18 @@ class ItemImportService
         $sheet->setTitle('Items Import Template');
 
         $headers = [
+            'item_ref',
             'item_name',
             'category',
+            'group_address',
             'barcode',
             'description',
             'cost_price',
-            'base_unit_name',
-            'base_unit_price',
+            'unit_name',
+            'quantity_in_base_units',
+            'selling_price',
             'wholesale_price',
-            'pack_unit_name',
-            'pack_quantity',
-            'pack_price',
-            'pack_wholesale_price',
-            'carton_unit_name',
-            'carton_quantity',
-            'carton_price',
-            'carton_wholesale_price',
+            'is_base_unit',
             'track_by_imei',
             'initial_stock_quantity',
             'expiry_date',
@@ -624,95 +769,134 @@ class ItemImportService
         ]);
         $sheet->getRowDimension(1)->setRowHeight(28);
 
-        // Format barcode column (C) as text so spreadsheets never show scientific notation (e.g. 6.154E+12)
-        $sheet->getStyle('C')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        // Format barcode column (E) as text so spreadsheets never show scientific notation (e.g. 6.154E+12)
+        $sheet->getStyle('E')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
 
         // Add sample rows if requested
         if ($withSampleData) {
             $sampleRows = [
+                // Group 1: Peak Milk Sachet with Roll & Carton variants
                 [
-                    'Paracetamol 500mg (10x10)',
-                    'Analgesics & Pain Relief',
+                    'P001',
+                    'Peak Milk Sachet',
+                    'Dairy & Provisions',
+                    'Shelf A1',
                     '8901234567890',
-                    'Fast acting pain reliever and antipyretic',
-                    150.00,
-                    'Sachet',
+                    'Instant full cream milk powder sachet',
                     200.00,
-                    180.00,
-                    'Pack',
-                    10,
-                    1800.00,
-                    1650.00,
-                    'Carton',
-                    20,
-                    34000.00,
-                    31000.00,
+                    'Unit',
+                    1,
+                    250.00,
+                    220.00,
+                    'Yes',
                     'No',
                     100,
                     date('Y-12-31', strtotime('+2 years')),
                 ],
                 [
+                    'P001',
+                    'Peak Milk Sachet',
+                    'Dairy & Provisions',
+                    'Shelf A1',
+                    '8901234567890',
+                    'Instant full cream milk powder sachet',
+                    null,
+                    'Roll (10-in-1)',
+                    10,
+                    2350.00,
+                    2100.00,
+                    'No',
+                    'No',
+                    null,
+                    null,
+                ],
+                [
+                    'P001',
+                    'Peak Milk Sachet',
+                    'Dairy & Provisions',
+                    'Shelf A1',
+                    '8901234567890',
+                    'Instant full cream milk powder sachet',
+                    null,
+                    'Carton (100-in-1)',
+                    100,
+                    22500.00,
+                    20000.00,
+                    'No',
+                    'No',
+                    null,
+                    null,
+                ],
+                // Group 2: Coca Cola PET with Pack variant
+                [
+                    'P002',
                     'Coca Cola PET 350ml',
                     'Soft Drinks & Beverages',
+                    'Cooler 1',
                     '5449000000996',
                     'Refreshing carbonated soft drink',
                     220.00,
                     'Bottle',
+                    1,
                     300.00,
                     280.00,
-                    'Pack',
-                    12,
-                    3300.00,
-                    3100.00,
-                    'Carton',
-                    24,
-                    6400.00,
-                    6000.00,
+                    'Yes',
                     'No',
                     50,
                     date('Y-06-30', strtotime('+1 year')),
                 ],
                 [
-                    'iPhone 15 Pro 128GB Blue Titanium',
-                    'Smartphones & Gadgets',
-                    '1959490001234',
-                    'A17 Pro chip, Super Retina XDR display',
-                    1100000.00,
-                    'Piece',
-                    1250000.00,
-                    1200000.00,
-                    'Pack',
-                    1,
+                    'P002',
+                    'Coca Cola PET 350ml',
+                    'Soft Drinks & Beverages',
+                    'Cooler 1',
+                    '5449000000996',
+                    'Refreshing carbonated soft drink',
                     null,
+                    'Pack (12-in-1)',
+                    12,
+                    3300.00,
+                    3100.00,
+                    'No',
+                    'No',
                     null,
-                    'Carton',
-                    1,
-                    null,
-                    null,
-                    'Yes',
-                    5,
                     null,
                 ],
+                // Group 3: Paracetamol 500mg (Base unit only, no variants)
                 [
-                    'Basmati Royal Rice 5kg',
-                    'Grains & Cereals',
+                    'P003',
+                    'Paracetamol 500mg',
+                    'Analgesics & Pain Relief',
+                    'Pharmacy Shelf',
                     '6001234987654',
-                    'Long grain aromatic white rice',
-                    6500.00,
-                    'Bag',
-                    8200.00,
-                    7800.00,
-                    'Bundle',
-                    4,
-                    31500.00,
-                    30000.00,
-                    'Carton',
+                    'Fast acting pain reliever and antipyretic',
+                    150.00,
+                    'Tablet',
                     1,
-                    null,
-                    null,
+                    200.00,
+                    180.00,
+                    'Yes',
                     'No',
-                    25,
+                    200,
                     date('Y-12-31', strtotime('+3 years')),
+                ],
+                // Group 4: Bottled Water (Base unit only, blank barcode)
+                [
+                    'P004',
+                    'Bottled Water 75cl',
+                    'Beverages',
+                    'Aisle 2',
+                    null,
+                    'Pure natural spring water',
+                    80.00,
+                    'Bottle',
+                    1,
+                    120.00,
+                    100.00,
+                    'Yes',
+                    'No',
+                    80,
+                    date('Y-12-31', strtotime('+1 year')),
                 ],
             ];
 
@@ -721,7 +905,7 @@ class ItemImportService
                 foreach ($rowValues as $cIdx => $val) {
                     $colNumber = $cIdx + 1;
                     $cellCoord = Coordinate::stringFromColumnIndex($colNumber) . $rowNum;
-                    if ($colNumber === 3) {
+                    if ($colNumber === 5) { // Barcode column
                         if ($val !== null && $val !== '') {
                             $sheet->setCellValueExplicit($cellCoord, (string) $val, DataType::TYPE_STRING);
                             $sheet->getStyle($cellCoord)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
@@ -744,62 +928,63 @@ class ItemImportService
 
         $filename = ($withSampleData ? 'pos_items_sample_template' : 'pos_items_blank_template') . '.' . $format;
 
-        return new StreamedResponse(function () use ($spreadsheet, $format) {
+        return response()->streamDownload(function () use ($spreadsheet, $format) {
+            $writer = $format === 'csv' ? new CsvWriter($spreadsheet) : new XlsxWriter($spreadsheet);
             if ($format === 'csv') {
-                $writer = new CsvWriter($spreadsheet);
                 $writer->setUseBOM(true);
-            } else {
-                $writer = new XlsxWriter($spreadsheet);
             }
             $writer->save('php://output');
-        }, 200, [
+        }, $filename, [
             'Content-Type'        => $format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
             'Cache-Control'       => 'max-age=0',
         ]);
     }
 
     /**
-     * Export all items of a branch in CSV or Excel (XLSX) format.
-     *
-     * @param Branch $branch Target branch
-     * @param string $format 'xlsx' or 'csv'
-     * @param string $quantityOption 'total', 'front_store', 'back_store', 'none'
+     * Export existing branch items into an Excel / CSV spreadsheet with multi-row item_ref & variant structure.
      */
     public function exportBranchItems(
         Branch $branch,
         string $format = 'xlsx',
-        string $quantityOption = 'total'
+        string $quantityOption = 'combined', // 'combined' | 'front_store' | 'back_store' | 'none'
+        ?array $categoryIds = null,
+        ?string $search = null
     ): StreamedResponse {
-        $format = in_array(strtolower($format), ['csv', 'xlsx']) ? strtolower($format) : 'xlsx';
-        $quantityOption = in_array($quantityOption, ['total', 'front_store', 'back_store', 'none']) ? $quantityOption : 'total';
+        $format = strtolower($format) === 'csv' ? 'csv' : 'xlsx';
 
-        $items = Item::where('branch_id', $branch->id)
-            ->with('category:id,name')
-            ->orderBy('item_name')
-            ->get();
+        $query = Item::where('branch_id', $branch->id)->with(['category', 'groupAddress', 'units']);
+
+        if (!empty($categoryIds)) {
+            $query->whereIn('category_id', $categoryIds);
+        }
+
+        if (!empty($search)) {
+            $query->where(function ($q) use ($search) {
+                $q->where('item_name', 'like', "%{$search}%")
+                  ->orWhere('barcode_number', 'like', "%{$search}%");
+            });
+        }
+
+        $items = $query->orderBy('item_name')->get();
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle(substr(preg_replace('/[^A-Za-z0-9_ ]/', '', $branch->name), 0, 30) ?: 'Branch Items');
+        $sheet->setTitle('Branch Items');
 
         $headers = [
+            'item_ref',
             'item_name',
             'category',
+            'group_address',
             'barcode',
             'description',
             'cost_price',
-            'base_unit_name',
-            'base_unit_price',
+            'unit_name',
+            'quantity_in_base_units',
+            'selling_price',
             'wholesale_price',
-            'pack_unit_name',
-            'pack_quantity',
-            'pack_price',
-            'pack_wholesale_price',
-            'carton_unit_name',
-            'carton_quantity',
-            'carton_price',
-            'carton_wholesale_price',
+            'is_base_unit',
             'track_by_imei',
             'initial_stock_quantity',
             'expiry_date',
@@ -831,8 +1016,8 @@ class ItemImportService
             $sheet->getRowDimension(1)->setRowHeight(28);
         }
 
-        // Format barcode column (C) as text so spreadsheets never show scientific notation (e.g. 6.154E+12)
-        $sheet->getStyle('C')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        // Format barcode column (E) as text so spreadsheets never show scientific notation (e.g. 6.154E+12)
+        $sheet->getStyle('E')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
 
         $rowNumber = 2;
         foreach ($items as $item) {
@@ -844,41 +1029,31 @@ class ItemImportService
                 default       => (int) (($item->front_store_qty ?? 0) + ($item->back_store_qty ?? 0)),
             };
 
-            $packUnit = $item->relationLoaded('units')
-                ? $item->units->first(fn($u) => $u->sort_order === 1 || str_contains(strtolower($u->unit_name), 'pack'))
-                : $item->units()->where('sort_order', 1)->first();
-            $cartonUnit = $item->relationLoaded('units')
-                ? $item->units->first(fn($u) => $u->sort_order === 2 || str_contains(strtolower($u->unit_name), 'carton'))
-                : $item->units()->where('sort_order', 2)->first();
+            $itemRef = 'REF-' . str_pad($item->id, 5, '0', STR_PAD_LEFT);
 
-            $rowData = [
+            // Base Unit Row
+            $baseRow = [
+                $itemRef,
                 $item->item_name,
                 $item->category?->name ?? '',
+                $item->groupAddress?->name ?? '',
                 $item->barcode_number ?? '',
                 $item->item_description ?? '',
                 (float) ($item->buy_price ?? 0),
                 $item->unit_label ?: 'Unit',
+                1,
                 (float) ($item->price ?? 0),
                 (float) ($item->wholesale_price ?? $item->price ?? 0),
-                $packUnit ? $packUnit->unit_name : 'Pack',
-                $packUnit ? (int) $packUnit->quantity_in_base_units : 1,
-                $packUnit ? (float) $packUnit->selling_price : null,
-                $packUnit ? (float) $packUnit->wholesale_price : null,
-                $cartonUnit ? $cartonUnit->unit_name : 'Carton',
-                $cartonUnit && $packUnit && $packUnit->quantity_in_base_units > 0 
-                    ? max(1, (int) round($cartonUnit->quantity_in_base_units / $packUnit->quantity_in_base_units))
-                    : ($cartonUnit ? (int) $cartonUnit->quantity_in_base_units : 1),
-                $cartonUnit ? (float) $cartonUnit->selling_price : null,
-                $cartonUnit ? (float) $cartonUnit->wholesale_price : null,
+                'Yes',
                 $item->is_imei_tracked ? 'Yes' : 'No',
                 $qty,
                 $item->expiry_date ? $item->expiry_date->format('Y-m-d') : '',
             ];
 
-            foreach ($rowData as $cIdx => $val) {
+            foreach ($baseRow as $cIdx => $val) {
                 $colNumber = $cIdx + 1;
                 $cellCoord = Coordinate::stringFromColumnIndex($colNumber) . $rowNumber;
-                if ($colNumber === 3) {
+                if ($colNumber === 5) { // Barcode column
                     if ($val !== null && $val !== '') {
                         $sheet->setCellValueExplicit($cellCoord, (string) $val, DataType::TYPE_STRING);
                         $sheet->getStyle($cellCoord)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
@@ -894,6 +1069,49 @@ class ItemImportService
                 $sheet->getRowDimension($rowNumber)->setRowHeight(20);
             }
             $rowNumber++;
+
+            // Variant Rows (ItemUnit)
+            if ($item->units && $item->units->count() > 0) {
+                foreach ($item->units as $unit) {
+                    $variantRow = [
+                        $itemRef,
+                        $item->item_name,
+                        $item->category?->name ?? '',
+                        '',
+                        $item->barcode_number ?? '',
+                        '',
+                        null,
+                        $unit->unit_name,
+                        (int) $unit->quantity_in_base_units,
+                        (float) $unit->selling_price,
+                        (float) ($unit->wholesale_price ?? $unit->selling_price),
+                        'No',
+                        '',
+                        null,
+                        '',
+                    ];
+
+                    foreach ($variantRow as $cIdx => $val) {
+                        $colNumber = $cIdx + 1;
+                        $cellCoord = Coordinate::stringFromColumnIndex($colNumber) . $rowNumber;
+                        if ($colNumber === 5) {
+                            if ($val !== null && $val !== '') {
+                                $sheet->setCellValueExplicit($cellCoord, (string) $val, DataType::TYPE_STRING);
+                                $sheet->getStyle($cellCoord)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+                            } else {
+                                $sheet->setCellValue($cellCoord, '');
+                            }
+                        } else {
+                            $sheet->setCellValue($cellCoord, $val);
+                        }
+                    }
+
+                    if ($format === 'xlsx') {
+                        $sheet->getRowDimension($rowNumber)->setRowHeight(20);
+                    }
+                    $rowNumber++;
+                }
+            }
         }
 
         // Auto-fit column widths
@@ -942,3 +1160,4 @@ class ItemImportService
         }
     }
 }
+

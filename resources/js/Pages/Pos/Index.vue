@@ -17,6 +17,7 @@ import ReturnModal from '@/Components/POS/ReturnModal.vue'
 import CustomerSelector from '@/Components/POS/CustomerSelector.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 import NotificationBell from '@/Components/Notifications/NotificationBell.vue'
+import PosSplashScreen from '@/Components/POS/PosSplashScreen.vue'
 import { useBarcodeScanner } from '@/Composables/useBarcodeScanner'
 import { useOfflineSync } from '@/Composables/useOfflineSync'
 import { getLocalQuickAccessData } from '@/Services/offlineDb'
@@ -48,6 +49,20 @@ const settStore     = usePosSettingsStore()
 const productSearch = ref(null)   // ref to ProductSearch component
 settStore.set(props.settings)
 
+// ── Splash Screen & Terminal Launch State ─────────────────────────────────────
+const isPosReady = ref(false)
+const showPosSplash = ref(true)
+
+const branchName = computed(() => {
+    return page.props.current_branch?.name || page.props.store_settings?.company_name || props.settings?.business_name || 'Skynet POS Terminal'
+})
+
+const branchLogo = computed(() => {
+    if (page.props.current_branch?.logo_url) return page.props.current_branch.logo_url
+    if (page.props.store_settings?.company_logo) return '/storage/' + page.props.store_settings.company_logo
+    return null
+})
+
 // Reactive Quick Access dataset (with offline Dexie fallback)
 const localQuickAccess = ref(props.quickAccess || null)
 const currentQuickAccess = computed(() => {
@@ -60,15 +75,6 @@ const currentQuickAccess = computed(() => {
         subtitle:   'Most purchased items this week',
         items:      [],
         categories: [],
-    }
-})
-
-onMounted(async () => {
-    if (!props.quickAccess || props.quickAccess.mode === 'none') {
-        const cached = await getLocalQuickAccessData()
-        if (cached && cached.mode && cached.mode !== 'none') {
-            localQuickAccess.value = cached
-        }
     }
 })
 
@@ -85,6 +91,31 @@ const {
     startSyncMonitor,
     stopSyncMonitor,
 } = useOfflineSync()
+
+onMounted(async () => {
+    try {
+        if (!props.quickAccess || props.quickAccess.mode === 'none') {
+            const cached = await getLocalQuickAccessData()
+            if (cached && cached.mode && cached.mode !== 'none') {
+                localQuickAccess.value = cached
+            }
+        }
+
+        // Prime local offline cache on terminal load
+        if (props.settings?.is_offline_enabled && isOnline.value) {
+            await refreshCatalog()
+        }
+    } catch (err) {
+        console.warn('POS initial cache sync notice:', err)
+    } finally {
+        await nextTick()
+        // Smoothly unlock terminal and evaluate auto-fullscreen
+        setTimeout(() => {
+            isPosReady.value = true
+            tryAutoFullscreen()
+        }, 200)
+    }
+})
 
 const showOfflineModal = ref(false)
 const offlineTabFilter = ref('all') // 'all' | 'pending' | 'synced' | 'failed'
@@ -169,6 +200,78 @@ const formattedTime = computed(() => {
     })
 })
 
+// ── Fullscreen Desktop Mode ──────────────────────────────────────────────────
+const isFullscreen = ref(false)
+
+function checkFullscreen() {
+    if (typeof document === 'undefined') return
+    isFullscreen.value = Boolean(
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.mozFullScreenElement ||
+        document.msFullscreenElement
+    )
+}
+
+function toggleFullscreen() {
+    if (typeof document === 'undefined') return
+
+    if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement) {
+        const el = document.documentElement
+        if (el.requestFullscreen) {
+            el.requestFullscreen().catch(err => console.warn('Fullscreen error:', err))
+        } else if (el.webkitRequestFullscreen) {
+            el.webkitRequestFullscreen()
+        } else if (el.mozRequestFullScreen) {
+            el.mozRequestFullScreen()
+        } else if (el.msRequestFullscreen) {
+            el.msRequestFullscreen()
+        }
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen().catch(err => console.warn('Exit fullscreen error:', err))
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen()
+        } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen()
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen()
+        }
+    }
+}
+
+async function tryAutoFullscreen() {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return
+    if (!props.settings?.is_auto_fullscreen_enabled) return
+    if (window.innerWidth < 1024) return // Desktop only
+    if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) return
+
+    try {
+        const el = document.documentElement
+        if (el.requestFullscreen) {
+            await el.requestFullscreen()
+        } else if (el.webkitRequestFullscreen) {
+            el.webkitRequestFullscreen()
+        }
+    } catch (err) {
+        // Modern browsers require a user gesture if auto-fullscreen is blocked by policy;
+        // attach a one-time interaction listener so the first tap/click triggers it smoothly
+        const onFirstInteraction = async () => {
+            if (!document.fullscreenElement && props.settings?.is_auto_fullscreen_enabled && window.innerWidth >= 1024) {
+                try {
+                    const docEl = document.documentElement
+                    if (docEl.requestFullscreen) await docEl.requestFullscreen()
+                    else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen()
+                } catch (e) {}
+            }
+            document.removeEventListener('click', onFirstInteraction)
+            document.removeEventListener('keydown', onFirstInteraction)
+        }
+        document.addEventListener('click', onFirstInteraction, { once: true })
+        document.addEventListener('keydown', onFirstInteraction, { once: true })
+    }
+}
+
 // Keyboard shortcuts
 function handleKeydown(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
@@ -179,6 +282,7 @@ function handleKeydown(e) {
         case 'F2':  e.preventDefault(); productSearch.value?.focus(); break
         case 'F10': e.preventDefault(); if (cart.items.length) showPayment.value = true; break
         case 'F9':  e.preventDefault(); if (cart.items.length) showHold.value = true; break
+        case 'F11': e.preventDefault(); toggleFullscreen(); break
         case 'Escape':
             showPayment.value    = false
             showReceipt.value    = false
@@ -189,8 +293,20 @@ function handleKeydown(e) {
             break
     }
 }
-onMounted(() => window.addEventListener('keydown', handleKeydown))
-onUnmounted(() => window.removeEventListener('keydown', handleKeydown))
+onMounted(() => {
+    window.addEventListener('keydown', handleKeydown)
+    document.addEventListener('fullscreenchange', checkFullscreen)
+    document.addEventListener('webkitfullscreenchange', checkFullscreen)
+    document.addEventListener('mozfullscreenchange', checkFullscreen)
+    document.addEventListener('MSFullscreenChange', checkFullscreen)
+})
+onUnmounted(() => {
+    window.removeEventListener('keydown', handleKeydown)
+    document.removeEventListener('fullscreenchange', checkFullscreen)
+    document.removeEventListener('webkitfullscreenchange', checkFullscreen)
+    document.removeEventListener('mozfullscreenchange', checkFullscreen)
+    document.removeEventListener('MSFullscreenChange', checkFullscreen)
+})
 
 // After sale completes
 function onSaleCompleted(sale) {
@@ -234,6 +350,15 @@ const productSearchMobile = ref(null)
 
 <template>
     <div class="flex flex-col h-screen bg-slate-900 text-slate-100 overflow-hidden select-none">
+
+        <!-- ── Splash Screen #2: Post-Login POS Launch Screen ── -->
+        <PosSplashScreen
+            v-if="showPosSplash"
+            :branch-name="branchName"
+            :branch-logo="branchLogo"
+            :is-ready="isPosReady"
+            @finish="showPosSplash = false"
+        />
 
         <!-- ========================================================================= -->
         <!-- ── DESKTOP VIEW (>= lg) ────────────────────────────────────────────────── -->
@@ -279,6 +404,21 @@ const productSearchMobile = ref(null)
                     <span class="text-slate-500 dark:text-slate-400 text-xs hidden sm:inline">{{ formattedTime }}</span>
                     <NotificationBell />
                     <ThemeToggle />
+
+                    <!-- Desktop Fullscreen Mode Toggle (Icon-Only) -->
+                    <button
+                        @click="toggleFullscreen"
+                        type="button"
+                        class="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition cursor-pointer"
+                        :class="{ 'text-theme dark:text-theme bg-theme/10 dark:bg-theme/20': isFullscreen }"
+                    >
+                        <svg v-if="!isFullscreen" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                        </svg>
+                        <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0v4m0-4h4m6 0h4m-4 0l5 5m-5-5v4m-6 6l-5 5m0 0v-4m0 4h4m11 0l-5-5m5 5v-4m0 4h-4" />
+                        </svg>
+                    </button>
                     <div class="flex items-center gap-2">
                         <button
                             title="F9 – Hold Cart"

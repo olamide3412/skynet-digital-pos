@@ -108,6 +108,16 @@ const reloadTurnstile = () => {
 }
 
 onMounted(() => {
+    // Ensure fullscreen is exited upon landing on login page
+    if (typeof document !== 'undefined' && (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement)) {
+        try {
+            if (document.exitFullscreen) document.exitFullscreen()
+            else if (document.webkitExitFullscreen) document.webkitExitFullscreen()
+            else if (document.mozCancelFullScreen) document.mozCancelFullScreen()
+            else if (document.msExitFullscreen) document.msExitFullscreen()
+        } catch (e) {}
+    }
+
     if (isTurnstileActive.value) {
         loadTurnstile()
     }

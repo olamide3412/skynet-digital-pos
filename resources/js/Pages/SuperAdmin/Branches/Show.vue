@@ -278,6 +278,7 @@ const settingsForm = useForm({
     show_receipt_preview: Boolean(props.settings?.show_receipt_preview),
     is_offline_enabled: Boolean(props.settings?.is_offline_enabled),
     is_turnstile_enabled: Boolean(props.settings?.is_turnstile_enabled ?? true),
+    is_auto_fullscreen_enabled: Boolean(props.settings?.is_auto_fullscreen_enabled),
     offline_receipt_prefix: props.settings?.offline_receipt_prefix || 'OFF',
     is_price_editable: Boolean(props.settings?.is_price_editable),
     is_qty_deduction: Boolean(props.settings?.is_qty_deduction),
@@ -605,6 +606,7 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                         </div>
 
                         <div class="flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400 pt-0.5">
+                            <span v-if="branch.created_at">📅 Created: <strong class="text-slate-700 dark:text-slate-200">{{ branch.created_at }}</strong></span>
                             <span v-if="branch.phone">📞 {{ branch.phone }}</span>
                             <span v-if="branch.email">✉️ {{ branch.email }}</span>
                             <span v-if="branch.address">📍 {{ branch.address }}</span>
@@ -1133,6 +1135,45 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                 </div>
                                 <input
                                     v-model="settingsForm.is_turnstile_enabled"
+                                    type="checkbox"
+                                    class="w-5 h-5 rounded text-indigo-600 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer flex-shrink-0"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fullscreen POS Mode Card -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-4 lg:col-span-2">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <div>
+                                <h3 class="font-bold text-slate-900 dark:text-white text-base">Terminal Fullscreen Display Mode</h3>
+                                <p class="text-xs text-slate-500">Configure auto-fullscreen takeover for desktop POS registers.</p>
+                            </div>
+                            <span class="text-xl">🖥️</span>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                                <div class="pr-4">
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                        <span>Auto-Fullscreen on Desktop Login</span>
+                                        <span
+                                            class="text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider"
+                                            :class="settingsForm.is_auto_fullscreen_enabled
+                                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700'"
+                                        >
+                                            {{ settingsForm.is_auto_fullscreen_enabled ? 'Auto-Fullscreen Enabled' : 'Standard Windowed' }}
+                                        </span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                        {{ settingsForm.is_auto_fullscreen_enabled
+                                            ? 'When cashiers or branch staff log in on a desktop terminal, the POS will automatically expand to fill the entire screen without browser borders. Automatically exits upon logout.'
+                                            : 'Cashiers will start in standard windowed mode and can manually toggle fullscreen using the topbar icon or F11.' }}
+                                    </div>
+                                </div>
+                                <input
+                                    v-model="settingsForm.is_auto_fullscreen_enabled"
                                     type="checkbox"
                                     class="w-5 h-5 rounded text-indigo-600 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer flex-shrink-0"
                                 />
@@ -2097,7 +2138,7 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                             <th class="px-3 py-1.5">Item Name</th>
                                             <th class="px-3 py-1.5">Category</th>
                                             <th class="px-3 py-1.5">Unit Price</th>
-                                            <th class="px-3 py-1.5">Pack Info</th>
+                                            <th class="px-3 py-1.5">Packaging Units</th>
                                             <th class="px-3 py-1.5">IMEI</th>
                                         </tr>
                                     </thead>
@@ -2106,8 +2147,14 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                             <td class="px-3 py-1.5 font-bold text-slate-900 dark:text-white">{{ row.data.item_name }}</td>
                                             <td class="px-3 py-1.5 text-slate-500">{{ row.data.category || '—' }}</td>
                                             <td class="px-3 py-1.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">₦{{ Number(row.data.base_unit_price).toLocaleString() }}</td>
-                                            <td class="px-3 py-1.5 font-mono text-slate-500">
-                                                {{ row.data.pack_price ? `₦${Number(row.data.pack_price).toLocaleString()} (${row.data.pack_quantity}/pk)` : '—' }}
+                                            <td class="px-3 py-1.5 font-mono text-slate-500 text-[10px]">
+                                                <span v-if="row.data.pack_price">
+                                                    {{ row.data.pack_unit_name || 'Pack' }}: ₦{{ Number(row.data.pack_price).toLocaleString() }} ({{ row.data.pack_quantity }})
+                                                </span>
+                                                <span v-else-if="row.data.carton_price">
+                                                    {{ row.data.carton_unit_name || 'Carton' }}: ₦{{ Number(row.data.carton_price).toLocaleString() }}
+                                                </span>
+                                                <span v-else class="text-slate-400">—</span>
                                             </td>
                                             <td class="px-3 py-1.5">
                                                 <span v-if="row.data.track_by_imei" class="px-1.5 py-0.5 bg-violet-100 dark:bg-violet-900/40 text-violet-700 dark:text-violet-300 rounded font-bold text-[9px]">IMEI</span>
