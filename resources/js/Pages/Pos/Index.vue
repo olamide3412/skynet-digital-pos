@@ -253,23 +253,8 @@ async function tryAutoFullscreen() {
             el.webkitRequestFullscreen()
         }
     } catch (err) {
-        // Modern browsers (especially mobile/tablet browsers) require a user gesture if auto-fullscreen is blocked by policy;
-        // attach a one-time interaction listener so the first tap/click triggers it smoothly on any device
-        const onFirstInteraction = async () => {
-            if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement && props.settings?.is_auto_fullscreen_enabled) {
-                try {
-                    const docEl = document.documentElement
-                    if (docEl.requestFullscreen) await docEl.requestFullscreen()
-                    else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen()
-                } catch (e) {}
-            }
-            document.removeEventListener('click', onFirstInteraction)
-            document.removeEventListener('keydown', onFirstInteraction)
-            document.removeEventListener('touchstart', onFirstInteraction)
-        }
-        document.addEventListener('click', onFirstInteraction, { once: true })
-        document.addEventListener('keydown', onFirstInteraction, { once: true })
-        document.addEventListener('touchstart', onFirstInteraction, { once: true })
+        // Browser requires explicit user gesture; user can toggle fullscreen anytime via the top bar button or F11 shortcut.
+        // We purposefully avoid hijacking document click events so clicking items/search remains 100% responsive.
     }
 }
 

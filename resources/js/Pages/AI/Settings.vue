@@ -12,26 +12,37 @@ const props = defineProps({
     branches:  Array,
 })
 
-const form = useForm({
-    active_provider:   props.settings.active_provider ?? 'gemini',
-    api_key:           '',
-    provider_models:   {},
-    temperature:       props.settings.temperature ?? 0.7,
-    max_tokens:        props.settings.max_tokens ?? 2048,
-    is_system_enabled: props.settings.is_system_enabled !== false,
+// Initialize provider models mapping upfront
+const initialModels = {}
+props.providers?.forEach(p => {
+    initialModels[p.id] = p.selected_model || p.default_model || ''
 })
 
-// Initialize provider models mapping
-props.providers.forEach(p => {
-    form.provider_models[p.id] = p.selected_model || p.default_model
+const form = useForm({
+    active_provider:   props.settings?.active_provider ?? 'gemini',
+    api_key:           '',
+    provider_models:   initialModels,
+    temperature:       props.settings?.temperature ?? 0.7,
+    max_tokens:        props.settings?.max_tokens ?? 2048,
+    is_system_enabled: props.settings?.is_system_enabled !== false,
 })
+
+function selectProvider(id) {
+    form.active_provider = id
+    if (!form.provider_models[id]) {
+        const prov = props.providers?.find(p => p.id === id)
+        if (prov) {
+            form.provider_models[id] = prov.selected_model || prov.default_model || ''
+        }
+    }
+}
 
 const showApiKey = ref(false)
 const testLoading = ref(false)
 const testResult = ref(null)
 
 const activeProviderConfig = computed(() => {
-    return props.providers.find(p => p.id === form.active_provider) || props.providers[0]
+    return props.providers?.find(p => p.id === form.active_provider) || props.providers?.[0] || { name: 'AI Provider', available_models: {} }
 })
 
 function submit() {
@@ -117,12 +128,16 @@ function toggleBranchAi(branch) {
 
                     <!-- Provider Selection Cards -->
                     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        <label
+                        <div
                             v-for="provider in providers"
                             :key="provider.id"
-                            @click="form.active_provider = provider.id"
+                            role="button"
+                            tabindex="0"
+                            @click="selectProvider(provider.id)"
+                            @keydown.enter.prevent="selectProvider(provider.id)"
+                            @keydown.space.prevent="selectProvider(provider.id)"
                             :class="[
-                                'p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between relative',
+                                'p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between relative select-none',
                                 form.active_provider === provider.id
                                     ? 'bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-500 dark:border-emerald-400 ring-2 ring-emerald-500/20 shadow-xs'
                                     : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
@@ -134,9 +149,9 @@ function toggleBranchAi(branch) {
                                 </span>
                                 <input
                                     type="radio"
-                                    v-model="form.active_provider"
-                                    :value="provider.id"
-                                    class="accent-emerald-600"
+                                    :name="'active_provider'"
+                                    :checked="form.active_provider === provider.id"
+                                    class="accent-emerald-600 pointer-events-none"
                                 />
                             </div>
 
@@ -153,7 +168,7 @@ function toggleBranchAi(branch) {
                                     {{ form.provider_models[provider.id] || provider.default_model }}
                                 </span>
                             </div>
-                        </label>
+                        </div>
                     </div>
 
                     <!-- Active Provider Configuration Details -->

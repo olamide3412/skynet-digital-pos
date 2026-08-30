@@ -9,12 +9,14 @@ use App\Models\InventoryTransaction;
 use App\Models\Item;
 use App\Models\ItemDeviceUnit;
 use App\Models\PosCustomer;
+use App\Models\PosLog;
 use App\Models\Sale;
 use App\Models\SaleOrder;
 use App\Models\SaleReturnItem;
 use App\Models\StockConflict;
 use App\Models\User;
 use App\Modules\AI\Models\AiConversationLog;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class ChatQueryTranslationService
@@ -35,7 +37,24 @@ class ChatQueryTranslationService
 
         $q = strtolower(trim($question));
 
-        // 1. Detect Intent and execute structured, branch-isolated DB queries
+        // 0. Super Admin dynamic branch resolution from question
+        if ($user->is_super_admin) {
+            $allBranches = Branch::where('is_active', true)->get();
+            foreach ($allBranches as $b) {
+                if (
+                    str_contains($q, strtolower($b->name)) ||
+                    (!empty($b->slug) && str_contains($q, strtolower($b->slug)))
+                ) {
+                    $branch = $b;
+                    break;
+                }
+            }
+        } else {
+            // Branch user: strictly isolate to their assigned branch
+            $branch = current_branch() ?: ($user->branch_id ? Branch::find($user->branch_id) : null);
+        }
+
+        // 1. Detect Intent and execute structured DB queries
         $intentData = self::resolveIntentAndData($q, $branch, $user);
         $intent     = $intentData['intent'];
         $payload    = $intentData['data'];
@@ -56,18 +75,24 @@ class ChatQueryTranslationService
 
                     $scopeLabel = $branch ? "Branch: {$branch->name}" : "All System Branches (Super Admin Cross-Branch)";
                     $systemPrompt = <<<SYS
-You are "Skynet AI Executive Business Analyst", the embedded intelligent advisor for Skynet Digital POS.
-You are analyzing business performance for: {$scopeLabel}.
-Analyze the user's business question using ONLY the provided verified database metrics.
+You are "Skynet AI Executive Business Analyst", the embedded intelligent business copilot for Skynet Digital POS.
+You are analyzing verified business data for: {$scopeLabel}.
+Analyze the user's business question using the provided verified database metrics and records.
 
-Formatting & Analytical Guidelines:
-1. ALWAYS format numbers and monetary values cleanly using the Nigerian Naira currency symbol (₦) with commas (e.g. ₦1,250,000.00).
-2. When presenting multiple comparative metrics (e.g., top items, employee rankings, branch comparisons, growth periods), ALWAYS format them in clean Markdown Tables using the '|' pipe syntax.
-3. Highlight critical insights, growth rates, top performers, or risk flags using **bold text**.
-4. Group actionable recommendations into bullet points under a '#### Strategic Recommendations' or '#### Key Takeaways' heading.
-5. If answering about suspicious activity, evaluate discount volume, refunds, stock write-offs, and conflicts with an objective, risk-focused tone.
-6. If answering about growth or trajectory, evaluate velocity percentages and profit margins with clear momentum indicators (e.g., Accelerating Growth, Stable, Contracting).
-7. NEVER fabricate, speculate, or hallucinate metrics not present in the verified grounding payload.
+Core Analytical & Presentation Guidelines:
+1. ALWAYS answer the user's question directly and concisely in the first 2 sentences, then provide full supporting data.
+2. If asked about a SPECIFIC PRODUCT (e.g. stock left, price, last sold):
+   - State the EXACT available quantity broken down into Front Store (cashier shelf) and Back Store (warehouse reserve).
+   - State the unit retail selling price, wholesale price, and packaging tiers/variants if present.
+   - Explicitly mention the EXACT LAST TIME it was sold (date, time, cashier name, quantity sold, receipt number, and total price).
+   - Provide 30-day sales volume and any restock history.
+   - If in Super Admin scope, display stock availability across other active store branches.
+3. If asked about STAFF ACTIVITY or AUDIT LOGS:
+   - Provide a clear breakdown or Markdown Table of recent staff actions, cashier sales, inventory adjustments, and timestamped activity logs.
+4. Format all monetary values cleanly using the Nigerian Naira currency symbol (₦) with commas (e.g. ₦1,250,000.00).
+5. When presenting multiple comparative metrics, rankings, inventory lists, or activity logs, ALWAYS format them in clean Markdown Tables using the '|' pipe syntax.
+6. Highlight key takeaways, product quantities, timestamps, or risk flags using **bold text**.
+7. NEVER speculate or fabricate figures not present in the verified database payload.
 SYS;
 
                     $payloadJson = json_encode($payload, JSON_PRETTY_PRINT);
@@ -77,15 +102,15 @@ User Question: "{$question}"
 Verified Database Records:
 {$payloadJson}
 
-Please provide a structured, executive-ready summary answering the question directly based on these exact verified figures:
+Please provide a structured, executive-ready answer addressing the question directly based on these exact verified database records:
 USER_PROMPT;
 
                     $aiResponse = $provider->chat([
                         ['role' => 'system', 'content' => $systemPrompt],
                         ['role' => 'user', 'content' => $prompt],
                     ], [
-                        'temperature' => 0.3,
-                        'max_tokens'  => 1200,
+                        'temperature' => 0.25,
+                        'max_tokens'  => 1500,
                     ]);
                 }
             } catch (\Throwable $e) {
@@ -139,11 +164,49 @@ USER_PROMPT;
     {
         $scopeName = $branch ? $branch->name : 'All System Branches (Cross-Branch)';
 
-        // ── 1. Suspicious Activity / Fraud & Risk Detection ──────────────────
-        if (str_contains($q, 'suspicious') || str_contains($q, 'fraud') || str_contains($q, 'theft') ||
-            str_contains($q, 'anomaly') || str_contains($q, 'risk') || str_contains($q, 'audit') ||
-            str_contains($q, 'discrepancy') || str_contains($q, 'unusual') || str_contains($q, 'loss')) {
+        // ── 0. FIRST PRIORITY: Specific Item / Product Search ────────────────
+        // If query asks about a particular item, stock count, price, last sold, or mentions an item name
+        $itemSearchResults = self::searchSpecificItemData($q, $branch, $user);
+        if (!empty($itemSearchResults['items'])) {
+            // If the query is specifically focused on an item lookup (e.g. stock, price, last sold, how many, or item name)
+            $isExplicitItemQuery = str_contains($q, 'how many') || str_contains($q, 'left') ||
+                str_contains($q, 'stock') || str_contains($q, 'price') || str_contains($q, 'cost') ||
+                str_contains($q, 'last sold') || str_contains($q, 'when was') || str_contains($q, 'sold') ||
+                str_contains($q, 'do we have') || str_contains($q, 'available') || str_contains($q, 'details') ||
+                str_contains($q, 'barcode') || str_contains($q, 'warehouse') || str_contains($q, 'store') ||
+                str_contains($q, 'reorder') || str_contains($q, 'carton') || str_contains($q, 'pack') ||
+                count($itemSearchResults['items']) === 1;
 
+            if ($isExplicitItemQuery) {
+                return [
+                    'intent'    => 'item_specific_lookup',
+                    'grounding' => 'Queried live item catalog, front/back inventory, packaging unit variants, recent 30-day sales, and exact last sold transaction.',
+                    'data'      => [
+                        'scope'            => $scopeName,
+                        'matched_products' => $itemSearchResults['items'],
+                        'search_query'     => $itemSearchResults['search_query'],
+                        'total_matches'    => count($itemSearchResults['items']),
+                    ],
+                ];
+            }
+        }
+
+        // ── 1. Staff Activity Logs & Weekly Audit Trail ───────────────────────
+        if (
+            str_contains($q, 'activity') || str_contains($q, 'audit log') || str_contains($q, 'activity log') ||
+            str_contains($q, 'what did staff') || str_contains($q, 'staff action') || str_contains($q, 'what happened') ||
+            str_contains($q, 'who logged') || str_contains($q, 'log of') || str_contains($q, 'history of') ||
+            str_contains($q, 'weekly log') || str_contains($q, 'past week') || str_contains($q, 'last 7 days')
+        ) {
+            return self::resolveStaffActivityAudit($q, $branch, $user, $scopeName);
+        }
+
+        // ── 2. Suspicious Activity / Fraud & Risk Detection ──────────────────
+        if (
+            str_contains($q, 'suspicious') || str_contains($q, 'fraud') || str_contains($q, 'theft') ||
+            str_contains($q, 'anomaly') || str_contains($q, 'risk') || str_contains($q, 'audit') ||
+            str_contains($q, 'discrepancy') || str_contains($q, 'unusual') || str_contains($q, 'loss')
+        ) {
             // A. High discount cashiers
             $discountAudit = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
                 ->where('created_at', '>=', now()->subDays(30))
@@ -254,11 +317,12 @@ USER_PROMPT;
             ];
         }
 
-        // ── 2. Staff Performance & Top Performers Ranking ───────────────────
-        if (str_contains($q, 'perform') || str_contains($q, 'cashier') || str_contains($q, 'staff') ||
+        // ── 3. Staff Performance & Top Performers Ranking ───────────────────
+        if (
+            str_contains($q, 'perform') || str_contains($q, 'cashier') || str_contains($q, 'staff') ||
             str_contains($q, 'employee') || str_contains($q, 'who sold') || str_contains($q, 'worker') ||
-            str_contains($q, 'agent') || str_contains($q, 'sales rep')) {
-
+            str_contains($q, 'agent') || str_contains($q, 'sales rep')
+        ) {
             $staffStats = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
                 ->where('created_at', '>=', now()->subDays(30))
                 ->with('user:id,name,username')
@@ -274,7 +338,6 @@ USER_PROMPT;
                 ->orderByDesc('total_volume')
                 ->get();
 
-            // Also calculate returns handled by each staff member
             $staffReturns = SaleReturnItem::when($branch, fn($query) => $query->whereHas('sale', fn($s) => $s->where('branch_id', $branch->id)))
                 ->where('created_at', '>=', now()->subDays(30))
                 ->select('user_id', DB::raw('COUNT(*) as returns_count'), DB::raw('SUM(refund_amount) as total_refunded'))
@@ -313,12 +376,12 @@ USER_PROMPT;
             ];
         }
 
-        // ── 3. Business Growth & Trajectory Prediction ───────────────────────
-        if (str_contains($q, 'grow') || str_contains($q, 'growth') || str_contains($q, 'trajectory') ||
+        // ── 4. Business Growth & Trajectory Prediction ───────────────────────
+        if (
+            str_contains($q, 'grow') || str_contains($q, 'growth') || str_contains($q, 'trajectory') ||
             str_contains($q, 'trend') || str_contains($q, 'predict') || str_contains($q, 'forecast') ||
-            str_contains($q, 'expansion') || str_contains($q, 'rate of growth') || str_contains($q, 'future')) {
-
-            // This month vs last month
+            str_contains($q, 'expansion') || str_contains($q, 'rate of growth') || str_contains($q, 'future')
+        ) {
             $thisMonth = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
                 ->whereMonth('created_at', now()->month)
                 ->whereYear('created_at', now()->year)
@@ -331,7 +394,6 @@ USER_PROMPT;
                 ->selectRaw('COUNT(*) as count, COALESCE(SUM(final_total), 0) as revenue, COALESCE(SUM(profit_made), 0) as profit')
                 ->first();
 
-            // This week vs last week
             $thisWeek = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
                 ->where('created_at', '>=', now()->startOfWeek())
                 ->selectRaw('COUNT(*) as count, COALESCE(SUM(final_total), 0) as revenue, COALESCE(SUM(profit_made), 0) as profit')
@@ -380,12 +442,12 @@ USER_PROMPT;
             ];
         }
 
-        // ── 4. Sales Rate, Hourly Velocity & Basket Analysis ─────────────────
-        if (str_contains($q, 'sale rate') || str_contains($q, 'rate of sale') || str_contains($q, 'velocity') ||
+        // ── 5. Sales Rate, Hourly Velocity & Payment Settlement Breakdown ────
+        if (
+            str_contains($q, 'sale rate') || str_contains($q, 'rate of sale') || str_contains($q, 'velocity') ||
             str_contains($q, 'rush') || str_contains($q, 'peak hour') || str_contains($q, 'busiest') ||
-            str_contains($q, 'basket') || str_contains($q, 'payment method')) {
-
-            // Payment method breakdown past 30 days
+            str_contains($q, 'basket') || str_contains($q, 'payment method')
+        ) {
             $paymentBreakdown = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
                 ->where('created_at', '>=', now()->subDays(30))
                 ->select(
@@ -398,7 +460,6 @@ USER_PROMPT;
                 )
                 ->first();
 
-            // Peak hourly sales distribution
             $hourlySales = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
                 ->where('created_at', '>=', now()->subDays(30))
                 ->select(
@@ -443,7 +504,7 @@ USER_PROMPT;
             ];
         }
 
-        // ── 5. Cross-Branch Comparison (Super Admin Scope) ───────────────────
+        // ── 6. Cross-Branch Comparison (Super Admin Scope) ───────────────────
         if (!$branch && (str_contains($q, 'branch') || str_contains($q, 'store') || str_contains($q, 'compare stores') || str_contains($q, 'all locations'))) {
             $branchComparison = Branch::where('is_active', true)
                 ->withCount(['sales as total_sales_30d' => fn($q) => $q->where('created_at', '>=', now()->subDays(30))])
@@ -480,7 +541,7 @@ USER_PROMPT;
             ];
         }
 
-        // ── 6. Top Selling Items ─────────────────────────────────────────────
+        // ── 7. Top Selling Items ─────────────────────────────────────────────
         if (str_contains($q, 'top') || str_contains($q, 'best seller') || str_contains($q, 'most sold') || str_contains($q, 'popular')) {
             $topItems = SaleOrder::join('sales', 'sales.id', '=', 'sale_orders.sale_id')
                 ->leftJoin('items', 'items.id', '=', 'sale_orders.item_id')
@@ -515,15 +576,16 @@ USER_PROMPT;
             ];
         }
 
-        // ── 7. Low Stock & Inventory ─────────────────────────────────────────
-        if (str_contains($q, 'stock') || str_contains($q, 'low') || str_contains($q, 'run out') ||
-            str_contains($q, 'inventory') || str_contains($q, 'reorder') || str_contains($q, 'warehouse')) {
-
+        // ── 8. Low Stock & Inventory Valuation ───────────────────────────────
+        if (
+            str_contains($q, 'stock') || str_contains($q, 'low') || str_contains($q, 'run out') ||
+            str_contains($q, 'inventory') || str_contains($q, 'reorder') || str_contains($q, 'warehouse')
+        ) {
             $lowStockItems = Item::when($branch, fn($query) => $query->where('branch_id', $branch->id))
                 ->where('front_store_qty', '<=', 10)
                 ->with('category:id,name')
                 ->orderBy('front_store_qty')
-                ->limit(10)
+                ->limit(12)
                 ->get();
 
             $totalStockWorth = Item::when($branch, fn($query) => $query->where('branch_id', $branch->id))->sum('stock_worth');
@@ -548,14 +610,15 @@ USER_PROMPT;
             ];
         }
 
-        // ── 8. Debt & Customer Credit Health ─────────────────────────────────
-        if (str_contains($q, 'debt') || str_contains($q, 'credit') || str_contains($q, 'debtor') ||
-            str_contains($q, 'unpaid') || str_contains($q, 'owing') || str_contains($q, 'recover')) {
-
+        // ── 9. Debt & Customer Credit Health ─────────────────────────────────
+        if (
+            str_contains($q, 'debt') || str_contains($q, 'credit') || str_contains($q, 'debtor') ||
+            str_contains($q, 'unpaid') || str_contains($q, 'owing') || str_contains($q, 'recover')
+        ) {
             $debtors = PosCustomer::when($branch, fn($query) => $query->where('branch_id', $branch->id))
                 ->where('debt_bal', '>', 0)
                 ->orderByDesc('debt_bal')
-                ->limit(6)
+                ->limit(8)
                 ->get();
 
             $totalOutstanding = PosCustomer::when($branch, fn($query) => $query->where('branch_id', $branch->id))
@@ -585,7 +648,7 @@ USER_PROMPT;
             ];
         }
 
-        // ── 9. Tax & VAT Collected ───────────────────────────────────────────
+        // ── 10. Tax & VAT Collected ──────────────────────────────────────────
         if (str_contains($q, 'tax') || str_contains($q, 'vat')) {
             $thisMonthTax = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
                 ->whereMonth('created_at', now()->month)
@@ -606,7 +669,7 @@ USER_PROMPT;
             ];
         }
 
-        // ── 10. IMEI / Device Serial Lookup ──────────────────────────────────
+        // ── 11. IMEI / Device Serial Lookup ──────────────────────────────────
         if (str_contains($q, 'imei') || str_contains($q, 'serial') || str_contains($q, 'device')) {
             $stopWords = ['where', 'which', 'device', 'serial', 'number', 'located', 'search', 'lookup', 'status', 'please', 'customer', 'about', 'gadget', 'product'];
             $tokens = preg_split('/[\s,;:\?\!]+/', $q);
@@ -644,7 +707,7 @@ USER_PROMPT;
             ];
         }
 
-        // ── 11. General Business Overview & Executive Briefing ───────────────
+        // ── 12. General Business Overview & Executive Briefing ───────────────
         $todaySales = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
             ->whereDate('created_at', today())
             ->selectRaw('COUNT(*) as count, COALESCE(SUM(final_total), 0) as revenue, COALESCE(SUM(profit_made), 0) as profit')
@@ -673,18 +736,316 @@ USER_PROMPT;
             ? round((((float)$thisWeekSales->revenue - (float)$lastWeekSales->revenue) / (float)$lastWeekSales->revenue) * 100, 1)
             : 0;
 
+        // Recent 5 activity logs for situational awareness
+        $recentActivityLogs = PosLog::when($branch, fn($query) => $query->where('branch_id', $branch->id))
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->limit(5)
+            ->get()
+            ->map(fn($l) => [
+                'user'    => $l->user?->name ?? 'System',
+                'action'  => $l->action_type,
+                'log'     => $l->log,
+                'time'    => $l->created_at ? $l->created_at->diffForHumans() : 'Recent',
+            ])->all();
+
         return [
             'intent'    => 'sales_performance',
             'grounding' => 'Queried multi-tier real-time metrics across sales orders, profits, catalog counts, and inventory health.',
             'data'      => [
-                'scope'           => $scopeName,
-                'today'           => ['orders' => (int)$todaySales->count, 'revenue' => (float)$todaySales->revenue, 'profit' => (float)$todaySales->profit],
-                'this_week'       => ['orders' => (int)$thisWeekSales->count, 'revenue' => (float)$thisWeekSales->revenue, 'profit' => (float)$thisWeekSales->profit],
-                'last_week'       => ['orders' => (int)$lastWeekSales->count, 'revenue' => (float)$lastWeekSales->revenue, 'profit' => (float)$lastWeekSales->profit],
-                'this_month'      => ['orders' => (int)$thisMonthSales->count, 'revenue' => (float)$thisMonthSales->revenue, 'profit' => (float)$thisMonthSales->profit],
-                'week_on_week_pct'=> $wowGrowth,
-                'total_products'  => (int)$totalItems,
-                'low_stock_count' => (int)$lowStockCount,
+                'scope'                 => $scopeName,
+                'today'                 => ['orders' => (int)$todaySales->count, 'revenue' => (float)$todaySales->revenue, 'profit' => (float)$todaySales->profit],
+                'this_week'             => ['orders' => (int)$thisWeekSales->count, 'revenue' => (float)$thisWeekSales->revenue, 'profit' => (float)$thisWeekSales->profit],
+                'last_week'             => ['orders' => (int)$lastWeekSales->count, 'revenue' => (float)$lastWeekSales->revenue, 'profit' => (float)$lastWeekSales->profit],
+                'this_month'            => ['orders' => (int)$thisMonthSales->count, 'revenue' => (float)$thisMonthSales->revenue, 'profit' => (float)$thisMonthSales->profit],
+                'week_on_week_pct'      => $wowGrowth,
+                'total_products'        => (int)$totalItems,
+                'low_stock_count'       => (int)$lowStockCount,
+                'recent_activity_trail' => $recentActivityLogs,
+            ],
+        ];
+    }
+
+    /**
+     * Search specific product catalog and enrich with inventory, last sale, 30-day velocity, and cross-branch stock.
+     */
+    protected static function searchSpecificItemData(string $q, ?Branch $branch, User $user): array
+    {
+        // 1. Clean query to extract product candidate tokens
+        $stopWords = [
+            'how', 'many', 'is', 'are', 'left', 'in', 'stock', 'of', 'for', 'the', 'a', 'an',
+            'what', 'price', 'cost', 'much', 'when', 'was', 'last', 'sold', 'with', 'time',
+            'date', 'do', 'we', 'have', 'can', 'you', 'tell', 'me', 'about', 'details',
+            'give', 'check', 'search', 'lookup', 'available', 'remaining', 'count', 'quantity',
+            'warehouse', 'store', 'front', 'back', 'item', 'product', 'please', 'there',
+            'at', 'our', 'branch', 'shop', 'business', 'currently', 'show', 'find', 'get'
+        ];
+
+        $tokens = preg_split('/[\s,;:\?\!]+/', $q);
+        $cleanTokens = array_values(array_filter($tokens, fn($t) => strlen($t) > 1 && !in_array(strtolower($t), $stopWords)));
+        $cleanSearchString = implode(' ', $cleanTokens);
+
+        if (empty($cleanTokens) && empty($cleanSearchString)) {
+            return ['items' => [], 'search_query' => ''];
+        }
+
+        // 2. Query Item matching candidates
+        $itemQuery = Item::when($branch, fn($query) => $query->where('branch_id', $branch->id))
+            ->with(['category:id,name', 'units' => fn($u) => $u->where('status', 'active')]);
+
+        // Attempt exact or phrase LIKE
+        $items = (clone $itemQuery)
+            ->where(function($query) use ($cleanSearchString, $cleanTokens) {
+                $query->where('item_name', 'like', "%{$cleanSearchString}%")
+                      ->orWhere('barcode_number', 'like', "%{$cleanSearchString}%");
+
+                // If multiple tokens, try matching all
+                if (count($cleanTokens) > 1) {
+                    $query->orWhere(function($sub) use ($cleanTokens) {
+                        foreach ($cleanTokens as $token) {
+                            $sub->where('item_name', 'like', "%{$token}%");
+                        }
+                    });
+                }
+            })
+            ->limit(5)
+            ->get();
+
+        // If not found, try searching individual prominent keywords (> 2 chars)
+        if ($items->isEmpty() && count($cleanTokens) > 0) {
+            $prominentTokens = array_filter($cleanTokens, fn($t) => strlen($t) >= 3);
+            if (!empty($prominentTokens)) {
+                $items = (clone $itemQuery)
+                    ->where(function($query) use ($prominentTokens) {
+                        foreach ($prominentTokens as $token) {
+                            $query->orWhere('item_name', 'like', "%{$token}%");
+                        }
+                    })
+                    ->limit(5)
+                    ->get();
+            }
+        }
+
+        if ($items->isEmpty()) {
+            return ['items' => [], 'search_query' => $cleanSearchString];
+        }
+
+        // 3. Enrich each matched item with last sold, 30-day velocity, and cross-branch distribution
+        $enrichedItems = $items->map(function(Item $item) use ($branch, $user) {
+            $totalQty = (int) $item->total_qty;
+            $frontStock = (int) $item->front_store_qty;
+            $backStock = (int) $item->back_store_qty;
+
+            // A. Last time this item was sold
+            $lastSaleOrder = SaleOrder::join('sales', 'sales.id', '=', 'sale_orders.sale_id')
+                ->where('sale_orders.item_id', $item->id)
+                ->when($branch, fn($q) => $q->where('sales.branch_id', $branch->id))
+                ->with(['user:id,name,username', 'sale.customer:id,name,phone'])
+                ->select(
+                    'sale_orders.id as order_id',
+                    'sale_orders.qty',
+                    'sale_orders.unit_used',
+                    'sale_orders.selling_price',
+                    'sale_orders.total_selling_price',
+                    'sales.id as sale_id',
+                    'sales.receipt_id',
+                    'sales.created_at as sale_datetime',
+                    'sales.user_id as cashier_id',
+                    'sales.customer_id'
+                )
+                ->orderByDesc('sales.created_at')
+                ->first();
+
+            $lastSoldData = null;
+            if ($lastSaleOrder) {
+                $saleTime = Carbon::parse($lastSaleOrder->sale_datetime);
+                $lastSoldData = [
+                    'exact_datetime'    => $saleTime->format('Y-m-d H:i:s'),
+                    'human_time'        => $saleTime->format('l, M j, Y \a\t h:i A') . ' (' . $saleTime->diffForHumans() . ')',
+                    'qty_sold'          => (int) $lastSaleOrder->qty,
+                    'unit_tier'         => $lastSaleOrder->unit_used ?: ($item->unit_label ?: 'Unit'),
+                    'unit_price'        => (float) $lastSaleOrder->selling_price,
+                    'total_price'       => (float) $lastSaleOrder->total_selling_price,
+                    'cashier_name'      => $lastSaleOrder->user?->name ?? 'Cashier',
+                    'receipt_id'        => $lastSaleOrder->receipt_id ?? "Sale #{$lastSaleOrder->sale_id}",
+                    'customer_name'     => $lastSaleOrder->sale?->customer?->name ?? 'Walk-in Customer',
+                ];
+            }
+
+            // B. 30-Day Sales Velocity for this item
+            $sales30d = SaleOrder::join('sales', 'sales.id', '=', 'sale_orders.sale_id')
+                ->where('sale_orders.item_id', $item->id)
+                ->when($branch, fn($q) => $q->where('sales.branch_id', $branch->id))
+                ->where('sales.created_at', '>=', now()->subDays(30))
+                ->selectRaw('COALESCE(SUM(sale_orders.qty), 0) as total_qty, COALESCE(SUM(sale_orders.total_selling_price), 0) as total_rev, COUNT(DISTINCT sales.id) as orders_count')
+                ->first();
+
+            // C. Multi-unit Packaging Tiers (Variants)
+            $packagingVariants = $item->units->map(fn($u) => [
+                'unit_name'       => $u->unit_name,
+                'multiplier'      => (int) $u->base_unit_multiplier,
+                'selling_price'   => (float) $u->selling_price,
+                'wholesale_price' => (float) $u->wholesale_price,
+                'barcode'         => $u->barcode_number ?: 'N/A',
+            ])->all();
+
+            // D. Cross-branch stock distribution (if Super Admin or multi-branch query)
+            $crossBranchStock = [];
+            if ($user->is_super_admin) {
+                $crossBranchStock = Item::where('item_name', $item->item_name)
+                    ->orWhere(function($q) use ($item) {
+                        if (!empty($item->barcode_number)) {
+                            $q->where('barcode_number', $item->barcode_number);
+                        }
+                    })
+                    ->with('branch:id,name')
+                    ->get()
+                    ->map(fn($other) => [
+                        'branch_name' => $other->branch?->name ?? 'Main Store',
+                        'front_stock' => (int) $other->front_store_qty,
+                        'back_stock'  => (int) $other->back_store_qty,
+                        'total_stock' => (int) $other->total_qty,
+                    ])->all();
+            }
+
+            // E. Last restocked / inventory transaction
+            $lastRestock = InventoryTransaction::where('item_id', $item->id)
+                ->when($branch, fn($q) => $q->where('branch_id', $branch->id))
+                ->with('user:id,name')
+                ->orderByDesc('created_at')
+                ->first();
+
+            $restockData = null;
+            if ($lastRestock) {
+                $restockData = [
+                    'transaction_type' => $lastRestock->transaction_type,
+                    'qty_change'       => (int) $lastRestock->qty,
+                    'logged_by'        => $lastRestock->user?->name ?? 'System',
+                    'notes'            => $lastRestock->notes ?: 'Stock Update',
+                    'datetime'         => $lastRestock->created_at ? $lastRestock->created_at->format('M j, Y h:i A') : 'Recent',
+                ];
+            }
+
+            return [
+                'item_id'            => $item->id,
+                'item_name'          => $item->item_name,
+                'barcode_number'     => $item->barcode_number ?: 'N/A',
+                'category'           => $item->category?->name ?? 'General',
+                'unit_label'         => $item->unit_label ?: 'Unit',
+                'front_store_qty'    => $frontStock,
+                'back_store_qty'     => $backStock,
+                'total_stock_qty'    => $totalQty,
+                'stock_status'       => $totalQty <= 0 ? 'Out of Stock' : ($frontStock <= (int)($item->reorder_point ?? 5) ? 'Low Stock Warning' : 'Healthy In-Stock'),
+                'reorder_point'      => (int) ($item->reorder_point ?? 5),
+                'buy_price'          => (float) $item->buy_price,
+                'selling_price'      => (float) $item->price,
+                'wholesale_price'    => (float) $item->wholesale_price,
+                'profit_margin_unit' => round((float)$item->price - (float)$item->buy_price, 2),
+                'packaging_variants' => $packagingVariants,
+                'last_sold_record'   => $lastSoldData ?: 'No sales recorded yet for this item.',
+                'sales_velocity_30d' => [
+                    'units_sold'     => (int) ($sales30d->total_qty ?? 0),
+                    'revenue'        => (float) ($sales30d->total_rev ?? 0),
+                    'orders_count'   => (int) ($sales30d->orders_count ?? 0),
+                ],
+                'last_restock_log'   => $restockData ?: 'No recent inventory restock logs found.',
+                'cross_branch_stock' => $crossBranchStock,
+            ];
+        })->all();
+
+        return [
+            'items'        => $enrichedItems,
+            'search_query' => $cleanSearchString,
+        ];
+    }
+
+    /**
+     * Resolve 7-Day Staff Activity Log, Inventory Adjustments & Cashier Operations.
+     */
+    protected static function resolveStaffActivityAudit(string $q, ?Branch $branch, User $user, string $scopeName): array
+    {
+        // 1. Check if asking about a specific staff member
+        $targetUser = null;
+        $allUsers = User::when($branch, fn($query) => $query->where('branch_id', $branch->id))->get();
+        foreach ($allUsers as $u) {
+            if (str_contains($q, strtolower($u->name)) || str_contains($q, strtolower($u->username))) {
+                $targetUser = $u;
+                break;
+            }
+        }
+
+        // 2. Query PosLogs for past 7 days
+        $logs = PosLog::when($branch, fn($query) => $query->where('branch_id', $branch->id))
+            ->when($targetUser, fn($query) => $query->where('user_id', $targetUser->id))
+            ->where('created_at', '>=', now()->subDays(7))
+            ->with(['user:id,name,username', 'branch:id,name'])
+            ->orderByDesc('created_at')
+            ->limit(35)
+            ->get()
+            ->map(fn($l) => [
+                'id'          => $l->id,
+                'staff_name'  => $l->user?->name ?? 'System / Anonymous',
+                'action_type' => $l->action_type,
+                'log_summary' => $l->log,
+                'details'     => $l->details,
+                'exact_time'  => $l->created_at ? $l->created_at->format('Y-m-d H:i:s') : 'N/A',
+                'time_human'  => $l->created_at ? $l->created_at->format('M j, h:i A') . ' (' . $l->created_at->diffForHumans() . ')' : 'Recent',
+                'branch'      => $l->branch?->name ?? 'Main',
+            ])->all();
+
+        // 3. Query Inventory Transactions logged by staff past 7 days
+        $inventoryActions = InventoryTransaction::when($branch, fn($query) => $query->where('branch_id', $branch->id))
+            ->when($targetUser, fn($query) => $query->where('user_id', $targetUser->id))
+            ->where('created_at', '>=', now()->subDays(7))
+            ->with(['user:id,name', 'item:id,item_name'])
+            ->orderByDesc('created_at')
+            ->limit(20)
+            ->get()
+            ->map(fn($i) => [
+                'staff_name'       => $i->user?->name ?? 'System',
+                'item_name'        => $i->item?->item_name ?? 'Unknown Item',
+                'transaction_type' => $i->transaction_type,
+                'qty_change'       => (int) $i->qty,
+                'previous_qty'     => (int) $i->previous_qty,
+                'new_qty'          => (int) $i->new_qty,
+                'notes'            => $i->notes ?: 'Inventory Update',
+                'time_human'       => $i->created_at ? $i->created_at->format('M j, h:i A') : 'Recent',
+            ])->all();
+
+        // 4. Per-staff 7-day sales breakdown
+        $staffSalesBreakdown = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
+            ->when($targetUser, fn($query) => $query->where('user_id', $targetUser->id))
+            ->where('created_at', '>=', now()->subDays(7))
+            ->with('user:id,name')
+            ->select(
+                'user_id',
+                DB::raw('COUNT(*) as total_orders'),
+                DB::raw('COALESCE(SUM(final_total), 0) as total_revenue'),
+                DB::raw('COALESCE(SUM(discount_amount), 0) as total_discounts'),
+                DB::raw('COALESCE(SUM(profit_made), 0) as total_profit')
+            )
+            ->groupBy('user_id')
+            ->orderByDesc('total_revenue')
+            ->get()
+            ->map(fn($s) => [
+                'staff_name'      => $s->user?->name ?? 'Unknown',
+                'orders_count'    => (int) $s->total_orders,
+                'revenue'         => (float) $s->total_revenue,
+                'discounts_given' => (float) $s->total_discounts,
+                'profit'          => (float) $s->total_profit,
+            ])->all();
+
+        return [
+            'intent'    => 'staff_activity_audit',
+            'grounding' => 'Queried past 7 days pos_logs, inventory transactions, and cashier sales orders.',
+            'data'      => [
+                'scope'                 => $scopeName,
+                'target_staff'          => $targetUser ? $targetUser->name : 'All Staff Members',
+                'period'                => 'Past 7 Days (Weekly Audit Trail)',
+                'total_activity_events' => count($logs),
+                'activity_logs'         => $logs,
+                'inventory_actions'     => $inventoryActions,
+                'staff_sales_summary'   => $staffSalesBreakdown,
             ],
         ];
     }
@@ -695,20 +1056,115 @@ USER_PROMPT;
     protected static function generateRuleBasedSummary(string $intent, array $payload, string $question): string
     {
         return match ($intent) {
-            'suspicious_activity_audit' => self::formatSuspiciousActivitySummary($payload),
-            'staff_performance_ranking' => self::formatStaffRankingSummary($payload),
+            'item_specific_lookup'         => self::formatItemSpecificSummary($payload),
+            'staff_activity_audit'         => self::formatStaffActivitySummary($payload),
+            'suspicious_activity_audit'    => self::formatSuspiciousActivitySummary($payload),
+            'staff_performance_ranking'    => self::formatStaffRankingSummary($payload),
             'growth_trajectory_prediction' => self::formatGrowthTrajectorySummary($payload),
             'sales_velocity_and_basket_rate' => self::formatSalesVelocitySummary($payload),
-            'cross_branch_benchmarking' => self::formatCrossBranchSummary($payload),
-            'top_sellers'               => self::formatTopSellersSummary($payload),
-            'inventory_status'          => self::formatInventoryStatusSummary($payload),
-            'debt_and_credit_health'    => self::formatDebtHealthSummary($payload),
-            'tax_summary'               => "### Tax & VAT Collection Brief\n\n- **Scope**: {$payload['scope']}\n- **Month-to-Date Tax**: **₦" . number_format($payload['this_month_tax'], 2) . "**\n- **All-Time Tax Collected**: **₦" . number_format($payload['all_time_tax'], 2) . "**\n\nAll tax figures are calculated strictly from completed sales invoices.",
-            'imei_lookup'               => $payload['found']
+            'cross_branch_benchmarking'    => self::formatCrossBranchSummary($payload),
+            'top_sellers'                  => self::formatTopSellersSummary($payload),
+            'inventory_status'             => self::formatInventoryStatusSummary($payload),
+            'debt_and_credit_health'       => self::formatDebtHealthSummary($payload),
+            'tax_summary'                  => "### Tax & VAT Collection Brief\n\n- **Scope**: {$payload['scope']}\n- **Month-to-Date Tax**: **₦" . number_format($payload['this_month_tax'], 2) . "**\n- **All-Time Tax Collected**: **₦" . number_format($payload['all_time_tax'], 2) . "**\n\nAll tax figures are calculated strictly from completed sales invoices.",
+            'imei_lookup'                  => $payload['found']
                 ? "### Device IMEI Verification Record\n\n- **Device Item**: **{$payload['device']['item_name']}**\n- **IMEI / Serial**: `{$payload['device']['imei']}`\n- **Current Status**: **" . strtoupper($payload['device']['status']) . "**\n- **Stock Location**: {$payload['device']['location']}"
                 : "### Device Search Result\n\nNo device matching `" . htmlspecialchars($payload['search_term'] ?? 'query') . "` was found in the inventory ledger.",
-            default                     => self::formatGeneralOverviewSummary($payload),
+            default                        => self::formatGeneralOverviewSummary($payload),
         };
+    }
+
+    private static function formatItemSpecificSummary(array $p): string
+    {
+        $out = "### 📦 Product Stock & Sales Report\n\n";
+        $out .= "**Scope**: {$p['scope']} | **Matched Products**: " . count($p['matched_products']) . "\n\n";
+
+        foreach ($p['matched_products'] as $item) {
+            $out .= "## **{$item['item_name']}**\n";
+            $out .= "- **Barcode / SKU**: `{$item['barcode_number']}` | **Category**: {$item['category']}\n";
+            $out .= "- **Available Stock**: **{$item['total_stock_qty']} {$item['unit_label']}** (Front Shelf: **{$item['front_store_qty']}**, Back Warehouse: **{$item['back_store_qty']}**)\n";
+            $out .= "- **Stock Status**: **{$item['stock_status']}** (Reorder Threshold: {$item['reorder_point']} pcs)\n";
+            $out .= "- **Pricing**: Retail Price: **₦" . number_format($item['selling_price'], 2) . "** | Wholesale: **₦" . number_format($item['wholesale_price'], 2) . "** | Buy Cost: **₦" . number_format($item['buy_price'], 2) . "** (Unit Margin: ₦" . number_format($item['profit_margin_unit'], 2) . ")\n\n";
+
+            // Last Sold Section
+            $out .= "#### 🕒 Last Time Sold\n";
+            if (is_array($item['last_sold_record'])) {
+                $ls = $item['last_sold_record'];
+                $out .= "- **Date & Time**: **{$ls['human_time']}**\n";
+                $out .= "- **Quantity Sold**: **{$ls['qty_sold']} {$ls['unit_tier']}** @ ₦" . number_format($ls['unit_price'], 2) . " (Total: **₦" . number_format($ls['total_price'], 2) . "**)\n";
+                $out .= "- **Cashier**: **{$ls['cashier_name']}** | **Receipt**: `{$ls['receipt_id']}` | **Customer**: {$ls['customer_name']}\n\n";
+            } else {
+                $out .= "- *{$item['last_sold_record']}*\n\n";
+            }
+
+            // 30-Day Velocity
+            $out .= "#### 📈 30-Day Sales Velocity\n";
+            $out .= "- **Units Sold**: **{$item['sales_velocity_30d']['units_sold']} pcs** | **Revenue Generated**: **₦" . number_format($item['sales_velocity_30d']['revenue'], 2) . "** across {$item['sales_velocity_30d']['orders_count']} transactions.\n\n";
+
+            // Packaging variants
+            if (!empty($item['packaging_variants'])) {
+                $out .= "#### 📦 Configured Packaging Tiers\n\n";
+                $out .= "| Tier Name | Multiplier | Retail Price (₦) | Wholesale Price (₦) | Barcode |\n";
+                $out .= "| :--- | :--- | :--- | :--- | :--- |\n";
+                foreach ($item['packaging_variants'] as $v) {
+                    $out .= "| {$v['unit_name']} | {$v['multiplier']}x base | ₦" . number_format($v['selling_price'], 2) . " | ₦" . number_format($v['wholesale_price'], 2) . " | `{$v['barcode']}` |\n";
+                }
+                $out .= "\n";
+            }
+
+            // Cross-branch breakdown
+            if (!empty($item['cross_branch_stock'])) {
+                $out .= "#### 🏬 Stock Across All Branches\n\n";
+                $out .= "| Store / Branch | Front Shelf | Back Warehouse | Total On Hand |\n";
+                $out .= "| :--- | :--- | :--- | :--- |\n";
+                foreach ($item['cross_branch_stock'] as $b) {
+                    $out .= "| {$b['branch_name']} | {$b['front_stock']} pcs | {$b['back_stock']} pcs | **{$b['total_stock']} pcs** |\n";
+                }
+                $out .= "\n";
+            }
+
+            $out .= "---\n\n";
+        }
+
+        return $out;
+    }
+
+    private static function formatStaffActivitySummary(array $p): string
+    {
+        $out = "### 📋 Staff Activity & Weekly Audit Log\n\n";
+        $out .= "**Scope**: {$p['scope']} | **Target**: {$p['target_staff']} | **Period**: {$p['period']}\n\n";
+
+        if (!empty($p['staff_sales_summary'])) {
+            $out .= "#### 💼 7-Day Cashier Sales Performance\n\n";
+            $out .= "| Staff Member | Orders Completed | Total Revenue (₦) | Discounts Given (₦) | Profit (₦) |\n";
+            $out .= "| :--- | :--- | :--- | :--- | :--- |\n";
+            foreach ($p['staff_sales_summary'] as $s) {
+                $out .= "| {$s['staff_name']} | {$s['orders_count']} | ₦" . number_format($s['revenue'], 2) . " | ₦" . number_format($s['discounts_given'], 2) . " | ₦" . number_format($s['profit'], 2) . " |\n";
+            }
+            $out .= "\n";
+        }
+
+        if (!empty($p['activity_logs'])) {
+            $out .= "#### ⏱️ Recent Activity Stream (Past 7 Days)\n\n";
+            $out .= "| Staff | Action | Details / Log | Time |\n";
+            $out .= "| :--- | :--- | :--- | :--- |\n";
+            foreach (array_slice($p['activity_logs'], 0, 15) as $l) {
+                $out .= "| {$l['staff_name']} | `{$l['action_type']}` | {$l['log_summary']} | {$l['time_human']} |\n";
+            }
+            $out .= "\n";
+        }
+
+        if (!empty($p['inventory_actions'])) {
+            $out .= "#### 📦 Staff Inventory Adjustments (Past 7 Days)\n\n";
+            $out .= "| Staff | Item | Type | Qty Change | Notes | Time |\n";
+            $out .= "| :--- | :--- | :--- | :--- | :--- | :--- |\n";
+            foreach (array_slice($p['inventory_actions'], 0, 10) as $i) {
+                $out .= "| {$i['staff_name']} | {$i['item_name']} | {$i['transaction_type']} | {$i['qty_change']} pcs | {$i['notes']} | {$i['time_human']} |\n";
+            }
+            $out .= "\n";
+        }
+
+        return $out;
     }
 
     private static function formatSuspiciousActivitySummary(array $p): string
@@ -838,7 +1294,7 @@ USER_PROMPT;
 
         if (!empty($p['top_items'])) {
             $out .= "| Rank | Product Name | Units Sold | Revenue (₦) | Est. Profit (₦) |\n";
-            $out .= "| :--- | :--- | :--- | :--- | :--- |\n";
+            $out .= "| :--- | :--- | :--- | :--- |\n";
             foreach ($p['top_items'] as $i) {
                 $out .= "| #{$i['rank']} | {$i['item_name']} | {$i['units_sold']} pcs | ₦" . number_format($i['revenue'], 2) . " | ₦" . number_format($i['profit'], 2) . " |\n";
             }
@@ -857,7 +1313,7 @@ USER_PROMPT;
         if (!empty($p['items_at_risk'])) {
             $out .= "#### Products At Risk / Low Stock\n\n";
             $out .= "| Product Name | Category | Front Store | Back Store | Reorder Point |\n";
-            $out .= "| :--- | :--- | :--- | :--- | :--- |\n";
+            $out .= "| :--- | :--- | :--- | :--- |\n";
             foreach ($p['items_at_risk'] as $item) {
                 $out .= "| {$item['item_name']} | {$item['category']} | **{$item['front_stock']} pcs** | {$item['back_stock']} pcs | {$item['reorder_point']} pcs |\n";
             }
