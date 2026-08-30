@@ -1147,7 +1147,7 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                         <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                             <div>
                                 <h3 class="font-bold text-slate-900 dark:text-white text-base">Terminal Fullscreen Display Mode</h3>
-                                <p class="text-xs text-slate-500">Configure auto-fullscreen takeover for desktop POS registers.</p>
+                                <p class="text-xs text-slate-500">Configure auto-fullscreen takeover for POS registers on any device.</p>
                             </div>
                             <span class="text-xl">🖥️</span>
                         </div>
@@ -1156,7 +1156,7 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                             <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
                                 <div class="pr-4">
                                     <div class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                        <span>Auto-Fullscreen on Desktop Login</span>
+                                        <span>Auto-Fullscreen on Terminal Login</span>
                                         <span
                                             class="text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider"
                                             :class="settingsForm.is_auto_fullscreen_enabled
@@ -1168,7 +1168,7 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                     </div>
                                     <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
                                         {{ settingsForm.is_auto_fullscreen_enabled
-                                            ? 'When cashiers or branch staff log in on a desktop terminal, the POS will automatically expand to fill the entire screen without browser borders. Automatically exits upon logout.'
+                                            ? 'When cashiers or branch staff log in on any device (desktop, tablet, or mobile), the POS will automatically expand to fill the entire screen without browser borders. Automatically exits upon logout.'
                                             : 'Cashiers will start in standard windowed mode and can manually toggle fullscreen using the topbar icon or F11.' }}
                                     </div>
                                 </div>

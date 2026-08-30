@@ -243,7 +243,6 @@ function toggleFullscreen() {
 async function tryAutoFullscreen() {
     if (typeof window === 'undefined' || typeof document === 'undefined') return
     if (!props.settings?.is_auto_fullscreen_enabled) return
-    if (window.innerWidth < 1024) return // Desktop only
     if (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement) return
 
     try {
@@ -254,10 +253,10 @@ async function tryAutoFullscreen() {
             el.webkitRequestFullscreen()
         }
     } catch (err) {
-        // Modern browsers require a user gesture if auto-fullscreen is blocked by policy;
-        // attach a one-time interaction listener so the first tap/click triggers it smoothly
+        // Modern browsers (especially mobile/tablet browsers) require a user gesture if auto-fullscreen is blocked by policy;
+        // attach a one-time interaction listener so the first tap/click triggers it smoothly on any device
         const onFirstInteraction = async () => {
-            if (!document.fullscreenElement && props.settings?.is_auto_fullscreen_enabled && window.innerWidth >= 1024) {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.mozFullScreenElement && !document.msFullscreenElement && props.settings?.is_auto_fullscreen_enabled) {
                 try {
                     const docEl = document.documentElement
                     if (docEl.requestFullscreen) await docEl.requestFullscreen()
@@ -266,9 +265,11 @@ async function tryAutoFullscreen() {
             }
             document.removeEventListener('click', onFirstInteraction)
             document.removeEventListener('keydown', onFirstInteraction)
+            document.removeEventListener('touchstart', onFirstInteraction)
         }
         document.addEventListener('click', onFirstInteraction, { once: true })
         document.addEventListener('keydown', onFirstInteraction, { once: true })
+        document.addEventListener('touchstart', onFirstInteraction, { once: true })
     }
 }
 
@@ -621,6 +622,21 @@ const productSearchMobile = ref(null)
                         </span>
                     </button>
 
+                    <!-- Mobile Fullscreen Toggle Button -->
+                    <button
+                        @click="toggleFullscreen"
+                        type="button"
+                        class="p-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition cursor-pointer"
+                        :title="isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'"
+                    >
+                        <svg v-if="!isFullscreen" class="w-4.5 h-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                        </svg>
+                        <svg v-else class="w-4.5 h-4.5 text-theme" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4l5 5m0 0H5m4 0V5m11-1l-5 5m0 0h4m-4 0V5M4 20l5-5m0 0H5m4 0v4m11-4l-5 5m0 0h4m-4 0v-4"/>
+                        </svg>
+                    </button>
+
                     <!-- Mobile Actions Overflow Menu -->
                     <button
                         @click="showMobileMenu = true"
@@ -890,6 +906,16 @@ const productSearchMobile = ref(null)
                                 <span v-if="pendingCount > 0" class="px-1.5 py-0.2 bg-rose-600 text-white rounded-full text-[10px]">{{ pendingCount }}</span>
                             </div>
                             <div class="text-[10px] text-slate-500 dark:text-slate-400">Sync status & queue</div>
+                        </button>
+
+                        <!-- Fullscreen Toggle Option -->
+                        <button
+                            @click="toggleFullscreen(); showMobileMenu = false"
+                            class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700/80 text-left space-y-1 transition cursor-pointer"
+                        >
+                            <div class="text-lg">{{ isFullscreen ? '🗗' : '⛶' }}</div>
+                            <div class="font-bold text-slate-800 dark:text-slate-200">{{ isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Mode' }}</div>
+                            <div class="text-[10px] text-slate-500 dark:text-slate-400">{{ isFullscreen ? 'Return to windowed' : 'Fill full device display' }}</div>
                         </button>
 
                         <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between">

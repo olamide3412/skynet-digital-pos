@@ -68,6 +68,26 @@ const mobileMenuOpen = ref(false)
 
 onMounted(() => {
     window.addEventListener('scroll', () => { scrolled.value = window.scrollY > 30 })
+
+    // Smooth Scroll Reveal Intersection Observer
+    if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries, obs) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('is-revealed')
+                    obs.unobserve(entry.target)
+                }
+            })
+        }, {
+            root: null,
+            rootMargin: '0px 0px -40px 0px',
+            threshold: 0.08,
+        })
+
+        document.querySelectorAll('.reveal-up, .reveal-left, .reveal-right, .reveal-zoom, .reveal-fade').forEach(el => {
+            observer.observe(el)
+        })
+    }
 })
 
 // ── WhatsApp Inquiry Link Generator ──────────────────────────────────────────
@@ -77,152 +97,6 @@ const whatsappUrl = computed(() => {
     return `https://wa.me/${phone}?text=${msg}`
 })
 
-// ── Interactive POS Terminal Simulator State ──────────────────────────────────
-const demoCategories = ['All', 'Groceries', 'Tech & IMEI', 'Pharmacy', 'Beverage & Bar']
-const activeDemoCategory = ref('All')
-
-const demoProducts = [
-    { id: 1, name: 'Dano Full Cream Milk 400g', price: 3200, unit: 'Tin', packPrice: 18500, packQty: 6, cartonPrice: 72000, cartonQty: 24, barcode: '60012345678', category: 'Groceries', stock: 48 },
-    { id: 2, name: 'Cold Stone Sweet Cream Ice Cream', price: 2500, unit: 'Cup', packPrice: null, packQty: null, cartonPrice: null, cartonQty: null, barcode: '60098765432', category: 'Groceries', stock: 24 },
-    { id: 3, name: 'Samsung Galaxy S24 Ultra (512GB)', price: 1450000, unit: 'Pcs', packPrice: null, packQty: null, cartonPrice: null, cartonQty: null, barcode: '88060912345', category: 'Tech & IMEI', stock: 6, isImei: true, imeiSample: '354890123456789' },
-    { id: 4, name: 'Apple iPhone 15 Pro Max 256GB', price: 1780000, unit: 'Pcs', packPrice: null, packQty: null, cartonPrice: null, cartonQty: null, barcode: '19019912345', category: 'Tech & IMEI', stock: 4, isImei: true, imeiSample: '359871109876543' },
-    { id: 5, name: 'Paracetamol Extra 500mg (Pack)', price: 1800, unit: 'Pack', packPrice: 16500, packQty: 10, cartonPrice: 62000, cartonQty: 40, barcode: '50123456789', category: 'Pharmacy', stock: 120 },
-    { id: 6, name: 'Augmentin 625mg Antibiotic (14 Tabs)', price: 9500, unit: 'Pack', packPrice: 90000, packQty: 10, cartonPrice: 420000, cartonQty: 50, barcode: '50345678901', category: 'Pharmacy', stock: 35 },
-    { id: 7, name: 'Hennessy VSOP Cognac 700ml', price: 68000, unit: 'Bottle', packPrice: null, packQty: null, cartonPrice: 780000, cartonQty: 12, barcode: '32456789012', category: 'Beverage & Bar', stock: 18 },
-    { id: 8, name: 'Heineken Lager Beer 330ml Can', price: 1100, unit: 'Can', packPrice: 6200, packQty: 6, cartonPrice: 24000, cartonQty: 24, barcode: '87120000456', category: 'Beverage & Bar', stock: 96 },
-]
-
-const filteredDemoProducts = computed(() => {
-    if (activeDemoCategory.value === 'All') return demoProducts
-    return demoProducts.filter(p => p.category === activeDemoCategory.value)
-})
-
-const demoCart = reactive([
-    { id: '1-unit', name: 'Dano Full Cream Milk 400g', price: 3200, qty: 2, unit: 'Tin', isImei: false, imei: null },
-    { id: '2-unit', name: 'Cold Stone Sweet Cream Ice Cream', price: 2500, qty: 1, unit: 'Cup', isImei: false, imei: null },
-])
-
-const heldCarts = reactive([
-    { id: 'HOLD-01', customer: 'Mr. Gabriel (Table 4)', itemsCount: 3, total: 18500, time: '10:42 AM' },
-])
-
-const activePaymentMethod = ref('cash')
-const demoReceivedAmount = ref(10000)
-const demoCustomerName = ref('Walk-in Customer')
-const scanFeedback = ref('')
-const showReceiptModal = ref(false)
-const simulatedReceiptData = ref(null)
-
-const demoSubtotal = computed(() => {
-    return demoCart.reduce((sum, item) => sum + (item.price * item.qty), 0)
-})
-
-const demoTax = computed(() => {
-    return Math.round(demoSubtotal.value * 0.075)
-})
-
-const demoTotal = computed(() => {
-    return demoSubtotal.value + demoTax.value
-})
-
-const demoChange = computed(() => {
-    if (activePaymentMethod.value === 'debt') return 0
-    return Math.max(0, demoReceivedAmount.value - demoTotal.value)
-})
-
-function addDemoProduct(product, unitType = 'unit') {
-    let itemPrice = product.price
-    let itemUnit = product.unit
-    let itemName = product.name
-
-    if (unitType === 'pack' && product.packPrice) {
-        itemPrice = product.packPrice
-        itemUnit = `Pack (${product.packQty} ${product.unit}s)`
-        itemName = `${product.name} [Pack of ${product.packQty}]`
-    } else if (unitType === 'carton' && product.cartonPrice) {
-        itemPrice = product.cartonPrice
-        itemUnit = `Carton (${product.cartonQty} ${product.unit}s)`
-        itemName = `${product.name} [Carton of ${product.cartonQty}]`
-    }
-
-    const key = `${product.id}-${unitType}`
-    const existing = demoCart.find(i => i.id === key)
-    if (existing) {
-        existing.qty++
-    } else {
-        demoCart.push({
-            id: key,
-            name: itemName,
-            price: itemPrice,
-            qty: 1,
-            unit: itemUnit,
-            isImei: product.isImei || false,
-            imei: product.imeiSample || null,
-        })
-    }
-}
-
-function updateDemoQty(id, delta) {
-    const index = demoCart.findIndex(i => i.id === id)
-    if (index !== -1) {
-        demoCart[index].qty += delta
-        if (demoCart[index].qty <= 0) {
-            demoCart.splice(index, 1)
-        }
-    }
-}
-
-function clearDemoCart() {
-    demoCart.splice(0, demoCart.length)
-}
-
-function simulateBarcodeScan() {
-    // Pick a random product to simulate scanner input
-    const randomProduct = demoProducts[Math.floor(Math.random() * demoProducts.length)]
-    addDemoProduct(randomProduct, 'unit')
-    scanFeedback.value = `⚡ Scanned [${randomProduct.barcode}]: ${randomProduct.name} added!`
-    setTimeout(() => {
-        scanFeedback.value = ''
-    }, 2800)
-}
-
-function holdCurrentCart() {
-    if (demoCart.length === 0) return
-    heldCarts.push({
-        id: `HOLD-0${heldCarts.length + 1}`,
-        customer: demoCustomerName.value || 'Walk-in Customer',
-        itemsCount: demoCart.reduce((sum, i) => sum + i.qty, 0),
-        total: demoTotal.value,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    })
-    demoCart.splice(0, demoCart.length)
-}
-
-function restoreHeldCart(index) {
-    const held = heldCarts.splice(index, 1)[0]
-    // Re-seed demo products
-    addDemoProduct(demoProducts[0], 'unit')
-    addDemoProduct(demoProducts[4], 'pack')
-    demoCustomerName.value = held.customer
-}
-
-function simulateCheckout() {
-    if (demoCart.length === 0) return
-    simulatedReceiptData.value = {
-        receiptNo: 'SKN-' + Math.floor(100000 + Math.random() * 900000),
-        date: new Date().toLocaleString(),
-        customer: demoCustomerName.value || 'Walk-in Customer',
-        items: JSON.parse(JSON.stringify(demoCart)),
-        subtotal: demoSubtotal.value,
-        tax: demoTax.value,
-        total: demoTotal.value,
-        paid: activePaymentMethod.value === 'debt' ? 0 : Math.max(demoTotal.value, demoReceivedAmount.value),
-        change: activePaymentMethod.value === 'debt' ? 0 : Math.max(0, demoReceivedAmount.value - demoTotal.value),
-        method: activePaymentMethod.value.toUpperCase(),
-        branchName: props.default_branch?.name || 'HUB Enterprise Terminal',
-    }
-    showReceiptModal.value = true
-}
 
 // ── Interactive AI Assistant Simulator State ──────────────────────────────────
 const activeAiPromptIndex = ref(0)
@@ -287,21 +161,6 @@ function submitCustomAiQuery() {
     }, 450)
 }
 
-// ── Interactive Multi-Unit Hierarchy Visualizer State ─────────────────────────
-const multiUnitCount = ref({
-    cartons: 2,
-    packs: 3,
-    units: 4,
-})
-
-const totalCalculatedUnits = computed(() => {
-    // 1 carton = 24 units, 1 pack = 6 units, 1 unit = 1
-    return (multiUnitCount.value.cartons * 24) + (multiUnitCount.value.packs * 6) + multiUnitCount.value.units
-})
-
-const totalCalculatedRevenue = computed(() => {
-    return (multiUnitCount.value.cartons * 72000) + (multiUnitCount.value.packs * 18500) + (multiUnitCount.value.units * 3200)
-})
 
 // ── Feature Matrix Highlights ────────────────────────────────────────────────
 const coreFeatures = [
@@ -422,8 +281,12 @@ const faqs = [
         a: 'The system supports all standard 80mm and 58mm thermal receipt printers (USB, Network IP, Bluetooth, ESC/POS) as well as all 1D/2D handheld and omnidirectional USB barcode scanners right out of the box with zero drivers needed.',
     },
     {
-        q: 'How does the Multi-Unit (Piece, Pack, Carton) system work?',
-        a: 'When you create an item, you can assign retail unit price, wholesale pack price, and distributor carton price. When a cashier sells 1 Carton, the system automatically decrements the exact constituent units from your central warehouse stock and assigns distinct barcodes for each level.',
+        q: 'How does the Product Variants & Multi-Tier pricing system work?',
+        a: 'When creating products, you can configure both attribute variations (such as Size, Color, or Flavor) and multi-level packaging tiers (Single Unit, Pack, Master Carton). Each variant or packaging tier has its own distinct barcode, retail price, wholesale price, and reorder point. When a cashier scans or rings up any variant, the system automatically deducts the exact base units from unified inventory in real time.',
+    },
+    {
+        q: 'Can you assist in migrating my data from an existing POS system?',
+        a: 'Yes, absolutely! We provide complimentary, end-to-end data migration assistance. Whether your inventory and customer data are currently in Excel/CSV spreadsheets, QuickBooks, Loyverse, Odoo, Vend, or any custom POS, our technical team will format, verify barcodes, and import your complete database so your store transitions smoothly with zero operational downtime.',
     },
     {
         q: 'How do I get started with Skynet Digital POS?',
@@ -460,9 +323,8 @@ function toggleFaq(index) {
                         </div>
                     </div>
                     <div>
-                        <span class="font-extrabold text-base tracking-tight text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors flex items-center gap-1.5">
+                        <span class="font-extrabold text-base tracking-tight text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
                             {{ companyName }}
-                            <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-black bg-gradient-to-r from-violet-600 to-purple-600 text-white uppercase tracking-wider shadow-xs">PRO</span>
                         </span>
                         <span class="text-[10px] text-slate-500 dark:text-slate-400 font-semibold tracking-wide block leading-none mt-0.5">{{ appTagline }}</span>
                     </div>
@@ -470,12 +332,12 @@ function toggleFaq(index) {
 
                 <!-- Desktop Nav Links -->
                 <nav class="hidden xl:flex items-center gap-6 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    <a href="#simulator" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">POS Simulator</a>
+                    <a href="#how-it-works" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">How It Works</a>
                     <a href="#ai-intelligence" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors flex items-center gap-1.5">
                         <span class="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse"></span>
                         AI Copilot
                     </a>
-                    <a href="#multi-unit" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Multi-Units</a>
+                    <a href="#variants" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Product Variants</a>
                     <a href="#features" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Core Features</a>
                     <a href="#hardware" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Hardware</a>
                     <a href="#industries" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Industries</a>
@@ -516,9 +378,9 @@ function toggleFaq(index) {
             <!-- Mobile Navigation Drawer -->
             <div v-if="mobileMenuOpen" class="xl:hidden px-6 pt-4 pb-6 bg-white/95 dark:bg-slate-950/95 border-b border-slate-200 dark:border-slate-800 space-y-4 shadow-xl">
                 <div class="flex flex-col space-y-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    <a @click="mobileMenuOpen = false" href="#simulator" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Live POS Simulator</a>
+                    <a @click="mobileMenuOpen = false" href="#how-it-works" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">How It Works</a>
                     <a @click="mobileMenuOpen = false" href="#ai-intelligence" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">AI Copilot Engine</a>
-                    <a @click="mobileMenuOpen = false" href="#multi-unit" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Multi-Unit Hierarchy</a>
+                    <a @click="mobileMenuOpen = false" href="#variants" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Product Variants &amp; Tiers</a>
                     <a @click="mobileMenuOpen = false" href="#features" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Core Features</a>
                     <a @click="mobileMenuOpen = false" href="#hardware" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Supported Hardware</a>
                     <a @click="mobileMenuOpen = false" href="#industries" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Industries &amp; Solutions</a>
@@ -532,18 +394,18 @@ function toggleFaq(index) {
 
         <!-- ══ 2. HERO SECTION ═════════════════════════════════════════════ -->
         <section class="relative min-h-[90vh] flex flex-col items-center justify-center text-center px-4 sm:px-6 pt-32 pb-20 overflow-hidden">
-            <!-- Background Glow & Mesh Orbs -->
+            <!-- Background Glow & Animated Mesh Orbs -->
             <div class="absolute inset-0 pointer-events-none overflow-hidden">
-                <div class="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-gradient-to-tr from-violet-600/20 via-purple-600/15 to-indigo-600/20 dark:from-violet-600/25 dark:via-purple-600/20 dark:to-indigo-600/25 blur-[140px]"></div>
-                <div class="absolute -bottom-10 left-1/4 w-[450px] h-[450px] rounded-full bg-emerald-500/10 dark:bg-emerald-500/15 blur-[120px]"></div>
-                <div class="absolute top-20 right-10 w-[400px] h-[400px] rounded-full bg-fuchsia-500/10 dark:bg-fuchsia-500/15 blur-[120px]"></div>
+                <div class="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-gradient-to-tr from-violet-600/20 via-purple-600/15 to-indigo-600/20 dark:from-violet-600/25 dark:via-purple-600/20 dark:to-indigo-600/25 blur-[140px] animate-float-orb"></div>
+                <div class="absolute -bottom-10 left-1/4 w-[450px] h-[450px] rounded-full bg-emerald-500/10 dark:bg-emerald-500/15 blur-[120px] animate-float-orb-delayed"></div>
+                <div class="absolute top-20 right-10 w-[400px] h-[400px] rounded-full bg-fuchsia-500/10 dark:bg-fuchsia-500/15 blur-[120px] animate-float-orb"></div>
                 <!-- Subtle Grid Texture -->
                 <div class="absolute inset-0 opacity-[0.03] dark:opacity-[0.04]" style="background-image: linear-gradient(rgba(139,92,246,1) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,1) 1px, transparent 1px); background-size: 56px 56px;"></div>
             </div>
 
             <div class="relative z-10 max-w-5xl mx-auto space-y-8">
                 <!-- Status Badge -->
-                <div class="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-violet-100 dark:bg-gradient-to-r dark:from-violet-950/80 dark:to-slate-900/80 border border-violet-300 dark:border-violet-500/30 text-violet-800 dark:text-violet-300 text-xs font-bold tracking-wide shadow-md dark:shadow-xl backdrop-blur-md">
+                <div class="animate-hero-badge inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full bg-violet-100 dark:bg-gradient-to-r dark:from-violet-950/80 dark:to-slate-900/80 border border-violet-300 dark:border-violet-500/30 text-violet-800 dark:text-violet-300 text-xs font-bold tracking-wide shadow-md dark:shadow-xl backdrop-blur-md hover:scale-105 hover:border-violet-400 transition-all duration-300 cursor-default">
                     <span class="flex h-2 w-2 relative">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -552,24 +414,24 @@ function toggleFaq(index) {
                 </div>
 
                 <!-- Main Punchy Headline -->
-                <h1 class="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-slate-900 dark:text-white leading-[1.08]">
+                <h1 class="animate-hero-title text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-slate-900 dark:text-white leading-[1.08]">
                     The Smarter, Faster &amp; <br>
-                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 via-fuchsia-600 to-amber-500 dark:from-violet-400 dark:via-fuchsia-400 dark:to-amber-300">
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 via-fuchsia-600 to-amber-500 dark:from-violet-400 dark:via-fuchsia-400 dark:to-amber-300 animate-shimmer">
                         AI-Powered
                     </span>
                     Point of Sale Platform.
                 </h1>
 
                 <!-- Persuasive Subtitle -->
-                <p class="text-slate-600 dark:text-slate-300 text-base sm:text-lg lg:text-xl max-w-3xl mx-auto leading-relaxed font-normal">
+                <p class="animate-hero-subtitle text-slate-600 dark:text-slate-300 text-base sm:text-lg lg:text-xl max-w-3xl mx-auto leading-relaxed font-normal">
                     Engineered for high-volume retail stores, supermarkets, pharmacies, electronics shops, and wholesale merchants. Ring up checkouts in under 0.4s offline or online, track IMEIs, eliminate stock shrinkage, and query your business performance in natural English, Pidgin, or native dialects.
                 </p>
 
                 <!-- Primary Action Buttons -->
-                <div class="flex flex-wrap items-center justify-center gap-4 pt-3">
+                <div class="animate-hero-cta flex flex-wrap items-center justify-center gap-4 pt-3">
                     <Link
                         :href="posUrl"
-                        class="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-extrabold text-base rounded-2xl transition-all duration-300 shadow-xl shadow-violet-600/30 dark:shadow-2xl dark:shadow-violet-900/60 hover:scale-[1.02] active:scale-[0.98]"
+                        class="flex items-center gap-3 px-8 py-4 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-extrabold text-base rounded-2xl transition-all duration-300 shadow-xl shadow-violet-600/30 dark:shadow-2xl dark:shadow-violet-900/60 hover:scale-105 hover:-translate-y-0.5 active:scale-95 cursor-pointer"
                     >
                         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/>
@@ -582,335 +444,166 @@ function toggleFaq(index) {
                         :href="whatsappUrl"
                         target="_blank"
                         rel="noopener"
-                        class="flex items-center gap-2.5 px-6 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base rounded-2xl transition-all duration-300 shadow-xl shadow-emerald-700/20 dark:shadow-emerald-950/50 hover:scale-[1.02] active:scale-[0.98] border border-emerald-400/40"
+                        class="flex items-center gap-2.5 px-6 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-base rounded-2xl transition-all duration-300 shadow-xl shadow-emerald-700/20 dark:shadow-emerald-950/50 hover:scale-105 hover:-translate-y-0.5 active:scale-95 border border-emerald-400/40 cursor-pointer"
                     >
                         <span class="text-xl">💬</span>
                         <span>Chat on WhatsApp</span>
                     </a>
                 </div>
 
+                <!-- Free POS Migration Assistance Banner -->
+                <div class="animate-hero-migration inline-flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-white/80 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 rounded-2xl px-5 py-2.5 shadow-xs backdrop-blur-md hover:scale-[1.02] hover:-translate-y-0.5 hover:border-emerald-500/50 transition-all duration-300 cursor-default">
+                    <span class="text-emerald-500 font-bold text-sm">🔄</span>
+                    <span>Switching from an existing POS? <strong>We easily assist to migrate all your products &amp; customer records with zero downtime.</strong></span>
+                </div>
+
                 <!-- Trust Badges Strip -->
-                <div class="pt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-4xl mx-auto text-xs font-semibold text-slate-600 dark:text-slate-400">
-                    <div class="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-xs">
-                        <span class="text-emerald-500 text-base">⚡</span>
+                <div class="animate-hero-badges pt-6 grid grid-cols-2 sm:grid-cols-4 gap-3 max-w-4xl mx-auto text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <div class="group flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-xs hover:border-emerald-400 hover:shadow-lg hover:-translate-y-1 hover:scale-105 transition-all duration-300 cursor-default">
+                        <span class="text-emerald-500 text-base group-hover:scale-125 transition-transform duration-300">⚡</span>
                         <span>100% Offline-First</span>
                     </div>
-                    <div class="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-xs">
-                        <span class="text-violet-500 text-base">🤖</span>
+                    <div class="group flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-xs hover:border-violet-400 hover:shadow-lg hover:-translate-y-1 hover:scale-105 transition-all duration-300 cursor-default">
+                        <span class="text-violet-500 text-base group-hover:scale-125 transition-transform duration-300">🤖</span>
                         <span>AI Assistant Built-in</span>
                     </div>
-                    <div class="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-xs">
-                        <span class="text-cyan-500 text-base">🖨️</span>
+                    <div class="group flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-xs hover:border-cyan-400 hover:shadow-lg hover:-translate-y-1 hover:scale-105 transition-all duration-300 cursor-default">
+                        <span class="text-cyan-500 text-base group-hover:scale-125 transition-transform duration-300">🖨️</span>
                         <span>Thermal ESC/POS Ready</span>
                     </div>
-                    <div class="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-xs">
-                        <span class="text-amber-500 text-base">📦</span>
+                    <div class="group flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-xs hover:border-amber-400 hover:shadow-lg hover:-translate-y-1 hover:scale-105 transition-all duration-300 cursor-default">
+                        <span class="text-amber-500 text-base group-hover:scale-125 transition-transform duration-300">📦</span>
                         <span>Multi-Unit &amp; IMEI Engine</span>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- ══ 3. LIVE INTERACTIVE POS TERMINAL SIMULATOR ═════════════════ -->
-        <section id="simulator" class="py-20 px-4 sm:px-6 lg:px-8 border-y border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-900/40 relative">
-            <div class="max-w-7xl mx-auto space-y-12">
+        <!-- ══ 3. HOW IT WORKS: CHECKOUT EXPLAINED ══════════════════════════ -->
+        <section id="how-it-works" class="py-20 px-4 sm:px-6 lg:px-8 border-y border-slate-200 dark:border-slate-800 bg-slate-100/70 dark:bg-slate-900/40 relative overflow-hidden">
+            <div class="max-w-7xl mx-auto space-y-14">
                 <!-- Section Title -->
-                <div class="text-center space-y-3 max-w-3xl mx-auto">
+                <div class="reveal-up text-center space-y-3 max-w-3xl mx-auto">
                     <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-violet-100 dark:bg-violet-500/10 border border-violet-300 dark:border-violet-500/30 text-violet-700 dark:text-violet-400 text-xs font-extrabold uppercase tracking-wider">
-                        Interactive Live Sandbox
+                        ⚡ Built for Real Stores
                     </div>
                     <h2 class="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight">
-                        Experience the POS in Real Time
+                        Fast, Reliable Checkout — Every Time
                     </h2>
-                    <p class="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
-                        Test the actual checkout engine directly on this page! Click products, simulate barcode scans, switch multi-unit tiers (Piece/Pack/Carton), test held sales, and generate a live 80mm thermal receipt.
+                    <p class="text-slate-600 dark:text-slate-400 text-sm sm:text-base max-w-2xl mx-auto">
+                        Engineered for high-volume Nigerian retail — checkout in under 0.4 seconds, fully offline-capable, with instant 80mm thermal receipt printing at every step.
                     </p>
                 </div>
 
-                <!-- Simulator Container -->
-                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 bg-white dark:bg-slate-950/90 border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-6 shadow-2xl dark:shadow-black/80">
-                    
-                    <!-- Left: Catalog & Scanner Mockup (7 Cols) -->
-                    <div class="lg:col-span-7 space-y-4 flex flex-col justify-between">
-                        <div>
-                            <!-- Mockup Topbar -->
-                            <div class="flex flex-wrap items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400 gap-2">
-                                <div class="flex items-center gap-2">
-                                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    <span class="font-bold text-slate-800 dark:text-slate-200">Terminal Register #1</span>
-                                    <span class="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-600 dark:text-slate-300 font-semibold">{{ props.default_branch?.name || 'HUB Enterprise' }}</span>
-                                </div>
-                                <div class="flex items-center gap-3">
-                                    <span class="text-emerald-600 dark:text-emerald-400 font-mono text-[11px] font-bold">● Dexie Synced (Offline Ready)</span>
-                                </div>
-                            </div>
+                <!-- 4-Step Checkout Process Cards -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
 
-                            <!-- Scanner & Search Bar Action Bar -->
-                            <div class="mt-4 flex flex-col sm:flex-row items-center gap-2">
-                                <div class="relative flex-1 w-full">
-                                    <input
-                                        type="text"
-                                        placeholder="🔍 Search product name, SKU, or unit..."
-                                        readonly
-                                        class="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded-xl px-4 py-2.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none cursor-default shadow-xs"
-                                    />
-                                </div>
-                                <button
-                                    @click="simulateBarcodeScan"
-                                    type="button"
-                                    class="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 transition active:scale-95 cursor-pointer"
-                                >
-                                    <span>⚡ Simulate Barcode Scan</span>
-                                </button>
-                            </div>
-
-                            <!-- Scan Feedback Toast -->
-                            <div v-if="scanFeedback" class="mt-2 p-2 rounded-xl bg-violet-100 dark:bg-violet-950/80 border border-violet-300 dark:border-violet-800 text-violet-800 dark:text-violet-300 text-xs font-bold flex items-center gap-2 animate-bounce">
-                                <span>🔔</span>
-                                <span>{{ scanFeedback }}</span>
-                            </div>
-
-                            <!-- Category Tabs -->
-                            <div class="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-                                <button
-                                    v-for="cat in demoCategories"
-                                    :key="cat"
-                                    @click="activeDemoCategory = cat"
-                                    type="button"
-                                    :class="[
-                                        'px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition text-[11px]',
-                                        activeDemoCategory === cat
-                                            ? 'bg-violet-600 text-white shadow-sm'
-                                            : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800'
-                                    ]"
-                                >
-                                    {{ cat }}
-                                </button>
-                            </div>
-
-                            <!-- Sample Products Grid -->
-                            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[380px] overflow-y-auto pr-1">
-                                <div
-                                    v-for="prod in filteredDemoProducts"
-                                    :key="prod.id"
-                                    class="group p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800/90 border border-slate-200 dark:border-slate-800 hover:border-violet-500/60 transition-all duration-200 shadow-xs flex flex-col justify-between"
-                                >
-                                    <div>
-                                        <div class="flex items-start justify-between">
-                                            <span class="text-[10px] font-bold text-violet-700 dark:text-violet-400 bg-violet-100 dark:bg-violet-950/80 border border-violet-200 dark:border-violet-800/50 px-2 py-0.5 rounded-md">
-                                                {{ prod.category }}
-                                            </span>
-                                            <span class="text-[11px] text-slate-500 dark:text-slate-400 font-mono">Stock: {{ prod.stock }}</span>
-                                        </div>
-                                        <h4 class="text-xs font-bold text-slate-900 dark:text-white mt-2 group-hover:text-violet-600 dark:group-hover:text-violet-300 transition-colors line-clamp-1">
-                                            {{ prod.name }}
-                                        </h4>
-                                        <div v-if="prod.isImei" class="mt-1 flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-semibold">
-                                            <span>📱 IMEI: {{ prod.imeiSample }}</span>
-                                        </div>
-                                    </div>
-
-                                    <div class="mt-3 pt-2 border-t border-slate-200 dark:border-slate-800/60">
-                                        <div class="flex items-baseline justify-between">
-                                            <span class="text-sm font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
-                                                ₦{{ prod.price.toLocaleString() }}
-                                                <span class="text-[10px] text-slate-400 font-normal">/ {{ prod.unit }}</span>
-                                            </span>
-                                            <button
-                                                @click="addDemoProduct(prod, 'unit')"
-                                                type="button"
-                                                class="text-[10px] font-bold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-violet-600 hover:text-white dark:hover:bg-violet-600 dark:hover:text-white px-2.5 py-1 rounded-lg border border-slate-200 dark:border-slate-700 transition cursor-pointer"
-                                            >
-                                                + Add
-                                            </button>
-                                        </div>
-
-                                        <!-- Multi-Unit Quick Add Options if available -->
-                                        <div v-if="prod.packPrice || prod.cartonPrice" class="mt-2 flex items-center gap-1.5 text-[9px]">
-                                            <button
-                                                v-if="prod.packPrice"
-                                                @click="addDemoProduct(prod, 'pack')"
-                                                type="button"
-                                                class="px-2 py-0.5 rounded bg-violet-100 dark:bg-violet-950/60 text-violet-700 dark:text-violet-300 hover:bg-violet-200 dark:hover:bg-violet-800 transition font-bold cursor-pointer"
-                                            >
-                                                Pack: ₦{{ prod.packPrice.toLocaleString() }}
-                                            </button>
-                                            <button
-                                                v-if="prod.cartonPrice"
-                                                @click="addDemoProduct(prod, 'carton')"
-                                                type="button"
-                                                class="px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-800 transition font-bold cursor-pointer"
-                                            >
-                                                Carton: ₦{{ prod.cartonPrice.toLocaleString() }}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                    <!-- Step 1: Scan or Search -->
+                    <div class="reveal-up delay-100 group relative p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-lg hover:border-violet-500/80 hover:shadow-2xl hover:shadow-violet-600/10 dark:hover:shadow-violet-950/40 hover:-translate-y-2.5 hover:scale-[1.025] transition-all duration-300 space-y-4 cursor-pointer">
+                        <div class="absolute -top-3.5 left-6 bg-gradient-to-r from-violet-600 to-indigo-600 text-white text-[10px] font-black px-3 py-0.5 rounded-full uppercase tracking-widest shadow">Step 1</div>
+                        <div class="w-12 h-12 rounded-2xl bg-violet-100 dark:bg-violet-950 flex items-center justify-center text-2xl group-hover:scale-125 group-hover:-rotate-6 transition-transform duration-300">
+                            🔍
                         </div>
-
-                        <!-- Mini Offline Indicator Note -->
-                        <div class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/40 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center gap-2 mt-4">
-                            <span>🛡️</span>
-                            <span><strong>Zero-Latency Engine:</strong> Transactions process in under 0.4s with instant receipt printing even offline.</span>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900 dark:text-white mb-1 group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">Scan or Search</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                Instantly locate any product by barcode scan or SKU keyword search. Our engine resolves the item in under <strong class="text-slate-700 dark:text-slate-300">0.4 seconds</strong> — no lag, no lookup delay, even offline.
+                            </p>
+                        </div>
+                        <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 text-[11px] font-semibold text-violet-600 dark:text-violet-400">
+                            <span class="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse"></span>
+                            Works fully offline via Dexie
                         </div>
                     </div>
 
-                    <!-- Right: Dynamic Cart & Checkout Mockup (5 Cols) -->
-                    <div class="lg:col-span-5 bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex flex-col justify-between space-y-4 shadow-sm">
-                        <div class="space-y-3">
-                            <div class="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-                                <span class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                                    <span>🛒 Active Cart</span>
-                                    <span class="text-[10px] bg-violet-600 text-white px-1.5 py-0.2 rounded-full font-bold">{{ demoCart.length }}</span>
-                                </span>
-                                <div class="flex items-center gap-2">
-                                    <button
-                                        v-if="demoCart.length > 0"
-                                        @click="holdCurrentCart"
-                                        type="button"
-                                        class="text-[10px] text-amber-600 dark:text-amber-400 hover:underline font-bold"
-                                    >
-                                        Hold Cart
-                                    </button>
-                                    <button
-                                        v-if="demoCart.length > 0"
-                                        @click="clearDemoCart"
-                                        type="button"
-                                        class="text-[10px] text-rose-500 hover:underline font-bold"
-                                    >
-                                        Clear
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Customer Name Input Mockup -->
-                            <div class="flex items-center gap-2 text-xs">
-                                <label class="text-[11px] text-slate-500 font-semibold flex-shrink-0">Customer:</label>
-                                <input
-                                    v-model="demoCustomerName"
-                                    type="text"
-                                    placeholder="Enter customer name..."
-                                    class="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
-                                />
-                            </div>
-
-                            <!-- Cart Items List -->
-                            <div class="space-y-2 max-h-44 overflow-y-auto pr-1">
-                                <div
-                                    v-for="item in demoCart"
-                                    :key="item.id"
-                                    class="p-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs shadow-xs"
-                                >
-                                    <div class="min-w-0 pr-2">
-                                        <div class="font-bold text-slate-900 dark:text-white truncate text-[11px]">{{ item.name }}</div>
-                                        <div class="text-[10px] text-slate-500 dark:text-slate-400 font-mono">₦{{ item.price.toLocaleString() }} / {{ item.unit }}</div>
-                                    </div>
-                                    <div class="flex items-center gap-1.5 flex-shrink-0">
-                                        <button
-                                            @click="updateDemoQty(item.id, -1)"
-                                            type="button"
-                                            class="w-5 h-5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-white font-bold flex items-center justify-center text-xs cursor-pointer"
-                                        >-</button>
-                                        <span class="w-6 text-center font-bold text-slate-900 dark:text-white font-mono text-xs">{{ item.qty }}</span>
-                                        <button
-                                            @click="updateDemoQty(item.id, 1)"
-                                            type="button"
-                                            class="w-5 h-5 rounded bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-800 dark:text-white font-bold flex items-center justify-center text-xs cursor-pointer"
-                                        >+</button>
-                                    </div>
-                                </div>
-                                <div v-if="demoCart.length === 0" class="text-center py-8 text-xs text-slate-400">
-                                    Cart is empty. Tap any product on the left or click "Simulate Barcode Scan" to begin!
-                                </div>
-                            </div>
-
-                            <!-- Held Carts Mockup Strip -->
-                            <div v-if="heldCarts.length > 0" class="pt-2 border-t border-dashed border-slate-200 dark:border-slate-800">
-                                <div class="text-[10px] font-bold text-amber-600 dark:text-amber-400 mb-1 flex items-center justify-between">
-                                    <span>⏸️ Held Sales Queue ({{ heldCarts.length }})</span>
-                                </div>
-                                <div class="space-y-1">
-                                    <div
-                                        v-for="(hc, hIdx) in heldCarts"
-                                        :key="hc.id"
-                                        class="flex items-center justify-between p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[10px]"
-                                    >
-                                        <span class="truncate font-semibold">{{ hc.customer }} ({{ hc.itemsCount }} items · ₦{{ hc.total.toLocaleString() }})</span>
-                                        <button
-                                            @click="restoreHeldCart(hIdx)"
-                                            type="button"
-                                            class="text-amber-700 dark:text-amber-300 font-bold hover:underline ml-2"
-                                        >
-                                            Resume →
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                    <!-- Step 2: Select the Unit -->
+                    <div class="reveal-up delay-200 group relative p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-lg hover:border-blue-500/80 hover:shadow-2xl hover:shadow-blue-600/10 dark:hover:shadow-blue-950/40 hover:-translate-y-2.5 hover:scale-[1.025] transition-all duration-300 space-y-4 cursor-pointer">
+                        <div class="absolute -top-3.5 left-6 bg-gradient-to-r from-blue-600 to-cyan-600 text-white text-[10px] font-black px-3 py-0.5 rounded-full uppercase tracking-widest shadow">Step 2</div>
+                        <div class="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950 flex items-center justify-center text-2xl group-hover:scale-125 group-hover:-rotate-6 transition-transform duration-300">
+                            📦
                         </div>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Select the Unit</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                Choose <strong class="text-slate-700 dark:text-slate-300">Piece, Pack, or Carton</strong> — each with its own price tier. Stock is automatically deducted from a single warehouse source regardless of unit level chosen.
+                            </p>
+                        </div>
+                        <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                            <span class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                            Auto stock deduction per tier
+                        </div>
+                    </div>
 
-                        <!-- Calculations & Payment Mode -->
-                        <div class="space-y-3 pt-2 border-t border-slate-200 dark:border-slate-800 text-xs">
-                            <div class="space-y-1.5 text-slate-500 dark:text-slate-400">
-                                <div class="flex justify-between">
-                                    <span>Subtotal</span>
-                                    <span class="font-mono text-slate-800 dark:text-slate-200">₦{{ demoSubtotal.toLocaleString() }}</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span>VAT (7.5%)</span>
-                                    <span class="font-mono text-slate-800 dark:text-slate-200">₦{{ demoTax.toLocaleString() }}</span>
-                                </div>
-                                <div class="flex justify-between text-sm font-extrabold text-slate-900 dark:text-white pt-1 border-t border-slate-200 dark:border-slate-800">
-                                    <span>Total Due</span>
-                                    <span class="text-emerald-600 dark:text-emerald-400 font-mono">₦{{ demoTotal.toLocaleString() }}</span>
-                                </div>
-                            </div>
+                    <!-- Step 3: Choose Payment -->
+                    <div class="reveal-up delay-300 group relative p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-lg hover:border-emerald-500/80 hover:shadow-2xl hover:shadow-emerald-600/10 dark:hover:shadow-emerald-950/40 hover:-translate-y-2.5 hover:scale-[1.025] transition-all duration-300 space-y-4 cursor-pointer">
+                        <div class="absolute -top-3.5 left-6 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-[10px] font-black px-3 py-0.5 rounded-full uppercase tracking-widest shadow">Step 3</div>
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950 flex items-center justify-center text-2xl group-hover:scale-125 group-hover:-rotate-6 transition-transform duration-300">
+                            💳
+                        </div>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900 dark:text-white mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Choose Payment</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                Accept <strong class="text-slate-700 dark:text-slate-300">Cash, Bank Transfer, Split Payment, or Debt Ledger</strong>. Customer debt is automatically posted to their CRM balance with full audit trail.
+                            </p>
+                        </div>
+                        <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Cash · Transfer · Split · Debt
+                        </div>
+                    </div>
 
-                            <!-- Payment Method Switcher -->
-                            <div class="grid grid-cols-4 gap-1 pt-1">
-                                <button
-                                    v-for="pm in ['cash', 'transfer', 'split', 'debt']"
-                                    :key="pm"
-                                    @click="activePaymentMethod = pm"
-                                    type="button"
-                                    :class="[
-                                        'py-1.5 rounded-lg text-[10px] font-bold capitalize transition cursor-pointer',
-                                        activePaymentMethod === pm
-                                            ? 'bg-violet-600 text-white shadow-md'
-                                            : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-700'
-                                    ]"
-                                >
-                                    {{ pm === 'debt' ? 'Debt Ledger' : pm }}
-                                </button>
-                            </div>
-
-                            <!-- Simulate Checkout Action -->
-                            <button
-                                @click="simulateCheckout"
-                                :disabled="demoCart.length === 0"
-                                type="button"
-                                class="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-extrabold text-xs transition shadow-lg shadow-emerald-600/30 dark:shadow-emerald-950/60 flex items-center justify-center gap-2 cursor-pointer"
-                            >
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-                                </svg>
-                                <span>Generate 80mm Receipt &amp; Pay</span>
-                            </button>
+                    <!-- Step 4: Instant Receipt -->
+                    <div class="reveal-up delay-400 group relative p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-lg hover:border-amber-500/80 hover:shadow-2xl hover:shadow-amber-600/10 dark:hover:shadow-amber-950/40 hover:-translate-y-2.5 hover:scale-[1.025] transition-all duration-300 space-y-4 cursor-pointer">
+                        <div class="absolute -top-3.5 left-6 bg-gradient-to-r from-amber-500 to-orange-600 text-white text-[10px] font-black px-3 py-0.5 rounded-full uppercase tracking-widest shadow">Step 4</div>
+                        <div class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950 flex items-center justify-center text-2xl group-hover:scale-125 group-hover:-rotate-6 transition-transform duration-300">
+                            🖨️
+                        </div>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900 dark:text-white mb-1 group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors">Instant Receipt</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                An <strong class="text-slate-700 dark:text-slate-300">80mm thermal receipt</strong> prints immediately — including IMEI serials for electronics, VAT breakdown, and payment summary. Works online or completely offline.
+                            </p>
+                        </div>
+                        <div class="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                            80mm/58mm ESC/POS ready
                         </div>
                     </div>
 
                 </div>
+
+                <!-- Performance Stats Strip -->
+                <div class="reveal-zoom delay-200 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+                    <div class="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xs text-center space-y-1 hover:border-violet-400/80 hover:shadow-lg hover:-translate-y-1 hover:scale-105 transition-all duration-300 cursor-default">
+                        <div class="text-2xl font-black text-violet-600 dark:text-violet-400">&lt;0.4s</div>
+                        <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">Checkout Speed</div>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xs text-center space-y-1 hover:border-emerald-400/80 hover:shadow-lg hover:-translate-y-1 hover:scale-105 transition-all duration-300 cursor-default">
+                        <div class="text-2xl font-black text-emerald-600 dark:text-emerald-400">100%</div>
+                        <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">Offline Capable</div>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xs text-center space-y-1 hover:border-amber-400/80 hover:shadow-lg hover:-translate-y-1 hover:scale-105 transition-all duration-300 cursor-default">
+                        <div class="text-2xl font-black text-amber-600 dark:text-amber-400">80mm</div>
+                        <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">Thermal Receipt</div>
+                    </div>
+                    <div class="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xs text-center space-y-1 hover:border-blue-400/80 hover:shadow-lg hover:-translate-y-1 hover:scale-105 transition-all duration-300 cursor-default">
+                        <div class="text-2xl font-black text-blue-600 dark:text-blue-400">3-Tier</div>
+                        <div class="text-xs font-semibold text-slate-500 dark:text-slate-400">Unit Pricing</div>
+                    </div>
+                </div>
+
             </div>
         </section>
+
 
         <!-- ══ 4. AI BUSINESS INTELLIGENCE COPILOT SPOTLIGHT ════════════════ -->
         <section id="ai-intelligence" class="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
             <!-- Ambient Glow -->
-            <div class="absolute -top-32 left-1/2 -translate-x-1/2 w-[750px] h-[550px] bg-gradient-to-br from-violet-500/15 via-fuchsia-500/10 to-indigo-500/15 rounded-full blur-[140px] pointer-events-none"></div>
+            <div class="absolute -top-32 left-1/2 -translate-x-1/2 w-[750px] h-[550px] bg-gradient-to-br from-violet-500/15 via-fuchsia-500/10 to-indigo-500/15 rounded-full blur-[140px] pointer-events-none animate-float-orb"></div>
 
             <div class="max-w-7xl mx-auto space-y-16 relative z-10">
                 <!-- Section Header -->
-                <div class="text-center space-y-3 max-w-3xl mx-auto">
+                <div class="reveal-up text-center space-y-3 max-w-3xl mx-auto">
                     <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-fuchsia-100 dark:bg-fuchsia-500/10 border border-fuchsia-300 dark:border-fuchsia-500/30 text-fuchsia-800 dark:text-fuchsia-400 text-xs font-extrabold uppercase tracking-wider">
                         🤖 Autonomous AI Assistant
                     </div>
@@ -926,7 +619,7 @@ function toggleFaq(index) {
                 <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch max-w-5xl mx-auto">
                     
                     <!-- Left: Prompt Pills & Custom Input (5 Cols) -->
-                    <div class="lg:col-span-5 space-y-3 flex flex-col justify-between">
+                    <div class="reveal-left delay-100 lg:col-span-5 space-y-3 flex flex-col justify-between">
                         <div class="space-y-2.5">
                             <span class="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-2">
                                 Select a live sample query:
@@ -936,7 +629,7 @@ function toggleFaq(index) {
                                 :key="idx"
                                 @click="selectAiPrompt(idx)"
                                 :class="[
-                                    'p-3.5 rounded-2xl border transition-all cursor-pointer text-left',
+                                    'p-3.5 rounded-2xl border transition-all duration-300 cursor-pointer text-left hover:scale-[1.015] hover:-translate-y-0.5 hover:shadow-md',
                                     activeAiPromptIndex === idx
                                         ? 'bg-violet-50 dark:bg-gradient-to-r dark:from-violet-950/90 dark:to-purple-950/80 border-violet-400 dark:border-violet-500/70 shadow-md dark:shadow-lg dark:shadow-violet-950/60'
                                         : 'bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800/80 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300'
@@ -962,11 +655,11 @@ function toggleFaq(index) {
                                     v-model="customAiQuery"
                                     type="text"
                                     placeholder="Type any custom store question..."
-                                    class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none shadow-xs"
+                                    class="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-3.5 pr-10 py-2.5 text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400 focus:outline-none focus:border-violet-500 shadow-xs transition-colors"
                                 />
                                 <button
                                     type="submit"
-                                    class="absolute right-1.5 top-1.5 p-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs transition"
+                                    class="absolute right-1.5 top-1.5 p-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs transition cursor-pointer"
                                 >
                                     ➔
                                 </button>
@@ -975,7 +668,7 @@ function toggleFaq(index) {
                     </div>
 
                     <!-- Right: AI Live Response Window (7 Cols) -->
-                    <div class="lg:col-span-7 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl dark:shadow-2xl flex flex-col justify-between space-y-6">
+                    <div class="reveal-right delay-200 lg:col-span-7 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xl dark:shadow-2xl hover:border-fuchsia-500/60 hover:shadow-fuchsia-900/20 transition-all duration-300 flex flex-col justify-between space-y-6">
                         <!-- AI Header -->
                         <div class="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
                             <div class="flex items-center gap-3">
@@ -1025,134 +718,116 @@ function toggleFaq(index) {
             </div>
         </section>
 
-        <!-- ══ 5. MULTI-UNIT PRICING & INVENTORY HIERARCHY ═════════════════ -->
-        <section id="multi-unit" class="py-20 px-4 sm:px-6 lg:px-8 bg-slate-100/80 dark:bg-slate-900/30 border-y border-slate-200 dark:border-slate-800">
+        <!-- ══ 5. PRODUCT VARIANTS & INVENTORY HIERARCHY ═════════════════ -->
+        <section id="variants" class="py-20 px-4 sm:px-6 lg:px-8 bg-slate-100/80 dark:bg-slate-900/30 border-y border-slate-200 dark:border-slate-800 relative overflow-hidden">
             <div class="max-w-7xl mx-auto space-y-12">
-                <div class="text-center space-y-3 max-w-3xl mx-auto">
+                <div class="reveal-up text-center space-y-3 max-w-3xl mx-auto">
                     <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-blue-100 dark:bg-blue-500/10 border border-blue-300 dark:border-blue-500/30 text-blue-700 dark:text-blue-400 text-xs font-extrabold uppercase tracking-wider">
-                        📦 Inventory Hierarchy
+                        📦 Variants &amp; Packaging Tiers
                     </div>
                     <h2 class="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight">
-                        Sell by Piece, Pack, or Carton
+                        Flexible Product Variants &amp; Unit Levels
                     </h2>
                     <p class="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
-                        Never do manual conversion math again. Our intelligent multi-unit hierarchy lets you sell single items at retail, packs at wholesale, and cartons at bulk rates while automatically synchronizing single-source warehouse stock.
+                        Stop manual math and stock shrinkage. Manage item variants by packaging level (Piece, Pack, Carton) or product attribute (Size, Color, Flavor, Storage) with dedicated barcodes, tiered pricing, and unified single-source warehouse deduction.
                     </p>
                 </div>
 
-                <!-- 3-Tier Multi-Unit Visual Card -->
+                <!-- 3-Tier Multi-Unit / Variant Visual Cards -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
                     <!-- Tier 1: Single Unit -->
-                    <div class="p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-lg space-y-4 hover:border-blue-500/60 transition">
-                        <div class="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-lg">
+                    <div class="reveal-left delay-100 group p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-lg space-y-4 hover:border-blue-500/80 hover:shadow-2xl hover:shadow-blue-600/10 dark:hover:shadow-blue-950/40 hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer">
+                        <div class="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-lg group-hover:scale-125 group-hover:-rotate-6 transition-transform duration-300">
                             1️⃣
                         </div>
                         <div>
-                            <span class="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Retail Level</span>
-                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Single Piece / Tin</h3>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">e.g. 1 Tin Dano Milk @ ₦3,200</p>
+                            <span class="text-[10px] font-bold text-blue-600 uppercase tracking-wider">Retail Level / Base Variant</span>
+                            <h3 class="text-lg font-black text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">Single Piece / Unit</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">e.g. 1 Single Tin Dano Milk @ ₦3,200</p>
                         </div>
                         <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 text-xs font-mono space-y-1">
-                            <div class="text-slate-500">Stock Deduction: <strong class="text-slate-800 dark:text-white">1.00 Unit</strong></div>
+                            <div class="text-slate-500">Stock Deduction: <strong class="text-slate-800 dark:text-white">1.00 Base Unit</strong></div>
                             <div class="text-slate-500">Barcode: <span class="text-blue-600 dark:text-blue-400">60012345678</span></div>
                         </div>
                     </div>
 
                     <!-- Tier 2: Pack -->
-                    <div class="p-6 rounded-3xl bg-white dark:bg-slate-950 border-2 border-violet-500 dark:border-violet-500/80 shadow-xl space-y-4 relative">
+                    <div class="reveal-up delay-200 group p-6 rounded-3xl bg-white dark:bg-slate-950 border-2 border-violet-500 dark:border-violet-500/80 shadow-xl space-y-4 relative hover:shadow-2xl hover:shadow-violet-500/25 hover:border-violet-400 hover:-translate-y-2.5 hover:scale-[1.04] transition-all duration-300 cursor-pointer">
                         <div class="absolute -top-3 right-6 bg-violet-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow">
-                            Most Popular
+                            Wholesale Tier
                         </div>
-                        <div class="w-10 h-10 rounded-2xl bg-violet-100 dark:bg-violet-950 text-violet-600 dark:text-violet-400 flex items-center justify-center font-bold text-lg">
+                        <div class="w-10 h-10 rounded-2xl bg-violet-100 dark:bg-violet-950 text-violet-600 dark:text-violet-400 flex items-center justify-center font-bold text-lg group-hover:scale-125 group-hover:rotate-6 transition-transform duration-300">
                             6️⃣
                         </div>
                         <div>
-                            <span class="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Wholesale Pack</span>
-                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Pack of 6 Tins</h3>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">e.g. 1 Pack @ ₦18,500 (Save ₦700)</p>
+                            <span class="text-[10px] font-bold text-violet-600 uppercase tracking-wider">Wholesale Pack Variant</span>
+                            <h3 class="text-lg font-black text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">Pack of 6 Units</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">e.g. 1 Pack @ ₦18,500 (Bulk Savings)</p>
                         </div>
                         <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 text-xs font-mono space-y-1">
-                            <div class="text-slate-500">Stock Deduction: <strong class="text-slate-800 dark:text-white">6.00 Units</strong></div>
+                            <div class="text-slate-500">Stock Deduction: <strong class="text-slate-800 dark:text-white">6.00 Base Units</strong></div>
                             <div class="text-slate-500">Barcode: <span class="text-violet-600 dark:text-violet-400">60012345678-PK</span></div>
                         </div>
                     </div>
 
                     <!-- Tier 3: Carton -->
-                    <div class="p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-lg space-y-4 hover:border-emerald-500/60 transition">
-                        <div class="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-lg">
+                    <div class="reveal-right delay-300 group p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-lg space-y-4 hover:border-emerald-500/80 hover:shadow-2xl hover:shadow-emerald-600/10 dark:hover:shadow-emerald-950/40 hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer">
+                        <div class="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-lg group-hover:scale-125 group-hover:-rotate-6 transition-transform duration-300">
                             📦
                         </div>
                         <div>
-                            <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Distributor Bulk</span>
-                            <h3 class="text-lg font-black text-slate-900 dark:text-white">Master Carton (24)</h3>
+                            <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Distributor Master Carton</span>
+                            <h3 class="text-lg font-black text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">Master Carton (24x)</h3>
                             <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">e.g. 1 Master Carton @ ₦72,000</p>
                         </div>
                         <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900 text-xs font-mono space-y-1">
-                            <div class="text-slate-500">Stock Deduction: <strong class="text-slate-800 dark:text-white">24.00 Units</strong></div>
+                            <div class="text-slate-500">Stock Deduction: <strong class="text-slate-800 dark:text-white">24.00 Base Units</strong></div>
                             <div class="text-slate-500">Barcode: <span class="text-emerald-600 dark:text-emerald-400">60012345678-CTN</span></div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Interactive Multi-Unit Math Demo Calculator -->
-                <div class="p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 max-w-3xl mx-auto shadow-md space-y-4">
-                    <div class="flex items-center justify-between">
-                        <span class="text-xs font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
-                            Interactive Conversion Calculator
-                        </span>
-                        <span class="text-[10px] bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold px-2 py-0.5 rounded-full">
-                            Auto-Synced
-                        </span>
+                <!-- Product Variant Highlights Matrix -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-5xl mx-auto">
+                    <div class="reveal-up delay-100 group p-5 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2 hover:border-violet-500/70 hover:shadow-xl hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 cursor-pointer">
+                        <div class="text-xl group-hover:scale-125 group-hover:rotate-6 transition-transform duration-300">🏷️</div>
+                        <h4 class="text-xs font-extrabold text-slate-900 dark:text-white">Unique Variant Barcodes</h4>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Each variant or packaging tier has its own scannable barcode for instantaneous 0.4s checkout lookup.
+                        </p>
                     </div>
 
-                    <div class="grid grid-cols-3 gap-3 text-center">
-                        <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 space-y-1">
-                            <label class="text-[10px] text-slate-500 uppercase font-bold">Cartons (24x)</label>
-                            <input
-                                v-model.number="multiUnitCount.cartons"
-                                type="number"
-                                min="0"
-                                class="w-full text-center font-black text-base bg-white dark:bg-slate-950 rounded-lg py-1 border border-slate-200 dark:border-slate-800 focus:outline-none"
-                            />
-                        </div>
-                        <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 space-y-1">
-                            <label class="text-[10px] text-slate-500 uppercase font-bold">Packs (6x)</label>
-                            <input
-                                v-model.number="multiUnitCount.packs"
-                                type="number"
-                                min="0"
-                                class="w-full text-center font-black text-base bg-white dark:bg-slate-950 rounded-lg py-1 border border-slate-200 dark:border-slate-800 focus:outline-none"
-                            />
-                        </div>
-                        <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 space-y-1">
-                            <label class="text-[10px] text-slate-500 uppercase font-bold">Units (1x)</label>
-                            <input
-                                v-model.number="multiUnitCount.units"
-                                type="number"
-                                min="0"
-                                class="w-full text-center font-black text-base bg-white dark:bg-slate-950 rounded-lg py-1 border border-slate-200 dark:border-slate-800 focus:outline-none"
-                            />
-                        </div>
+                    <div class="reveal-up delay-200 group p-5 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2 hover:border-violet-500/70 hover:shadow-xl hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 cursor-pointer">
+                        <div class="text-xl group-hover:scale-125 group-hover:rotate-6 transition-transform duration-300">🔄</div>
+                        <h4 class="text-xs font-extrabold text-slate-900 dark:text-white">Single-Source Stock Sync</h4>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Selling a single piece, pack, or carton draws directly from unified warehouse inventory with zero math errors.
+                        </p>
                     </div>
 
-                    <div class="p-4 rounded-2xl bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-indigo-500/10 border border-violet-200 dark:border-violet-800/60 flex items-center justify-between text-xs">
-                        <div>
-                            <span class="text-slate-500 dark:text-slate-400 block text-[11px]">Calculated Base Stock Deducted:</span>
-                            <span class="font-black text-slate-900 dark:text-white text-base">{{ totalCalculatedUnits }} Base Units</span>
-                        </div>
-                        <div class="text-right">
-                            <span class="text-slate-500 dark:text-slate-400 block text-[11px]">Total Revenue Generated:</span>
-                            <span class="font-black text-emerald-600 dark:text-emerald-400 text-base font-mono">₦{{ totalCalculatedRevenue.toLocaleString() }}</span>
-                        </div>
+                    <div class="reveal-up delay-300 group p-5 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2 hover:border-violet-500/70 hover:shadow-xl hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 cursor-pointer">
+                        <div class="text-xl group-hover:scale-125 group-hover:rotate-6 transition-transform duration-300">💰</div>
+                        <h4 class="text-xs font-extrabold text-slate-900 dark:text-white">Tiered Profit Margins</h4>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Configure retail, wholesale, and distributor prices with automated margin calculation per variant level.
+                        </p>
+                    </div>
+
+                    <div class="reveal-up delay-400 group p-5 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xs space-y-2 hover:border-violet-500/70 hover:shadow-xl hover:-translate-y-1.5 hover:scale-[1.02] transition-all duration-300 cursor-pointer">
+                        <div class="text-xl group-hover:scale-125 group-hover:rotate-6 transition-transform duration-300">🎯</div>
+                        <h4 class="text-xs font-extrabold text-slate-900 dark:text-white">Multi-Industry Matrices</h4>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                            Full matrix support for Supermarkets (packs/cartons), Pharmacies (strips/boxes), and Boutiques (sizes/colors).
+                        </p>
                     </div>
                 </div>
             </div>
         </section>
 
         <!-- ══ 6. CORE ENTERPRISE FEATURES GRID ════════════════════════════ -->
-        <section id="features" class="py-24 px-4 sm:px-6 lg:px-8">
+        <section id="features" class="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
             <div class="max-w-7xl mx-auto space-y-16">
-                <div class="text-center space-y-4 max-w-3xl mx-auto">
+                <div class="reveal-up text-center space-y-4 max-w-3xl mx-auto">
                     <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-violet-100 dark:bg-violet-500/10 border border-violet-300 dark:border-violet-500/30 text-violet-700 dark:text-violet-400 text-xs font-extrabold uppercase tracking-wider">
                         Enterprise Architecture
                     </div>
@@ -1169,11 +844,14 @@ function toggleFaq(index) {
                     <div
                         v-for="(feat, idx) in coreFeatures"
                         :key="idx"
-                        class="group relative p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-violet-500/60 transition-all duration-300 shadow-md hover:shadow-2xl hover:shadow-violet-600/10 dark:hover:shadow-violet-950/40 hover:-translate-y-1 flex flex-col justify-between space-y-4"
+                        :class="[
+                            'reveal-up group relative p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-violet-500/80 transition-all duration-300 shadow-md hover:shadow-2xl hover:shadow-violet-600/15 dark:hover:shadow-violet-950/50 hover:-translate-y-2.5 hover:scale-[1.025] flex flex-col justify-between space-y-4 cursor-pointer',
+                            'delay-' + ((idx % 4 + 1) * 100)
+                        ]"
                     >
                         <div>
                             <div class="flex items-center justify-between mb-4">
-                                <div :class="['w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center text-white shadow-md', feat.gradient]">
+                                <div :class="['w-10 h-10 rounded-xl bg-gradient-to-br flex items-center justify-center text-white shadow-md transition-transform duration-300 group-hover:scale-120 group-hover:rotate-6', feat.gradient]">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="feat.icon"/>
                                     </svg>
@@ -1189,7 +867,7 @@ function toggleFaq(index) {
                                 {{ feat.desc }}
                             </p>
                         </div>
-                        <div class="text-[11px] font-bold text-violet-600 dark:text-violet-400 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
+                        <div class="text-[11px] font-bold text-violet-600 dark:text-violet-400 flex items-center gap-1 group-hover:translate-x-1.5 transition-transform">
                             <span>Ready in Platform</span>
                             <span>→</span>
                         </div>
@@ -1199,9 +877,9 @@ function toggleFaq(index) {
         </section>
 
         <!-- ══ 7. HARDWARE & PERIPHERALS COMPATIBILITY ═════════════════════ -->
-        <section id="hardware" class="py-20 px-4 sm:px-6 lg:px-8 border-y border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-900/30">
+        <section id="hardware" class="py-20 px-4 sm:px-6 lg:px-8 border-y border-slate-200 dark:border-slate-800 bg-slate-100/80 dark:bg-slate-900/30 relative overflow-hidden">
             <div class="max-w-7xl mx-auto space-y-12">
-                <div class="text-center space-y-3 max-w-3xl mx-auto">
+                <div class="reveal-up text-center space-y-3 max-w-3xl mx-auto">
                     <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-cyan-100 dark:bg-cyan-500/10 border border-cyan-300 dark:border-cyan-500/30 text-cyan-800 dark:text-cyan-400 text-xs font-extrabold uppercase tracking-wider">
                         🔌 Zero-Driver Hardware
                     </div>
@@ -1217,10 +895,13 @@ function toggleFaq(index) {
                     <div
                         v-for="(hw, hIdx) in hardwareSupported"
                         :key="hIdx"
-                        class="p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-md space-y-3 hover:border-cyan-500/60 transition"
+                        :class="[
+                            'reveal-up group p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-md space-y-3 hover:border-cyan-500/80 hover:shadow-2xl hover:shadow-cyan-500/15 hover:-translate-y-2 hover:scale-[1.03] transition-all duration-300 cursor-pointer',
+                            'delay-' + ((hIdx + 1) * 100)
+                        ]"
                     >
-                        <div class="text-3xl">{{ hw.icon }}</div>
-                        <h3 class="font-extrabold text-slate-900 dark:text-white text-base">{{ hw.name }}</h3>
+                        <div class="text-3xl group-hover:scale-125 group-hover:-rotate-6 transition-transform duration-300">{{ hw.icon }}</div>
+                        <h3 class="font-extrabold text-slate-900 dark:text-white text-base group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">{{ hw.name }}</h3>
                         <p class="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">{{ hw.detail }}</p>
                     </div>
                 </div>
@@ -1228,9 +909,9 @@ function toggleFaq(index) {
         </section>
 
         <!-- ══ 8. INDUSTRY SOLUTIONS MATRIX ════════════════════════════════ -->
-        <section id="industries" class="py-24 px-4 sm:px-6 lg:px-8">
+        <section id="industries" class="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
             <div class="max-w-7xl mx-auto space-y-16">
-                <div class="text-center space-y-4 max-w-3xl mx-auto">
+                <div class="reveal-up text-center space-y-4 max-w-3xl mx-auto">
                     <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-extrabold uppercase tracking-wider">
                         Versatile Solutions
                     </div>
@@ -1246,10 +927,13 @@ function toggleFaq(index) {
                     <div
                         v-for="(ind, i) in targetIndustries"
                         :key="i"
-                        class="p-6 rounded-3xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 transition space-y-3 shadow-sm hover:shadow-md"
+                        :class="[
+                            'reveal-up group p-6 rounded-3xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 hover:border-emerald-500/80 dark:hover:border-emerald-500/80 transition-all duration-300 space-y-3 shadow-sm hover:shadow-2xl hover:shadow-emerald-500/15 hover:-translate-y-2 hover:scale-[1.03] cursor-pointer',
+                            'delay-' + ((i + 1) * 100)
+                        ]"
                     >
-                        <div class="text-3xl">{{ ind.icon }}</div>
-                        <h3 class="text-base font-extrabold text-slate-900 dark:text-white">{{ ind.name }}</h3>
+                        <div class="text-3xl group-hover:scale-125 group-hover:rotate-6 transition-transform duration-300">{{ ind.icon }}</div>
+                        <h3 class="text-base font-extrabold text-slate-900 dark:text-white group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">{{ ind.name }}</h3>
                         <p class="text-slate-600 dark:text-slate-400 text-xs leading-relaxed">{{ ind.desc }}</p>
                     </div>
                 </div>
@@ -1257,31 +941,31 @@ function toggleFaq(index) {
         </section>
 
         <!-- ══ 9. NUMERICAL PROOF & ROI STATS ══════════════════════════════ -->
-        <section class="py-16 px-4 sm:px-6 lg:px-8 border-y border-slate-200 dark:border-slate-800 bg-white dark:bg-gradient-to-b dark:from-slate-950 dark:via-slate-900/80 dark:to-slate-950">
-            <div class="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-                <div class="space-y-1">
-                    <div class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-violet-400 dark:to-indigo-400">
+        <section class="py-16 px-4 sm:px-6 lg:px-8 border-y border-slate-200 dark:border-slate-800 bg-white dark:bg-gradient-to-b dark:from-slate-950 dark:via-slate-900/80 dark:to-slate-950 relative overflow-hidden">
+            <div class="reveal-zoom delay-100 max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+                <div class="group space-y-1 p-4 rounded-2xl hover:bg-slate-100/70 dark:hover:bg-slate-900/70 hover:scale-110 hover:-translate-y-1 transition-all duration-300 cursor-default">
+                    <div class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-violet-400 dark:to-indigo-400 group-hover:scale-105 transition-transform">
                         &lt; 0.4s
                     </div>
                     <div class="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider">Checkout Speed</div>
                     <div class="text-[11px] text-slate-500">Zero lag during peak rush hours</div>
                 </div>
-                <div class="space-y-1">
-                    <div class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400">
+                <div class="group space-y-1 p-4 rounded-2xl hover:bg-slate-100/70 dark:hover:bg-slate-900/70 hover:scale-110 hover:-translate-y-1 transition-all duration-300 cursor-default">
+                    <div class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-600 to-teal-600 dark:from-emerald-400 dark:to-teal-400 group-hover:scale-105 transition-transform">
                         100%
                     </div>
                     <div class="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider">Offline Capable</div>
                     <div class="text-[11px] text-slate-500">Dexie IndexedDB local engine</div>
                 </div>
-                <div class="space-y-1">
-                    <div class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400">
+                <div class="group space-y-1 p-4 rounded-2xl hover:bg-slate-100/70 dark:hover:bg-slate-900/70 hover:scale-110 hover:-translate-y-1 transition-all duration-300 cursor-default">
+                    <div class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400 group-hover:scale-105 transition-transform">
                         ∞
                     </div>
                     <div class="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider">Branches &amp; Staff</div>
                     <div class="text-[11px] text-slate-500">Scale without per-device tax</div>
                 </div>
-                <div class="space-y-1">
-                    <div class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-600 to-pink-600 dark:from-fuchsia-400 dark:to-pink-400">
+                <div class="group space-y-1 p-4 rounded-2xl hover:bg-slate-100/70 dark:hover:bg-slate-900/70 hover:scale-110 hover:-translate-y-1 transition-all duration-300 cursor-default">
+                    <div class="text-4xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-fuchsia-600 to-pink-600 dark:from-fuchsia-400 dark:to-pink-400 group-hover:scale-105 transition-transform">
                         24/7
                     </div>
                     <div class="text-xs font-bold text-slate-800 dark:text-white uppercase tracking-wider">AI Business Insights</div>
@@ -1291,9 +975,9 @@ function toggleFaq(index) {
         </section>
 
         <!-- ══ 10. CLIENT TESTIMONIALS & TRUST ═════════════════════════════ -->
-        <section class="py-24 px-4 sm:px-6 lg:px-8">
+        <section class="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
             <div class="max-w-7xl mx-auto space-y-16">
-                <div class="text-center space-y-3 max-w-3xl mx-auto">
+                <div class="reveal-up text-center space-y-3 max-w-3xl mx-auto">
                     <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-100 dark:bg-amber-500/10 border border-amber-300 dark:border-amber-500/30 text-amber-800 dark:text-amber-400 text-xs font-extrabold uppercase tracking-wider">
                         ⭐️ Client Stories
                     </div>
@@ -1306,13 +990,16 @@ function toggleFaq(index) {
                     <div
                         v-for="(t, tIdx) in testimonials"
                         :key="tIdx"
-                        class="p-6 rounded-3xl bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 shadow-md space-y-4 flex flex-col justify-between"
+                        :class="[
+                            'reveal-up group p-6 rounded-3xl bg-white dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 shadow-md space-y-4 flex flex-col justify-between hover:border-amber-500/80 hover:shadow-2xl hover:shadow-amber-500/15 hover:-translate-y-2.5 hover:scale-[1.025] transition-all duration-300 cursor-default',
+                            'delay-' + ((tIdx + 1) * 150)
+                        ]"
                     >
                         <p class="text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed italic">
                             "{{ t.quote }}"
                         </p>
                         <div class="flex items-center gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-                            <div :class="['w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs', t.avatarBg]">
+                            <div :class="['w-9 h-9 rounded-full flex items-center justify-center font-bold text-white text-xs transition-transform duration-300 group-hover:scale-115', t.avatarBg]">
                                 {{ t.name.charAt(0) }}
                             </div>
                             <div>
@@ -1325,9 +1012,66 @@ function toggleFaq(index) {
             </div>
         </section>
 
-        <!-- ══ 11. FAQ ACCORDION ════════════════════════════════════════════ -->
+        <!-- ══ 11. FREE POS DATA MIGRATION ASSISTANCE ═══════════════════ -->
+        <section class="py-16 px-4 sm:px-6 lg:px-8">
+            <div class="reveal-zoom delay-100 max-w-6xl mx-auto rounded-3xl bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-emerald-500/10 border border-violet-200 dark:border-violet-800/60 p-8 sm:p-12 shadow-xl hover:shadow-2xl hover:border-violet-400/80 hover:scale-[1.01] transition-all duration-300 relative overflow-hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                    <div class="lg:col-span-7 space-y-4 text-left">
+                        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/80 border border-emerald-300 dark:border-emerald-700/60 text-emerald-800 dark:text-emerald-300 text-xs font-black uppercase tracking-wider">
+                            🔄 Hassle-Free Onboarding
+                        </div>
+                        <h2 class="text-2xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
+                            Switching from Another POS? <br>
+                            <span class="text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-emerald-600 dark:from-violet-400 dark:to-emerald-400">
+                                We Migrate Your Entire Store for Free.
+                            </span>
+                        </h2>
+                        <p class="text-slate-600 dark:text-slate-300 text-sm leading-relaxed">
+                            Don't let data migration hold your business back. Our dedicated technical team easily extracts, formats, and imports all your existing product catalogs, barcodes, customer credit balances, and supplier lists from your old POS with 100% accuracy and zero downtime.
+                        </p>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                            <div class="flex items-start gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                <span class="text-emerald-500 text-base">✓</span>
+                                <span>Bulk Excel, CSV &amp; Database Imports</span>
+                            </div>
+                            <div class="flex items-start gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                <span class="text-emerald-500 text-base">✓</span>
+                                <span>Customer Debt &amp; Ledger Transfer</span>
+                            </div>
+                            <div class="flex items-start gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                <span class="text-emerald-500 text-base">✓</span>
+                                <span>Barcode &amp; Packaging Variant Formatting</span>
+                            </div>
+                            <div class="flex items-start gap-2 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                <span class="text-emerald-500 text-base">✓</span>
+                                <span>1-on-1 Dedicated Switch Support</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="lg:col-span-5 flex flex-col items-center lg:items-end justify-center">
+                        <div class="group p-6 rounded-2xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 shadow-xl space-y-4 text-center w-full max-w-sm hover:-translate-y-1 hover:shadow-2xl hover:scale-[1.02] transition-all duration-300">
+                            <div class="text-4xl group-hover:scale-125 group-hover:rotate-6 transition-transform duration-300">🚀</div>
+                            <h3 class="text-sm font-black text-slate-900 dark:text-white">Seamless Data Migration</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Send us your existing inventory export or connect with our migration engineers on WhatsApp.</p>
+                            <a
+                                :href="whatsappUrl"
+                                target="_blank"
+                                rel="noopener"
+                                class="w-full py-3.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs transition shadow-lg shadow-emerald-600/30 hover:scale-105 active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                                <span>💬 Request Free POS Migration</span>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══ 12. FAQ ACCORDION ════════════════════════════════════════════ -->
         <section id="faq" class="py-24 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-12">
-            <div class="text-center space-y-3">
+            <div class="reveal-up text-center space-y-3">
                 <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-violet-100 dark:bg-violet-500/10 border border-violet-300 dark:border-violet-500/30 text-violet-700 dark:text-violet-400 text-xs font-extrabold uppercase tracking-wider">
                     Got Questions?
                 </div>
@@ -1340,7 +1084,10 @@ function toggleFaq(index) {
                 <div
                     v-for="(faq, fIndex) in faqs"
                     :key="fIndex"
-                    class="rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 overflow-hidden transition shadow-xs"
+                    :class="[
+                        'reveal-up rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 overflow-hidden transition-all duration-300 shadow-xs hover:border-violet-400 dark:hover:border-violet-500/80 hover:shadow-md hover:scale-[1.01]',
+                        'delay-' + ((fIndex % 4 + 1) * 100)
+                    ]"
                 >
                     <button
                         @click="toggleFaq(fIndex)"
@@ -1348,7 +1095,7 @@ function toggleFaq(index) {
                         class="w-full p-5 text-left flex items-center justify-between gap-4 font-extrabold text-sm text-slate-900 dark:text-white hover:text-violet-600 dark:hover:text-violet-300 transition cursor-pointer"
                     >
                         <span>{{ faq.q }}</span>
-                        <span class="text-violet-600 dark:text-violet-400 font-mono text-base flex-shrink-0">
+                        <span class="text-violet-600 dark:text-violet-400 font-mono text-base flex-shrink-0 transition-transform duration-200">
                             {{ activeFaqIndex === fIndex ? '−' : '+' }}
                         </span>
                     </button>
@@ -1362,15 +1109,15 @@ function toggleFaq(index) {
             </div>
         </section>
 
-        <!-- ══ 12. HIGH-CONVERTING CLOSING CTA ═════════════════════════════ -->
+        <!-- ══ 13. HIGH-CONVERTING CLOSING CTA ═════════════════════════════ -->
         <section class="py-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-            <div class="max-w-5xl mx-auto relative z-10 bg-gradient-to-r from-violet-900/90 via-purple-900/90 to-indigo-900/90 border border-violet-500/40 rounded-3xl p-8 sm:p-14 text-center space-y-8 shadow-2xl backdrop-blur-xl text-white">
+            <div class="reveal-zoom delay-100 max-w-5xl mx-auto relative z-10 bg-gradient-to-r from-violet-900/90 via-purple-900/90 to-indigo-900/90 border border-violet-500/40 rounded-3xl p-8 sm:p-14 text-center space-y-8 shadow-2xl hover:shadow-violet-600/30 hover:scale-[1.01] transition-all duration-300 backdrop-blur-xl text-white">
                 <div class="space-y-3">
                     <h2 class="text-3xl sm:text-5xl font-black text-white tracking-tight">
                         Ready to Upgrade Your Store Operations?
                     </h2>
                     <p class="text-violet-200 text-sm sm:text-base max-w-2xl mx-auto">
-                        Launch your POS terminal instantly or connect directly with our engineering team on WhatsApp for custom multi-store rollouts and catalog migrations.
+                        Launch your POS terminal instantly or connect directly with our engineering team on WhatsApp for free POS data migration, catalog onboarding, and custom multi-store rollouts.
                     </p>
                 </div>
 
@@ -1402,7 +1149,7 @@ function toggleFaq(index) {
                 <!-- Col 1: Brand & Bio -->
                 <div class="space-y-4 md:col-span-2">
                     <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center font-black text-sm text-white">
+                        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center font-black text-sm text-white shadow-md">
                             {{ companyName.charAt(0).toUpperCase() }}
                         </div>
                         <span class="font-extrabold text-base text-slate-900 dark:text-white tracking-tight">{{ companyName }}</span>
@@ -1420,9 +1167,9 @@ function toggleFaq(index) {
                 <div class="space-y-3">
                     <h4 class="font-extrabold text-slate-900 dark:text-white text-xs uppercase tracking-wider">Navigation</h4>
                     <ul class="space-y-2 font-medium">
-                        <li><a href="#simulator" class="hover:text-violet-600 dark:hover:text-white transition">POS Simulator</a></li>
+                        <li><a href="#how-it-works" class="hover:text-violet-600 dark:hover:text-white transition">How It Works</a></li>
                         <li><a href="#ai-intelligence" class="hover:text-violet-600 dark:hover:text-white transition">AI Copilot</a></li>
-                        <li><a href="#multi-unit" class="hover:text-violet-600 dark:hover:text-white transition">Multi-Unit Hierarchy</a></li>
+                        <li><a href="#variants" class="hover:text-violet-600 dark:hover:text-white transition">Product Variants &amp; Tiers</a></li>
                         <li><a href="#features" class="hover:text-violet-600 dark:hover:text-white transition">Core Features</a></li>
                         <li><a href="#hardware" class="hover:text-violet-600 dark:hover:text-white transition">Supported Hardware</a></li>
                         <li><a href="#industries" class="hover:text-violet-600 dark:hover:text-white transition">Industry Solutions</a></li>
@@ -1459,94 +1206,88 @@ function toggleFaq(index) {
             </div>
         </footer>
 
-        <!-- ══ MODAL: SIMULATED THERMAL RECEIPT ═══════════════════════════ -->
-        <Transition name="fade">
-            <div
-                v-if="showReceiptModal && simulatedReceiptData"
-                class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md"
-                @click.self="showReceiptModal = false"
-            >
-                <div class="bg-white text-slate-900 rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl font-mono text-xs border border-slate-200">
-                    <!-- Receipt Header -->
-                    <div class="text-center space-y-1 pb-3 border-b border-dashed border-slate-300">
-                        <h3 class="font-black text-base uppercase tracking-tight">{{ companyName }}</h3>
-                        <p class="text-[10px] text-slate-500">{{ simulatedReceiptData.branchName }}</p>
-                        <p class="text-[10px] text-slate-400">{{ simulatedReceiptData.date }}</p>
-                        <p class="text-[10px] font-bold text-slate-700">Receipt #: {{ simulatedReceiptData.receiptNo }}</p>
-                        <p class="text-[10px] text-slate-600 font-sans">Customer: <strong>{{ simulatedReceiptData.customer }}</strong></p>
-                    </div>
-
-                    <!-- Items -->
-                    <div class="space-y-1.5 py-2 border-b border-dashed border-slate-300">
-                        <div
-                            v-for="(it, iIdx) in simulatedReceiptData.items"
-                            :key="iIdx"
-                            class="space-y-0.5 text-[11px]"
-                        >
-                            <div class="flex justify-between font-bold">
-                                <span class="truncate pr-2">{{ it.name }} (x{{ it.qty }})</span>
-                                <span>₦{{ (it.price * it.qty).toLocaleString() }}</span>
-                            </div>
-                            <div v-if="it.isImei && it.imei" class="text-[9px] text-slate-500 font-mono">
-                                IMEI: {{ it.imei }}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Totals -->
-                    <div class="space-y-1 text-[11px]">
-                        <div class="flex justify-between">
-                            <span>Subtotal:</span>
-                            <span>₦{{ simulatedReceiptData.subtotal.toLocaleString() }}</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span>VAT (7.5%):</span>
-                            <span>₦{{ simulatedReceiptData.tax.toLocaleString() }}</span>
-                        </div>
-                        <div class="flex justify-between font-black text-sm pt-1 border-t border-slate-300">
-                            <span>TOTAL:</span>
-                            <span class="text-emerald-700">₦{{ simulatedReceiptData.total.toLocaleString() }}</span>
-                        </div>
-                        <div class="flex justify-between text-slate-600 pt-1">
-                            <span>Payment Mode:</span>
-                            <span class="font-bold">{{ simulatedReceiptData.method }}</span>
-                        </div>
-                        <div v-if="simulatedReceiptData.method !== 'DEBT'" class="flex justify-between text-slate-600">
-                            <span>Tendered:</span>
-                            <span>₦{{ simulatedReceiptData.paid.toLocaleString() }}</span>
-                        </div>
-                        <div v-if="simulatedReceiptData.method !== 'DEBT'" class="flex justify-between text-slate-600">
-                            <span>Change Due:</span>
-                            <span>₦{{ simulatedReceiptData.change.toLocaleString() }}</span>
-                        </div>
-                        <div v-else class="p-2 rounded bg-amber-50 border border-amber-200 text-amber-900 text-[10px] text-center font-sans font-semibold">
-                            ⚠️ Added to Customer Debt Ledger balance
-                        </div>
-                    </div>
-
-                    <!-- Barcode Simulation Mockup -->
-                    <div class="text-center pt-3 border-t border-dashed border-slate-300 space-y-1">
-                        <div class="h-8 bg-slate-900 rounded mx-auto w-3/4 flex items-center justify-center text-white text-[8px] tracking-[6px] font-bold">
-                            |||||||||||||||||||||||||||
-                        </div>
-                        <p class="text-[9px] text-slate-400">Thank you for your patronage!</p>
-                    </div>
-
-                    <button
-                        @click="showReceiptModal = false"
-                        type="button"
-                        class="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer"
-                    >
-                        Close Receipt Preview
-                    </button>
-                </div>
-            </div>
-        </Transition>
-
     </div>
 </template>
 
 <style scoped>
+/* ── Hero Load Animations ─────────────────────────────────────────────────── */
+@keyframes heroFadeUp {
+    from {
+        opacity: 0;
+        transform: translateY(28px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.animate-hero-badge { animation: heroFadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both; }
+.animate-hero-title { animation: heroFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both; }
+.animate-hero-subtitle { animation: heroFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.28s both; }
+.animate-hero-cta { animation: heroFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.38s both; }
+.animate-hero-migration { animation: heroFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.48s both; }
+.animate-hero-badges { animation: heroFadeUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.58s both; }
+
+/* ── Ambient Mesh Floating Keyframes ───────────────────────────────────────── */
+@keyframes floatOrb {
+    0%, 100% {
+        transform: translateY(0px) scale(1);
+    }
+    50% {
+        transform: translateY(-20px) scale(1.05);
+    }
+}
+.animate-float-orb {
+    animation: floatOrb 10s ease-in-out infinite;
+}
+.animate-float-orb-delayed {
+    animation: floatOrb 12s ease-in-out infinite 3s;
+}
+
+/* ── Scroll Reveal System ──────────────────────────────────────────────────── */
+.reveal-up {
+    opacity: 0;
+    transform: translateY(32px);
+    transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+.reveal-left {
+    opacity: 0;
+    transform: translateX(-40px);
+    transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+.reveal-right {
+    opacity: 0;
+    transform: translateX(40px);
+    transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+.reveal-zoom {
+    opacity: 0;
+    transform: scale(0.93);
+    transition: opacity 0.75s cubic-bezier(0.16, 1, 0.3, 1), transform 0.75s cubic-bezier(0.16, 1, 0.3, 1);
+    will-change: opacity, transform;
+}
+
+.reveal-up.is-revealed,
+.reveal-left.is-revealed,
+.reveal-right.is-revealed,
+.reveal-zoom.is-revealed {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+}
+
+/* Stagger Delays */
+.delay-100 { transition-delay: 100ms; }
+.delay-150 { transition-delay: 150ms; }
+.delay-200 { transition-delay: 200ms; }
+.delay-250 { transition-delay: 250ms; }
+.delay-300 { transition-delay: 300ms; }
+.delay-400 { transition-delay: 400ms; }
+.delay-450 { transition-delay: 450ms; }
+
 .fade-enter-active,
 .fade-leave-active {
     transition: opacity 0.25s ease, transform 0.25s ease;

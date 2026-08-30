@@ -409,6 +409,39 @@ onMounted(() => {
 
         <!-- Main -->
         <main class="flex-1 flex flex-col overflow-hidden min-w-0">
+            <!-- Mobile Top Header for Non-POS Pages -->
+            <header
+                v-if="page.component !== 'Pos/Index' && page.component !== 'AI/ChatAssistant'"
+                class="lg:hidden h-14 flex-shrink-0 flex items-center justify-between bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-3.5 transition-colors z-20 select-none"
+            >
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <button
+                        @click="toggleMobile"
+                        type="button"
+                        class="p-2 -ml-1.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer flex-shrink-0"
+                        title="Toggle Navigation Menu"
+                    >
+                        <svg class="w-5.5 h-5.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+                        </svg>
+                    </button>
+                    <div class="flex items-center gap-2 min-w-0">
+                        <div class="w-7 h-7 rounded-lg bg-theme flex items-center justify-center flex-shrink-0 shadow-xs">
+                            <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3M16 5h3m0 0v3m0-3l-5 5"/>
+                            </svg>
+                        </div>
+                        <span class="font-bold text-theme text-xs sm:text-sm truncate">
+                            {{ $page.props.system_config?.company_name || $page.props.settings?.business_name || 'SkyNet POS' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1.5 flex-shrink-0">
+                    <ThemeToggle />
+                </div>
+            </header>
+
             <slot />
         </main>
 

@@ -1,5 +1,6 @@
 import { onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
+import { getLocalItemByBarcode } from '@/Services/offlineDb'
 
 /**
  * Global Barcode Scanner Composable
@@ -43,7 +44,6 @@ export function useBarcodeScanner({ onScan, getPurchaseType, isEnabled }) {
 
         // 1. Instant local barcode lookup (0ms response time)
         try {
-            const { getLocalItemByBarcode } = await import('@/Services/offlineDb')
             const matchedItem = await getLocalItemByBarcode(cleanCode, purchaseType)
             if (matchedItem) {
                 playBeepSound()
