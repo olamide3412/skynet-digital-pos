@@ -303,6 +303,9 @@ Route::prefix('{branch}')
             Route::get('/transfers',    [StockTransferController::class, 'index'])
                 ->name('transfers.index')
                 ->middleware('pos.role:canTransferStock');
+            Route::get('/transfer',     [StockTransferController::class, 'index'])
+                ->name('transfer')
+                ->middleware('pos.role:canTransferStock');
             Route::post('/transfers',   [StockTransferController::class, 'store'])
                 ->name('transfers.store')
                 ->middleware('pos.role:canTransferStock');
