@@ -13,26 +13,22 @@ class HomeController extends Controller
 {
     public function index()
     {
-        $branches = Branch::where('is_active', true)
+        $defaultBranch = Branch::where('is_active', true)
             ->orderBy('id')
-            ->get(['id', 'name', 'slug', 'address', 'phone', 'email', 'logo_path', 'is_ai_enabled'])
-            ->map(function ($branch) {
-                return [
-                    'id'            => $branch->id,
-                    'name'          => $branch->name,
-                    'slug'          => $branch->slug,
-                    'address'       => $branch->address,
-                    'phone'         => $branch->phone,
-                    'email'         => $branch->email,
-                    'logo_url'      => $branch->logo_path ? asset('storage/' . $branch->logo_path) : null,
-                    'is_ai_enabled' => (bool) $branch->is_ai_enabled,
-                ];
-            });
+            ->first(['id', 'name', 'slug', 'address', 'phone', 'email', 'logo_path', 'is_ai_enabled']);
 
-        $defaultBranch = $branches->first();
+        $defaultBranchData = $defaultBranch ? [
+            'id'            => $defaultBranch->id,
+            'name'          => $defaultBranch->name,
+            'slug'          => $defaultBranch->slug,
+            'address'       => $defaultBranch->address,
+            'phone'         => $defaultBranch->phone,
+            'email'         => $defaultBranch->email,
+            'logo_url'      => $defaultBranch->logo_path ? asset('storage/' . $defaultBranch->logo_path) : null,
+            'is_ai_enabled' => (bool) $defaultBranch->is_ai_enabled,
+        ] : null;
 
         // High-level aggregate metrics for social proof
-        $branchesCount = Branch::where('is_active', true)->count();
         $itemsCount    = Item::count();
         $salesCount    = Sale::count();
 
@@ -42,10 +38,8 @@ class HomeController extends Controller
         $appTagline    = SystemSetting::get('app_tagline', 'AI-Powered Cloud & Offline Point of Sale');
 
         return Inertia::render('Home', [
-            'default_branch' => $defaultBranch,
-            'branches'       => $branches,
+            'default_branch' => $defaultBranchData,
             'stats'          => [
-                'branches_count'   => $branchesCount,
                 'items_count'      => $itemsCount,
                 'sales_count'      => $salesCount,
             ],

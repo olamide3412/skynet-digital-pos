@@ -27,14 +27,9 @@ defineOptions({ layout: null })
 
 const props = defineProps({
     default_branch: Object,
-    branches: {
-        type: Array,
-        default: () => [],
-    },
     stats: {
         type: Object,
         default: () => ({
-            branches_count: 1,
             items_count: 0,
             sales_count: 0,
         }),
@@ -60,21 +55,16 @@ const appTagline   = computed(() => props.contact_info?.app_tagline || systemCon
 const logoUrl      = computed(() => systemConfig.value.company_logo_url || null)
 
 const defaultBranchSlug = computed(() => {
-    return props.default_branch?.slug || props.branches?.[0]?.slug || 'hub-enterprise'
+    return props.default_branch?.slug || 'felix-enterprise'
 })
 
 const posUrl = computed(() => {
     return route('pos.index', { branch: defaultBranchSlug.value })
 })
 
-const superAdminUrl = computed(() => {
-    return route('superadmin.login')
-})
-
 const currentYear = new Date().getFullYear()
 const scrolled = ref(false)
 const mobileMenuOpen = ref(false)
-const showBranchModal = ref(false)
 
 onMounted(() => {
     window.addEventListener('scroll', () => { scrolled.value = window.scrollY > 30 })
@@ -365,11 +355,11 @@ const coreFeatures = [
         desc: 'Track individual device IMEIs and serial numbers from purchase orders through inventory to checkout receipt for airtight warranty and fraud protection.',
     },
     {
-        icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
+        icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
         gradient: 'from-fuchsia-500 to-purple-600',
-        badge: 'Multi-Store',
-        title: 'Super Admin Multi-Branch Portal',
-        desc: 'Oversee unlimited branches from one command center. Push items globally, initiate stock transfers between locations, and review unified profit & loss.',
+        badge: 'Analytics',
+        title: 'Deep Sales & Profit Analytics',
+        desc: 'Track daily profit margins, cashier end-of-day register balancing, returned inventory logs, and comprehensive financial reports with instant exports.',
     },
 ]
 
@@ -496,28 +486,6 @@ function toggleFaq(index) {
                 <div class="flex items-center gap-2 sm:gap-3">
                     <ThemeToggle />
 
-                    <!-- Branch Selector Dropdown Trigger -->
-                    <button
-                        v-if="branches && branches.length > 1"
-                        @click="showBranchModal = true"
-                        type="button"
-                        class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-900/90 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-800 transition shadow-xs"
-                    >
-                        <span>🏢 Branches</span>
-                        <span class="px-1.5 py-0.2 rounded-full bg-violet-600/20 text-violet-600 dark:text-violet-300 text-[10px] font-bold">{{ branches.length }}</span>
-                    </button>
-
-                    <!-- Super Admin Link -->
-                    <Link
-                        :href="superAdminUrl"
-                        class="hidden md:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-violet-600 dark:hover:text-white bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition shadow-xs"
-                    >
-                        <svg class="w-3.5 h-3.5 text-violet-500 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                        </svg>
-                        <span>Super Admin</span>
-                    </Link>
-
                     <!-- Primary Launch POS -->
                     <Link
                         :href="posUrl"
@@ -555,15 +523,15 @@ function toggleFaq(index) {
                     <a @click="mobileMenuOpen = false" href="#hardware" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Supported Hardware</a>
                     <a @click="mobileMenuOpen = false" href="#industries" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Industries &amp; Solutions</a>
                     <a @click="mobileMenuOpen = false" href="#faq" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Frequently Asked Questions</a>
-                    <Link :href="superAdminUrl" class="text-violet-600 dark:text-violet-400 py-1 flex items-center gap-2 font-bold">
-                        <span>Super Admin Portal →</span>
+                    <Link :href="posUrl" class="text-violet-600 dark:text-violet-400 py-1 flex items-center gap-2 font-bold">
+                        <span>Launch POS Register →</span>
                     </Link>
                 </div>
             </div>
         </header>
 
         <!-- ══ 2. HERO SECTION ═════════════════════════════════════════════ -->
-        <section class="relative min-h-[92vh] flex flex-col items-center justify-center text-center px-4 sm:px-6 pt-32 pb-20 overflow-hidden">
+        <section class="relative min-h-[90vh] flex flex-col items-center justify-center text-center px-4 sm:px-6 pt-32 pb-20 overflow-hidden">
             <!-- Background Glow & Mesh Orbs -->
             <div class="absolute inset-0 pointer-events-none overflow-hidden">
                 <div class="absolute top-1/4 left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-gradient-to-tr from-violet-600/20 via-purple-600/15 to-indigo-600/20 dark:from-violet-600/25 dark:via-purple-600/20 dark:to-indigo-600/25 blur-[140px]"></div>
@@ -580,7 +548,7 @@ function toggleFaq(index) {
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                     </span>
-                    <span>AI-Powered Point of Sale · 100% Offline-First (Dexie) · Multi-Branch Super Admin</span>
+                    <span>AI-Powered Point of Sale · 100% Offline-First (Dexie) · Real-Time Cloud Sync</span>
                 </div>
 
                 <!-- Main Punchy Headline -->
@@ -619,16 +587,6 @@ function toggleFaq(index) {
                         <span class="text-xl">💬</span>
                         <span>Chat on WhatsApp</span>
                     </a>
-
-                    <Link
-                        :href="superAdminUrl"
-                        class="flex items-center gap-2 px-6 py-4 bg-white dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-base rounded-2xl transition-all border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 shadow-lg"
-                    >
-                        <svg class="w-5 h-5 text-violet-500 dark:text-violet-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-                        </svg>
-                        <span>Super Admin Portal</span>
-                    </Link>
                 </div>
 
                 <!-- Trust Badges Strip -->
@@ -646,8 +604,8 @@ function toggleFaq(index) {
                         <span>Thermal ESC/POS Ready</span>
                     </div>
                     <div class="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800/80 shadow-xs">
-                        <span class="text-amber-500 text-base">🏢</span>
-                        <span>Unlimited Multi-Branch</span>
+                        <span class="text-amber-500 text-base">📦</span>
+                        <span>Multi-Unit &amp; IMEI Engine</span>
                     </div>
                 </div>
             </div>
@@ -1474,16 +1432,11 @@ function toggleFaq(index) {
 
                 <!-- Col 3: Portal Launchers -->
                 <div class="space-y-3">
-                    <h4 class="font-extrabold text-slate-900 dark:text-white text-xs uppercase tracking-wider">Portals</h4>
+                    <h4 class="font-extrabold text-slate-900 dark:text-white text-xs uppercase tracking-wider">Quick Actions</h4>
                     <ul class="space-y-2 font-medium">
                         <li>
                             <Link :href="posUrl" class="text-violet-600 dark:text-violet-400 font-bold hover:underline">
                                 Launch POS Register →
-                            </Link>
-                        </li>
-                        <li>
-                            <Link :href="superAdminUrl" class="hover:text-slate-900 dark:hover:text-white transition">
-                                Super Admin Login
                             </Link>
                         </li>
                         <li>
@@ -1505,48 +1458,6 @@ function toggleFaq(index) {
                 </div>
             </div>
         </footer>
-
-        <!-- ══ MODAL: BRANCH SELECTION PICKER ═════════════════════════════ -->
-        <Transition name="fade">
-            <div
-                v-if="showBranchModal"
-                class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
-                @click.self="showBranchModal = false"
-            >
-                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-lg w-full space-y-6 shadow-2xl">
-                    <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-                        <div>
-                            <h3 class="text-base font-extrabold text-slate-900 dark:text-white">Select a Branch Terminal</h3>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Click to open register for your location</p>
-                        </div>
-                        <button
-                            @click="showBranchModal = false"
-                            class="text-slate-400 hover:text-slate-600 dark:hover:text-white font-bold p-1 cursor-pointer"
-                        >✕</button>
-                    </div>
-
-                    <div class="space-y-2.5 max-h-72 overflow-y-auto">
-                        <Link
-                            v-for="br in branches"
-                            :key="br.id"
-                            :href="route('pos.index', { branch: br.slug })"
-                            class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-800/90 border border-slate-200 dark:border-slate-800 hover:border-violet-500 flex items-center justify-between transition group"
-                        >
-                            <div class="flex items-center gap-3">
-                                <div class="w-9 h-9 rounded-xl bg-violet-100 dark:bg-violet-950 border border-violet-200 dark:border-violet-800 flex items-center justify-center font-bold text-violet-700 dark:text-violet-300">
-                                    🏢
-                                </div>
-                                <div>
-                                    <h4 class="text-xs font-bold text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-300 transition">{{ br.name }}</h4>
-                                    <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-xs">{{ br.address || 'Standard Storefront' }}</p>
-                                </div>
-                            </div>
-                            <span class="text-xs font-bold text-violet-600 dark:text-violet-400 group-hover:translate-x-1 transition-transform">Launch →</span>
-                        </Link>
-                    </div>
-                </div>
-            </div>
-        </Transition>
 
         <!-- ══ MODAL: SIMULATED THERMAL RECEIPT ═══════════════════════════ -->
         <Transition name="fade">

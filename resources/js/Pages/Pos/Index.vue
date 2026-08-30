@@ -349,7 +349,7 @@ const productSearchMobile = ref(null)
 </script>
 
 <template>
-    <div class="flex flex-col h-screen bg-slate-900 text-slate-100 overflow-hidden select-none">
+    <div class="flex flex-col h-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 overflow-hidden select-none transition-colors duration-300">
 
         <!-- ── Splash Screen #2: Post-Login POS Launch Screen ── -->
         <PosSplashScreen
@@ -557,7 +557,7 @@ const productSearchMobile = ref(null)
         <!-- ========================================================================= -->
         <!-- ── DEDICATED MOBILE POS VIEW (< lg) ────────────────────────────────────── -->
         <!-- ========================================================================= -->
-        <div class="flex lg:hidden flex-col flex-1 h-full overflow-hidden bg-slate-900 relative">
+        <div class="flex lg:hidden flex-col flex-1 h-full overflow-hidden bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 relative transition-colors duration-300">
             <!-- ── Mobile Top Header ── -->
             <header class="h-13 flex-shrink-0 flex items-center justify-between bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-3 transition-colors duration-300">
                 <div class="flex items-center gap-2 min-w-0">
@@ -636,7 +636,7 @@ const productSearchMobile = ref(null)
             </header>
 
             <!-- ── Mobile Tab Switcher Bar ── -->
-            <div class="grid grid-cols-2 p-1.5 bg-slate-800 border-b border-slate-700/80 gap-1.5 flex-shrink-0">
+            <div class="grid grid-cols-2 p-1.5 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700/80 gap-1.5 flex-shrink-0 transition-colors duration-300">
                 <button
                     @click="mobileActiveTab = 'catalog'"
                     type="button"
@@ -644,7 +644,7 @@ const productSearchMobile = ref(null)
                         'py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer',
                         mobileActiveTab === 'catalog'
                             ? 'bg-theme text-white shadow-md shadow-theme/20'
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50 bg-slate-50 dark:bg-slate-800/60'
                     ]"
                 >
                     <span>🛍️ Catalog</span>
@@ -656,11 +656,11 @@ const productSearchMobile = ref(null)
                         'py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer relative',
                         mobileActiveTab === 'cart'
                             ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/30'
-                            : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50 bg-slate-50 dark:bg-slate-800/60'
                     ]"
                 >
                     <span>🛒 Cart</span>
-                    <span v-if="cart.items.length > 0" class="px-1.5 py-0.2 rounded-full text-[10px] font-black" :class="mobileActiveTab === 'cart' ? 'bg-white text-emerald-700' : 'bg-emerald-500 text-white'">
+                    <span v-if="cart.items.length > 0" class="px-1.5 py-0.2 rounded-full text-[10px] font-black" :class="mobileActiveTab === 'cart' ? 'bg-white text-emerald-700' : 'bg-emerald-600 text-white'">
                         {{ cart.items.length }}
                     </span>
                     <span v-if="cart.grandTotal > 0" class="text-[11px] font-bold opacity-90">
@@ -670,9 +670,9 @@ const productSearchMobile = ref(null)
             </div>
 
             <!-- ── Tab 1: Mobile Catalog / Search View ── -->
-            <div v-show="mobileActiveTab === 'catalog'" class="flex-1 flex flex-col overflow-hidden relative">
+            <div v-show="mobileActiveTab === 'catalog'" class="flex-1 flex flex-col overflow-hidden relative bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
                 <!-- Search Component -->
-                <div class="p-2.5 border-b border-slate-700/70 bg-slate-850/60 flex-shrink-0">
+                <div class="p-2.5 border-b border-slate-200 dark:border-slate-700/70 bg-white dark:bg-slate-800/80 flex-shrink-0 transition-colors duration-300">
                     <ProductSearch
                         ref="productSearchMobile"
                         :purchase-type="cart.purchaseType"
@@ -685,7 +685,7 @@ const productSearchMobile = ref(null)
                 <div class="flex-1 overflow-y-auto p-3 pb-28">
                     <!-- Mode switch quick bar -->
                     <div class="flex items-center justify-between mb-3 px-1">
-                        <span class="text-xs font-semibold text-slate-400">
+                        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">
                             {{ viewMode === 'gallery' ? 'Quick Product Grid' : 'Standard Search Mode' }}
                         </span>
                         <button
@@ -724,7 +724,7 @@ const productSearchMobile = ref(null)
                     <button
                         @click="mobileActiveTab = 'cart'"
                         type="button"
-                        class="w-full p-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl shadow-xl shadow-emerald-950/50 border border-emerald-400/30 flex items-center justify-between transition cursor-pointer"
+                        class="w-full p-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-2xl shadow-xl shadow-emerald-900/20 dark:shadow-emerald-950/50 border border-emerald-400/30 flex items-center justify-between transition cursor-pointer"
                     >
                         <div class="flex items-center gap-2.5 text-left">
                             <span class="p-2 rounded-xl bg-white/15 text-lg">🛒</span>
@@ -747,9 +747,9 @@ const productSearchMobile = ref(null)
             </div>
 
             <!-- ── Tab 2: Mobile Cart & Checkout View ── -->
-            <div v-show="mobileActiveTab === 'cart'" class="flex-1 flex flex-col overflow-hidden bg-slate-900">
+            <div v-show="mobileActiveTab === 'cart'" class="flex-1 flex flex-col overflow-hidden bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
                 <!-- Customer Selector & Purchase Type -->
-                <div class="p-2.5 border-b border-slate-800 bg-slate-850/80 space-y-2 flex-shrink-0">
+                <div class="p-2.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/80 space-y-2 flex-shrink-0 transition-colors duration-300">
                     <CustomerSelector
                         :customer="cart.customer"
                         @select="cart.setCustomer"
@@ -761,44 +761,44 @@ const productSearchMobile = ref(null)
                             @click="cart.setPurchaseType('Consumer')"
                             :class="cart.purchaseType === 'Consumer'
                                 ? 'bg-emerald-600 text-white font-bold shadow-xs'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'"
+                                : 'bg-slate-100 dark:bg-slate-700/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'"
                             class="py-1.5 rounded-xl text-xs font-medium transition cursor-pointer"
                         >Retail (Consumer)</button>
                         <button
                             @click="cart.setPurchaseType('Wholesale')"
                             :class="cart.purchaseType === 'Wholesale'
                                 ? 'bg-blue-600 text-white font-bold shadow-xs'
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'"
+                                : 'bg-slate-100 dark:bg-slate-700/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'"
                             class="py-1.5 rounded-xl text-xs font-medium transition cursor-pointer"
                         >Wholesale</button>
                     </div>
                 </div>
 
                 <!-- Cart Items Scroll List -->
-                <div class="flex-1 overflow-y-auto p-2 min-h-0">
+                <div class="flex-1 overflow-y-auto p-2 min-h-0 bg-slate-50 dark:bg-slate-900">
                     <Cart :can-edit-price="canEditPrice" :settings="settings" />
                 </div>
 
                 <!-- Sticky Bottom Order Summary & Checkout Action -->
-                <div class="p-3 bg-slate-850 border-t border-slate-800 space-y-2 flex-shrink-0 shadow-2xl">
-                    <div class="space-y-1 text-xs text-slate-300">
-                        <div class="flex justify-between">
-                            <span class="text-slate-400">Subtotal</span>
-                            <span>{{ format(cart.subtotal) }}</span>
+                <div class="p-3 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 space-y-2 flex-shrink-0 shadow-2xl transition-colors duration-300">
+                    <div class="space-y-1 text-xs text-slate-700 dark:text-slate-300">
+                        <div class="flex justify-between text-slate-600 dark:text-slate-400">
+                            <span>Subtotal</span>
+                            <span class="font-medium text-slate-900 dark:text-white">{{ format(cart.subtotal) }}</span>
                         </div>
-                        <div v-if="cart.discountAmount > 0" class="flex justify-between text-red-400">
+                        <div v-if="cart.discountAmount > 0" class="flex justify-between text-red-600 dark:text-red-400">
                             <span>Discount</span>
                             <span>-{{ format(cart.discountAmount) }}</span>
                         </div>
-                        <div v-if="cart.consultationFee > 0" class="flex justify-between text-slate-400">
+                        <div v-if="cart.consultationFee > 0" class="flex justify-between text-slate-600 dark:text-slate-400">
                             <span>Consult Fee</span>
                             <span>{{ format(cart.consultationFee) }}</span>
                         </div>
-                        <div v-if="cart.taxAmount > 0" class="flex justify-between text-amber-400 font-medium">
+                        <div v-if="cart.taxAmount > 0" class="flex justify-between text-amber-600 dark:text-amber-400 font-medium">
                             <span>Tax ({{ settings?.tax_percentage }}%)</span>
                             <span>+{{ format(cart.taxAmount) }}</span>
                         </div>
-                        <div class="flex justify-between font-black text-lg text-theme pt-1 border-t border-slate-750">
+                        <div class="flex justify-between font-black text-lg text-theme pt-1 border-t border-slate-200 dark:border-slate-700">
                             <span>TOTAL</span>
                             <span>{{ format(cart.grandTotal) }}</span>
                         </div>
@@ -810,7 +810,7 @@ const productSearchMobile = ref(null)
                             @click="cart.clearCart()"
                             :disabled="!cart.items.length"
                             type="button"
-                            class="py-2.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-xs font-bold transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                            class="py-2.5 rounded-xl bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30 text-xs font-bold transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
                         >
                             Clear
                         </button>
@@ -818,7 +818,7 @@ const productSearchMobile = ref(null)
                             @click="showPayment = true"
                             :disabled="!cart.items.length"
                             type="button"
-                            class="col-span-2 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-sm font-black shadow-lg shadow-emerald-950/50 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
+                            class="col-span-2 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-sm font-black shadow-lg shadow-emerald-950/20 dark:shadow-emerald-950/50 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
                         >
                             <span>Charge {{ format(cart.grandTotal) }}</span>
                             <span>→</span>
@@ -828,74 +828,74 @@ const productSearchMobile = ref(null)
             </div>
 
             <!-- ── Mobile Quick Actions Drawer Modal ── -->
-            <div v-if="showMobileMenu" class="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-end justify-center p-0 lg:hidden">
-                <div class="bg-slate-900 border-t border-slate-700 rounded-t-3xl w-full max-w-lg p-5 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-200">
-                    <div class="flex items-center justify-between pb-2 border-b border-slate-800">
-                        <h3 class="font-bold text-white text-base flex items-center gap-2">
+            <div v-if="showMobileMenu" class="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-end justify-center p-0 lg:hidden">
+                <div class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 rounded-t-3xl w-full max-w-lg p-5 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-200 text-slate-900 dark:text-white transition-colors duration-300">
+                    <div class="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+                        <h3 class="font-bold text-slate-900 dark:text-white text-base flex items-center gap-2">
                             <span>⚡ Quick Actions</span>
                         </h3>
-                        <button @click="showMobileMenu = false" class="text-slate-400 hover:text-white p-1 text-lg cursor-pointer">✕</button>
+                        <button @click="showMobileMenu = false" class="text-slate-400 hover:text-slate-700 dark:hover:text-white p-1 text-lg cursor-pointer">✕</button>
                     </div>
 
                     <div class="grid grid-cols-2 gap-2.5 text-xs">
                         <button
                             @click="cart.items.length ? (showHold = true, showMobileMenu = false) : null"
                             :disabled="!cart.items.length"
-                            class="p-3 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700/80 text-left space-y-1 transition disabled:opacity-40 cursor-pointer"
+                            class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700/80 text-left space-y-1 transition disabled:opacity-40 cursor-pointer"
                         >
                             <div class="text-lg">⏸️</div>
-                            <div class="font-bold text-slate-200">Hold Cart</div>
-                            <div class="text-[10px] text-slate-400">Save current order</div>
+                            <div class="font-bold text-slate-800 dark:text-slate-200">Hold Cart</div>
+                            <div class="text-[10px] text-slate-500 dark:text-slate-400">Save current order</div>
                         </button>
 
                         <button
                             @click="showHeld = true; showMobileMenu = false"
-                            class="p-3 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700/80 text-left space-y-1 transition cursor-pointer"
+                            class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700/80 text-left space-y-1 transition cursor-pointer"
                         >
                             <div class="text-lg">📂</div>
-                            <div class="font-bold text-slate-200 flex items-center justify-between">
+                            <div class="font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
                                 <span>Held Carts</span>
                                 <span class="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px]">{{ heldSales.length }}</span>
                             </div>
-                            <div class="text-[10px] text-slate-400">Resume paused sales</div>
+                            <div class="text-[10px] text-slate-500 dark:text-slate-400">Resume paused sales</div>
                         </button>
 
                         <button
                             v-if="canProcessReturn"
                             @click="showReturn = true; showMobileMenu = false"
-                            class="p-3 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700/80 text-left space-y-1 transition cursor-pointer"
+                            class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700/80 text-left space-y-1 transition cursor-pointer"
                         >
                             <div class="text-lg">🔄</div>
-                            <div class="font-bold text-slate-200">Returns</div>
-                            <div class="text-[10px] text-slate-400">Process item return</div>
+                            <div class="font-bold text-slate-800 dark:text-slate-200">Returns</div>
+                            <div class="text-[10px] text-slate-500 dark:text-slate-400">Process item return</div>
                         </button>
 
                         <button
                             @click="viewMode = (viewMode === 'gallery' ? 'classic' : 'gallery'); showMobileMenu = false"
-                            class="p-3 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700/80 text-left space-y-1 transition cursor-pointer"
+                            class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700/80 text-left space-y-1 transition cursor-pointer"
                         >
                             <div class="text-lg">{{ viewMode === 'gallery' ? '📋' : '🖼️' }}</div>
-                            <div class="font-bold text-slate-200">{{ viewMode === 'gallery' ? 'Classic Mode' : 'Grid Mode' }}</div>
-                            <div class="text-[10px] text-slate-400">Switch catalog layout</div>
+                            <div class="font-bold text-slate-800 dark:text-slate-200">{{ viewMode === 'gallery' ? 'Classic Mode' : 'Grid Mode' }}</div>
+                            <div class="text-[10px] text-slate-500 dark:text-slate-400">Switch catalog layout</div>
                         </button>
 
                         <button
                             v-if="settings?.is_offline_enabled"
                             @click="openOfflineModal(); showMobileMenu = false"
-                            class="p-3 rounded-xl bg-slate-800 hover:bg-slate-750 border border-slate-700/80 text-left space-y-1 transition cursor-pointer"
+                            class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border border-slate-200 dark:border-slate-700/80 text-left space-y-1 transition cursor-pointer"
                         >
                             <div class="text-lg">📡</div>
-                            <div class="font-bold text-slate-200 flex items-center justify-between">
+                            <div class="font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
                                 <span>Offline Queue</span>
                                 <span v-if="pendingCount > 0" class="px-1.5 py-0.2 bg-rose-600 text-white rounded-full text-[10px]">{{ pendingCount }}</span>
                             </div>
-                            <div class="text-[10px] text-slate-400">Sync status & queue</div>
+                            <div class="text-[10px] text-slate-500 dark:text-slate-400">Sync status & queue</div>
                         </button>
 
-                        <div class="p-3 rounded-xl bg-slate-800 border border-slate-700/80 flex items-center justify-between">
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between">
                             <div>
-                                <div class="font-bold text-slate-200">Theme</div>
-                                <div class="text-[10px] text-slate-400">Light / Dark</div>
+                                <div class="font-bold text-slate-800 dark:text-slate-200">Theme</div>
+                                <div class="text-[10px] text-slate-500 dark:text-slate-400">Light / Dark</div>
                             </div>
                             <ThemeToggle />
                         </div>
@@ -904,7 +904,7 @@ const productSearchMobile = ref(null)
                     <button
                         @click="toggleMobileSidebar(); showMobileMenu = false"
                         type="button"
-                        class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
+                        class="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer"
                     >
                         <span>🧭 Open Navigation Menu</span>
                     </button>
