@@ -19,6 +19,7 @@ const form = useForm({
     phone: '',
     email: '',
     is_offline_enabled: false,
+    held_sales_visibility: 'device_only',
     is_turnstile_enabled: true,
     admin_name: '',
     admin_username: '',
@@ -514,6 +515,14 @@ const triggerExport = () => {
                                     <p class="text-[11px] text-slate-500 dark:text-slate-400">Uncheck to bypass CAPTCHA on slow or unstable network connections</p>
                                 </div>
                             </label>
+
+                            <div class="pt-1">
+                                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Held Sales Visibility</label>
+                                <select v-model="form.held_sales_visibility" class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 transition">
+                                    <option value="device_only">Device Only (Local to till only - Recommended)</option>
+                                    <option value="shared_across_branch">Shared Across Branch (Syncs across branch tills)</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 

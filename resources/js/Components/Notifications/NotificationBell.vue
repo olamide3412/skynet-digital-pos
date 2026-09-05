@@ -114,6 +114,12 @@ function getTypeIcon(type) {
                 badge: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
                 label: 'Stock Conflict'
             }
+        case 'held_sale_conflict':
+            return {
+                bg: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',
+                badge: 'bg-purple-500/15 text-purple-700 dark:text-purple-300',
+                label: 'Held Sale Conflict'
+            }
         case 'imei_conflict':
             return {
                 bg: 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20',

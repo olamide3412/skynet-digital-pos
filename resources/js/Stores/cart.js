@@ -290,23 +290,52 @@ export const useCartStore = defineStore('cart', () => {
 
     function loadFromHeld(heldSale) {
         clearCart()
-        if (heldSale.customer) customer.value = heldSale.customer
-        heldSale.items.forEach(heldItem => {
+        if (heldSale.customer) {
+            customer.value = heldSale.customer
+        } else if (heldSale.customer_id || heldSale.customer_name) {
+            customer.value = {
+                id: heldSale.customer_id,
+                name: heldSale.customer_name || 'Customer',
+                phone: heldSale.customer_phone || '',
+            }
+        }
+        if (heldSale.purchase_type) {
+            purchaseType.value = heldSale.purchase_type
+        }
+        if (heldSale.consultation_fee) {
+            consultationFee.value = parseFloat(heldSale.consultation_fee) || 0
+        }
+        if (heldSale.discount) {
+            discount.value = heldSale.discount
+        }
+        (heldSale.items || []).forEach(heldItem => {
             const unitUsed = heldItem.unit_used || 'unit'
+            const isImei   = !!(heldItem.is_imei_tracked || heldItem.selected_imei || heldItem.imei_or_device_id || heldItem.item?.is_imei_tracked)
+            const key      = isImei
+                ? `${heldItem.item_id}_unit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+                : `${heldItem.item_id}_${unitUsed}`
+            
+            const price = parseFloat(heldItem.unit_price ?? heldItem.price ?? 0)
+            const qty   = Number(heldItem.qty || 1)
+
             items.value.push({
-                cart_key:      `${heldItem.item_id}_${unitUsed}`,
-                item_id:       heldItem.item_id,
-                item_name:     heldItem.item_name || heldItem.item?.item_name,
-                qty:           heldItem.qty,
-                unit_used:     unitUsed,
-                unit_price:    parseFloat(heldItem.price),
-                buy_price:     parseFloat(heldItem.item?.buy_price || 0),
-                purchase_type: heldItem.purchase_type,
-                line_total:    heldItem.price * heldItem.qty,
-                price_locked:  false,
-                max_qty:       heldItem.item?.front_store_qty ?? 9999,
-                unit_label:    heldItem.item?.unit_label || 'Unit',
-                raw_item:      heldItem.item || {},
+                cart_key:         heldItem.cart_key || key,
+                item_id:          heldItem.item_id,
+                item_name:        heldItem.item_name || heldItem.item?.item_name,
+                qty:              qty,
+                unit_used:        unitUsed,
+                unit_price:       price,
+                buy_price:        parseFloat(heldItem.buy_price || heldItem.item?.buy_price || 0),
+                purchase_type:    heldItem.purchase_type || purchaseType.value,
+                line_total:       Math.round(price * qty * 100) / 100,
+                price_locked:     heldItem.price_locked || false,
+                max_qty:          heldItem.max_qty ?? heldItem.item?.front_store_qty ?? 9999,
+                unit_label:       heldItem.unit_label || heldItem.item?.unit_label || 'Unit',
+                units:            heldItem.units || heldItem.item?.units || [],
+                is_imei_tracked:  isImei,
+                available_imeis:  heldItem.available_imeis || heldItem.item?.available_imeis || [],
+                selected_imei:    heldItem.selected_imei || heldItem.imei_or_device_id || null,
+                raw_item:         heldItem.raw_item || heldItem.item || {},
             })
         })
     }

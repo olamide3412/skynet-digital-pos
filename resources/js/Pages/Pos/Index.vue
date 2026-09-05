@@ -89,9 +89,13 @@ const {
     syncState,
     pendingCount,
     queuedSalesList,
+    heldSalesCount,
+    activeHeldSales,
     syncQueuedSales,
+    syncHeldSales,
     refreshCatalog,
     updatePendingCount,
+    updateHeldSales,
     startSyncMonitor,
     stopSyncMonitor,
 } = useOfflineSync()
@@ -164,7 +168,9 @@ watch(showOfflineModal, async (open) => {
 
 onMounted(() => {
     if (props.settings?.is_offline_enabled) {
-        startSyncMonitor()
+        startSyncMonitor(props.settings?.held_sales_visibility || 'device_only')
+    } else {
+        updateHeldSales()
     }
 })
 
@@ -315,20 +321,29 @@ function onReceiptClose() {
 }
 
 // Load held cart
-function onLoadHeld(heldSale) {
+async function onLoadHeld(heldSale) {
     cart.loadFromHeld(heldSale)
     showHeld.value = false
-    router.reload({ only: ['heldSales'] })
+    await updateHeldSales()
+    if (isOnline.value) {
+        router.reload({ only: ['heldSales'] })
+    }
     nextTick(() => productSearch.value?.focus())
 }
 
-function onHeld() {
+async function onHeld() {
     showHold.value = false
-    router.reload({ only: ['heldSales'] })
+    await updateHeldSales()
+    if (isOnline.value) {
+        router.reload({ only: ['heldSales'] })
+    }
 }
 
-function onHeldDeleted() {
-    router.reload({ only: ['heldSales'] })
+async function onHeldDeleted() {
+    await updateHeldSales()
+    if (isOnline.value) {
+        router.reload({ only: ['heldSales'] })
+    }
 }
 const viewMode = ref(props.settings?.sell_interface ?? 'classic')
 
@@ -446,7 +461,7 @@ const productSearchMobile = ref(null)
                             title="Held Carts"
                             class="px-3 py-1 rounded bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-800 dark:text-white text-xs font-medium transition cursor-pointer"
                             @click="showHeld = true"
-                        >Held ({{ heldSales.length }})</button>
+                        >Held ({{ heldSalesCount }})</button>
                         <button
                             v-if="canProcessReturn"
                             title="Process Return"
@@ -938,7 +953,7 @@ const productSearchMobile = ref(null)
                             <div class="text-lg">📂</div>
                             <div class="font-bold text-slate-800 dark:text-slate-200 flex items-center justify-between">
                                 <span>Held Carts</span>
-                                <span class="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px]">{{ heldSales.length }}</span>
+                                <span class="px-1.5 py-0.2 bg-amber-500 text-white rounded-full text-[10px]">{{ heldSalesCount }}</span>
                             </div>
                             <div class="text-[10px] text-slate-500 dark:text-slate-400">Resume paused sales</div>
                         </button>
@@ -1023,13 +1038,14 @@ const productSearchMobile = ref(null)
 
         <HoldCartModal
             v-if="showHold"
+            :settings="settings"
             @close="showHold = false"
             @held="onHeld"
         />
 
         <HeldCartsList
             v-if="showHeld"
-            :held-sales="heldSales"
+            :settings="settings"
             @close="showHeld = false"
             @load="onLoadHeld"
             @deleted="onHeldDeleted"

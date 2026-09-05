@@ -1,34 +1,87 @@
 <script setup>
 import { ref } from 'vue'
 import { useCartStore } from '@/Stores/cart'
-import axios from 'axios'
+import { usePosSettingsStore } from '@/Stores/posSettings'
+import { saveLocalHeldSale } from '@/Services/offlineDb'
+import { useOfflineSync } from '@/Composables/useOfflineSync'
+
+const props = defineProps({
+    settings: { type: Object, default: () => ({}) },
+})
 
 const emit = defineEmits(['close', 'held'])
-const cart  = useCartStore()
-const holdName  = ref('')
-const saving    = ref(false)
-const error     = ref('')
+const cart = useCartStore()
+const settStore = usePosSettingsStore()
+const { isOnline, updateHeldSales, syncHeldSales } = useOfflineSync()
+
+const holdName = ref('')
+const saving = ref(false)
+const error = ref('')
 
 async function holdCart() {
     if (!cart.items.length) return
     saving.value = true
     error.value  = ''
+
     try {
-        await axios.post(route('pos.api.held-sales.store'), {
-            hold_name:   holdName.value || null,
-            customer_id: cart.customer?.id ?? null,
+        const heldSaleId = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+            ? crypto.randomUUID() 
+            : 'held_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)
+
+        const visibilityMode = props.settings?.held_sales_visibility || settStore.settings?.held_sales_visibility || 'device_only'
+
+        const heldPayload = {
+            held_sale_id:     heldSaleId,
+            hold_name:        holdName.value.trim() || 'Held Cart',
+            customer:         cart.customer ? JSON.parse(JSON.stringify(cart.customer)) : null,
+            customer_id:      cart.customer?.id ?? null,
+            customer_name:    cart.customer?.name ?? null,
+            customer_phone:   cart.customer?.phone ?? null,
+            purchase_type:    cart.purchaseType,
+            consultation_fee: parseFloat(cart.consultationFee || 0),
+            discount:         cart.discount ? JSON.parse(JSON.stringify(cart.discount)) : null,
+            total_amount:     parseFloat(cart.grandTotal || 0),
+            created_at:       new Date().toISOString(),
+            status:           'active',
+            sync_status:      'pending',
             items: cart.items.map(i => ({
-                item_id:       i.item_id,
-                qty:           i.qty,
-                price:         i.unit_price,
-                item_name:     i.item_name,
-                purchase_type: i.purchase_type,
+                item_id:           i.item_id,
+                item_name:         i.item_name,
+                qty:               Number(i.qty || 1),
+                price:             parseFloat(i.unit_price || i.price || 0),
+                unit_price:        parseFloat(i.unit_price || i.price || 0),
+                buy_price:         parseFloat(i.buy_price || 0),
+                unit_used:         i.unit_used || 'unit',
+                purchase_type:     i.purchase_type || cart.purchaseType,
+                selected_imei:     i.selected_imei || null,
+                imei_or_device_id: i.selected_imei || null,
+                is_imei_tracked:   Boolean(i.is_imei_tracked),
+                unit_label:        i.unit_label || 'Unit',
+                units:             Array.isArray(i.units) ? JSON.parse(JSON.stringify(i.units)) : [],
             })),
-        })
+        }
+
+        // 1. ALWAYS write to local IndexedDB first (works 100% offline & instant)
+        await saveLocalHeldSale(JSON.parse(JSON.stringify(heldPayload)))
+
+        // 2. Clear current cart
         cart.clearCart()
+
+        // 3. Update reactive count in composable
+        await updateHeldSales()
+
+        // 4. If online & shared branch mode, trigger background sync
+        if (visibilityMode === 'shared_across_branch' && isOnline.value) {
+            syncHeldSales('shared_across_branch').catch(err => {
+                console.warn('Background hold sync notice:', err)
+            })
+        }
+
         emit('held')
+        emit('close')
     } catch (e) {
-        error.value = 'Failed to hold cart. Please try again.'
+        console.error('Failed to hold cart locally:', e)
+        error.value = 'Failed to hold cart locally. Please try again.'
     } finally {
         saving.value = false
     }

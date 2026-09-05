@@ -21,15 +21,18 @@ class NotificationService
         $branchSlug = $branchModel?->slug ?? 'branch';
 
         $isImei = $conflict->conflict_type === 'imei_already_sold';
-        $type = $isImei ? 'imei_conflict' : 'stock_conflict';
+        $isHeld = $conflict->conflict_type === 'held_sale_conflict';
+        $type = $isHeld ? 'held_sale_conflict' : ($isImei ? 'imei_conflict' : 'stock_conflict');
         
-        $title = $isImei
-            ? "IMEI Conflict — {$conflict->item_name}"
-            : "Stock Conflict — {$conflict->item_name}";
+        $title = $isHeld
+            ? "Held Sale Conflict — {$conflict->item_name}"
+            : ($isImei ? "IMEI Conflict — {$conflict->item_name}" : "Stock Conflict — {$conflict->item_name}");
 
-        $message = $isImei
-            ? "Serial/IMEI '{$conflict->imei_or_device_id}' for {$conflict->item_name} was already sold prior to offline sync."
-            : "Offline sync recorded {$conflict->requested_qty} sold against {$conflict->available_qty_at_sync} in front store ({$conflict->requested_qty} units requested).";
+        $message = $isHeld
+            ? ($conflict->resolution_notes ?: "A held cart was resumed and completed on two separate terminals before sync.")
+            : ($isImei
+                ? "Serial/IMEI '{$conflict->imei_or_device_id}' for {$conflict->item_name} was already sold prior to offline sync."
+                : "Offline sync recorded {$conflict->requested_qty} sold against {$conflict->available_qty_at_sync} in front store ({$conflict->requested_qty} units requested).");
 
         $actionUrl = "/{$branchSlug}/inventory/conflicts?search=" . urlencode($conflict->item_name);
 

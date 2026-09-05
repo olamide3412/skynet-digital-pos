@@ -8,7 +8,14 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class HeldSale extends Model
 {
-    protected $fillable = ['user_id', 'hold_name', 'status', 'customer_id'];
+    protected $fillable = [
+        'branch_id',
+        'held_sale_uuid',
+        'user_id',
+        'hold_name',
+        'status',
+        'customer_id',
+    ];
 
     public function user(): BelongsTo
     {

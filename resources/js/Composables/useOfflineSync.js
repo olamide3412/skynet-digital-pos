@@ -7,6 +7,11 @@ import {
     markSaleSynced,
     markSaleFailed,
     getAllQueuedSales,
+    getActiveLocalHeldSales,
+    getActiveLocalHeldSalesCount,
+    getPendingHeldSales,
+    markHeldSaleSynced,
+    mergeServerHeldSales,
 } from '@/Services/offlineDb'
 
 // Shared singleton state across all components
@@ -15,6 +20,12 @@ const isSyncing = ref(false)
 const pendingCount = ref(0)
 const lastSyncTime = ref(null)
 const queuedSalesList = ref([])
+
+// Held Sales Shared State
+const activeHeldSales = ref([])
+const heldSalesCount = ref(0)
+const lastHeldRefreshTime = ref(null)
+const isRefreshingHeld = ref(false)
 
 export function useOfflineSync() {
     const syncState = computed(() => {
@@ -29,6 +40,16 @@ export function useOfflineSync() {
             queuedSalesList.value = await getAllQueuedSales()
         } catch (e) {
             console.warn('Could not read IndexedDB pending sales count:', e)
+        }
+    }
+
+    async function updateHeldSales() {
+        try {
+            const list = await getActiveLocalHeldSales()
+            activeHeldSales.value = list
+            heldSalesCount.value = list.length
+        } catch (e) {
+            console.warn('Could not read local held sales from IndexedDB:', e)
         }
     }
 
@@ -141,6 +162,63 @@ export function useOfflineSync() {
         }
     }
 
+    /**
+     * Synchronize locally held sales to server in background if branch is in 'shared_across_branch' mode.
+     */
+    async function syncHeldSales(visibilityMode = 'device_only') {
+        if (visibilityMode !== 'shared_across_branch') return
+        if (!isOnline.value) return
+
+        try {
+            const pendingHolds = await getPendingHeldSales(50)
+            if (!pendingHolds || !pendingHolds.length) return
+
+            const res = await axios.post(route('pos.api.held-sales.sync'), {
+                held_sales: pendingHolds,
+            }, { timeout: 15000 })
+
+            if (res.data && Array.isArray(res.data.results)) {
+                for (const r of res.data.results) {
+                    if (r.status === 'synced') {
+                        await markHeldSaleSynced(r.held_sale_id, r)
+                    }
+                }
+            }
+            await updateHeldSales()
+        } catch (err) {
+            console.warn('Background held sales sync notice:', err)
+        }
+    }
+
+    /**
+     * Manual Pull: Fetch held sales from server and merge into local IndexedDB per §3.6.
+     */
+    async function pullServerHeldSales() {
+        if (isRefreshingHeld.value) return false
+        isRefreshingHeld.value = true
+
+        try {
+            const online = await checkServerHealth()
+            if (!online) {
+                isOnline.value = false
+                return false
+            }
+
+            const res = await axios.get(route('pos.api.held-sales.index'), { timeout: 10000 })
+            if (res.data && Array.isArray(res.data)) {
+                await mergeServerHeldSales(res.data)
+                lastHeldRefreshTime.value = new Date().toISOString()
+                await updateHeldSales()
+                return true
+            }
+        } catch (err) {
+            console.warn('Pull held sales error:', err)
+        } finally {
+            isRefreshingHeld.value = false
+        }
+        return false
+    }
+
     // Event Handlers
     async function handleOnline() {
         isOnline.value = true
@@ -148,6 +226,7 @@ export function useOfflineSync() {
         if (isOnline.value) {
             await syncQueuedSales()
             await refreshCatalog()
+            await updateHeldSales()
         }
     }
 
@@ -157,13 +236,14 @@ export function useOfflineSync() {
 
     let intervalId = null
 
-    function startSyncMonitor() {
+    function startSyncMonitor(visibilityMode = 'device_only') {
         if (typeof window === 'undefined') return
 
         window.addEventListener('online', handleOnline)
         window.addEventListener('offline', handleOffline)
 
         updatePendingCount()
+        updateHeldSales()
         refreshCatalog()
 
         // Periodic heartbeat & auto-sync every 25 seconds
@@ -172,6 +252,7 @@ export function useOfflineSync() {
                 const online = await checkServerHealth()
                 if (online) {
                     await syncQueuedSales()
+                    await syncHeldSales(visibilityMode)
                 }
             }, 25000)
         }
@@ -194,11 +275,19 @@ export function useOfflineSync() {
         pendingCount,
         lastSyncTime,
         queuedSalesList,
+        activeHeldSales,
+        heldSalesCount,
+        lastHeldRefreshTime,
+        isRefreshingHeld,
         refreshCatalog,
         syncQueuedSales,
+        syncHeldSales,
+        pullServerHeldSales,
         updatePendingCount,
+        updateHeldSales,
         startSyncMonitor,
         stopSyncMonitor,
         checkServerHealth,
     }
 }
+

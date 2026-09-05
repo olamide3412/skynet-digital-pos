@@ -153,6 +153,33 @@ class OfflineSyncService
             $amountPaid    = round((float) ($data['amount_paid'] ?? $finalTotal), 2);
             $changeBal     = max(0, round($amountPaid - $finalTotal, 2));
             $clientCreated = !empty($data['created_at']) ? date('Y-m-d H:i:s', strtotime($data['created_at'])) : now();
+            $heldSaleId    = !empty($data['held_sale_id']) ? trim($data['held_sale_id']) : null;
+
+            // ── Held Sale Conflict Check (Two terminals resumed same held cart) ──
+            if ($heldSaleId) {
+                $priorSale = Sale::where('branch_id', $branch->id)
+                    ->where('held_sale_id', $heldSaleId)
+                    ->first();
+
+                if ($priorSale) {
+                    $hasConflict = true;
+                    $conflictsToRecord[] = [
+                        'branch_id'             => $branch->id,
+                        'sale_id'               => null, // Will be set once sale record created
+                        'offline_sale_id'       => $offlineSaleId,
+                        'item_id'               => $cartItems[0]['item_id'] ?? null,
+                        'item_name'             => "Held Cart Ref: " . ($data['hold_name'] ?? $heldSaleId),
+                        'conflict_type'         => 'held_sale_conflict',
+                        'requested_qty'         => count($cartItems),
+                        'available_qty_at_sync' => 0,
+                        'imei_or_device_id'     => null,
+                        'status'                => 'pending_review',
+                        'resolution_notes'      => "Held cart [{$heldSaleId}] was already completed by receipt #{$priorSale->receipt_id} before this terminal synced.",
+                        'created_at'            => now(),
+                        'updated_at'            => now(),
+                    ];
+                }
+            }
 
             // Create Sale record
             $sale = Sale::create([
@@ -160,6 +187,7 @@ class OfflineSyncService
                 'customer_id'       => $customerId,
                 'receipt_id'        => $receiptId,
                 'offline_sale_id'   => $offlineSaleId,
+                'held_sale_id'      => $heldSaleId,
                 'is_offline_sale'   => true,
                 'synced_at'         => now(),
                 'has_conflict'      => false, // Updated if conflicts occur
@@ -183,6 +211,16 @@ class OfflineSyncService
                 'created_at'        => $clientCreated,
                 'updated_at'        => now(),
             ]);
+
+            // Mark server HeldSale record as Completed if linked
+            if ($heldSaleId) {
+                \App\Models\HeldSale::where(function ($q) use ($heldSaleId) {
+                    $q->where('held_sale_uuid', $heldSaleId);
+                    if (is_numeric($heldSaleId)) {
+                        $q->orWhere('id', (int) $heldSaleId);
+                    }
+                })->update(['status' => 'Completed']);
+            }
 
             // Process line items & check conflicts
             foreach ($cartItems as $cartItem) {
@@ -280,6 +318,7 @@ class OfflineSyncService
             // Insert logged conflicts and dispatch notifications
             if (!empty($conflictsToRecord)) {
                 foreach ($conflictsToRecord as $conflictData) {
+                    $conflictData['sale_id'] = $conflictData['sale_id'] ?? $sale->id;
                     $conflict = StockConflict::create($conflictData);
                     \App\Services\NotificationService::notifyConflict($conflict, $branch, $user);
                 }

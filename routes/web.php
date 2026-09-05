@@ -525,6 +525,7 @@ Route::prefix('{branch}')
             Route::get('/held-sales',            [HeldSaleController::class, 'apiIndex'])->name('held-sales.index');
             Route::post('/held-sales',           [HeldSaleController::class, 'apiStore'])->name('held-sales.store');
             Route::delete('/held-sales/{id}',     [HeldSaleController::class, 'apiDestroy'])->name('held-sales.destroy');
+            Route::post('/sync-held-sales',       [HeldSaleController::class, 'apiSyncBatch'])->name('held-sales.sync');
             Route::get('/settings',              [PosSettingsController::class, 'apiShow'])->name('settings.show');
             Route::get('/offline-bootstrap',     [\App\Http\Controllers\Pos\OfflineSyncController::class, 'bootstrap'])->name('offline.bootstrap');
             Route::post('/sync-offline-sales',   [\App\Http\Controllers\Pos\OfflineSyncController::class, 'sync'])->name('offline.sync');

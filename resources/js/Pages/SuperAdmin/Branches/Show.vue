@@ -301,6 +301,7 @@ const settingsForm = useForm({
     is_offline_enabled: Boolean(props.settings?.is_offline_enabled),
     is_turnstile_enabled: Boolean(props.settings?.is_turnstile_enabled ?? true),
     is_auto_fullscreen_enabled: Boolean(props.settings?.is_auto_fullscreen_enabled),
+    held_sales_visibility: props.settings?.held_sales_visibility || 'device_only',
     offline_receipt_prefix: props.settings?.offline_receipt_prefix || 'OFF',
     is_price_editable: Boolean(props.settings?.is_price_editable),
     is_qty_deduction: Boolean(props.settings?.is_qty_deduction),
@@ -1258,6 +1259,55 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                     type="checkbox"
                                     class="w-5 h-5 rounded text-indigo-600 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer"
                                 />
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Held Sales Visibility Mode</label>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                                    <label
+                                        :class="[
+                                            'p-3 rounded-2xl border text-xs cursor-pointer transition flex items-start gap-2.5',
+                                            settingsForm.held_sales_visibility === 'device_only'
+                                                ? 'bg-indigo-50/50 dark:bg-indigo-950/30 border-indigo-500/50 text-slate-900 dark:text-white'
+                                                : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                                        ]"
+                                    >
+                                        <input
+                                            type="radio"
+                                            value="device_only"
+                                            v-model="settingsForm.held_sales_visibility"
+                                            class="mt-0.5 accent-indigo-600"
+                                        />
+                                        <div>
+                                            <div class="font-bold text-slate-900 dark:text-white">Device Only (Default)</div>
+                                            <div class="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                                Held carts stay strictly local to the device/till that held them. Zero cross-device sync.
+                                            </div>
+                                        </div>
+                                    </label>
+
+                                    <label
+                                        :class="[
+                                            'p-3 rounded-2xl border text-xs cursor-pointer transition flex items-start gap-2.5',
+                                            settingsForm.held_sales_visibility === 'shared_across_branch'
+                                                ? 'bg-indigo-50/50 dark:bg-indigo-950/30 border-indigo-500/50 text-slate-900 dark:text-white'
+                                                : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                                        ]"
+                                    >
+                                        <input
+                                            type="radio"
+                                            value="shared_across_branch"
+                                            v-model="settingsForm.held_sales_visibility"
+                                            class="mt-0.5 accent-indigo-600"
+                                        />
+                                        <div>
+                                            <div class="font-bold text-slate-900 dark:text-white">Shared Across Branch</div>
+                                            <div class="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                                                Syncs to server; other tills can view and resume via the manual Refresh button.
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
                             </div>
 
                             <div>

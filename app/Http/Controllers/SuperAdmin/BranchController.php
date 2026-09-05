@@ -69,6 +69,7 @@ class BranchController extends Controller
             'phone'              => 'nullable|string|max:50',
             'email'              => 'nullable|email|max:255',
             'is_offline_enabled'   => 'nullable|boolean',
+            'held_sales_visibility'=> 'nullable|string|in:device_only,shared_across_branch',
             'is_turnstile_enabled' => 'nullable|boolean',
             // Branch Admin account details
             'admin_name'         => 'required|string|max:255',
@@ -110,6 +111,9 @@ class BranchController extends Controller
             $settingsUpdates = [];
             if (!empty($data['is_offline_enabled'])) {
                 $settingsUpdates['is_offline_enabled'] = true;
+            }
+            if (!empty($data['held_sales_visibility'])) {
+                $settingsUpdates['held_sales_visibility'] = $data['held_sales_visibility'];
             }
             if (isset($data['is_turnstile_enabled'])) {
                 $settingsUpdates['is_turnstile_enabled'] = (bool)$data['is_turnstile_enabled'];
@@ -405,6 +409,7 @@ class BranchController extends Controller
             'is_offline_enabled'       => 'required|boolean',
             'is_turnstile_enabled'     => 'required|boolean',
             'is_auto_fullscreen_enabled' => 'required|boolean',
+            'held_sales_visibility'    => 'nullable|string|in:device_only,shared_across_branch',
             'offline_receipt_prefix'   => 'nullable|string|max:10',
             'is_price_editable'        => 'required|boolean',
             'is_qty_deduction'         => 'required|boolean',

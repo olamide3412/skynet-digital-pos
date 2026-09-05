@@ -266,6 +266,7 @@ function submitResolution() {
                     <option value="">All Conflict Types</option>
                     <option value="stock_shortfall">Stock Shortfall 📉</option>
                     <option value="imei_already_sold">Duplicate IMEI Sold 📱</option>
+                    <option value="held_sale_conflict">Held Sale Double-Resume ⚠️</option>
                 </select>
             </div>
 
@@ -351,10 +352,14 @@ function submitResolution() {
                                         'px-2.5 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5',
                                         c.conflict_type === 'stock_shortfall'
                                             ? 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+                                            : c.conflict_type === 'held_sale_conflict'
+                                            ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300'
                                             : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
                                     ]"
                                 >
-                                    <span>{{ c.conflict_type === 'stock_shortfall' ? '📉 Stock Shortfall' : '📱 Duplicate IMEI' }}</span>
+                                    <span>
+                                        {{ c.conflict_type === 'stock_shortfall' ? '📉 Stock Shortfall' : (c.conflict_type === 'held_sale_conflict' ? '⚠️ Held Sale Conflict' : '📱 Duplicate IMEI') }}
+                                    </span>
                                 </span>
                             </td>
                             <td class="px-5 py-4">

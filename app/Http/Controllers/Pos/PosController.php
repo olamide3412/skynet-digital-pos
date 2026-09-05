@@ -46,12 +46,48 @@ class PosController extends Controller
             ->orderBy('menu_index')
             ->get() : collect();
 
-        // Held sales for current user
-        $heldSales = $user ? HeldSale::with(['items.item', 'customer'])
-            ->where('user_id', $user->id)
-            ->where('status', 'Held')
-            ->latest()
-            ->get() : collect();
+        // Held sales respecting branch visibility setting
+        $isShared = ($settings?->held_sales_visibility === 'shared_across_branch');
+        $heldQuery = HeldSale::with(['items.item', 'customer'])->where('status', 'Held');
+        if ($branch) {
+            $heldQuery->where('branch_id', $branch->id);
+            if (!$isShared && $user) {
+                $heldQuery->where('user_id', $user->id);
+            }
+        } elseif ($user) {
+            $heldQuery->where('user_id', $user->id);
+        }
+
+        $heldSales = $heldQuery->latest()->get()->map(function ($held) {
+            return [
+                'id'             => $held->id,
+                'held_sale_id'   => $held->held_sale_uuid ?: (string) $held->id,
+                'held_sale_uuid' => $held->held_sale_uuid,
+                'hold_name'      => $held->hold_name,
+                'customer_id'    => $held->customer_id,
+                'customer'       => $held->customer ? [
+                    'id'    => $held->customer->id,
+                    'name'  => $held->customer->name,
+                    'phone' => $held->customer->phone,
+                ] : null,
+                'created_at'     => $held->created_at?->toIso8601String(),
+                'status'         => $held->status,
+                'items'          => $held->items->map(function ($item) {
+                    return [
+                        'id'                => $item->id,
+                        'item_id'           => $item->item_id,
+                        'item_name'         => $item->item_name ?: $item->item?->item_name,
+                        'qty'               => (int) $item->qty,
+                        'price'             => (float) $item->price,
+                        'unit_price'        => (float) $item->price,
+                        'unit_used'         => $item->unit_used ?: 'unit',
+                        'purchase_type'     => $item->purchase_type ?: 'Consumer',
+                        'imei_or_device_id' => $item->imei_or_device_id,
+                        'item'              => $item->item,
+                    ];
+                })->values()->all(),
+            ];
+        });
 
         // Merge branch business details into settings for receipt/UI use
         $settingsData = $settings->toArray();
