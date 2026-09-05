@@ -216,18 +216,27 @@ async function submitSale() {
                 </div>
 
                 <!-- Breakdown -->
-                <div v-if="cart.taxAmount > 0" class="px-5 py-2 bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700/50 text-xs space-y-1">
+                <div v-if="cart.discountAmount > 0 || cart.taxAmount > 0 || cart.consultationFee > 0" class="px-5 py-2.5 bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700/50 text-xs space-y-1.5">
                     <div class="flex justify-between text-slate-500 dark:text-slate-400">
                         <span>Subtotal:</span>
-                        <span>{{ format(cart.subtotal) }}</span>
+                        <span class="font-mono font-medium text-slate-800 dark:text-slate-200">{{ format(cart.subtotal) }}</span>
                     </div>
-                    <div v-if="cart.discountAmount > 0" class="flex justify-between text-red-600 dark:text-red-400">
-                        <span>Discount:</span>
-                        <span>-{{ format(cart.discountAmount) }}</span>
+                    <div v-if="cart.discountAmount > 0" class="flex justify-between items-center text-red-600 dark:text-red-400 font-semibold">
+                        <span class="flex items-center gap-1.5 min-w-0">
+                            <span>Discount:</span>
+                            <span v-if="cart.discount?.type" class="text-[10px] bg-red-100 dark:bg-red-950/60 px-1.5 py-0.2 rounded font-bold border border-red-300 dark:border-red-800 truncate max-w-[120px]" :title="cart.discount?.name">
+                                {{ cart.discount.type === 'percentage' ? `${cart.discount.value}%` : format(cart.discount.value) }}
+                            </span>
+                        </span>
+                        <span class="font-mono font-bold">-{{ format(cart.discountAmount) }}</span>
                     </div>
-                    <div class="flex justify-between text-amber-600 dark:text-amber-400 font-medium">
+                    <div v-if="cart.consultationFee > 0" class="flex justify-between text-slate-500 dark:text-slate-400">
+                        <span>Consult Fee:</span>
+                        <span class="font-mono">{{ format(cart.consultationFee) }}</span>
+                    </div>
+                    <div v-if="cart.taxAmount > 0" class="flex justify-between text-amber-600 dark:text-amber-400 font-medium">
                         <span>Tax ({{ settings?.tax_percentage }}%):</span>
-                        <span>+{{ format(cart.taxAmount) }}</span>
+                        <span class="font-mono">+{{ format(cart.taxAmount) }}</span>
                     </div>
                 </div>
 

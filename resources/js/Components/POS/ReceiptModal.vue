@@ -101,6 +101,7 @@ watch(() => props.sale.receipt_id, () => {
 
 const items = computed(() => props.sale.sale_orders || props.sale.saleOrders || props.sale.items || [])
 
+const totalUnits   = computed(() => items.value.reduce((s, i) => s + (Number(i.qty) || 0), 0))
 const subtotal     = computed(() => items.value.reduce((s, i) => s + parseFloat(i.total_selling_price || 0), 0))
 const amountPaid   = computed(() => parseFloat(props.sale.amount_paid  || 0))
 const finalTotal   = computed(() => parseFloat(props.sale.final_total  || 0))
@@ -212,6 +213,7 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
                 <table style="width:100%; border-collapse:collapse; font-size:11.5px;">
                     <thead>
                         <tr style="border-bottom: 1.5px solid #000000;">
+                            <th style="text-align:left; padding-bottom:4px; font-weight:800; color:#000000; width:20px;">#</th>
                             <th style="text-align:left; padding-bottom:4px; font-weight:800; color:#000000;">Item</th>
                             <th style="text-align:center; padding-bottom:4px; font-weight:800; color:#000000; white-space:nowrap;">Qty</th>
                             <th style="text-align:right; padding-bottom:4px; font-weight:800; color:#000000; white-space:nowrap;">Unit</th>
@@ -219,8 +221,11 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="item in items" :key="item.id"
+                        <tr v-for="(item, idx) in items" :key="item.id || idx"
                             style="border-bottom: 1px dashed #000000;">
+                            <td style="padding: 4px 2px 4px 0; font-weight:800; color:#000000; vertical-align:top; width:20px;">
+                                {{ idx + 1 }}.
+                            </td>
                             <td style="padding: 4px 0; font-weight:600; color:#000000; word-break:break-word; max-width:100px;">
                                 {{ item.item_name }}
                                 <div v-if="item.imei_or_device_id"
@@ -232,9 +237,9 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
                                     ({{ item.unit_used }})
                                 </div>
                             </td>
-                            <td style="text-align:center; padding: 4px; font-weight:700; color:#000000;">{{ item.qty }}</td>
-                            <td style="text-align:right; padding: 4px 0; font-weight:600; color:#000000; white-space:nowrap;">{{ format(item.selling_price) }}</td>
-                            <td style="text-align:right; padding: 4px 0; font-weight:800; color:#000000; white-space:nowrap;">{{ format(item.total_selling_price) }}</td>
+                            <td style="text-align:center; padding: 4px; font-weight:700; color:#000000; vertical-align:top;">{{ item.qty }}</td>
+                            <td style="text-align:right; padding: 4px 0; font-weight:600; color:#000000; white-space:nowrap; vertical-align:top;">{{ format(item.selling_price) }}</td>
+                            <td style="text-align:right; padding: 4px 0; font-weight:800; color:#000000; white-space:nowrap; vertical-align:top;">{{ format(item.total_selling_price) }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -245,6 +250,12 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
                 <!-- ══ TOTALS ════════════════════════════════════════════════ -->
                 <table style="width:100%; border-collapse:collapse; font-size:11.5px; font-weight:600;">
                     <tbody>
+                        <tr>
+                            <td style="color:#000000;">Total Items</td>
+                            <td style="text-align:right; color:#000000; font-weight:700;">
+                                {{ items.length }} {{ items.length === 1 ? 'item' : 'items' }} ({{ totalUnits }} {{ totalUnits === 1 ? 'unit' : 'units' }})
+                            </td>
+                        </tr>
                         <tr>
                             <td style="color:#000000;">Subtotal</td>
                             <td style="text-align:right; color:#000000;">{{ format(subtotal) }}</td>

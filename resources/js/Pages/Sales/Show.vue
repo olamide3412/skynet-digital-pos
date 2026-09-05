@@ -83,6 +83,7 @@ const showReceiptModal = ref(false)
                     <table class="w-full text-sm">
                         <thead class="bg-slate-100 dark:bg-slate-700/40 text-xs text-slate-600 dark:text-slate-400 border-b border-slate-200 dark:border-slate-700">
                             <tr>
+                                <th class="text-left px-4 py-2 font-semibold w-10">#</th>
                                 <th class="text-left px-4 py-2 font-semibold">Item</th>
                                 <th class="text-right px-4 py-2 font-semibold">Price</th>
                                 <th class="text-right px-4 py-2 font-semibold">Qty</th>
@@ -90,7 +91,8 @@ const showReceiptModal = ref(false)
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
-                            <tr v-for="order in sale.sale_orders" :key="order.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/20">
+                            <tr v-for="(order, idx) in sale.sale_orders" :key="order.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/20">
+                                <td class="px-4 py-2 text-slate-400 font-mono text-xs">{{ idx + 1 }}</td>
                                 <td class="px-4 py-2 text-slate-900 dark:text-white font-medium">
                                     <div>{{ order.item_name }}</div>
                                     <div v-if="order.imei_or_device_id" class="text-[11px] font-mono font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">

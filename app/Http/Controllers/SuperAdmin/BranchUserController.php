@@ -48,15 +48,21 @@ class BranchUserController extends Controller
             ->with(['roles', 'permissions'])
             ->latest()
             ->get()
-            ->map(fn (User $u) => [
-                'id'          => $u->id,
-                'name'        => $u->name,
-                'username'    => $u->username,
-                'email'       => $u->email,
-                'is_active'   => $u->is_active,
-                'roles'       => $u->roles->map(fn ($r) => ['id' => $r->id, 'name' => $r->name])->values(),
-                'permissions' => $u->getAllPermissions()->pluck('name')->values(),
-            ]);
+            ->map(function (User $u) {
+                $perms = $u->permissions->isNotEmpty()
+                    ? $u->permissions->pluck('name')->values()
+                    : $u->getPermissionsViaRoles()->pluck('name')->values();
+
+                return [
+                    'id'          => $u->id,
+                    'name'        => $u->name,
+                    'username'    => $u->username,
+                    'email'       => $u->email,
+                    'is_active'   => $u->is_active,
+                    'roles'       => $u->roles->map(fn ($r) => ['id' => $r->id, 'name' => $r->name])->values(),
+                    'permissions' => $perms,
+                ];
+            });
 
         $roles = Role::where('team_id', $branch->id)->get(['id', 'name']);
 
@@ -70,11 +76,16 @@ class BranchUserController extends Controller
 
     public function store(Request $request, Branch $branch)
     {
+        // Treat empty string email as null so unique validation doesn't clash on empty strings
+        if ($request->has('email') && trim((string)$request->email) === '') {
+            $request->merge(['email' => null]);
+        }
+
         $data = $request->validate([
             'name'        => 'required|string|max:255',
             'username'    => 'required|string|max:50|unique:users,username',
             'email'       => 'nullable|email|max:255|unique:users,email',
-            'password'    => ['required', Rules\Password::defaults()],
+            'password'    => ['required', 'string', 'min:4'],
             'role'        => 'required|string',
             'permissions' => 'nullable|array',
             'is_active'   => 'boolean',
@@ -101,14 +112,16 @@ class BranchUserController extends Controller
 
         \App\Services\ActivityLogger::userAction("Created staff user '{$user->name}' (@{$user->username}) in branch '{$branch->name}'", $branch->id);
 
-        return redirect()
-            ->route('superadmin.branches.users.index', $branch->slug)
-            ->with('success', 'User added to branch.');
+        return back()->with('success', "Staff user '{$user->name}' created successfully.");
     }
 
     public function update(Request $request, Branch $branch, User $user)
     {
         $this->validateUserBelongsToBranch($user, $branch);
+
+        if ($request->has('email') && trim((string)$request->email) === '') {
+            $request->merge(['email' => null]);
+        }
 
         $data = $request->validate([
             'name'        => 'required|string|max:255',
@@ -124,22 +137,16 @@ class BranchUserController extends Controller
             'full_name' => $data['name'],
             'username'  => $data['username'],
             'email'     => $data['email'] ?? null,
-            'is_active' => $data['is_active'],
+            'is_active' => $data['is_active'] ?? $user->is_active,
         ]);
 
         setPermissionsTeamId($branch->id);
-        $branch->ensureDefaultRoles();
         $user->syncRoles([$data['role']]);
-
-        if (isset($data['permissions'])) {
-            $user->syncPermissions($data['permissions']);
-        }
+        $user->syncPermissions($data['permissions'] ?? []);
 
         \App\Services\ActivityLogger::userAction("Updated staff profile for '{$user->name}'", $branch->id);
 
-        return redirect()
-            ->route('superadmin.branches.users.index', $branch->slug)
-            ->with('success', 'User updated.');
+        return back()->with('success', "Staff user '{$user->name}' updated successfully.");
     }
 
     public function destroy(Branch $branch, User $user)
@@ -148,9 +155,7 @@ class BranchUserController extends Controller
         $userName = $user->name;
         $user->delete();
         \App\Services\ActivityLogger::userAction("Removed user '{$userName}' from branch '{$branch->name}'", $branch->id);
-        return redirect()
-            ->route('superadmin.branches.users.index', $branch->slug)
-            ->with('success', 'User removed from branch.');
+        return back()->with('success', "User '{$userName}' removed from branch.");
     }
 
     public function toggle(Branch $branch, User $user)
@@ -159,9 +164,7 @@ class BranchUserController extends Controller
         $user->update(['is_active' => !$user->is_active]);
         $status = $user->is_active ? 'enabled' : 'disabled';
         \App\Services\ActivityLogger::userAction("Toggled account status to '{$status}' for user '{$user->name}'", $branch->id);
-        return redirect()
-            ->route('superadmin.branches.users.index', $branch->slug)
-            ->with('success', "User account {$status}.");
+        return back()->with('success', "User account {$status}.");
     }
 
     public function resetPassword(Request $request, Branch $branch, User $user)
@@ -169,14 +172,12 @@ class BranchUserController extends Controller
         $this->validateUserBelongsToBranch($user, $branch);
 
         $data = $request->validate([
-            'password' => ['required', Rules\Password::defaults(), 'confirmed'],
+            'password' => ['required', 'string', 'min:4', 'confirmed'],
         ]);
 
         $user->update(['password' => Hash::make($data['password'])]);
         \App\Services\ActivityLogger::userAction("Reset password for user '{$user->name}'", $branch->id);
-        return redirect()
-            ->route('superadmin.branches.users.index', $branch->slug)
-            ->with('success', 'Password reset successfully.');
+        return back()->with('success', "Password for user '{$user->name}' reset successfully.");
     }
 
     protected function validateUserBelongsToBranch(User $user, Branch $branch): void

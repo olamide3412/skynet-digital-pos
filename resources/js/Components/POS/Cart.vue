@@ -60,7 +60,7 @@ watch(() => cart.lastAddedAt, async (timestamp) => {
 </script>
 
 <template>
-    <div ref="scrollContainer" class="flex-1 overflow-y-auto min-h-0 scroll-smooth">
+    <div ref="scrollContainer" class="flex-1 overflow-y-auto min-h-0 scroll-smooth flex flex-col">
         <!-- Empty State -->
         <div v-if="!cart.items.length" class="flex flex-col items-center justify-center h-full text-slate-400 dark:text-slate-500 py-12">
             <svg class="w-12 h-12 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,19 +71,32 @@ watch(() => cart.lastAddedAt, async (timestamp) => {
             <p class="text-xs mt-1 text-slate-400 dark:text-slate-500">Search or scan items to add</p>
         </div>
 
-        <!-- Cart Items -->
-        <div v-else class="divide-y divide-slate-200 dark:divide-slate-700/50 p-1">
-            <CartItem
-                v-for="item in cart.items"
-                :key="item.cart_key"
-                :data-cart-key="item.cart_key"
-                :item="item"
-                :is-highlighted="highlightedKey === item.cart_key"
-                :can-edit-price="canEditPrice"
-                @remove="cart.removeItem(item.cart_key)"
-                @update-qty="(qty) => cart.updateQty(item.cart_key, qty)"
-                @update-price="(price) => cart.updatePrice(item.cart_key, price)"
-            />
+        <!-- Cart Items with Counter Header -->
+        <div v-else class="flex-1">
+            <!-- Cart Items Summary Bar -->
+            <div class="sticky top-0 z-10 px-3 py-2 bg-slate-50 dark:bg-slate-800/95 backdrop-blur-xs border-b border-slate-200 dark:border-slate-700 text-xs flex items-center justify-between text-slate-600 dark:text-slate-300">
+                <div class="flex items-center gap-2">
+                    <span class="font-bold text-slate-900 dark:text-white">Items in Cart</span>
+                    <span class="px-2 py-0.5 rounded-full text-xs font-bold font-mono bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800">
+                        {{ cart.items.length }} {{ cart.items.length === 1 ? 'item' : 'items' }} ({{ cart.itemCount }} {{ cart.itemCount === 1 ? 'unit' : 'units' }})
+                    </span>
+                </div>
+            </div>
+
+            <div class="divide-y divide-slate-200 dark:divide-slate-700/50 p-1">
+                <CartItem
+                    v-for="(item, idx) in cart.items"
+                    :key="item.cart_key"
+                    :data-cart-key="item.cart_key"
+                    :item="item"
+                    :index="idx"
+                    :is-highlighted="highlightedKey === item.cart_key"
+                    :can-edit-price="canEditPrice"
+                    @remove="cart.removeItem(item.cart_key)"
+                    @update-qty="(qty) => cart.updateQty(item.cart_key, qty)"
+                    @update-price="(price) => cart.updatePrice(item.cart_key, price)"
+                />
+            </div>
         </div>
     </div>
 </template>

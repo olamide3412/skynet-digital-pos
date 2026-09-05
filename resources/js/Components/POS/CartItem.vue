@@ -8,6 +8,7 @@ import axios from 'axios'
 
 const props = defineProps({
     item:          { type: Object, required: true },
+    index:         { type: Number, default: 0 },
     canEditPrice:  { type: Boolean, default: false },
     isHighlighted: { type: Boolean, default: false },
 })
@@ -143,6 +144,9 @@ function onUnitChange(newUnit) {
         <!-- Top Row: Name, Badge & Remove -->
         <div class="flex items-center justify-between gap-2">
             <div class="flex items-center gap-1.5 min-w-0">
+                <span class="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300 font-mono text-[10px] font-bold flex items-center justify-center flex-shrink-0 shadow-xs border border-slate-200/80 dark:border-slate-600/60">
+                    #{{ index + 1 }}
+                </span>
                 <span class="text-sm font-semibold text-slate-900 dark:text-white truncate">{{ item.item_name }}</span>
                 <span v-if="!isImeiItem" class="px-1.5 py-0.5 rounded text-[10px] uppercase font-mono bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                     {{ currentUnitLabel }}

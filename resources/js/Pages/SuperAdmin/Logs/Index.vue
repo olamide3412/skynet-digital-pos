@@ -1,5 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { router, Link } from '@inertiajs/vue3'
 import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
 
@@ -18,8 +18,45 @@ const selectedType     = ref(props.filters?.action_type || '')
 const selectedUser     = ref(props.filters?.user_id || '')
 const startDate        = ref(props.filters?.start_date || '')
 const endDate          = ref(props.filters?.end_date || '')
+const activePreset     = ref('custom')
 
 const selectedLogModal = ref(null)
+
+const setPreset = (preset) => {
+    activePreset.value = preset
+    const today = new Date()
+    const fmt = (d) => {
+        const year = d.getFullYear()
+        const month = String(d.getMonth() + 1).padStart(2, '0')
+        const day = String(d.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+    }
+
+    if (preset === 'today') {
+        startDate.value = fmt(today)
+        endDate.value = fmt(today)
+    } else if (preset === 'yesterday') {
+        const y = new Date()
+        y.setDate(y.getDate() - 1)
+        startDate.value = fmt(y)
+        endDate.value = fmt(y)
+    } else if (preset === 'week') {
+        const curr = new Date()
+        const day = curr.getDay()
+        const diff = curr.getDate() - day + (day === 0 ? -6 : 1)
+        const mon = new Date(curr.setDate(diff))
+        startDate.value = fmt(mon)
+        endDate.value = fmt(new Date())
+    } else if (preset === 'month') {
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+        startDate.value = fmt(firstDay)
+        endDate.value = fmt(new Date())
+    } else if (preset === 'all') {
+        startDate.value = ''
+        endDate.value = ''
+    }
+    applyFilters()
+}
 
 function applyFilters() {
     router.get(route('superadmin.logs.index'), {
@@ -39,8 +76,40 @@ function resetFilters() {
     selectedUser.value   = ''
     startDate.value      = ''
     endDate.value        = ''
+    activePreset.value   = 'all'
     applyFilters()
 }
+
+// ── Export Dropdown ──────────────────────────────────────────────────────────
+const exportMenuOpen = ref(false)
+const exportDropdownRef = ref(null)
+
+const downloadExport = (format = 'xlsx') => {
+    exportMenuOpen.value = false
+    const params = new URLSearchParams()
+    params.set('format', format)
+    if (searchFilter.value)   params.set('search', searchFilter.value.trim())
+    if (selectedBranch.value) params.set('branch_id', selectedBranch.value)
+    if (selectedType.value)   params.set('action_type', selectedType.value)
+    if (selectedUser.value)   params.set('user_id', selectedUser.value)
+    if (startDate.value)      params.set('start_date', startDate.value)
+    if (endDate.value)        params.set('end_date', endDate.value)
+    window.location.href = `${route('superadmin.logs.export')}?${params.toString()}`
+}
+
+const handleClickOutside = (e) => {
+    if (exportDropdownRef.value && !exportDropdownRef.value.contains(e.target)) {
+        exportMenuOpen.value = false
+    }
+}
+
+onMounted(() => {
+    document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+    document.removeEventListener('click', handleClickOutside)
+})
 
 function getBadgeClass(type) {
     switch (type) {
@@ -59,22 +128,127 @@ function getBadgeClass(type) {
 <template>
     <div class="max-w-7xl mx-auto space-y-6">
         <!-- Header -->
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
                 <h1 class="text-xl font-black text-slate-900 dark:text-white tracking-tight">System Activity & Error Logs</h1>
                 <p class="text-xs text-slate-500 dark:text-slate-400">Master audit trail of all transactions, inventory movements, logins, setting changes, and system errors.</p>
             </div>
-            <button
-                @click="resetFilters"
-                class="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition"
-            >
-                Reset All Filters
-            </button>
+            <div class="flex items-center gap-2.5">
+                <!-- Export Dropdown -->
+                <div class="relative" ref="exportDropdownRef">
+                    <button
+                        type="button"
+                        @click="exportMenuOpen = !exportMenuOpen"
+                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-600/20 flex items-center space-x-1.5 cursor-pointer"
+                        title="Export filtered activity logs"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Export Logs</span>
+                        <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Dropdown Menu -->
+                    <div
+                        v-if="exportMenuOpen"
+                        class="absolute right-0 mt-1.5 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100"
+                    >
+                        <div class="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            Export Logs List
+                        </div>
+                        <button
+                            type="button"
+                            @click="downloadExport('xlsx')"
+                            class="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                        >
+                            <span class="w-5 h-5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-[10px]">
+                                XLS
+                            </span>
+                            Excel (.xlsx)
+                        </button>
+                        <button
+                            type="button"
+                            @click="downloadExport('csv')"
+                            class="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                        >
+                            <span class="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px]">
+                                CSV
+                            </span>
+                            CSV Document (.csv)
+                        </button>
+                    </div>
+                </div>
+
+                <button
+                    @click="resetFilters"
+                    class="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                    Reset All Filters
+                </button>
+            </div>
         </div>
 
         <!-- Filter Bar Card -->
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <!-- Date Presets -->
+            <div class="flex flex-wrap items-center gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                <span class="text-xs font-bold text-slate-500 dark:text-slate-400 mr-1">Date Presets:</span>
+                <button
+                    type="button"
+                    @click="setPreset('all')"
+                    :class="activePreset === 'all' && !startDate && !endDate
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                >
+                    All Time
+                </button>
+                <button
+                    type="button"
+                    @click="setPreset('today')"
+                    :class="activePreset === 'today'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                >
+                    Today
+                </button>
+                <button
+                    type="button"
+                    @click="setPreset('yesterday')"
+                    :class="activePreset === 'yesterday'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                >
+                    Yesterday
+                </button>
+                <button
+                    type="button"
+                    @click="setPreset('week')"
+                    :class="activePreset === 'week'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                >
+                    This Week
+                </button>
+                <button
+                    type="button"
+                    @click="setPreset('month')"
+                    :class="activePreset === 'month'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                    class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                >
+                    This Month
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
                 <!-- Search Input -->
                 <div class="lg:col-span-2">
                     <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Search Keywords</label>
@@ -133,14 +307,25 @@ function getBadgeClass(type) {
                     </select>
                 </div>
 
-                <!-- Date Range -->
+                <!-- Start Date -->
                 <div>
-                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Date Range</label>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Start Date</label>
                     <input
                         type="date"
                         v-model="startDate"
-                        @change="applyFilters"
-                        class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs mb-1"
+                        @change="activePreset = 'custom'; applyFilters()"
+                        class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
+                    />
+                </div>
+
+                <!-- End Date -->
+                <div>
+                    <label class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">End Date</label>
+                    <input
+                        type="date"
+                        v-model="endDate"
+                        @change="activePreset = 'custom'; applyFilters()"
+                        class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
                     />
                 </div>
             </div>

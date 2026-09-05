@@ -15,16 +15,35 @@ class CustomerController extends Controller
 {
     public function index(Request $request)
     {
+        $tab = $request->get('tab', 'all');
+
+        $baseQuery = PosCustomer::query();
+
+        // Calculate counts for quick tab navigation
+        $allCount       = (clone $baseQuery)->count();
+        $watchlistCount = (clone $baseQuery)->where('watch_list', true)->count();
+        $debtCount      = (clone $baseQuery)->where('debt_bal', '>', 0)->count();
+
         $customers = PosCustomer::when($request->search, fn ($q) =>
                 $q->where('name', 'like', '%'.$request->search.'%')
                   ->orWhere('phone', 'like', '%'.$request->search.'%'))
+            ->when($tab === 'watchlist', fn ($q) => $q->where('watch_list', true))
+            ->when($tab === 'debt', fn ($q) => $q->where('debt_bal', '>', 0))
             ->latest()
             ->paginate(20)
             ->withQueryString();
 
         return Inertia::render('Customers/Index', [
             'customers' => $customers,
-            'filters'   => $request->only('search'),
+            'filters'   => [
+                'search' => $request->search ?? '',
+                'tab'    => $tab,
+            ],
+            'counts'    => [
+                'all'       => $allCount,
+                'watchlist' => $watchlistCount,
+                'debt'      => $debtCount,
+            ],
         ]);
     }
 
@@ -73,17 +92,58 @@ class CustomerController extends Controller
 
     public function destroy($branchParam, PosCustomer $customer)
     {
+        // 1. Strictly block deleting customers who owe money
+        if ((float) $customer->debt_bal > 0) {
+            return back()->withErrors([
+                'customer' => "Cannot delete customer \"{$customer->name}\" because they have an outstanding debt balance of ₦" . number_format($customer->debt_bal, 2) . ". All debts must be fully settled before deleting."
+            ]);
+        }
+
+        // 2. Protect transaction audit trail if sales or debt logs exist
+        if ($customer->sales()->exists() || $customer->debtPayments()->exists()) {
+            return back()->withErrors([
+                'customer' => "Cannot delete customer \"{$customer->name}\" because they have sales transaction history on record. To preserve accounting integrity, existing customer accounts with sales history cannot be removed."
+            ]);
+        }
+
+        $customerName = $customer->name;
         $customer->delete();
-        return redirect()->route('pos.customers.index')->with('success', 'Customer deleted.');
+        return redirect()->route('pos.customers.index')->with('success', "Customer \"{$customerName}\" deleted successfully.");
+    }
+
+    /** Toggle customer watchlist flag */
+    public function toggleWatchlist($branchParam, PosCustomer $customer)
+    {
+        $customer->update(['watch_list' => !$customer->watch_list]);
+        $status = $customer->watch_list ? 'added to' : 'removed from';
+        return back()->with('success', "Customer \"{$customer->name}\" {$status} watch list.");
+    }
+
+    /** Update note only without full profile editing */
+    public function updateNote(Request $request, $branchParam, PosCustomer $customer)
+    {
+        $data = $request->validate([
+            'note' => 'nullable|string|max:1000',
+        ]);
+
+        $customer->update([
+            'note' => empty(trim($data['note'] ?? '')) ? 'No Note' : trim($data['note']),
+        ]);
+
+        return back()->with('success', "Note for customer \"{$customer->name}\" updated.");
     }
 
     /** API: search for POS customer selector */
     public function search(Request $request)
     {
+        $branch = current_branch();
         return response()->json(
-            PosCustomer::where('name', 'like', '%'.$request->q.'%')
-                ->orWhere('phone', 'like', '%'.$request->q.'%')
-                ->limit(10)->get(['id', 'name', 'phone', 'debt_bal'])
+            PosCustomer::when($branch, fn ($q) => $q->where('branch_id', $branch->id))
+                ->where(function ($q) use ($request) {
+                    $q->where('name', 'like', '%'.$request->q.'%')
+                      ->orWhere('phone', 'like', '%'.$request->q.'%');
+                })
+                ->limit(10)->get(['id', 'name', 'phone', 'debt_bal', 'watch_list'])
         );
     }
 

@@ -29,15 +29,21 @@ class UserController extends Controller
             ->withQueryString();
 
         // Transform users to include permission array
-        $users->through(fn (User $u) => [
-            'id'          => $u->id,
-            'name'        => $u->name,
-            'username'    => $u->username,
-            'email'       => $u->email,
-            'is_active'   => $u->is_active,
-            'roles'       => $u->roles->map(fn ($r) => ['id' => $r->id, 'name' => $r->name])->values(),
-            'permissions' => $u->getAllPermissions()->pluck('name')->values(),
-        ]);
+        $users->through(function (User $u) {
+            $perms = $u->permissions->isNotEmpty()
+                ? $u->permissions->pluck('name')->values()
+                : $u->getPermissionsViaRoles()->pluck('name')->values();
+
+            return [
+                'id'          => $u->id,
+                'name'        => $u->name,
+                'username'    => $u->username,
+                'email'       => $u->email,
+                'is_active'   => $u->is_active,
+                'roles'       => $u->roles->map(fn ($r) => ['id' => $r->id, 'name' => $r->name])->values(),
+                'permissions' => $perms,
+            ];
+        });
 
         // Branch-scoped roles
         $roles = Role::where('team_id', $branch->id)
@@ -120,10 +126,7 @@ class UserController extends Controller
 
         setPermissionsTeamId($branch->id);
         $user->syncRoles([$data['role']]);
-
-        if (isset($data['permissions'])) {
-            $user->syncPermissions($data['permissions']);
-        }
+        $user->syncPermissions($data['permissions'] ?? []);
 
         return back()->with('success', 'User updated.');
     }

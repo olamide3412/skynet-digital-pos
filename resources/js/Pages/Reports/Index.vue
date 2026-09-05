@@ -1,8 +1,9 @@
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
-import { Link } from '@inertiajs/vue3'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { router } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import { useCurrency } from '@/Composables/useCurrency'
+import dayjs from 'dayjs'
 import {
     Chart,
     BarController,
@@ -36,9 +37,126 @@ const props = defineProps({
     topItems:            Array,
     returnsSummary:      Object,
     monthlyStats:        Object,
+    periodStats:         Object,
+    users:               Array,
+    canSeeAll:           Boolean,
+    filters:             Object,
 })
 
 const { format } = useCurrency()
+
+// Filter State
+const from   = ref(props.filters?.from || dayjs().startOf('month').format('YYYY-MM-DD'))
+const to     = ref(props.filters?.to || dayjs().format('YYYY-MM-DD'))
+const userId = ref(props.filters?.user_id || '')
+
+// Active date preset detection
+const activeDatePreset = computed(() => {
+    if (!from.value && !to.value) return 'all'
+    const today = dayjs().format('YYYY-MM-DD')
+    const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD')
+    const startOfWeek = dayjs().startOf('week').format('YYYY-MM-DD')
+    const startOfMonth = dayjs().startOf('month').format('YYYY-MM-DD')
+
+    if (from.value === today && to.value === today) return 'today'
+    if (from.value === yesterday && to.value === yesterday) return 'yesterday'
+    if (from.value === startOfWeek && to.value === today) return 'week'
+    if (from.value === startOfMonth && to.value === today) return 'month'
+    return 'custom'
+})
+
+// Active Filter Counter
+const activeFilterCount = computed(() => {
+    let count = 0
+    if (activeDatePreset.value !== 'month') count++
+    if (userId.value) count++
+    return count
+})
+
+// Narrative description banner
+const filterDescription = computed(() => {
+    let timeText = 'for All Time'
+    const today = dayjs().format('YYYY-MM-DD')
+    const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD')
+    const startOfWeek = dayjs().startOf('week').format('YYYY-MM-DD')
+    const startOfMonth = dayjs().startOf('month').format('YYYY-MM-DD')
+
+    if (from.value && to.value) {
+        if (from.value === today && to.value === today) {
+            timeText = `for Today (${dayjs().format('DD MMM YYYY')})`
+        } else if (from.value === yesterday && to.value === yesterday) {
+            timeText = `for Yesterday (${dayjs(yesterday).format('DD MMM YYYY')})`
+        } else if (from.value === startOfWeek && to.value === today) {
+            timeText = `for This Week (${dayjs(startOfWeek).format('DD MMM')} – ${dayjs().format('DD MMM YYYY')})`
+        } else if (from.value === startOfMonth && to.value === today) {
+            timeText = `for This Month (${dayjs().format('MMMM YYYY')})`
+        } else if (from.value === to.value) {
+            timeText = `for ${dayjs(from.value).format('DD MMM YYYY')}`
+        } else {
+            timeText = `from ${dayjs(from.value).format('DD MMM YYYY')} to ${dayjs(to.value).format('DD MMM YYYY')}`
+        }
+    } else if (from.value) {
+        timeText = `from ${dayjs(from.value).format('DD MMM YYYY')} onwards`
+    } else if (to.value) {
+        timeText = `up to ${dayjs(to.value).format('DD MMM YYYY')}`
+    }
+
+    let userText = 'across all cashiers & staff'
+    if (userId.value) {
+        const foundUser = props.users?.find(u => String(u.id) === String(userId.value))
+        const name = foundUser ? (foundUser.full_name || foundUser.name || foundUser.username) : 'Selected Staff'
+        userText = `processed by ${name}`
+    } else if (!props.canSeeAll) {
+        userText = 'processed by You'
+    }
+
+    return {
+        timeText,
+        userText,
+        salesCount: props.periodStats?.sales_count || 0,
+    }
+})
+
+function applyPreset(preset) {
+    const today = dayjs().format('YYYY-MM-DD')
+    if (preset === 'today') {
+        from.value = today
+        to.value   = today
+    } else if (preset === 'yesterday') {
+        const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD')
+        from.value = yesterday
+        to.value   = yesterday
+    } else if (preset === 'week') {
+        from.value = dayjs().startOf('week').format('YYYY-MM-DD')
+        to.value   = today
+    } else if (preset === 'month') {
+        from.value = dayjs().startOf('month').format('YYYY-MM-DD')
+        to.value   = today
+    } else if (preset === 'all') {
+        from.value = ''
+        to.value   = ''
+    }
+    doFilter()
+}
+
+function doFilter() {
+    router.get(
+        route('pos.reports.index'),
+        {
+            from:    from.value || undefined,
+            to:      to.value || undefined,
+            user_id: userId.value || undefined,
+        },
+        { preserveState: true, replace: true }
+    )
+}
+
+function resetFilters() {
+    from.value   = dayjs().startOf('month').format('YYYY-MM-DD')
+    to.value     = dayjs().format('YYYY-MM-DD')
+    userId.value = ''
+    doFilter()
+}
 
 // Canvas Refs
 const salesTrendCanvas = ref(null)
@@ -51,24 +169,32 @@ let topChart     = null
 
 function getThemeColors() {
     if (typeof window === 'undefined' || typeof document === 'undefined') {
-        return { primary: '#7b00ff', secondary: '#fba43d', hover: '#6200cc', light: '#f2e6ff', text: '#5900b3' }
+        return { primary: '#059669', secondary: '#10b981', hover: '#047857', light: '#ecfdf5', text: '#065f46' }
     }
-    const computed   = getComputedStyle(document.documentElement)
-    const primary   = computed.getPropertyValue('--color-theme').trim() || '#7b00ff'
-    const secondary = computed.getPropertyValue('--color-theme-secondary').trim() || '#fba43d'
-    const hover     = computed.getPropertyValue('--color-theme-hover').trim() || '#6200cc'
-    const light     = computed.getPropertyValue('--color-theme-light').trim() || '#f2e6ff'
-    const text      = computed.getPropertyValue('--color-theme-text').trim() || '#5900b3'
+    const computed = getComputedStyle(document.documentElement)
+    const primary   = computed.getPropertyValue('--color-theme').trim() || '#059669'
+    const secondary = computed.getPropertyValue('--color-theme-secondary').trim() || '#10b981'
+    const hover     = computed.getPropertyValue('--color-theme-hover').trim() || '#047857'
+    const light     = computed.getPropertyValue('--color-theme-light').trim() || '#ecfdf5'
+    const text      = computed.getPropertyValue('--color-theme-text').trim() || '#065f46'
 
     return { primary, secondary, hover, light, text }
 }
 
-onMounted(async () => {
+async function renderAllCharts() {
     await nextTick()
     renderSalesTrendChart()
     renderPaymentDistributionChart()
     renderTopItemsChart()
+}
+
+onMounted(() => {
+    renderAllCharts()
 })
+
+watch(() => [props.salesTrend, props.paymentDistribution, props.topItems], () => {
+    renderAllCharts()
+}, { deep: true })
 
 function renderSalesTrendChart() {
     if (!salesTrendCanvas.value) return
@@ -102,7 +228,7 @@ function renderSalesTrendChart() {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'top', labels: { font: { family: 'Poppins', size: 12 } } },
+                legend: { position: 'top', labels: { font: { family: 'Poppins', size: 11 } } },
                 tooltip: {
                     callbacks: {
                         label: (ctx) => `${ctx.dataset.label}: ₦${Number(ctx.raw || 0).toLocaleString()}`
@@ -145,7 +271,7 @@ function renderPaymentDistributionChart() {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { position: 'bottom', labels: { font: { family: 'Poppins', size: 12 } } },
+                legend: { position: 'bottom', labels: { font: { family: 'Poppins', size: 11 } } },
                 tooltip: {
                     callbacks: {
                         label: (ctx) => `${ctx.label}: ₦${Number(ctx.raw || 0).toLocaleString()}`
@@ -199,100 +325,180 @@ function renderTopItemsChart() {
         }
     })
 }
-
-const reports = [
-    {
-        title: 'End of Day',
-        description: "Summary of today's sales, payment modes, and register closeout.",
-        route: 'pos.reports.end-of-day',
-        iconClass: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400',
-        icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'
-    },
-    {
-        title: 'Sales Report',
-        description: 'View sales transactions for a specific day or date range.',
-        route: 'pos.reports.daily-sales',
-        iconClass: 'bg-teal-100 text-teal-600 dark:bg-teal-500/20 dark:text-teal-400',
-        icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z'
-    },
-    {
-        title: 'Returned Items',
-        description: 'Track returned items, quantities, units restocked, and total refund worth.',
-        route: 'pos.reports.returns',
-        iconClass: 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400',
-        icon: 'M16 15v-1a4 4 0 00-4-4H4m0 0l4-4m-4 4l4 4m6 4v1a3 3 0 003 3h3a3 3 0 003-3v-3a3 3 0 00-3-3h-3'
-    },
-    {
-        title: 'Profit & Loss',
-        description: 'Calculate gross profit based on items sold and their cost.',
-        route: 'pos.reports.profit-loss',
-        iconClass: 'bg-blue-100 text-blue-600 dark:bg-blue-500/20 dark:text-blue-400',
-        icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6'
-    },
-    {
-        title: 'Low Stock Alerts',
-        description: 'Items that have fallen below their configured alert threshold.',
-        route: 'pos.reports.low-stock',
-        iconClass: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400',
-        icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
-    },
-    {
-        title: 'Customer Debts',
-        description: 'List of customers with outstanding balances.',
-        route: 'pos.reports.customer-debt',
-        iconClass: 'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-400',
-        icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
-    },
-    {
-        title: 'Reorder Points',
-        description: 'Stock replenishment thresholds, deficits, and reorder point alerts.',
-        route: 'pos.inventory.reorder-points',
-        iconClass: 'bg-amber-100 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400',
-        icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'
-    },
-    {
-        title: 'Audit & Activity Logs',
-        description: 'Branch audit trail for sales, stock moves, staff actions, and errors.',
-        route: 'pos.reports.logs',
-        iconClass: 'bg-theme-light text-theme',
-        icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
-    }
-]
 </script>
 
 <template>
     <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
-        <!-- Header -->
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+        <!-- Top Header -->
+        <div class="flex items-center justify-between px-6 py-3.5 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
             <div>
-                <h1 class="text-lg font-bold text-slate-900 dark:text-white">Reports & Business Analytics</h1>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Executive performance overview, charts, and detailed reports.</p>
+                <h1 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>📊</span>
+                    <span>Reports & Business Analytics</span>
+                </h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Executive performance overview, trends, and charts.</p>
+            </div>
+        </div>
+
+        <!-- ── Filter Toolbar (Matching Sales History Style) ────────────────── -->
+        <div class="px-4 sm:px-6 py-2.5 bg-slate-100/80 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
+            <div class="flex flex-col gap-2">
+                <!-- Primary Row: Date Preset Pills + Action Buttons -->
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                    <!-- Date Preset Pills -->
+                    <div class="flex flex-wrap items-center gap-1">
+                        <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mr-1 hidden sm:inline">Period:</span>
+                        <button
+                            type="button"
+                            @click="applyPreset('today')"
+                            class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition border cursor-pointer"
+                            :class="activeDatePreset === 'today'
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                : 'bg-white dark:bg-slate-700/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'"
+                        >
+                            Today
+                        </button>
+                        <button
+                            type="button"
+                            @click="applyPreset('yesterday')"
+                            class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition border cursor-pointer"
+                            :class="activeDatePreset === 'yesterday'
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                : 'bg-white dark:bg-slate-700/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'"
+                        >
+                            Yesterday
+                        </button>
+                        <button
+                            type="button"
+                            @click="applyPreset('week')"
+                            class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition border cursor-pointer"
+                            :class="activeDatePreset === 'week'
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                : 'bg-white dark:bg-slate-700/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'"
+                        >
+                            This Week
+                        </button>
+                        <button
+                            type="button"
+                            @click="applyPreset('month')"
+                            class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition border cursor-pointer"
+                            :class="activeDatePreset === 'month'
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                : 'bg-white dark:bg-slate-700/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'"
+                        >
+                            This Month
+                        </button>
+                        <button
+                            type="button"
+                            @click="applyPreset('all')"
+                            class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition border cursor-pointer"
+                            :class="activeDatePreset === 'all'
+                                ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900 border-slate-800 shadow-xs'
+                                : 'bg-white dark:bg-slate-700/80 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'"
+                        >
+                            All Time
+                        </button>
+                    </div>
+
+                    <!-- Apply & Reset Buttons -->
+                    <div class="flex items-center gap-1.5 ml-auto">
+                        <button
+                            type="button"
+                            @click="doFilter"
+                            class="px-3 py-1 bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-white text-xs font-bold rounded-lg transition shadow-xs cursor-pointer"
+                        >
+                            Apply
+                        </button>
+                        <button
+                            v-if="activeFilterCount > 0"
+                            type="button"
+                            @click="resetFilters"
+                            class="px-2.5 py-1 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-semibold rounded-lg transition cursor-pointer"
+                            title="Reset all filters"
+                        >
+                            Reset
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Secondary Row: Staff Selector + Custom Date Range Inputs -->
+                <div class="flex flex-wrap items-center gap-3 pt-1.5 border-t border-slate-200/60 dark:border-slate-700/50">
+                    <!-- Staff selector -->
+                    <div v-if="canSeeAll" class="flex items-center gap-1.5">
+                        <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Staff:</span>
+                        <select
+                            v-model="userId"
+                            class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-2.5 py-1 rounded-md text-xs border border-slate-300 dark:border-slate-600 outline-none"
+                        >
+                            <option value="">All Cashiers / Staff</option>
+                            <option v-for="u in users" :key="u.id" :value="u.id">
+                                {{ u.full_name || u.name || u.username }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <!-- Custom Range Date Pickers -->
+                    <div class="flex items-center gap-1.5 ml-auto">
+                        <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Custom Range:</span>
+                        <input
+                            v-model="from"
+                            type="date"
+                            class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-2 py-1 rounded-md text-xs border border-slate-300 dark:border-slate-600 outline-none"
+                        />
+                        <span class="text-slate-400 text-xs">to</span>
+                        <input
+                            v-model="to"
+                            type="date"
+                            class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-2 py-1 rounded-md text-xs border border-slate-300 dark:border-slate-600 outline-none"
+                        />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Filter Results Narrative Description Banner ──────────────────── -->
+        <div class="px-4 sm:px-6 py-2 bg-emerald-50/70 dark:bg-slate-900/90 border-b border-emerald-100 dark:border-slate-700/80 text-xs text-slate-700 dark:text-slate-300 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
+            <div class="flex items-center gap-2 flex-1 min-w-[260px]">
+                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 text-xs font-bold flex-shrink-0">
+                    📈
+                </span>
+                <p class="leading-relaxed text-xs">
+                    Analytics report <span class="font-bold text-emerald-700 dark:text-emerald-400">{{ filterDescription.timeText }}</span>
+                    &bull; <span class="font-semibold text-slate-900 dark:text-white">{{ filterDescription.userText }}</span>
+                </p>
+            </div>
+            <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                <span>{{ filterDescription.salesCount }} orders recorded</span>
             </div>
         </div>
 
         <div class="flex-1 overflow-y-auto p-6 space-y-6">
             
-            <!-- ── Monthly Metric Stat Cards ────────────────────────────────────── -->
+            <!-- ── Dynamic Metric Stat Cards ────────────────────────────────────── -->
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between gap-3">
                     <div class="min-w-0 flex-1">
-                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1 truncate">Monthly Revenue</p>
-                        <p class="text-xl sm:text-2xl font-bold text-theme font-mono truncate" :title="format(monthlyStats?.monthly_revenue || 0)">{{ format(monthlyStats?.monthly_revenue || 0) }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1 truncate">Period Revenue</p>
+                        <p class="text-xl sm:text-2xl font-bold text-theme font-mono truncate" :title="format(periodStats?.revenue || 0)">
+                            {{ format(periodStats?.revenue || 0) }}
+                        </p>
                     </div>
                     <div class="w-10 h-10 rounded-lg bg-theme-light text-theme flex-shrink-0 flex items-center justify-center font-bold text-lg">₦</div>
                 </div>
 
                 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between gap-3">
                     <div class="min-w-0 flex-1">
-                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1 truncate">Monthly Gross Profit</p>
-                        <p class="text-xl sm:text-2xl font-bold text-theme font-mono truncate" :title="format(monthlyStats?.monthly_profit || 0)">{{ format(monthlyStats?.monthly_profit || 0) }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1 truncate">Period Gross Profit</p>
+                        <p class="text-xl sm:text-2xl font-bold text-theme font-mono truncate" :title="format(periodStats?.profit || 0)">
+                            {{ format(periodStats?.profit || 0) }}
+                        </p>
                     </div>
                     <div class="w-10 h-10 rounded-lg bg-theme-light text-theme flex-shrink-0 flex items-center justify-center font-bold text-lg">📈</div>
                 </div>
 
                 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between gap-3">
                     <div class="min-w-0 flex-1">
-                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1 truncate">Returns (This Month)</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1 truncate">Returns in Period</p>
                         <p class="text-xl sm:text-2xl font-bold text-purple-600 dark:text-purple-400 font-mono">{{ returnsSummary?.total_qty || 0 }} <span class="text-xs text-slate-500 font-normal">items</span></p>
                         <p class="text-[11px] text-red-500 font-medium font-mono mt-0.5 truncate" :title="format(returnsSummary?.refund_worth || 0)">Worth: {{ format(returnsSummary?.refund_worth || 0) }}</p>
                     </div>
@@ -302,7 +508,9 @@ const reports = [
                 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs flex items-center justify-between gap-3">
                     <div class="min-w-0 flex-1">
                         <p class="text-xs text-slate-500 dark:text-slate-400 font-medium mb-1 truncate">Outstanding Customer Debt</p>
-                        <p class="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400 font-mono truncate" :title="format(monthlyStats?.outstanding_debt || 0)">{{ format(monthlyStats?.outstanding_debt || 0) }}</p>
+                        <p class="text-xl sm:text-2xl font-bold text-red-600 dark:text-red-400 font-mono truncate" :title="format(periodStats?.outstanding_debt || 0)">
+                            {{ format(periodStats?.outstanding_debt || 0) }}
+                        </p>
                     </div>
                     <div class="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 flex-shrink-0 flex items-center justify-center font-bold text-lg">💳</div>
                 </div>
@@ -311,12 +519,12 @@ const reports = [
             <!-- ── Analytics Visualizations Grid (Charts) ───────────────────────── -->
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
-                <!-- 1. 7-Day Revenue & Profit Bar Chart -->
+                <!-- 1. Revenue & Profit Performance Bar Chart -->
                 <div class="lg:col-span-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs space-y-4">
                     <div class="flex items-center justify-between">
                         <div>
-                            <h3 class="font-bold text-sm text-slate-900 dark:text-white">7-Day Sales & Profit Performance</h3>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">Daily revenue and gross profit breakdown for the past week.</p>
+                            <h3 class="font-bold text-sm text-slate-900 dark:text-white">Revenue & Gross Profit Performance</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Periodic revenue and gross profit breakdown for the selected timeline.</p>
                         </div>
                     </div>
                     <div class="h-64 relative">
@@ -328,7 +536,7 @@ const reports = [
                 <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs space-y-4">
                     <div>
                         <h3 class="font-bold text-sm text-slate-900 dark:text-white">Payment Method Breakdown</h3>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Distribution of payments this month.</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Distribution of payments received during this period.</p>
                     </div>
                     <div class="h-64 relative flex items-center justify-center">
                         <canvas ref="paymentCanvas"></canvas>
@@ -340,28 +548,11 @@ const reports = [
             <!-- ── Top 5 Selling Products Bar Chart ─────────────────────────────── -->
             <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl p-5 shadow-xs space-y-4">
                 <div>
-                    <h3 class="font-bold text-sm text-slate-900 dark:text-white">Top 5 Best-Selling Products (This Month)</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Products generating the highest total revenue.</p>
+                    <h3 class="font-bold text-sm text-slate-900 dark:text-white">Top 5 Best-Selling Products</h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Products generating the highest total sales volume during this period.</p>
                 </div>
                 <div class="h-60 relative">
                     <canvas ref="topItemsCanvas"></canvas>
-                </div>
-            </div>
-
-            <!-- ── Report Section Navigation Cards ──────────────────────────────── -->
-            <div>
-                <h3 class="font-bold text-sm text-slate-900 dark:text-white mb-3">Detailed Reports Navigation</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                    <Link v-for="report in reports" :key="report.title" :href="route(report.route)"
-                        class="group bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 rounded-xl p-5 transition flex items-start gap-3 shadow-xs">
-                        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-transform group-hover:scale-110" :class="report.iconClass">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="report.icon"/></svg>
-                        </div>
-                        <div>
-                            <h4 class="text-slate-900 dark:text-white font-bold text-sm mb-0.5 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition">{{ report.title }}</h4>
-                            <p class="text-slate-500 dark:text-slate-400 text-xs leading-relaxed line-clamp-2">{{ report.description }}</p>
-                        </div>
-                    </Link>
                 </div>
             </div>
 

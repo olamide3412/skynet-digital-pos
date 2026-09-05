@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Head, Link, useForm, router } from '@inertiajs/vue3'
 import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
 
@@ -139,7 +139,6 @@ watch(() => userForm.role, (newRole) => {
             'canAccessPos',
             'canViewSales',
             'canViewEndOfDay',
-            'canApplyDiscount',
             'canProcessReturn',
             'canManageCustomers',
         ]
@@ -177,11 +176,18 @@ watch(() => userForm.role, (newRole) => {
     }
 }, { immediate: true })
 
+const closeCreateUserModal = () => {
+    showCreateUserModal.value = false
+    showCreatePass.value = false
+    userForm.reset()
+    userForm.clearErrors()
+}
+
 const submitCreateUser = () => {
     userForm.post(route('superadmin.branches.users.store', { branch: props.branch.slug }), {
+        preserveScroll: true,
         onSuccess: () => {
-            showCreateUserModal.value = false
-            userForm.reset()
+            closeCreateUserModal()
         },
     })
 }
@@ -204,6 +210,13 @@ const deselectAllEdit = () => {
     editUserForm.permissions = []
 }
 
+const closeEditUserModal = () => {
+    showEditUserModal.value = false
+    editingUser.value = null
+    editUserForm.reset()
+    editUserForm.clearErrors()
+}
+
 const openEditUser = (user) => {
     editingUser.value = user
     editUserForm.name = user.name
@@ -219,9 +232,9 @@ const submitEditUser = () => {
     editUserForm.put(
         route('superadmin.branches.users.update', { branch: props.branch.slug, user: editingUser.value.id }),
         {
+            preserveScroll: true,
             onSuccess: () => {
-                showEditUserModal.value = false
-                editingUser.value = null
+                closeEditUserModal()
             },
         }
     )
@@ -230,6 +243,15 @@ const submitEditUser = () => {
 const showResetUserModal = ref(false)
 const resetUserId = ref(null)
 const resetUserForm = useForm({ password: '', password_confirmation: '' })
+
+const closeResetUserModal = () => {
+    showResetUserModal.value = false
+    resetUserId.value = null
+    showResetPass.value = false
+    showResetConfirmPass.value = false
+    resetUserForm.reset()
+    resetUserForm.clearErrors()
+}
 
 const openResetUser = (userId) => {
     resetUserId.value = userId
@@ -241,9 +263,9 @@ const submitResetUser = () => {
     resetUserForm.post(
         route('superadmin.branches.users.reset-password', { branch: props.branch.slug, user: resetUserId.value }),
         {
+            preserveScroll: true,
             onSuccess: () => {
-                showResetUserModal.value = false
-                resetUserId.value = null
+                closeResetUserModal()
             },
         }
     )
@@ -311,23 +333,192 @@ const doItemSearch = () => {
 
 // ── Tab 5: Financials & Sales Search ──────────────────────────────────────────
 const salesSearch = ref(props.filters?.sales_search ?? '')
+const salesStartDate = ref(props.filters?.sales_start_date ?? '')
+const salesEndDate = ref(props.filters?.sales_end_date ?? '')
+const activeSalesPreset = ref('custom')
+
+const setSalesPreset = (preset) => {
+    activeSalesPreset.value = preset
+    const today = new Date()
+    const fmt = (d) => {
+        const year = d.getFullYear()
+        const month = String(d.getMonth() + 1).padStart(2, '0')
+        const day = String(d.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+    }
+
+    if (preset === 'today') {
+        salesStartDate.value = fmt(today)
+        salesEndDate.value = fmt(today)
+    } else if (preset === 'yesterday') {
+        const y = new Date()
+        y.setDate(y.getDate() - 1)
+        salesStartDate.value = fmt(y)
+        salesEndDate.value = fmt(y)
+    } else if (preset === 'week') {
+        const curr = new Date()
+        const day = curr.getDay()
+        const diff = curr.getDate() - day + (day === 0 ? -6 : 1)
+        const mon = new Date(curr.setDate(diff))
+        salesStartDate.value = fmt(mon)
+        salesEndDate.value = fmt(new Date())
+    } else if (preset === 'month') {
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+        salesStartDate.value = fmt(firstDay)
+        salesEndDate.value = fmt(new Date())
+    } else if (preset === 'all') {
+        salesStartDate.value = ''
+        salesEndDate.value = ''
+    }
+    doSalesSearch()
+}
+
 const doSalesSearch = () => {
     router.get(
         route('superadmin.branches.show', { branch: props.branch.slug }),
-        { tab: 'reports', sales_search: salesSearch.value },
+        {
+            tab: 'reports',
+            sales_search: salesSearch.value,
+            sales_start_date: salesStartDate.value,
+            sales_end_date: salesEndDate.value,
+        },
         { preserveState: true, replace: true }
     )
 }
 
+const resetSalesFilters = () => {
+    salesSearch.value = ''
+    salesStartDate.value = ''
+    salesEndDate.value = ''
+    activeSalesPreset.value = 'all'
+    doSalesSearch()
+}
+
 // ── Tab 6: Audit Logs Search ──────────────────────────────────────────────────
 const logSearch = ref(props.filters?.log_search ?? '')
+const logStartDate = ref(props.filters?.log_start_date ?? '')
+const logEndDate = ref(props.filters?.log_end_date ?? '')
+const activeLogPreset = ref('custom')
+
+const setLogPreset = (preset) => {
+    activeLogPreset.value = preset
+    const today = new Date()
+    const fmt = (d) => {
+        const year = d.getFullYear()
+        const month = String(d.getMonth() + 1).padStart(2, '0')
+        const day = String(d.getDate()).padStart(2, '0')
+        return `${year}-${month}-${day}`
+    }
+
+    if (preset === 'today') {
+        logStartDate.value = fmt(today)
+        logEndDate.value = fmt(today)
+    } else if (preset === 'yesterday') {
+        const y = new Date()
+        y.setDate(y.getDate() - 1)
+        logStartDate.value = fmt(y)
+        logEndDate.value = fmt(y)
+    } else if (preset === 'week') {
+        const curr = new Date()
+        const day = curr.getDay()
+        const diff = curr.getDate() - day + (day === 0 ? -6 : 1)
+        const mon = new Date(curr.setDate(diff))
+        logStartDate.value = fmt(mon)
+        logEndDate.value = fmt(new Date())
+    } else if (preset === 'month') {
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
+        logStartDate.value = fmt(firstDay)
+        logEndDate.value = fmt(new Date())
+    } else if (preset === 'all') {
+        logStartDate.value = ''
+        logEndDate.value = ''
+    }
+    doLogSearch()
+}
+
 const doLogSearch = () => {
     router.get(
         route('superadmin.branches.show', { branch: props.branch.slug }),
-        { tab: 'audit', log_search: logSearch.value },
+        {
+            tab: 'audit',
+            log_search: logSearch.value,
+            log_start_date: logStartDate.value,
+            log_end_date: logEndDate.value,
+        },
         { preserveState: true, replace: true }
     )
 }
+
+const resetLogFilters = () => {
+    logSearch.value = ''
+    logStartDate.value = ''
+    logEndDate.value = ''
+    activeLogPreset.value = 'all'
+    doLogSearch()
+}
+
+// ── Export Handlers (Tabs 4, 5, 6) ───────────────────────────────────────────
+const showExportModal = ref(false)
+const exportForm = ref({
+    format: 'xlsx',
+    quantity_option: 'total',
+})
+
+const openExportModal = () => {
+    showExportModal.value = true
+}
+
+const triggerExport = () => {
+    showExportModal.value = false
+    const params = new URLSearchParams()
+    params.set('format', exportForm.value.format)
+    params.set('quantity_option', exportForm.value.quantity_option)
+    if (itemSearch.value) params.set('item_search', itemSearch.value.trim())
+    window.location.href = `${route('superadmin.branches.export-items', { branch: props.branch.slug })}?${params.toString()}`
+}
+
+const exportSalesMenuOpen = ref(false)
+const exportSalesDropdownRef = ref(null)
+
+const downloadSalesExport = (exportFormat = 'xlsx') => {
+    exportSalesMenuOpen.value = false
+    const params = new URLSearchParams()
+    params.set('format', exportFormat)
+    if (salesSearch.value) params.set('sales_search', salesSearch.value.trim())
+    if (salesStartDate.value) params.set('sales_start_date', salesStartDate.value)
+    if (salesEndDate.value) params.set('sales_end_date', salesEndDate.value)
+    window.location.href = `${route('superadmin.branches.export-sales', { branch: props.branch.slug })}?${params.toString()}`
+}
+
+const exportLogsMenuOpen = ref(false)
+const exportLogsDropdownRef = ref(null)
+
+const downloadLogsExport = (exportFormat = 'xlsx') => {
+    exportLogsMenuOpen.value = false
+    const params = new URLSearchParams()
+    params.set('format', exportFormat)
+    if (logSearch.value) params.set('log_search', logSearch.value.trim())
+    if (logStartDate.value) params.set('log_start_date', logStartDate.value)
+    if (logEndDate.value) params.set('log_end_date', logEndDate.value)
+    window.location.href = `${route('superadmin.branches.export-logs', { branch: props.branch.slug })}?${params.toString()}`
+}
+
+const handleGlobalClickOutside = (e) => {
+    if (exportSalesDropdownRef.value && !exportSalesDropdownRef.value.contains(e.target)) {
+        exportSalesMenuOpen.value = false
+    }
+    if (exportLogsDropdownRef.value && !exportLogsDropdownRef.value.contains(e.target)) {
+        exportLogsMenuOpen.value = false
+    }
+}
+
+onMounted(() => {
+    document.addEventListener('click', handleGlobalClickOutside)
+})
+
+onUnmounted(() => {
+    document.removeEventListener('click', handleGlobalClickOutside)
+})
 
 const showImportModal = ref(false)
 const masterSearch = ref('')
@@ -384,31 +575,6 @@ const removeItem = (item) => {
     if (confirm(`Remove "${item.item_name}" from ${props.branch.name} catalog?`)) {
         router.delete(route('superadmin.branches.items.destroy', { branch: props.branch.slug, item: item.id }))
     }
-}
-
-// ── Tab 4: Export Branch Items Flow ──────────────────────────────────────────
-const showExportModal = ref(false)
-const exportForm = ref({
-    format: 'xlsx',
-    quantity_option: 'total',
-})
-
-const openExportModal = () => {
-    exportForm.value = {
-        format: 'xlsx',
-        quantity_option: 'total',
-    }
-    showExportModal.value = true
-}
-
-const triggerExport = () => {
-    const url = route('superadmin.branches.export-items', {
-        branch: props.branch.slug,
-        format: exportForm.value.format,
-        quantity_option: exportForm.value.quantity_option,
-    })
-    window.location.href = url
-    showExportModal.value = false
 }
 
 // ── Tab 4: CSV / Excel Import Library Flow ──────────────────────────────────
@@ -969,13 +1135,17 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                     <span v-else class="text-rose-500 text-xs italic font-medium">No Role</span>
                                 </td>
                                 <td class="px-6 py-4">
-                                    <span v-if="user.roles?.some(r => r.name === 'branch-admin')"
+                                    <span v-if="user.permissions?.length && user.permissions.length >= all_permissions.length"
                                         class="text-xs text-indigo-700 dark:text-indigo-300 font-semibold bg-indigo-50 dark:bg-indigo-500/10 px-2.5 py-1 rounded border border-indigo-200 dark:border-indigo-500/20">
                                         Full Access (All Permissions)
                                     </span>
                                     <span v-else-if="user.permissions?.length"
                                         class="text-xs text-emerald-700 dark:text-emerald-300 font-medium bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-200 dark:border-emerald-500/20">
                                         {{ user.permissions.length }} of {{ all_permissions.length }} permissions
+                                    </span>
+                                    <span v-else-if="user.roles?.some(r => r.name === 'branch-admin')"
+                                        class="text-xs text-indigo-700 dark:text-indigo-300 font-semibold bg-indigo-50 dark:bg-indigo-500/10 px-2.5 py-1 rounded border border-indigo-200 dark:border-indigo-500/20">
+                                        Full Access (All Permissions)
                                     </span>
                                     <span v-else class="text-slate-400 dark:text-slate-500 text-xs italic">No custom permissions</span>
                                 </td>
@@ -1473,23 +1643,173 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                     <h2 class="text-lg font-bold text-slate-900 dark:text-white">Sales & Financial Activity</h2>
                     <p class="text-xs text-slate-500">Live sales receipts logged from {{ branch.name }} terminals.</p>
                 </div>
+                <!-- Export Dropdown -->
+                <div class="relative" ref="exportSalesDropdownRef">
+                    <button
+                        type="button"
+                        @click="exportSalesMenuOpen = !exportSalesMenuOpen"
+                        class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-600/20 flex items-center space-x-1.5 cursor-pointer"
+                        title="Export sales records"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Export Sales</span>
+                        <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Dropdown Menu -->
+                    <div
+                        v-if="exportSalesMenuOpen"
+                        class="absolute right-0 mt-1.5 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100"
+                    >
+                        <div class="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            Export Sales List
+                        </div>
+                        <button
+                            type="button"
+                            @click="downloadSalesExport('xlsx')"
+                            class="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                        >
+                            <span class="w-5 h-5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-[10px]">
+                                XLS
+                            </span>
+                            Excel (.xlsx)
+                        </button>
+                        <button
+                            type="button"
+                            @click="downloadSalesExport('csv')"
+                            class="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                        >
+                            <span class="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px]">
+                                CSV
+                            </span>
+                            CSV Document (.csv)
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <!-- Sales Search Bar -->
-            <div class="flex items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs">
-                <div class="relative flex-1 max-w-md">
-                    <input
-                        v-model="salesSearch"
-                        @keydown.enter="doSalesSearch"
-                        type="text"
-                        placeholder="Search by receipt #, customer, cashier, payment method…"
-                        class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl pl-9 pr-4 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                    <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <!-- Sales Filter Bar with Preset Pills, Start & End Date Pickers, Search, and Reset -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs space-y-3">
+                <!-- Preset Pills -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-bold text-slate-500 dark:text-slate-400 mr-1">Date Presets:</span>
+                    <button
+                        type="button"
+                        @click="setSalesPreset('all')"
+                        :class="activeSalesPreset === 'all' && !salesStartDate && !salesEndDate
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                        All Time
+                    </button>
+                    <button
+                        type="button"
+                        @click="setSalesPreset('today')"
+                        :class="activeSalesPreset === 'today'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                        Today
+                    </button>
+                    <button
+                        type="button"
+                        @click="setSalesPreset('yesterday')"
+                        :class="activeSalesPreset === 'yesterday'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                        Yesterday
+                    </button>
+                    <button
+                        type="button"
+                        @click="setSalesPreset('week')"
+                        :class="activeSalesPreset === 'week'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                        This Week
+                    </button>
+                    <button
+                        type="button"
+                        @click="setSalesPreset('month')"
+                        :class="activeSalesPreset === 'month'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                        This Month
+                    </button>
                 </div>
-                <button @click="doSalesSearch" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 transition cursor-pointer">
-                    Search
-                </button>
+
+                <!-- Custom Range & Keyword Search Controls -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 pt-1">
+                    <!-- Search Input -->
+                    <div class="lg:col-span-5 relative">
+                        <input
+                            v-model="salesSearch"
+                            @keydown.enter="doSalesSearch"
+                            type="text"
+                            placeholder="Search receipt #, customer, cashier, payment method…"
+                            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                        />
+                        <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </div>
+
+                    <!-- Start Date -->
+                    <div class="lg:col-span-3">
+                        <div class="relative">
+                            <input
+                                v-model="salesStartDate"
+                                @change="activeSalesPreset = 'custom'; doSalesSearch()"
+                                type="date"
+                                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- End Date -->
+                    <div class="lg:col-span-3">
+                        <div class="relative">
+                            <input
+                                v-model="salesEndDate"
+                                @change="activeSalesPreset = 'custom'; doSalesSearch()"
+                                type="date"
+                                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Filter / Reset Actions -->
+                    <div class="lg:col-span-1 flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            @click="doSalesSearch"
+                            class="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center"
+                            title="Apply Filter"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                        </button>
+                        <button
+                            v-if="salesSearch || salesStartDate || salesEndDate"
+                            type="button"
+                            @click="resetSalesFilters"
+                            class="px-2.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-xl text-xs font-bold transition cursor-pointer"
+                            title="Reset Filters"
+                        >
+                            &times;
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <!-- Recent Sales Ledger -->
@@ -1557,28 +1877,178 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
         <!-- TAB 6: AUDIT & ACTIVITY LOG                                           -->
         <!-- ══════════════════════════════════════════════════════════════════════ -->
         <div v-show="activeTab === 'audit'" class="space-y-6">
-            <div class="flex items-center justify-between">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
                     <h2 class="text-lg font-bold text-slate-900 dark:text-white">Branch Activity & Change Audit Trail</h2>
                     <p class="text-xs text-slate-500">Complete timestamped history of actions and configuration overrides in {{ branch.name }}.</p>
                 </div>
+                <!-- Export Dropdown -->
+                <div class="relative" ref="exportLogsDropdownRef">
+                    <button
+                        type="button"
+                        @click="exportLogsMenuOpen = !exportLogsMenuOpen"
+                        class="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-emerald-600/20 flex items-center space-x-1.5 cursor-pointer"
+                        title="Export audit logs"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Export Logs</span>
+                        <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Dropdown Menu -->
+                    <div
+                        v-if="exportLogsMenuOpen"
+                        class="absolute right-0 mt-1.5 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100"
+                    >
+                        <div class="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            Export Audit Logs
+                        </div>
+                        <button
+                            type="button"
+                            @click="downloadLogsExport('xlsx')"
+                            class="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                        >
+                            <span class="w-5 h-5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-[10px]">
+                                XLS
+                            </span>
+                            Excel (.xlsx)
+                        </button>
+                        <button
+                            type="button"
+                            @click="downloadLogsExport('csv')"
+                            class="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                        >
+                            <span class="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px]">
+                                CSV
+                            </span>
+                            CSV Document (.csv)
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <!-- Audit Logs Search Bar -->
-            <div class="flex items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs">
-                <div class="relative flex-1 max-w-md">
-                    <input
-                        v-model="logSearch"
-                        @keydown.enter="doLogSearch"
-                        type="text"
-                        placeholder="Search audit trail by action, user, or IP…"
-                        class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl pl-9 pr-4 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
-                    <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <!-- Audit Logs Filter Bar with Preset Pills, Start & End Date Pickers, Search, and Reset -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs space-y-3">
+                <!-- Preset Pills -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-bold text-slate-500 dark:text-slate-400 mr-1">Date Presets:</span>
+                    <button
+                        type="button"
+                        @click="setLogPreset('all')"
+                        :class="activeLogPreset === 'all' && !logStartDate && !logEndDate
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                        All Time
+                    </button>
+                    <button
+                        type="button"
+                        @click="setLogPreset('today')"
+                        :class="activeLogPreset === 'today'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                        Today
+                    </button>
+                    <button
+                        type="button"
+                        @click="setLogPreset('yesterday')"
+                        :class="activeLogPreset === 'yesterday'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                        Yesterday
+                    </button>
+                    <button
+                        type="button"
+                        @click="setLogPreset('week')"
+                        :class="activeLogPreset === 'week'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                        This Week
+                    </button>
+                    <button
+                        type="button"
+                        @click="setLogPreset('month')"
+                        :class="activeLogPreset === 'month'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
+                        class="px-3 py-1.5 rounded-lg text-xs font-semibold transition cursor-pointer"
+                    >
+                        This Month
+                    </button>
                 </div>
-                <button @click="doLogSearch" class="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold border border-slate-200 dark:border-slate-700 transition cursor-pointer">
-                    Search
-                </button>
+
+                <!-- Custom Range & Keyword Search Controls -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 pt-1">
+                    <!-- Search Input -->
+                    <div class="lg:col-span-5 relative">
+                        <input
+                            v-model="logSearch"
+                            @keydown.enter="doLogSearch"
+                            type="text"
+                            placeholder="Search audit trail by action, user, or IP…"
+                            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                        />
+                        <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </div>
+
+                    <!-- Start Date -->
+                    <div class="lg:col-span-3">
+                        <div class="relative">
+                            <input
+                                v-model="logStartDate"
+                                @change="activeLogPreset = 'custom'; doLogSearch()"
+                                type="date"
+                                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- End Date -->
+                    <div class="lg:col-span-3">
+                        <div class="relative">
+                            <input
+                                v-model="logEndDate"
+                                @change="activeLogPreset = 'custom'; doLogSearch()"
+                                type="date"
+                                class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Filter / Reset Actions -->
+                    <div class="lg:col-span-1 flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            @click="doLogSearch"
+                            class="w-full px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center justify-center"
+                            title="Apply Filter"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/></svg>
+                        </button>
+                        <button
+                            v-if="logSearch || logStartDate || logEndDate"
+                            type="button"
+                            @click="resetLogFilters"
+                            class="px-2.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 rounded-xl text-xs font-bold transition cursor-pointer"
+                            title="Reset Filters"
+                        >
+                            &times;
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl overflow-hidden shadow-xs">
@@ -1655,14 +2125,26 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
         </div>
 
         <!-- ── MODAL: ADD STAFF USER ─────────────────────────────────────────── -->
-        <div v-if="showCreateUserModal" class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div v-if="showCreateUserModal" @click.self="closeCreateUserModal" class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-8 max-h-[90vh] flex flex-col">
                 <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-shrink-0">
                     <div>
                         <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Add Staff User to {{ branch.name }}</h2>
                         <p class="text-xs text-slate-500 dark:text-slate-400">Assign role and select specific POS permissions</p>
                     </div>
-                    <button @click="showCreateUserModal = false; userForm.reset()" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xl font-bold">&times;</button>
+                    <button
+                        type="button"
+                        @click="closeCreateUserModal"
+                        class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-xl font-bold"
+                        aria-label="Close"
+                    >
+                        &times;
+                    </button>
+                </div>
+
+                <!-- Global Validation Error Banner -->
+                <div v-if="userForm.hasErrors" class="p-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl text-xs text-rose-700 dark:text-rose-300 font-medium flex-shrink-0">
+                    ⚠️ Please correct the errors highlighted below before creating this staff account.
                 </div>
 
                 <form @submit.prevent="submitCreateUser" class="space-y-4 overflow-y-auto pr-1 flex-1">
@@ -1671,30 +2153,34 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Name *</label>
                             <input v-model="userForm.name" type="text" required
                                 class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500" />
+                            <div v-if="userForm.errors.name" class="text-rose-500 text-xs mt-1 font-medium">{{ userForm.errors.name }}</div>
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Username *</label>
                             <input v-model="userForm.username" type="text" required
                                 class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500" />
+                            <div v-if="userForm.errors.username" class="text-rose-500 text-xs mt-1 font-medium">{{ userForm.errors.username }}</div>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email <span class="text-slate-400 font-normal">(Optional)</span></label>
                             <input v-model="userForm.email" type="email"
                                 class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500" />
+                            <div v-if="userForm.errors.email" class="text-rose-500 text-xs mt-1 font-medium">{{ userForm.errors.email }}</div>
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Password *</label>
                             <div class="relative flex items-center">
                                 <input v-model="userForm.password" :type="showCreatePass ? 'text' : 'password'" required
                                     class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 pr-9 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500" />
-                                <button type="button" @click="showCreatePass = !showCreatePass" class="absolute right-2.5 text-slate-400 hover:text-slate-600 transition focus:outline-none">
+                                <button type="button" @click="showCreatePass = !showCreatePass" class="absolute right-2.5 text-slate-400 hover:text-slate-600 transition focus:outline-none cursor-pointer">
                                     <span v-if="!showCreatePass">👁️</span>
                                     <span v-else>🙈</span>
                                 </button>
                             </div>
+                            <div v-if="userForm.errors.password" class="text-rose-500 text-xs mt-1 font-medium">{{ userForm.errors.password }}</div>
                         </div>
                     </div>
 
@@ -1705,6 +2191,7 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                             <option value="" disabled>-- Select Base Role --</option>
                             <option v-for="r in roles" :key="r.id" :value="r.name">{{ formatRoleName(r.name) }}</option>
                         </select>
+                        <div v-if="userForm.errors.role" class="text-rose-500 text-xs mt-1 font-medium">{{ userForm.errors.role }}</div>
                     </div>
 
                     <!-- Permissions Grid -->
@@ -1715,10 +2202,10 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                 <p class="text-xs text-slate-500">Assign menu and operational rights</p>
                             </div>
                             <div class="flex items-center space-x-2">
-                                <button type="button" @click="selectAllCreate" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <button type="button" @click="selectAllCreate" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
                                     Select All
                                 </button>
-                                <button type="button" @click="deselectAllCreate" class="text-xs text-slate-600 dark:text-slate-400 hover:underline px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <button type="button" @click="deselectAllCreate" class="text-xs text-slate-600 dark:text-slate-400 hover:underline px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
                                     Deselect All
                                 </button>
                             </div>
@@ -1741,11 +2228,12 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                 <span>{{ perm.label }}</span>
                             </label>
                         </div>
+                        <div v-if="userForm.errors.permissions" class="text-rose-500 text-xs mt-1 font-medium">{{ userForm.errors.permissions }}</div>
                     </div>
 
                     <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end space-x-3">
-                        <button type="button" @click="showCreateUserModal = false" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
-                        <button type="submit" :disabled="userForm.processing" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 cursor-pointer">
+                        <button type="button" @click="closeCreateUserModal" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer">Cancel</button>
+                        <button type="submit" :disabled="userForm.processing" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 cursor-pointer disabled:opacity-50">
                             {{ userForm.processing ? 'Creating User…' : 'Create User & Assign Permissions' }}
                         </button>
                     </div>
@@ -1754,14 +2242,26 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
         </div>
 
         <!-- ── MODAL: EDIT STAFF USER ────────────────────────────────────────── -->
-        <div v-if="showEditUserModal" class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
+        <div v-if="showEditUserModal" @click.self="closeEditUserModal" class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-8 max-h-[90vh] flex flex-col">
                 <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-shrink-0">
                     <div>
                         <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Edit Staff User — @{{ editingUser?.username }}</h2>
                         <p class="text-xs text-slate-500 dark:text-slate-400">Update account details and feature permissions</p>
                     </div>
-                    <button @click="showEditUserModal = false" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xl font-bold">&times;</button>
+                    <button
+                        type="button"
+                        @click="closeEditUserModal"
+                        class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-xl font-bold"
+                        aria-label="Close"
+                    >
+                        &times;
+                    </button>
+                </div>
+
+                <!-- Global Validation Error Banner -->
+                <div v-if="editUserForm.hasErrors" class="p-3 bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/20 rounded-xl text-xs text-rose-700 dark:text-rose-300 font-medium flex-shrink-0">
+                    ⚠️ Please correct the errors highlighted below before saving changes.
                 </div>
 
                 <form @submit.prevent="submitEditUser" class="space-y-4 overflow-y-auto pr-1 flex-1">
@@ -1770,19 +2270,22 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Full Name *</label>
                             <input v-model="editUserForm.name" type="text" required
                                 class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500" />
+                            <div v-if="editUserForm.errors.name" class="text-rose-500 text-xs mt-1 font-medium">{{ editUserForm.errors.name }}</div>
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Username *</label>
                             <input v-model="editUserForm.username" type="text" required
                                 class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500" />
+                            <div v-if="editUserForm.errors.username" class="text-rose-500 text-xs mt-1 font-medium">{{ editUserForm.errors.username }}</div>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email <span class="text-slate-400 font-normal">(Optional)</span></label>
                             <input v-model="editUserForm.email" type="email"
                                 class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500" />
+                            <div v-if="editUserForm.errors.email" class="text-rose-500 text-xs mt-1 font-medium">{{ editUserForm.errors.email }}</div>
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Role *</label>
@@ -1791,6 +2294,7 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                 <option value="" disabled>-- Select Base Role --</option>
                                 <option v-for="r in roles" :key="r.id" :value="r.name">{{ formatRoleName(r.name) }}</option>
                             </select>
+                            <div v-if="editUserForm.errors.role" class="text-rose-500 text-xs mt-1 font-medium">{{ editUserForm.errors.role }}</div>
                         </div>
                     </div>
 
@@ -1802,10 +2306,10 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                 <p class="text-xs text-slate-500">Customize feature access</p>
                             </div>
                             <div class="flex items-center space-x-2">
-                                <button type="button" @click="selectAllEdit" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <button type="button" @click="selectAllEdit" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
                                     Select All
                                 </button>
-                                <button type="button" @click="deselectAllEdit" class="text-xs text-slate-600 dark:text-slate-400 hover:underline px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <button type="button" @click="deselectAllEdit" class="text-xs text-slate-600 dark:text-slate-400 hover:underline px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
                                     Deselect All
                                 </button>
                             </div>
@@ -1828,11 +2332,12 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                 <span>{{ perm.label }}</span>
                             </label>
                         </div>
+                        <div v-if="editUserForm.errors.permissions" class="text-rose-500 text-xs mt-1 font-medium">{{ editUserForm.errors.permissions }}</div>
                     </div>
 
                     <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end space-x-3">
-                        <button type="button" @click="showEditUserModal = false" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
-                        <button type="submit" :disabled="editUserForm.processing" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 cursor-pointer">
+                        <button type="button" @click="closeEditUserModal" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer">Cancel</button>
+                        <button type="submit" :disabled="editUserForm.processing" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-600/20 cursor-pointer disabled:opacity-50">
                             {{ editUserForm.processing ? 'Saving…' : 'Save Changes' }}
                         </button>
                     </div>
@@ -1841,26 +2346,35 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
         </div>
 
         <!-- ── MODAL: RESET PASSWORD ─────────────────────────────────────────── -->
-        <div v-if="showResetUserModal" class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
+        <div v-if="showResetUserModal" @click.self="closeResetUserModal" class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
                 <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                     <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Reset Password</h2>
-                    <button @click="showResetUserModal = false" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xl font-bold">&times;</button>
+                    <button
+                        type="button"
+                        @click="closeResetUserModal"
+                        class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-xl font-bold"
+                        aria-label="Close"
+                    >
+                        &times;
+                    </button>
                 </div>
                 <form @submit.prevent="submitResetUser" class="space-y-3">
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">New Password *</label>
                         <input v-model="resetUserForm.password" :type="showResetPass ? 'text' : 'password'" required
                             class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500" />
+                        <div v-if="resetUserForm.errors.password" class="text-rose-500 text-xs mt-1 font-medium">{{ resetUserForm.errors.password }}</div>
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Confirm Password *</label>
                         <input v-model="resetUserForm.password_confirmation" :type="showResetConfirmPass ? 'text' : 'password'" required
                             class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500" />
+                        <div v-if="resetUserForm.errors.password_confirmation" class="text-rose-500 text-xs mt-1 font-medium">{{ resetUserForm.errors.password_confirmation }}</div>
                     </div>
                     <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end space-x-3">
-                        <button type="button" @click="showResetUserModal = false" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400">Cancel</button>
-                        <button type="submit" :disabled="resetUserForm.processing" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer">
+                        <button type="button" @click="closeResetUserModal" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer">Cancel</button>
+                        <button type="submit" :disabled="resetUserForm.processing" class="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer disabled:opacity-50">
                             {{ resetUserForm.processing ? 'Resetting…' : 'Reset Password' }}
                         </button>
                     </div>

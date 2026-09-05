@@ -35,9 +35,14 @@ class RoleService
             setPermissionsTeamId($user->branch_id);
         }
 
-        if ($user->isBranchAdmin()) return true;
-
         try {
+            // If user has customized direct permissions, respect direct permission overrides
+            if ($user->permissions->isNotEmpty()) {
+                return $user->hasDirectPermission($permission);
+            }
+
+            if ($user->isBranchAdmin()) return true;
+
             return $user->hasPermissionTo($permission);
         } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {
             \Spatie\Permission\Models\Permission::findOrCreate($permission, 'web');

@@ -482,11 +482,11 @@ function executeTestPrint() {
 
                                 <div class="space-y-1">
                                     <div class="flex justify-between">
-                                        <span>2x Sample Item 1</span>
+                                        <span>1. 2x Sample Item 1</span>
                                         <span>3,000.00</span>
                                     </div>
                                     <div class="flex justify-between">
-                                        <span>1x Sample Item 2</span>
+                                        <span>2. 1x Sample Item 2</span>
                                         <span>2,500.00</span>
                                     </div>
                                 </div>

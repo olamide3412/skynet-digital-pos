@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { router, Link } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 
@@ -15,6 +15,9 @@ const props = defineProps({
 const activeTab        = ref(props.filters?.tab || 'reorder')
 const searchFilter     = ref(props.filters?.search || '')
 const categoryFilter   = ref(props.filters?.category_id || '')
+
+const exportMenuOpen   = ref(false)
+const exportDropdownRef = ref(null)
 
 const editingItem      = ref(null)
 const editForm         = ref({ reorder_point: 10, reorder_unit: 'unit' })
@@ -39,6 +42,35 @@ function resetFilters() {
     categoryFilter.value = ''
     applyFilters()
 }
+
+function getExportUrl(exportFormat = 'xlsx') {
+    const branchSlug = route().params.branch || 'felix-enterprise'
+    const params = new URLSearchParams()
+    params.set('format', exportFormat)
+    if (activeTab.value) params.set('tab', activeTab.value)
+    if (searchFilter.value) params.set('search', searchFilter.value.trim())
+    if (categoryFilter.value) params.set('category_id', categoryFilter.value)
+    return `${route('pos.inventory.reorder-points.export', { branch: branchSlug })}?${params.toString()}`
+}
+
+function downloadExport(exportFormat) {
+    exportMenuOpen.value = false
+    window.location.href = getExportUrl(exportFormat)
+}
+
+function handleClickOutside(e) {
+    if (exportDropdownRef.value && !exportDropdownRef.value.contains(e.target)) {
+        exportMenuOpen.value = false
+    }
+}
+
+onMounted(() => {
+    document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+    document.removeEventListener('click', handleClickOutside)
+})
 
 function openEditModal(item) {
     editingItem.value = item
@@ -82,9 +114,57 @@ function getStatusBadge(item) {
                 <p class="text-xs text-slate-500 dark:text-slate-400">Identify items reaching critical thresholds and manage stock replenishment triggers.</p>
             </div>
             <div class="flex items-center gap-2">
+                <!-- Export Dropdown -->
+                <div class="relative" ref="exportDropdownRef">
+                    <button
+                        type="button"
+                        @click="exportMenuOpen = !exportMenuOpen"
+                        class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        title="Export reorder items"
+                    >
+                        <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Export</span>
+                        <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Dropdown Menu -->
+                    <div
+                        v-if="exportMenuOpen"
+                        class="absolute right-0 mt-1.5 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100"
+                    >
+                        <div class="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            Export Items List
+                        </div>
+                        <button
+                            type="button"
+                            @click="downloadExport('xlsx')"
+                            class="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                        >
+                            <span class="w-5 h-5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-[10px]">
+                                XLS
+                            </span>
+                            Excel (.xlsx)
+                        </button>
+                        <button
+                            type="button"
+                            @click="downloadExport('csv')"
+                            class="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                        >
+                            <span class="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px]">
+                                CSV
+                            </span>
+                            CSV Document (.csv)
+                        </button>
+                    </div>
+                </div>
+
                 <button
                     @click="resetFilters"
-                    class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition"
+                    class="px-4 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl transition cursor-pointer"
                 >
                     Reset Filters
                 </button>

@@ -29,14 +29,13 @@ class PosRoleMiddleware
             return $next($request);
         }
 
-        // Branch Admins have all branch-level permissions
-        if ($user->isBranchAdmin()) {
-            return $next($request);
-        }
-
         // Check Spatie permission (branch-scoped via team_id)
         try {
-            if ($user->hasPermissionTo($ability)) {
+            if ($user->permissions->isNotEmpty()) {
+                if ($user->hasDirectPermission($ability)) {
+                    return $next($request);
+                }
+            } elseif ($user->isBranchAdmin() || $user->hasPermissionTo($ability)) {
                 return $next($request);
             }
         } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {

@@ -6,16 +6,45 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\PosLog;
 use App\Models\User;
+use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
+use PhpOffice\PhpSpreadsheet\Writer\Csv as CsvWriter;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class ActivityLogController extends Controller
 {
-    public function index(Request $request)
+    private function streamExcelOrCsv(Spreadsheet $spreadsheet, string $filenamePrefix, string $format = 'xlsx')
+    {
+        $format = strtolower($format) === 'csv' ? 'csv' : 'xlsx';
+        $filename = $filenamePrefix . '_' . date('Y-m-d_His') . '.' . $format;
+
+        if ($format === 'csv') {
+            $writer = new CsvWriter($spreadsheet);
+            $writer->setUseBOM(true);
+            $contentType = 'text/csv; charset=UTF-8';
+        } else {
+            $writer = new XlsxWriter($spreadsheet);
+            $contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        }
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type'        => $contentType,
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control'       => 'max-age=0',
+        ]);
+    }
+
+    private function buildLogQuery(Request $request)
     {
         $query = PosLog::with([
             'branch:id,name,slug',
-            'user:id,name,email',
+            'user:id,name,email,username',
         ])->latest('id');
 
         // Filter by branch
@@ -50,13 +79,22 @@ class ActivityLogController extends Controller
             $search = '%' . trim($request->search) . '%';
             $query->where(function ($q) use ($search) {
                 $q->where('log', 'like', $search)
+                  ->orWhere('action_type', 'like', $search)
                   ->orWhere('ip_address', 'like', $search)
                   ->orWhereHas('user', function ($uq) use ($search) {
-                      $uq->where('name', 'like', $search)->orWhere('email', 'like', $search);
+                      $uq->where('name', 'like', $search)
+                         ->orWhere('email', 'like', $search)
+                         ->orWhere('username', 'like', $search);
                   });
             });
         }
 
+        return $query;
+    }
+
+    public function index(Request $request)
+    {
+        $query = $this->buildLogQuery($request);
         $logs = $query->paginate(25)->withQueryString();
 
         $branches = Branch::select('id', 'name', 'slug')->orderBy('name')->get();
@@ -68,5 +106,75 @@ class ActivityLogController extends Controller
             'users'    => $users,
             'filters'  => $request->only(['branch_id', 'action_type', 'user_id', 'search', 'start_date', 'end_date']),
         ]);
+    }
+
+    /**
+     * Export master activity and error logs in CSV or Excel format with date range and filters.
+     */
+    public function export(Request $request)
+    {
+        $format = $request->query('format', 'xlsx');
+        $query = $this->buildLogQuery($request);
+        $logs = $query->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Activity & Error Logs');
+
+        $headers = [
+            '#',
+            'Timestamp',
+            'Category / Action',
+            'Branch Location',
+            'Staff / User',
+            'Email / Username',
+            'IP Address',
+            'Log Description',
+            'Payload / Error Details',
+        ];
+
+        foreach ($headers as $colIdx => $header) {
+            $colLetter = Coordinate::stringFromColumnIndex($colIdx + 1);
+            $sheet->setCellValue("{$colLetter}1", $header);
+        }
+
+        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
+        $headerRange = "A1:{$lastCol}1";
+        $sheet->getStyle($headerRange)->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle($headerRange)->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setRGB('059669'); // Emerald
+
+        $rowNum = 2;
+        foreach ($logs as $idx => $log) {
+            $branchName = $log->branch ? $log->branch->name : 'Global System';
+            $userName   = $log->user ? $log->user->name : 'System / Guest';
+            $userEmail  = $log->user ? ($log->user->email ?: $log->user->username) : '-';
+            $details    = is_array($log->details) ? json_encode($log->details, JSON_UNESCAPED_UNICODE) : ($log->details ?: '-');
+
+            $col = 1;
+            $sheet->setCellValue([$col++, $rowNum], $idx + 1);
+            $sheet->setCellValue([$col++, $rowNum], $log->created_at ? $log->created_at->format('Y-m-d H:i:s') : '-');
+            $sheet->setCellValue([$col++, $rowNum], strtoupper($log->action_type ?: 'INFO'));
+            $sheet->setCellValue([$col++, $rowNum], $branchName);
+            $sheet->setCellValue([$col++, $rowNum], $userName);
+            $sheet->setCellValue([$col++, $rowNum], $userEmail);
+            $sheet->setCellValue([$col++, $rowNum], $log->ip_address ?: '-');
+            $sheet->setCellValue([$col++, $rowNum], $log->log);
+            $sheet->setCellValue([$col++, $rowNum], $details);
+
+            $rowNum++;
+        }
+
+        for ($c = 1; $c <= count($headers); $c++) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($c))->setAutoSize(true);
+        }
+
+        ActivityLogger::log(
+            'system',
+            "Super Admin exported system activity & error logs ({$format}, " . count($logs) . " records)"
+        );
+
+        return $this->streamExcelOrCsv($spreadsheet, 'system_activity_logs', $format);
     }
 }

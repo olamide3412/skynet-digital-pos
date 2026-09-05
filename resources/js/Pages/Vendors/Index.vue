@@ -23,6 +23,16 @@ const form = useForm({
     status: 'Active',
 })
 
+function resetForm() {
+    form.clearErrors()
+    form.name = ''
+    form.company_name = ''
+    form.phone = ''
+    form.email = ''
+    form.address = ''
+    form.status = 'Active'
+}
+
 function doSearch() {
     router.get(route('pos.vendors.index'), { search: search.value }, { preserveState: true, replace: true })
 }
@@ -30,30 +40,36 @@ function doSearch() {
 function openCreateModal() {
     isEditing.value = false
     currentVendor.value = null
-    form.reset()
-    document.getElementById('vendor-modal').showModal()
+    resetForm()
+    document.getElementById('vendor-modal')?.showModal()
 }
 
 function openEditModal(vendor) {
     isEditing.value = true
     currentVendor.value = vendor
-    form.name = vendor.name
+    form.clearErrors()
+    form.name = vendor.name || ''
     form.company_name = vendor.company_name || ''
-    form.phone = vendor.phone
+    form.phone = vendor.phone || ''
     form.email = vendor.email || ''
     form.address = vendor.address || ''
-    form.status = vendor.status
-    document.getElementById('vendor-modal').showModal()
+    form.status = vendor.status || 'Active'
+    document.getElementById('vendor-modal')?.showModal()
+}
+
+function closeModal() {
+    document.getElementById('vendor-modal')?.close()
+    resetForm()
 }
 
 function submit() {
     if (isEditing.value) {
         form.put(route('pos.vendors.update', currentVendor.value.id), {
-            onSuccess: () => document.getElementById('vendor-modal').close(),
+            onSuccess: () => closeModal(),
         })
     } else {
         form.post(route('pos.vendors.store'), {
-            onSuccess: () => document.getElementById('vendor-modal').close(),
+            onSuccess: () => closeModal(),
         })
     }
 }
@@ -130,7 +146,9 @@ function destroy(vendor) {
             <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-hidden rounded-xl">
                 <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50">
                     <h3 class="font-bold text-slate-900 dark:text-white">{{ isEditing ? 'Edit Vendor' : 'New Vendor' }}</h3>
-                    <form method="dialog"><button class="text-slate-400 hover:text-slate-700 dark:hover:text-white transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button></form>
+                    <button type="button" @click="closeModal" class="text-slate-400 hover:text-slate-700 dark:hover:text-white transition cursor-pointer">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
                 </div>
                 <div class="p-6">
                     <form @submit.prevent="submit" class="space-y-4">
@@ -138,22 +156,27 @@ function destroy(vendor) {
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Name *</label>
                                 <input v-model="form.name" type="text" required class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-emerald-500 transition" />
+                                <p v-if="form.errors.name" class="text-red-500 text-xs mt-1">{{ form.errors.name }}</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Company Name</label>
                                 <input v-model="form.company_name" type="text" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-emerald-500 transition" />
+                                <p v-if="form.errors.company_name" class="text-red-500 text-xs mt-1">{{ form.errors.company_name }}</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Phone *</label>
                                 <input v-model="form.phone" type="text" required class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-emerald-500 transition" />
+                                <p v-if="form.errors.phone" class="text-red-500 text-xs mt-1">{{ form.errors.phone }}</p>
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email</label>
                                 <input v-model="form.email" type="email" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-emerald-500 transition" />
+                                <p v-if="form.errors.email" class="text-red-500 text-xs mt-1">{{ form.errors.email }}</p>
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Address</label>
                                 <input v-model="form.address" type="text" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-emerald-500 transition" />
+                                <p v-if="form.errors.address" class="text-red-500 text-xs mt-1">{{ form.errors.address }}</p>
                             </div>
                             <div class="col-span-2">
                                 <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Status</label>
@@ -165,10 +188,10 @@ function destroy(vendor) {
                         </div>
 
                         <div class="pt-4 flex gap-3">
-                            <form method="dialog" class="flex-1">
-                                <button class="w-full py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition">Cancel</button>
-                            </form>
-                            <button type="submit" :disabled="form.processing" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-40">
+                            <button type="button" @click="closeModal" class="flex-1 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-300 dark:hover:bg-slate-600 transition cursor-pointer">
+                                Cancel
+                            </button>
+                            <button type="submit" :disabled="form.processing" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-40 cursor-pointer shadow-xs">
                                 {{ form.processing ? 'Saving...' : 'Save Vendor' }}
                             </button>
                         </div>

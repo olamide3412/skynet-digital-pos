@@ -99,11 +99,13 @@ class Branch extends Model
             'guard_name' => 'web',
             'team_id'    => $this->id,
         ]);
-        $allPerms = Permission::where('guard_name', 'web')
-            ->where('name', '!=', 'canResetPassword')
-            ->get();
-        if ($allPerms->isNotEmpty()) {
-            $adminRole->syncPermissions($allPerms);
+        if ($adminRole->wasRecentlyCreated || $adminRole->permissions()->count() === 0) {
+            $allPerms = Permission::where('guard_name', 'web')
+                ->where('name', '!=', 'canResetPassword')
+                ->get();
+            if ($allPerms->isNotEmpty()) {
+                $adminRole->syncPermissions($allPerms);
+            }
         }
 
         // 2. Cashier Role
@@ -112,16 +114,17 @@ class Branch extends Model
             'guard_name' => 'web',
             'team_id'    => $this->id,
         ]);
-        $cashierPerms = Permission::where('guard_name', 'web')
-            ->whereIn('name', [
-                'canAccessPos',
-                'canViewEndOfDay',
-                'canApplyDiscount',
-                'canProcessReturn',
-                'canManageCustomers',
-            ])->get();
-        if ($cashierPerms->isNotEmpty()) {
-            $cashierRole->syncPermissions($cashierPerms);
+        if ($cashierRole->wasRecentlyCreated || $cashierRole->permissions()->count() === 0) {
+            $cashierPerms = Permission::where('guard_name', 'web')
+                ->whereIn('name', [
+                    'canAccessPos',
+                    'canViewEndOfDay',
+                    'canProcessReturn',
+                    'canManageCustomers',
+                ])->get();
+            if ($cashierPerms->isNotEmpty()) {
+                $cashierRole->syncPermissions($cashierPerms);
+            }
         }
 
         // 3. Store Manager Role
@@ -130,30 +133,32 @@ class Branch extends Model
             'guard_name' => 'web',
             'team_id'    => $this->id,
         ]);
-        $managerPerms = Permission::where('guard_name', 'web')
-            ->whereIn('name', [
-                'canAccessPos',
-                'canViewSales',
-                'canProcessReturn',
-                'canApplyDiscount',
-                'canEditPrice',
-                'canViewBuyPrice',
-                'canViewEndOfDay',
-                'canViewReports',
-                'canViewProfitLoss',
-                'canManageDebt',
-                'canGiveDebt',
-                'canAdjustStock',
-                'canTransferStock',
-                'canViewReorderPoints',
-                'canManagePurchases',
-                'canManageItems',
-                'canManageBarcodes',
-                'canManageCustomers',
-                'canManageUsers',
-            ])->get();
-        if ($managerPerms->isNotEmpty()) {
-            $managerRole->syncPermissions($managerPerms);
+        if ($managerRole->wasRecentlyCreated || $managerRole->permissions()->count() === 0) {
+            $managerPerms = Permission::where('guard_name', 'web')
+                ->whereIn('name', [
+                    'canAccessPos',
+                    'canViewSales',
+                    'canProcessReturn',
+                    'canApplyDiscount',
+                    'canEditPrice',
+                    'canViewBuyPrice',
+                    'canViewEndOfDay',
+                    'canViewReports',
+                    'canViewProfitLoss',
+                    'canManageDebt',
+                    'canGiveDebt',
+                    'canAdjustStock',
+                    'canTransferStock',
+                    'canViewReorderPoints',
+                    'canManagePurchases',
+                    'canManageItems',
+                    'canManageBarcodes',
+                    'canManageCustomers',
+                    'canManageUsers',
+                ])->get();
+            if ($managerPerms->isNotEmpty()) {
+                $managerRole->syncPermissions($managerPerms);
+            }
         }
 
         // 4. Inventory Manager Role
@@ -162,17 +167,19 @@ class Branch extends Model
             'guard_name' => 'web',
             'team_id'    => $this->id,
         ]);
-        $inventoryPerms = Permission::where('guard_name', 'web')
-            ->whereIn('name', [
-                'canAdjustStock',
-                'canTransferStock',
-                'canViewReorderPoints',
-                'canManagePurchases',
-                'canManageItems',
-                'canManageBarcodes',
-            ])->get();
-        if ($inventoryPerms->isNotEmpty()) {
-            $inventoryRole->syncPermissions($inventoryPerms);
+        if ($inventoryRole->wasRecentlyCreated || $inventoryRole->permissions()->count() === 0) {
+            $inventoryPerms = Permission::where('guard_name', 'web')
+                ->whereIn('name', [
+                    'canAdjustStock',
+                    'canTransferStock',
+                    'canViewReorderPoints',
+                    'canManagePurchases',
+                    'canManageItems',
+                    'canManageBarcodes',
+                ])->get();
+            if ($inventoryPerms->isNotEmpty()) {
+                $inventoryRole->syncPermissions($inventoryPerms);
+            }
         }
     }
 }

@@ -58,7 +58,6 @@ watch(() => form.role, (newRole) => {
             'canAccessPos',
             'canViewSales',
             'canViewEndOfDay',
-            'canApplyDiscount',
             'canProcessReturn',
             'canManageCustomers',
         ]
@@ -78,7 +77,6 @@ function openCreateModal() {
         'canAccessPos',
         'canViewSales',
         'canViewEndOfDay',
-        'canApplyDiscount',
         'canProcessReturn',
         'canManageCustomers',
     ]
@@ -204,11 +202,14 @@ function submitResetPassword() {
                                 </div>
                             </td>
                             <td class="px-5 py-3">
-                                <span v-if="user.roles?.some(r => r.name === 'branch-admin')" class="text-xs text-indigo-700 dark:text-indigo-300 font-semibold bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-500/20">
+                                <span v-if="user.permissions?.length && user.permissions.length >= (all_permissions?.length ?? 19)" class="text-xs text-indigo-700 dark:text-indigo-300 font-semibold bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-500/20">
                                     Full Access (All Permissions)
                                 </span>
                                 <span v-else-if="user.permissions?.length" class="text-xs text-emerald-700 dark:text-emerald-300 font-semibold bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-500/20">
                                     {{ user.permissions.length }} of {{ all_permissions?.length ?? 19 }} permissions
+                                </span>
+                                <span v-else-if="user.roles?.some(r => r.name === 'branch-admin')" class="text-xs text-indigo-700 dark:text-indigo-300 font-semibold bg-indigo-50 dark:bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-500/20">
+                                    Full Access (All Permissions)
                                 </span>
                                 <span v-else class="text-slate-500 text-xs italic">Default Role Permissions</span>
                             </td>

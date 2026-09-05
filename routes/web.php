@@ -138,6 +138,10 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.logo.update');
         Route::get('/branches/{branch}/export-items', [BranchController::class, 'exportItems'])
             ->name('branches.export-items');
+        Route::get('/branches/{branch}/export-sales', [BranchController::class, 'exportSales'])
+            ->name('branches.export-sales');
+        Route::get('/branches/{branch}/export-logs',  [BranchController::class, 'exportLogs'])
+            ->name('branches.export-logs');
 
         Route::prefix('branches/{branch}/users')->name('branches.users.')->group(function () {
             Route::get('/',                [BranchUserController::class, 'index'])->name('index');
@@ -167,7 +171,8 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
         Route::post('/settings', [\App\Http\Controllers\SuperAdmin\SystemSettingController::class, 'update'])->name('settings.update');
 
         // System Activity & Error Logs
-        Route::get('/logs', [\App\Http\Controllers\SuperAdmin\ActivityLogController::class, 'index'])->name('logs.index');
+        Route::get('/logs/export', [\App\Http\Controllers\SuperAdmin\ActivityLogController::class, 'export'])->name('logs.export');
+        Route::get('/logs',        [\App\Http\Controllers\SuperAdmin\ActivityLogController::class, 'index'])->name('logs.index');
 
         Route::resource('global-items', GlobalItemController::class)
             ->except(['show'])
@@ -242,6 +247,8 @@ Route::prefix('{branch}')
         // Sales
         Route::get('/sales/search-receipt', [SaleController::class, 'searchReceipt'])->name('sales.search-receipt')
             ->middleware('pos.role:canViewSales');
+        Route::get('/sales/export',    [SaleController::class, 'export'])->name('sales.export')
+            ->middleware('pos.role:canViewSales');
         Route::get('/sales',           [SaleController::class, 'index'])->name('sales.index')
             ->middleware('pos.role:canViewSales');
         Route::post('/sales',          [SaleController::class, 'store'])->name('sales.store')
@@ -290,6 +297,10 @@ Route::prefix('{branch}')
                 [\App\Http\Controllers\Pos\InventoryController::class, 'index'])
                 ->name('index')
                 ->middleware('pos.role:canAdjustStock');
+            Route::get('/export',
+                [\App\Http\Controllers\Pos\InventoryController::class, 'export'])
+                ->name('export')
+                ->middleware('pos.role:canAdjustStock');
             Route::get('/adjust',
                 [\App\Http\Controllers\Pos\InventoryController::class, 'adjustForm'])
                 ->name('adjust')
@@ -314,6 +325,9 @@ Route::prefix('{branch}')
             Route::get('/reorder-points', [\App\Http\Controllers\Pos\ReorderPointController::class, 'index'])
                 ->name('reorder-points')
                 ->middleware('pos.role:canViewReorderPoints');
+            Route::get('/reorder-points/export', [\App\Http\Controllers\Pos\ReorderPointController::class, 'export'])
+                ->name('reorder-points.export')
+                ->middleware('pos.role:canViewReorderPoints');
             Route::post('/reorder-points/{item}', [\App\Http\Controllers\Pos\ReorderPointController::class, 'update'])
                 ->name('reorder-points.update')
                 ->middleware('pos.role:canViewReorderPoints');
@@ -321,6 +335,9 @@ Route::prefix('{branch}')
             // Stock Conflicts & Offline Reconciliation
             Route::get('/conflicts', [\App\Http\Controllers\Pos\StockConflictController::class, 'index'])
                 ->name('conflicts.index')
+                ->middleware('pos.role:canAdjustStock');
+            Route::get('/conflicts/export', [\App\Http\Controllers\Pos\StockConflictController::class, 'export'])
+                ->name('conflicts.export')
                 ->middleware('pos.role:canAdjustStock');
             Route::post('/conflicts/{conflict}/resolve', [\App\Http\Controllers\Pos\StockConflictController::class, 'resolve'])
                 ->name('conflicts.resolve')
@@ -346,13 +363,18 @@ Route::prefix('{branch}')
         Route::prefix('reports')->name('reports.')
             ->middleware('pos.role:canViewReports')
             ->group(function () {
-                Route::get('/',             [\App\Http\Controllers\Pos\ReportController::class, 'index'])->name('index');
-                Route::get('/daily-sales',  [\App\Http\Controllers\Pos\ReportController::class, 'dailySales'])->name('daily-sales');
-                Route::get('/returns',      [\App\Http\Controllers\Pos\ReportController::class, 'returns'])->name('returns');
-                Route::get('/profit-loss',  [\App\Http\Controllers\Pos\ReportController::class, 'profitLoss'])->name('profit-loss')
+                Route::get('/',                     [\App\Http\Controllers\Pos\ReportController::class, 'index'])->name('index');
+                Route::get('/daily-sales',          [\App\Http\Controllers\Pos\ReportController::class, 'dailySales'])->name('daily-sales');
+                Route::get('/daily-sales/export',   [\App\Http\Controllers\Pos\ReportController::class, 'dailySalesExport'])->name('daily-sales.export');
+                Route::get('/returns',              [\App\Http\Controllers\Pos\ReportController::class, 'returns'])->name('returns');
+                Route::get('/returns/export',       [\App\Http\Controllers\Pos\ReportController::class, 'returnsExport'])->name('returns.export');
+                Route::get('/profit-loss',          [\App\Http\Controllers\Pos\ReportController::class, 'profitLoss'])->name('profit-loss')
                     ->middleware('pos.role:canViewProfitLoss');
-                Route::get('/low-stock',    [\App\Http\Controllers\Pos\ReportController::class, 'lowStock'])->name('low-stock');
-                Route::get('/customer-debt',[\App\Http\Controllers\Pos\ReportController::class, 'customerDebt'])->name('customer-debt')
+                Route::get('/low-stock',            [\App\Http\Controllers\Pos\ReportController::class, 'lowStock'])->name('low-stock');
+                Route::get('/low-stock/export',     [\App\Http\Controllers\Pos\ReportController::class, 'lowStockExport'])->name('low-stock.export');
+                Route::get('/customer-debt',        [\App\Http\Controllers\Pos\ReportController::class, 'customerDebt'])->name('customer-debt')
+                    ->middleware('pos.role:canManageDebt');
+                Route::get('/customer-debt/export', [\App\Http\Controllers\Pos\ReportController::class, 'customerDebtExport'])->name('customer-debt.export')
                     ->middleware('pos.role:canManageDebt');
             });
 
@@ -434,6 +456,14 @@ Route::prefix('{branch}')
                 'update'  => 'customers.update',
                 'destroy' => 'customers.destroy',
             ])
+            ->middleware('pos.role:canManageCustomers');
+        Route::post('/customers/{customer}/toggle-watchlist',
+                [PosCustomerController::class, 'toggleWatchlist'])
+            ->name('customers.toggle-watchlist')
+            ->middleware('pos.role:canManageCustomers');
+        Route::patch('/customers/{customer}/note',
+                [PosCustomerController::class, 'updateNote'])
+            ->name('customers.update-note')
             ->middleware('pos.role:canManageCustomers');
         Route::post('/customers/{customer}/debt',
                 [PosCustomerController::class, 'recordDebt'])

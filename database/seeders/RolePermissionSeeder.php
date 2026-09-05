@@ -69,7 +69,6 @@ class RolePermissionSeeder extends Seeder
         $cashierRole->givePermissionTo([
             'canAccessPos',
             'canViewEndOfDay',
-            'canApplyDiscount',
             'canProcessReturn',
             'canManageCustomers',
         ]);

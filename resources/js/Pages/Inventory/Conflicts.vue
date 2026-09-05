@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { Head, Link, router } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import { useCurrency } from '@/Composables/useCurrency'
@@ -18,6 +18,10 @@ const { format } = useCurrency()
 const search = ref(props.filters.search || '')
 const status = ref(props.filters.status || '')
 const conflictType = ref(props.filters.conflict_type || '')
+const from = ref(props.filters.from || '')
+const to = ref(props.filters.to || '')
+const exportMenuOpen = ref(false)
+const exportDropdownRef = ref(null)
 
 const selectedConflict = ref(null)
 const showModal = ref(false)
@@ -32,10 +36,51 @@ function applyFilters() {
             search: search.value || undefined,
             status: status.value || undefined,
             conflict_type: conflictType.value || undefined,
+            from: from.value || undefined,
+            to: to.value || undefined,
         },
         { preserveState: true, replace: true }
     )
 }
+
+function resetFilters() {
+    search.value = ''
+    status.value = ''
+    conflictType.value = ''
+    from.value = ''
+    to.value = ''
+    router.get(route('pos.inventory.conflicts.index'), {}, { preserveState: true, replace: true })
+}
+
+function getExportUrl(format = 'xlsx') {
+    const params = new URLSearchParams()
+    params.set('format', format)
+    if (search.value) params.set('search', search.value.trim())
+    if (status.value) params.set('status', status.value)
+    if (conflictType.value) params.set('conflict_type', conflictType.value)
+    if (from.value) params.set('from', from.value)
+    if (to.value) params.set('to', to.value)
+    return `${route('pos.inventory.conflicts.export')}?${params.toString()}`
+}
+
+function downloadExport(format) {
+    exportMenuOpen.value = false
+    window.location.href = getExportUrl(format)
+}
+
+function handleClickOutside(e) {
+    if (exportDropdownRef.value && !exportDropdownRef.value.contains(e.target)) {
+        exportMenuOpen.value = false
+    }
+}
+
+onMounted(() => {
+    document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+    document.removeEventListener('click', handleClickOutside)
+})
 
 const onSearchInput = debounce(() => {
     applyFilters()
@@ -91,6 +136,54 @@ function submitResolution() {
                 </p>
             </div>
             <div class="flex items-center gap-2">
+                <!-- Export Dropdown -->
+                <div class="relative" ref="exportDropdownRef">
+                    <button
+                        type="button"
+                        @click="exportMenuOpen = !exportMenuOpen"
+                        class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        title="Export filtered conflicts"
+                    >
+                        <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Export</span>
+                        <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    <!-- Dropdown Menu -->
+                    <div
+                        v-if="exportMenuOpen"
+                        class="absolute right-0 mt-1.5 w-44 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100"
+                    >
+                        <div class="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                            Export Filtered Logs
+                        </div>
+                        <button
+                            type="button"
+                            @click="downloadExport('xlsx')"
+                            class="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                        >
+                            <span class="w-5 h-5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-[10px]">
+                                XLS
+                            </span>
+                            Excel (.xlsx)
+                        </button>
+                        <button
+                            type="button"
+                            @click="downloadExport('csv')"
+                            class="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                        >
+                            <span class="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px]">
+                                CSV
+                            </span>
+                            CSV (.csv)
+                        </button>
+                    </div>
+                </div>
+
                 <Link
                     :href="route('pos.inventory.adjust')"
                     class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition inline-flex items-center gap-1.5 shadow-xs"
@@ -141,7 +234,7 @@ function submitResolution() {
 
         <!-- ── FILTER BAR ──────────────────────────────────────────────────── -->
         <div class="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-3">
-            <div class="flex-1 min-w-[240px]">
+            <div class="flex-1 min-w-[220px]">
                 <input
                     v-model="search"
                     @input="onSearchInput"
@@ -151,7 +244,7 @@ function submitResolution() {
                 />
             </div>
 
-            <div class="w-48">
+            <div class="w-44">
                 <select
                     v-model="status"
                     @change="applyFilters"
@@ -174,6 +267,40 @@ function submitResolution() {
                     <option value="stock_shortfall">Stock Shortfall 📉</option>
                     <option value="imei_already_sold">Duplicate IMEI Sold 📱</option>
                 </select>
+            </div>
+
+            <!-- Date Range Inputs -->
+            <div class="flex items-center gap-1.5">
+                <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">Date:</span>
+                <input
+                    v-model="from"
+                    type="date"
+                    class="px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white outline-none"
+                />
+                <span class="text-xs text-slate-400">to</span>
+                <input
+                    v-model="to"
+                    type="date"
+                    class="px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white outline-none"
+                />
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button
+                    type="button"
+                    @click="applyFilters"
+                    class="px-3.5 py-2 text-xs font-bold bg-slate-800 dark:bg-slate-200 text-white dark:text-slate-900 hover:bg-slate-700 dark:hover:bg-white rounded-xl transition cursor-pointer shadow-xs"
+                >
+                    Apply
+                </button>
+                <button
+                    v-if="search || status || conflictType || from || to"
+                    type="button"
+                    @click="resetFilters"
+                    class="px-3 py-2 text-xs font-semibold bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-xl transition cursor-pointer"
+                >
+                    Reset
+                </button>
             </div>
         </div>
 

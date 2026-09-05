@@ -46,7 +46,6 @@ class BranchSeeder extends Seeder
         $cashierRole->syncPermissions([
             'canAccessPos',
             'canViewEndOfDay',
-            'canApplyDiscount',
             'canProcessReturn',
             'canManageCustomers',
         ]);

@@ -11,11 +11,14 @@ class StoreCustomerRequest extends FormRequest
 
     public function rules(): array
     {
-        $customerId = $this->route('customer')?->id;
+        $customer = $this->route('customer');
+        $customerId = is_object($customer) ? $customer->id : $customer;
 
         return [
             'name'            => ['required', 'string', 'max:255'],
-            'phone'           => ['required', 'string', Rule::unique('pos_customers','phone')->ignore($customerId)],
+            'phone'           => ['required', 'string', Rule::unique('pos_customers', 'phone')->where(function ($query) {
+                return $query->where('branch_id', current_branch()?->id);
+            })->ignore($customerId)],
             'address'         => ['nullable', 'string'],
             'gender'          => ['nullable', 'string', 'in:Male,Female,Other'],
             'dob'             => ['nullable', 'date'],

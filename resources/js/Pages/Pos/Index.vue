@@ -14,6 +14,7 @@ import ReceiptModal from '@/Components/POS/ReceiptModal.vue'
 import HoldCartModal from '@/Components/POS/HoldCartModal.vue'
 import HeldCartsList from '@/Components/POS/HeldCartsList.vue'
 import ReturnModal from '@/Components/POS/ReturnModal.vue'
+import DiscountModal from '@/Components/POS/DiscountModal.vue'
 import CustomerSelector from '@/Components/POS/CustomerSelector.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 import NotificationBell from '@/Components/Notifications/NotificationBell.vue'
@@ -48,6 +49,9 @@ const cart          = useCartStore()
 const settStore     = usePosSettingsStore()
 const productSearch = ref(null)   // ref to ProductSearch component
 settStore.set(props.settings)
+watch(() => props.activeDiscount, (disc) => {
+    cart.setActiveBranchDiscount(disc)
+}, { immediate: true })
 
 // ── Splash Screen & Terminal Launch State ─────────────────────────────────────
 const isPosReady = ref(false)
@@ -174,9 +178,10 @@ const showReceipt    = ref(false)
 const showHold       = ref(false)
 const showHeld       = ref(false)
 const showReturn     = ref(false)
+const showDiscount   = ref(false)
 const completedSale  = ref(null)
 
-const isAnyModalOpen = computed(() => showPayment.value || showReceipt.value || showHold.value || showHeld.value || showReturn.value || showOfflineModal.value)
+const isAnyModalOpen = computed(() => showPayment.value || showReceipt.value || showHold.value || showHeld.value || showReturn.value || showDiscount.value || showOfflineModal.value)
 
 useBarcodeScanner({
     onScan: (item) => {
@@ -366,14 +371,14 @@ const productSearchMobile = ref(null)
                             :class="[
                                 'px-2.5 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-xs',
                                 syncState === 'online'
-                                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25'
+                                    ? 'bg-green-500/15 text-green-700 dark:text-green-400 border border-green-500/30 hover:bg-green-500/25'
                                     : syncState === 'syncing'
                                     ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30 animate-pulse hover:bg-blue-500/25'
                                     : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 hover:bg-rose-500/25'
                             ]"
                             :title="syncState === 'online' ? 'Online – All systems operational' : syncState === 'syncing' ? 'Syncing queued sales with server...' : 'Offline – Sales are stored locally on device'"
                         >
-                            <span v-if="syncState === 'online'" class="w-2 h-2 rounded-full bg-emerald-500 shadow-xs"></span>
+                            <span v-if="syncState === 'online'" class="w-2 h-2 rounded-full bg-green-500 shadow-xs"></span>
                             <span v-else-if="syncState === 'syncing'" class="animate-spin text-[10px]">🔄</span>
                             <span v-else class="relative flex h-2 w-2">
                                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
@@ -406,6 +411,31 @@ const productSearchMobile = ref(null)
                         </svg>
                     </button>
                     <div class="flex items-center gap-2">
+                        <!-- Active Promotional Discount Banner Badge -->
+                        <button
+                            v-if="activeDiscount && activeDiscount.is_apply"
+                            type="button"
+                            @click="canApplyDiscount && (showDiscount = true)"
+                            class="px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 flex items-center gap-1.5 transition shadow-xs hover:bg-amber-500/25 cursor-pointer"
+                            :title="canApplyDiscount ? 'Click to manage active promo discount' : 'Active Store Promotion'"
+                        >
+                            <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                            <span>🏷️ {{ activeDiscount.discount_type === 'percentage' ? `${activeDiscount.discount_value}% Promo` : `₦${activeDiscount.discount_value} Promo` }}</span>
+                        </button>
+
+                        <button
+                            v-else-if="canApplyDiscount"
+                            title="Apply or Adjust Sale Discount"
+                            class="px-3 py-1 rounded bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 text-slate-800 dark:text-white text-xs font-medium transition cursor-pointer flex items-center gap-1.5"
+                            :class="{ 'text-emerald-700 dark:text-emerald-300 font-bold bg-emerald-500/15 dark:bg-emerald-950/60 border border-emerald-500/30': cart.discountAmount > 0 }"
+                            @click="showDiscount = true"
+                        >
+                            <span>Discount</span>
+                            <span v-if="cart.discountAmount > 0" class="text-[10px] bg-emerald-600 text-white px-1.5 py-0.2 rounded-full font-mono font-bold">
+                                {{ cart.discount?.type === 'percentage' ? `${cart.discount.value}%` : format(cart.discount.value) }}
+                            </span>
+                        </button>
+
                         <button
                             title="F9 – Hold Cart"
                             class="px-3 py-1 rounded bg-amber-600 hover:bg-amber-500 text-white text-xs font-medium transition cursor-pointer"
@@ -504,9 +534,35 @@ const productSearchMobile = ref(null)
                             <span>Subtotal</span>
                             <span>{{ format(cart.subtotal) }}</span>
                         </div>
-                        <div v-if="cart.discountAmount > 0" class="flex justify-between text-red-600 dark:text-red-400">
+                        <div v-if="cart.discountAmount > 0" class="flex justify-between items-center text-red-600 dark:text-red-400">
+                            <span class="flex items-center gap-1.5 min-w-0">
+                                <span>Discount</span>
+                                <span class="text-[10px] bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 font-bold px-1.5 py-0.2 rounded border border-red-300 dark:border-red-800 truncate max-w-[110px]" :title="cart.discount?.name">
+                                    {{ cart.discount?.type === 'percentage' ? `${cart.discount.value}%` : format(cart.discount.value) }}
+                                </span>
+                            </span>
+                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                                <span class="font-mono font-bold">-{{ format(cart.discountAmount) }}</span>
+                                <button
+                                    v-if="canApplyDiscount"
+                                    @click="showDiscount = true"
+                                    type="button"
+                                    title="Edit discount"
+                                    class="text-xs text-slate-400 hover:text-red-500 transition cursor-pointer p-0.5"
+                                >
+                                    ✏️
+                                </button>
+                            </div>
+                        </div>
+                        <div v-else-if="canApplyDiscount && cart.items.length > 0" class="flex justify-between items-center text-xs text-slate-400">
                             <span>Discount</span>
-                            <span>-{{ format(cart.discountAmount) }}</span>
+                            <button
+                                @click="showDiscount = true"
+                                type="button"
+                                class="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline font-bold cursor-pointer"
+                            >
+                                + Add Discount
+                            </button>
                         </div>
                         <div v-if="cart.consultationFee > 0" class="flex justify-between text-slate-600 dark:text-slate-400">
                             <span>Consult Fee</span>
@@ -577,13 +633,13 @@ const productSearchMobile = ref(null)
                         :class="[
                             'px-2 py-1 rounded-full text-[10px] sm:text-[11px] font-bold flex items-center gap-1 transition cursor-pointer',
                             syncState === 'online'
-                                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                                ? 'bg-green-500/15 text-green-600 dark:text-green-400 border border-green-500/20'
                                 : syncState === 'syncing'
                                 ? 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/20 animate-pulse'
                                 : 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20'
                         ]"
                     >
-                        <span v-if="syncState === 'online'" class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        <span v-if="syncState === 'online'" class="w-2 h-2 rounded-full bg-green-500"></span>
                         <span v-else-if="syncState === 'syncing'" class="animate-spin text-[10px]">🔄</span>
                         <span v-else class="w-2 h-2 rounded-full bg-rose-500"></span>
                         <span v-if="pendingCount > 0" class="px-1 bg-rose-600 text-white rounded-full text-[9px] font-black">
@@ -787,9 +843,35 @@ const productSearchMobile = ref(null)
                             <span>Subtotal</span>
                             <span class="font-medium text-slate-900 dark:text-white">{{ format(cart.subtotal) }}</span>
                         </div>
-                        <div v-if="cart.discountAmount > 0" class="flex justify-between text-red-600 dark:text-red-400">
+                        <div v-if="cart.discountAmount > 0" class="flex justify-between items-center text-red-600 dark:text-red-400">
+                            <span class="flex items-center gap-1.5 min-w-0">
+                                <span>Discount</span>
+                                <span class="text-[10px] bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 font-bold px-1.5 py-0.2 rounded border border-red-300 dark:border-red-800 truncate max-w-[100px]" :title="cart.discount?.name">
+                                    {{ cart.discount?.type === 'percentage' ? `${cart.discount.value}%` : format(cart.discount.value) }}
+                                </span>
+                            </span>
+                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                                <span class="font-mono font-bold">-{{ format(cart.discountAmount) }}</span>
+                                <button
+                                    v-if="canApplyDiscount"
+                                    @click="showDiscount = true"
+                                    type="button"
+                                    title="Edit discount"
+                                    class="text-xs text-slate-400 hover:text-red-500 transition cursor-pointer p-0.5"
+                                >
+                                    ✏️
+                                </button>
+                            </div>
+                        </div>
+                        <div v-else-if="canApplyDiscount && cart.items.length > 0" class="flex justify-between items-center text-xs text-slate-400">
                             <span>Discount</span>
-                            <span>-{{ format(cart.discountAmount) }}</span>
+                            <button
+                                @click="showDiscount = true"
+                                type="button"
+                                class="text-[11px] text-emerald-600 dark:text-emerald-400 hover:underline font-bold cursor-pointer"
+                            >
+                                + Add Discount
+                            </button>
                         </div>
                         <div v-if="cart.consultationFee > 0" class="flex justify-between text-slate-600 dark:text-slate-400">
                             <span>Consult Fee</span>
@@ -958,6 +1040,12 @@ const productSearchMobile = ref(null)
             @close="showReturn = false"
         />
 
+        <DiscountModal
+            v-if="showDiscount"
+            :active-discount="activeDiscount"
+            @close="showDiscount = false"
+        />
+
         <!-- Offline Sales Queue Inspection Modal -->
         <div v-if="showOfflineModal" class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
             <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 max-w-xl w-full overflow-hidden shadow-2xl space-y-4 p-5">
@@ -973,7 +1061,7 @@ const productSearchMobile = ref(null)
                             </h3>
                             <p class="text-xs text-slate-500 dark:text-slate-400">
                                 Terminal Status: 
-                                <strong :class="isOnline ? 'text-emerald-500' : 'text-rose-500'">
+                                <strong :class="isOnline ? 'text-green-600 dark:text-green-400' : 'text-rose-600 dark:text-rose-400'">
                                     {{ isOnline ? 'Connected (Online)' : 'Disconnected (Offline Mode)' }}
                                 </strong>
                             </p>
@@ -1035,8 +1123,8 @@ const productSearchMobile = ref(null)
                         :class="[
                             'flex-1 py-1.5 px-2 rounded-lg transition text-center cursor-pointer',
                             offlineTabFilter === 'synced'
-                                ? 'bg-emerald-600 text-white shadow-xs font-bold'
-                                : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-600/10'
+                                ? 'bg-green-600 text-white shadow-xs font-bold'
+                                : 'text-green-600 dark:text-green-400 hover:bg-green-600/10'
                         ]"
                     >
                         Synced ({{ syncedSalesCount }})
@@ -1061,7 +1149,7 @@ const productSearchMobile = ref(null)
                         v-model="offlineSearchQuery"
                         type="text"
                         placeholder="Search offline sales by receipt ID, cashier or payment method..."
-                        class="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
+                        class="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-green-500"
                     />
                 </div>
 
@@ -1085,7 +1173,7 @@ const productSearchMobile = ref(null)
                                 <span
                                     :class="[
                                         'px-1.5 py-0.5 rounded text-[10px] font-bold uppercase',
-                                        sale.sync_status === 'synced' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' :
+                                        sale.sync_status === 'synced' ? 'bg-green-100 text-green-700 dark:bg-green-950/60 dark:text-green-300' :
                                         sale.sync_status === 'failed' ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300' :
                                         'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 animate-pulse'
                                     ]"
@@ -1120,7 +1208,7 @@ const productSearchMobile = ref(null)
                             @click="syncQueuedSales"
                             :disabled="isSyncing || pendingCount === 0 || !isOnline"
                             type="button"
-                            class="px-4 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                            class="px-4 py-1.5 rounded-lg text-xs font-bold bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white transition flex items-center gap-1.5 shadow-sm cursor-pointer"
                         >
                             <span v-if="isSyncing" class="animate-spin">🔄</span>
                             <span>{{ isSyncing ? 'Syncing...' : 'Sync Now' }}</span>

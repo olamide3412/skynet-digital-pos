@@ -19,6 +19,11 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
+use PhpOffice\PhpSpreadsheet\Writer\Csv as CsvWriter;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 class BranchController extends Controller
 {
@@ -202,15 +207,24 @@ class BranchController extends Controller
         $categories = Category::where('branch_id', $branch->id)->orWhereNull('branch_id')->orderBy('name')->get(['id', 'name']);
 
         // ── 4. Transactions Snapshot (Paginated) ──────────────────────────────
-        $salesSearch = $request->query('sales_search', '');
-        $recentSales = Sale::where('branch_id', $branch->id)
+        $salesSearch    = $request->query('sales_search', '');
+        $salesStartDate = $request->query('sales_start_date', '');
+        $salesEndDate   = $request->query('sales_end_date', '');
+
+        $salesQuery = Sale::where('branch_id', $branch->id)
             ->with(['user:id,name,username', 'customer:id,name'])
             ->when($salesSearch, function ($q) use ($salesSearch) {
-                $q->where('receipt_id', 'like', "%{$salesSearch}%")
-                  ->orWhere('payment_method', 'like', "%{$salesSearch}%")
-                  ->orWhereHas('customer', fn ($cq) => $cq->where('name', 'like', "%{$salesSearch}%"))
-                  ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$salesSearch}%"));
+                $q->where(function ($sq) use ($salesSearch) {
+                    $sq->where('receipt_id', 'like', "%{$salesSearch}%")
+                       ->orWhere('payment_method', 'like', "%{$salesSearch}%")
+                       ->orWhereHas('customer', fn ($cq) => $cq->where('name', 'like', "%{$salesSearch}%"))
+                       ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$salesSearch}%"));
+                });
             })
+            ->when($salesStartDate, fn ($q) => $q->whereDate('created_at', '>=', $salesStartDate))
+            ->when($salesEndDate, fn ($q) => $q->whereDate('created_at', '<=', $salesEndDate));
+
+        $recentSales = (clone $salesQuery)
             ->latest('id')
             ->paginate(15, ['*'], 'sales_page')
             ->withQueryString()
@@ -226,15 +240,24 @@ class BranchController extends Controller
             ]);
 
         // ── 5. Branch Activity & Audit Logs (Paginated) ───────────────────────
-        $logSearch = $request->query('log_search', '');
-        $activityLogs = PosLog::where('branch_id', $branch->id)
+        $logSearch    = $request->query('log_search', '');
+        $logStartDate = $request->query('log_start_date', '');
+        $logEndDate   = $request->query('log_end_date', '');
+
+        $logQuery = PosLog::where('branch_id', $branch->id)
             ->with('user:id,name,email')
             ->when($logSearch, function ($q) use ($logSearch) {
-                $q->where('log', 'like', "%{$logSearch}%")
-                  ->orWhere('action_type', 'like', "%{$logSearch}%")
-                  ->orWhere('ip_address', 'like', "%{$logSearch}%")
-                  ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$logSearch}%"));
+                $q->where(function ($sq) use ($logSearch) {
+                    $sq->where('log', 'like', "%{$logSearch}%")
+                       ->orWhere('action_type', 'like', "%{$logSearch}%")
+                       ->orWhere('ip_address', 'like', "%{$logSearch}%")
+                       ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', "%{$logSearch}%"));
+                });
             })
+            ->when($logStartDate, fn ($q) => $q->whereDate('created_at', '>=', $logStartDate))
+            ->when($logEndDate, fn ($q) => $q->whereDate('created_at', '<=', $logEndDate));
+
+        $activityLogs = (clone $logQuery)
             ->latest('id')
             ->paginate(20, ['*'], 'logs_page')
             ->withQueryString()
@@ -282,10 +305,14 @@ class BranchController extends Controller
             'recent_sales'         => $recentSales,
             'activity_logs'        => $activityLogs,
             'filters'              => [
-                'item_search'  => $search,
-                'sales_search' => $salesSearch,
-                'log_search'   => $logSearch,
-                'active_tab'   => $request->query('tab', 'overview'),
+                'item_search'      => $search,
+                'sales_search'     => $salesSearch,
+                'sales_start_date' => $salesStartDate,
+                'sales_end_date'   => $salesEndDate,
+                'log_search'       => $logSearch,
+                'log_start_date'   => $logStartDate,
+                'log_end_date'     => $logEndDate,
+                'active_tab'       => $request->query('tab', 'overview'),
             ],
         ]);
     }
@@ -518,21 +545,352 @@ class BranchController extends Controller
         return back()->with('success', "Auto-fullscreen on POS login {$status} for {$branch->name}.");
     }
 
+    private function streamExcelOrCsv(Spreadsheet $spreadsheet, string $filenamePrefix, string $format = 'xlsx')
+    {
+        $format = strtolower($format) === 'csv' ? 'csv' : 'xlsx';
+        $filename = $filenamePrefix . '_' . date('Y-m-d_His') . '.' . $format;
+
+        if ($format === 'csv') {
+            $writer = new CsvWriter($spreadsheet);
+            $writer->setUseBOM(true);
+            $contentType = 'text/csv; charset=UTF-8';
+        } else {
+            $writer = new XlsxWriter($spreadsheet);
+            $contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        }
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type'        => $contentType,
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Cache-Control'       => 'max-age=0',
+        ]);
+    }
+
     /**
      * Export branch catalog items in CSV or Excel format with customizable quantity levels.
      */
-    public function exportItems(Request $request, Branch $branch, ItemImportService $importService)
+    public function exportItems(Request $request, Branch $branch)
     {
         $format = $request->query('format', 'xlsx');
         $quantityOption = $request->query('quantity_option', 'total');
+        $search = $request->query('item_search', $request->query('search', ''));
+
+        $query = Item::where('branch_id', $branch->id)
+            ->with(['category:id,name', 'groupAddress:id,name']);
+
+        if (!empty($search)) {
+            $term = '%' . trim($search) . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('item_name', 'like', $term)
+                  ->orWhere('barcode_number', 'like', $term);
+            });
+        }
+
+        $items = $query->orderBy('item_name')->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Branch Catalog');
+
+        $headers = [
+            '#',
+            'Barcode / SKU',
+            'Item Name',
+            'Category',
+            'Group Address / Shelf',
+        ];
+
+        if ($quantityOption === 'total') {
+            $headers[] = 'Front Store Qty';
+            $headers[] = 'Back Store Qty';
+            $headers[] = 'Total Stock Qty';
+        } elseif ($quantityOption === 'front_store') {
+            $headers[] = 'Front Store Qty';
+        } elseif ($quantityOption === 'back_store') {
+            $headers[] = 'Back Store Qty';
+        }
+
+        $headers[] = 'Unit Label';
+        $headers[] = 'Cost Price (₦)';
+        $headers[] = 'Selling Price (₦)';
+        $headers[] = 'Wholesale Price (₦)';
+        $headers[] = 'Expiry Date';
+        $headers[] = 'IMEI Tracked';
+        $headers[] = 'Stock Status';
+
+        foreach ($headers as $colIdx => $header) {
+            $colLetter = Coordinate::stringFromColumnIndex($colIdx + 1);
+            $sheet->setCellValue("{$colLetter}1", $header);
+        }
+
+        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
+        $headerRange = "A1:{$lastCol}1";
+        $sheet->getStyle($headerRange)->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle($headerRange)->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setRGB('059669'); // Emerald
+
+        $rowNum = 2;
+        foreach ($items as $idx => $item) {
+            $frontQty = (int) $item->front_store_qty;
+            $backQty  = (int) $item->back_store_qty;
+            $totalQty = $frontQty + $backQty;
+
+            $status = 'Adequate';
+            if ($totalQty <= 0) {
+                $status = 'Out of Stock';
+            } elseif ($item->needs_reorder) {
+                $status = 'Low Stock (Reorder)';
+            }
+
+            $col = 1;
+            $sheet->setCellValue([$col++, $rowNum], $idx + 1);
+            $sheet->setCellValue([$col++, $rowNum], $item->barcode_number ?: '-');
+            $sheet->setCellValue([$col++, $rowNum], $item->item_name);
+            $sheet->setCellValue([$col++, $rowNum], $item->category?->name ?: 'Uncategorized');
+            $sheet->setCellValue([$col++, $rowNum], $item->groupAddress?->name ?: '-');
+
+            if ($quantityOption === 'total') {
+                $sheet->setCellValue([$col++, $rowNum], $frontQty);
+                $sheet->setCellValue([$col++, $rowNum], $backQty);
+                $sheet->setCellValue([$col++, $rowNum], $totalQty);
+            } elseif ($quantityOption === 'front_store') {
+                $sheet->setCellValue([$col++, $rowNum], $frontQty);
+            } elseif ($quantityOption === 'back_store') {
+                $sheet->setCellValue([$col++, $rowNum], $backQty);
+            }
+
+            $sheet->setCellValue([$col++, $rowNum], $item->unit_label ?: ($item->unit ?: 'unit'));
+            $sheet->setCellValue([$col++, $rowNum], (float) $item->buy_price);
+            $sheet->setCellValue([$col++, $rowNum], (float) $item->unit_price);
+            $sheet->setCellValue([$col++, $rowNum], (float) ($item->wholesale_price ?? 0));
+            $sheet->setCellValue([$col++, $rowNum], $item->expiry_date ?: '-');
+            $sheet->setCellValue([$col++, $rowNum], $item->is_imei ? 'YES' : 'No');
+            $sheet->setCellValue([$col++, $rowNum], $status);
+
+            $rowNum++;
+        }
+
+        for ($c = 1; $c <= count($headers); $c++) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($c))->setAutoSize(true);
+        }
 
         ActivityLogger::log(
             'branch',
-            "Exported catalog items for branch '{$branch->name}' ({$format}, quantity: {$quantityOption})",
+            "Super Admin exported catalog items for branch '{$branch->name}' ({$format}, quantity: {$quantityOption})",
             $branch->id
         );
 
-        return $importService->exportBranchItems($branch, $format, $quantityOption);
+        return $this->streamExcelOrCsv($spreadsheet, $branch->slug . '_inventory_catalog', $format);
+    }
+
+    /**
+     * Export branch sales transactions and financial logs in CSV or Excel format.
+     */
+    public function exportSales(Request $request, Branch $branch)
+    {
+        $format    = $request->query('format', 'xlsx');
+        $search    = $request->query('sales_search', $request->query('search', ''));
+        $startDate = $request->query('sales_start_date', $request->query('start_date', ''));
+        $endDate   = $request->query('sales_end_date', $request->query('end_date', ''));
+
+        $query = Sale::where('branch_id', $branch->id)
+            ->with(['user:id,name,username', 'customer:id,name,phone', 'saleOrders']);
+
+        if (!empty($search)) {
+            $term = '%' . trim($search) . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('receipt_id', 'like', $term)
+                  ->orWhere('payment_method', 'like', $term)
+                  ->orWhereHas('customer', fn ($cq) => $cq->where('name', 'like', $term)->orWhere('phone', 'like', $term))
+                  ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', $term)->orWhere('username', 'like', $term));
+            });
+        }
+
+        if (!empty($startDate)) {
+            $query->whereDate('created_at', '>=', $startDate);
+        }
+        if (!empty($endDate)) {
+            $query->whereDate('created_at', '<=', $endDate);
+        }
+
+        $sales = $query->latest('id')->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Sales Financials');
+
+        $headers = [
+            '#',
+            'Receipt ID',
+            'Date & Time',
+            'Cashier / Staff',
+            'Customer Name',
+            'Customer Phone',
+            'Payment Method',
+            'Items Count',
+            'Subtotal (₦)',
+            'Discount (₦)',
+            'Total Amount (₦)',
+            'Gross Profit (₦)',
+            'Status / Type',
+        ];
+
+        foreach ($headers as $colIdx => $header) {
+            $colLetter = Coordinate::stringFromColumnIndex($colIdx + 1);
+            $sheet->setCellValue("{$colLetter}1", $header);
+        }
+
+        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
+        $headerRange = "A1:{$lastCol}1";
+        $sheet->getStyle($headerRange)->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle($headerRange)->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setRGB('059669'); // Emerald
+
+        $rowNum = 2;
+        foreach ($sales as $idx => $s) {
+            $staffName = $s->user?->name ?: ($s->user?->username ?: '-');
+            $custName  = $s->customer?->name ?: 'Walk-in Customer';
+            $custPhone = $s->customer?->phone ?: '-';
+            $itemCount = $s->saleOrders ? $s->saleOrders->sum('qty') : ($s->items_order_count ?? 1);
+
+            $payMethod = 'Cash';
+            if ($s->is_debt) {
+                $payMethod = 'Debt / Credit';
+            } elseif ((float) $s->cash > 0 && (float) $s->bank_transfer > 0) {
+                $payMethod = 'Split (Cash + Bank)';
+            } elseif ((float) $s->bank_transfer > 0) {
+                $payMethod = 'Bank Transfer';
+            } elseif ($s->payment_method) {
+                $payMethod = ucfirst($s->payment_method);
+            }
+
+            $status = $s->is_debt ? 'Unpaid Debt' : 'Completed';
+
+            $col = 1;
+            $sheet->setCellValue([$col++, $rowNum], $idx + 1);
+            $sheet->setCellValue([$col++, $rowNum], $s->receipt_id ?: "REC-{$s->id}");
+            $sheet->setCellValue([$col++, $rowNum], $s->created_at ? $s->created_at->format('Y-m-d H:i:s') : '-');
+            $sheet->setCellValue([$col++, $rowNum], $staffName);
+            $sheet->setCellValue([$col++, $rowNum], $custName);
+            $sheet->setCellValue([$col++, $rowNum], $custPhone);
+            $sheet->setCellValue([$col++, $rowNum], $payMethod);
+            $sheet->setCellValue([$col++, $rowNum], (int) $itemCount);
+            $sheet->setCellValue([$col++, $rowNum], (float) ($s->amount_cost ?: $s->final_total));
+            $sheet->setCellValue([$col++, $rowNum], (float) $s->discount_amount);
+            $sheet->setCellValue([$col++, $rowNum], (float) $s->final_total);
+            $sheet->setCellValue([$col++, $rowNum], (float) $s->profit_made);
+            $sheet->setCellValue([$col++, $rowNum], $status);
+
+            $rowNum++;
+        }
+
+        for ($c = 1; $c <= count($headers); $c++) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($c))->setAutoSize(true);
+        }
+
+        ActivityLogger::log(
+            'branch',
+            "Super Admin exported sales transactions for branch '{$branch->name}' ({$format})",
+            $branch->id
+        );
+
+        return $this->streamExcelOrCsv($spreadsheet, $branch->slug . '_sales_financials', $format);
+    }
+
+    /**
+     * Export branch activity and audit logs in CSV or Excel format.
+     */
+    public function exportLogs(Request $request, Branch $branch)
+    {
+        $format    = $request->query('format', 'xlsx');
+        $search    = $request->query('log_search', $request->query('search', ''));
+        $startDate = $request->query('log_start_date', $request->query('start_date', ''));
+        $endDate   = $request->query('log_end_date', $request->query('end_date', ''));
+
+        $query = PosLog::where('branch_id', $branch->id)
+            ->with('user:id,name,username,email');
+
+        if (!empty($search)) {
+            $term = '%' . trim($search) . '%';
+            $query->where(function ($q) use ($term) {
+                $q->where('log', 'like', $term)
+                  ->orWhere('action_type', 'like', $term)
+                  ->orWhere('ip_address', 'like', $term)
+                  ->orWhereHas('user', fn ($uq) => $uq->where('name', 'like', $term)->orWhere('username', 'like', $term)->orWhere('email', 'like', $term));
+            });
+        }
+
+        if (!empty($startDate)) {
+            $query->whereDate('created_at', '>=', $startDate);
+        }
+        if (!empty($endDate)) {
+            $query->whereDate('created_at', '<=', $endDate);
+        }
+
+        $logs = $query->latest('id')->get();
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Audit Logs');
+
+        $headers = [
+            '#',
+            'Timestamp',
+            'Action Type',
+            'Log / Event Description',
+            'Staff / User',
+            'Email / Username',
+            'IP Address',
+            'Details / Payload',
+        ];
+
+        foreach ($headers as $colIdx => $header) {
+            $colLetter = Coordinate::stringFromColumnIndex($colIdx + 1);
+            $sheet->setCellValue("{$colLetter}1", $header);
+        }
+
+        $lastCol = Coordinate::stringFromColumnIndex(count($headers));
+        $headerRange = "A1:{$lastCol}1";
+        $sheet->getStyle($headerRange)->getFont()->setBold(true)->getColor()->setRGB('FFFFFF');
+        $sheet->getStyle($headerRange)->getFill()
+            ->setFillType(Fill::FILL_SOLID)
+            ->getStartColor()->setRGB('059669'); // Emerald
+
+        $rowNum = 2;
+        foreach ($logs as $idx => $log) {
+            $userName  = $log->user?->name ?? 'System / SuperAdmin';
+            $userEmail = $log->user?->email ?: ($log->user?->username ?: '-');
+            $details   = is_array($log->details) ? json_encode($log->details, JSON_UNESCAPED_UNICODE) : ($log->details ?: '-');
+
+            $col = 1;
+            $sheet->setCellValue([$col++, $rowNum], $idx + 1);
+            $sheet->setCellValue([$col++, $rowNum], $log->created_at ? $log->created_at->format('Y-m-d H:i:s') : '-');
+            $sheet->setCellValue([$col++, $rowNum], strtoupper($log->action_type ?: 'GENERAL'));
+            $sheet->setCellValue([$col++, $rowNum], $log->log);
+            $sheet->setCellValue([$col++, $rowNum], $userName);
+            $sheet->setCellValue([$col++, $rowNum], $userEmail);
+            $sheet->setCellValue([$col++, $rowNum], $log->ip_address ?: '-');
+            $sheet->setCellValue([$col++, $rowNum], $details);
+
+            $rowNum++;
+        }
+
+        for ($c = 1; $c <= count($headers); $c++) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($c))->setAutoSize(true);
+        }
+
+        ActivityLogger::log(
+            'branch',
+            "Super Admin exported audit logs for branch '{$branch->name}' ({$format})",
+            $branch->id
+        );
+
+        return $this->streamExcelOrCsv($spreadsheet, $branch->slug . '_audit_logs', $format);
     }
 }
+
 

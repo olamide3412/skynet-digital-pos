@@ -57,7 +57,6 @@ watch(() => form.role, (newRole) => {
             'canAccessPos',
             'canViewSales',
             'canViewEndOfDay',
-            'canApplyDiscount',
             'canProcessReturn',
             'canManageCustomers',
         ]
@@ -276,13 +275,17 @@ const togglePermInForm = (targetForm, permName) => {
                                 <span v-else class="text-rose-500 text-xs italic font-medium">No Role</span>
                             </td>
                             <td class="px-6 py-4">
-                                <span v-if="user.roles?.some(r => r.name === 'branch-admin')"
+                                <span v-if="user.permissions?.length && user.permissions.length >= all_permissions.length"
                                     class="text-xs text-indigo-700 dark:text-indigo-300 font-semibold bg-indigo-50 dark:bg-indigo-500/10 px-2.5 py-1 rounded border border-indigo-200 dark:border-indigo-500/20">
                                     Full Access (All Permissions)
                                 </span>
                                 <span v-else-if="user.permissions?.length"
                                     class="text-xs text-emerald-700 dark:text-emerald-300 font-medium bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded border border-emerald-200 dark:border-emerald-500/20">
                                     {{ user.permissions.length }} of {{ all_permissions.length }} permissions
+                                </span>
+                                <span v-else-if="user.roles?.some(r => r.name === 'branch-admin')"
+                                    class="text-xs text-indigo-700 dark:text-indigo-300 font-semibold bg-indigo-50 dark:bg-indigo-500/10 px-2.5 py-1 rounded border border-indigo-200 dark:border-indigo-500/20">
+                                    Full Access (All Permissions)
                                 </span>
                                 <span v-else class="text-slate-400 dark:text-slate-500 text-xs italic">No custom permissions</span>
                             </td>
@@ -331,6 +334,7 @@ const togglePermInForm = (targetForm, permName) => {
 
         <!-- ── Add User Modal ────────────────────────────────────────────────────── -->
         <div v-if="showCreateModal"
+            @click.self="showCreateModal = false; form.reset(); form.clearErrors()"
             class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-8 max-h-[90vh] flex flex-col">
                 <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-shrink-0">
@@ -338,7 +342,14 @@ const togglePermInForm = (targetForm, permName) => {
                         <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Add Staff to {{ branch.name }}</h2>
                         <p class="text-xs text-slate-500 dark:text-slate-400">Assign role and select specific POS permissions</p>
                     </div>
-                    <button @click="showCreateModal = false; form.reset()" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xl font-bold">&times;</button>
+                    <button
+                        type="button"
+                        @click="showCreateModal = false; form.reset(); form.clearErrors()"
+                        class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-xl font-bold"
+                        aria-label="Close"
+                    >
+                        &times;
+                    </button>
                 </div>
 
                 <form @submit.prevent="submitCreate" class="space-y-4 overflow-y-auto pr-1 flex-1">
@@ -445,6 +456,7 @@ const togglePermInForm = (targetForm, permName) => {
 
         <!-- ── Edit User Modal ───────────────────────────────────────────────────── -->
         <div v-if="showEditModal"
+            @click.self="showEditModal = false; editForm.clearErrors()"
             class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto">
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-8 max-h-[90vh] flex flex-col">
                 <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-shrink-0">
@@ -452,7 +464,14 @@ const togglePermInForm = (targetForm, permName) => {
                         <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Edit Staff Permissions — {{ editingUser?.username }}</h2>
                         <p class="text-xs text-slate-500 dark:text-slate-400">Update account details, role, and granular permissions</p>
                     </div>
-                    <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xl font-bold">&times;</button>
+                    <button
+                        type="button"
+                        @click="showEditModal = false; editForm.clearErrors()"
+                        class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-xl font-bold"
+                        aria-label="Close"
+                    >
+                        &times;
+                    </button>
                 </div>
 
                 <form @submit.prevent="submitEdit" class="space-y-4 overflow-y-auto pr-1 flex-1">
@@ -473,9 +492,10 @@ const togglePermInForm = (targetForm, permName) => {
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email</label>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email <span class="text-slate-400 font-normal">(Optional)</span></label>
                             <input v-model="editForm.email" type="email"
                                 class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500" />
+                            <div v-if="editForm.errors.email" class="text-rose-500 text-xs mt-1">{{ editForm.errors.email }}</div>
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Role *</label>
@@ -496,10 +516,10 @@ const togglePermInForm = (targetForm, permName) => {
                                 <p class="text-xs text-slate-500">Customize feature access for {{ editingUser?.name }}</p>
                             </div>
                             <div class="flex items-center space-x-2">
-                                <button type="button" @click="selectAllEdit" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <button type="button" @click="selectAllEdit" class="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-semibold px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
                                     Select All
                                 </button>
-                                <button type="button" @click="deselectAllEdit" class="text-xs text-slate-600 dark:text-slate-400 hover:underline px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                <button type="button" @click="deselectAllEdit" class="text-xs text-slate-600 dark:text-slate-400 hover:underline px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 cursor-pointer">
                                     Deselect All
                                 </button>
                             </div>
@@ -532,7 +552,7 @@ const togglePermInForm = (targetForm, permName) => {
 
                     <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end space-x-3 flex-shrink-0">
                         <button type="button" @click="showEditModal = false"
-                            class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition">
+                            class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 transition cursor-pointer">
                             Cancel
                         </button>
                         <button type="submit" :disabled="editForm.processing"
@@ -546,11 +566,19 @@ const togglePermInForm = (targetForm, permName) => {
 
         <!-- ── Reset Password Modal ─────────────────────────────────────────────── -->
         <div v-if="showResetModal"
+            @click.self="showResetModal = false; resetForm.clearErrors()"
             class="fixed inset-0 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50">
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
                 <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                     <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Reset Password</h2>
-                    <button @click="showResetModal = false" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xl font-bold">&times;</button>
+                    <button
+                        type="button"
+                        @click="showResetModal = false; resetForm.clearErrors()"
+                        class="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer text-xl font-bold"
+                        aria-label="Close"
+                    >
+                        &times;
+                    </button>
                 </div>
                 <form @submit.prevent="submitReset" class="space-y-3">
                     <div>
@@ -575,6 +603,7 @@ const togglePermInForm = (targetForm, permName) => {
                                 <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858-5.908a10.05 10.05 0 014.122-.863c4.478 0 8.268 2.943 9.542 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21M3 3l18 18"/></svg>
                             </button>
                         </div>
+                        <div v-if="resetForm.errors.password_confirmation" class="text-rose-500 text-xs mt-1">{{ resetForm.errors.password_confirmation }}</div>
                     </div>
                     <div class="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end space-x-3">
                         <button type="button" @click="showResetModal = false"

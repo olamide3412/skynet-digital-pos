@@ -8,7 +8,8 @@ export const useCartStore = defineStore('cart', () => {
     const items        = ref([])
     const customer     = ref(null)
     const purchaseType = ref('Consumer') // 'Consumer' | 'Wholesale'
-    const discount     = ref({ type: null, value: 0, applied_id: null })
+    const discount     = ref({ type: null, value: 0, applied_id: null, name: '' })
+    const activeBranchDiscount = ref(null)
     const consultationFee = ref(0)
     const payment      = ref({ method: 'Cash', cash: 0, bank_transfer: 0, amount_paid: 0 })
     const lastAddedKey = ref(null)
@@ -226,12 +227,38 @@ export const useCartStore = defineStore('cart', () => {
         })
     }
 
+    function setActiveBranchDiscount(disc) {
+        activeBranchDiscount.value = disc || null
+        if (disc && disc.is_apply) {
+            applyBranchDiscount()
+        }
+    }
+
+    function applyBranchDiscount() {
+        if (activeBranchDiscount.value && activeBranchDiscount.value.is_apply) {
+            const val = Number(activeBranchDiscount.value.discount_value || 0)
+            const type = activeBranchDiscount.value.discount_type || 'percentage'
+            const label = activeBranchDiscount.value.description || (type === 'percentage' ? `${val}% Promo Discount` : `₦${val} Promo Discount`)
+            discount.value = {
+                type: type,
+                value: val,
+                applied_id: activeBranchDiscount.value.id,
+                name: label,
+            }
+        }
+    }
+
     function applyDiscount(disc) {
-        discount.value = disc
+        discount.value = {
+            type: disc?.type || null,
+            value: Number(disc?.value || 0),
+            applied_id: disc?.applied_id ?? null,
+            name: disc?.name || '',
+        }
     }
 
     function clearDiscount() {
-        discount.value = { type: null, value: 0, applied_id: null }
+        discount.value = { type: null, value: 0, applied_id: null, name: '' }
     }
 
     function setCustomer(c) {
@@ -250,9 +277,15 @@ export const useCartStore = defineStore('cart', () => {
         items.value           = []
         customer.value        = null
         purchaseType.value    = 'Consumer'
-        discount.value        = { type: null, value: 0, applied_id: null }
         consultationFee.value = 0
         payment.value         = { method: 'Cash', cash: 0, bank_transfer: 0, amount_paid: 0 }
+        
+        // Auto-reapply branch promotional discount if active
+        if (activeBranchDiscount.value && activeBranchDiscount.value.is_apply) {
+            applyBranchDiscount()
+        } else {
+            discount.value = { type: null, value: 0, applied_id: null, name: '' }
+        }
     }
 
     function loadFromHeld(heldSale) {
@@ -300,11 +333,11 @@ export const useCartStore = defineStore('cart', () => {
     }
 
     return {
-        items, customer, purchaseType, discount, consultationFee, payment,
+        items, customer, purchaseType, discount, activeBranchDiscount, consultationFee, payment,
         lastAddedKey, lastAddedAt,
         subtotal, discountAmount, taxAmount, grandTotal, itemCount, hasUnassignedImeis,
         addItem, switchUnit, removeItem, updateQty, updatePrice, setItemImei,
-        setPurchaseType, applyDiscount, clearDiscount,
+        setPurchaseType, applyDiscount, clearDiscount, setActiveBranchDiscount, applyBranchDiscount,
         setCustomer, clearCustomer, setConsultationFee,
         clearCart, loadFromHeld, toPayload,
     }
