@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Pos;
 
 use App\Http\Controllers\Controller;
+use App\Models\DiscountGroup;
+use App\Models\Item;
+use App\Models\ItemDiscount;
 use App\Models\SaleDiscount;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -16,8 +19,26 @@ class SaleDiscountController extends Controller
             ->latest()
             ->get();
 
+        $itemDiscounts = ItemDiscount::forBranch($branch?->id)
+            ->with(['item:id,item_name,barcode_number,price,unit_label'])
+            ->latest()
+            ->get();
+
+        $discountGroups = DiscountGroup::forBranch($branch?->id)
+            ->with(['items:id,item_name,barcode_number,price,unit_label'])
+            ->latest()
+            ->get();
+
+        $items = $branch ? Item::where('branch_id', $branch->id)
+            ->select(['id', 'item_name', 'barcode_number', 'price', 'unit_label'])
+            ->orderBy('item_name')
+            ->get() : collect();
+
         return Inertia::render('Discounts/Index', [
-            'discounts' => $discounts,
+            'discounts'      => $discounts,
+            'itemDiscounts'  => $itemDiscounts,
+            'discountGroups' => $discountGroups,
+            'items'          => $items,
         ]);
     }
 

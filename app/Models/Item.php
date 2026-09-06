@@ -269,4 +269,25 @@ class Item extends Model
     {
         return $this->hasMany(ItemDeviceUnit::class)->where('status', 'in_stock');
     }
+
+    public function itemDiscounts(): HasMany
+    {
+        return $this->hasMany(ItemDiscount::class);
+    }
+
+    public function activeItemDiscount(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(ItemDiscount::class)
+            ->where('is_active', true)
+            ->where('starts_at', '<=', now())
+            ->where('ends_at', '>=', now())
+            ->latestOfMany();
+    }
+
+    public function discountGroups(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(DiscountGroup::class, 'discount_group_items')
+            ->withTimestamps();
+    }
 }
+

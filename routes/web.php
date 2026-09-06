@@ -11,6 +11,8 @@ use App\Http\Controllers\Pos\SettingsController as PosSettingsController;
 use App\Http\Controllers\Pos\ItemGridController;
 use App\Http\Controllers\Pos\BarcodeController;
 use App\Http\Controllers\Pos\SaleDiscountController;
+use App\Http\Controllers\Pos\ItemDiscountController;
+use App\Http\Controllers\Pos\DiscountGroupController;
 use App\Http\Controllers\Pos\StockTransferController;
 use App\Http\Controllers\SuperAdmin\SuperAdminAuthController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboard;
@@ -273,6 +275,35 @@ Route::prefix('{branch}')
                 'destroy' => 'discounts.destroy',
             ])
             ->middleware('pos.role:canApplyDiscount');
+
+        // Item Discounts
+        Route::post('/item-discounts', [ItemDiscountController::class, 'store'])
+            ->name('item-discounts.store')
+            ->middleware('pos.role:canApplyDiscount');
+        Route::put('/item-discounts/{itemDiscount}', [ItemDiscountController::class, 'update'])
+            ->name('item-discounts.update')
+            ->middleware('pos.role:canApplyDiscount');
+        Route::patch('/item-discounts/{itemDiscount}/toggle', [ItemDiscountController::class, 'toggleActive'])
+            ->name('item-discounts.toggle')
+            ->middleware('pos.role:canApplyDiscount');
+        Route::delete('/item-discounts/{itemDiscount}', [ItemDiscountController::class, 'destroy'])
+            ->name('item-discounts.destroy')
+            ->middleware('pos.role:canApplyDiscount');
+
+        // Discount Groups
+        Route::post('/discount-groups', [DiscountGroupController::class, 'store'])
+            ->name('discount-groups.store')
+            ->middleware('pos.role:canApplyDiscount');
+        Route::put('/discount-groups/{discountGroup}', [DiscountGroupController::class, 'update'])
+            ->name('discount-groups.update')
+            ->middleware('pos.role:canApplyDiscount');
+        Route::patch('/discount-groups/{discountGroup}/toggle', [DiscountGroupController::class, 'toggleActive'])
+            ->name('discount-groups.toggle')
+            ->middleware('pos.role:canApplyDiscount');
+        Route::delete('/discount-groups/{discountGroup}', [DiscountGroupController::class, 'destroy'])
+            ->name('discount-groups.destroy')
+            ->middleware('pos.role:canApplyDiscount');
+
 
         // Vendors & Purchases
         Route::resource('vendors', \App\Http\Controllers\Pos\VendorController::class)

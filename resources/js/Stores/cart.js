@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { usePosSettingsStore } from './posSettings'
+import { resolveLineItemDiscount, getRawPriceForUnit } from '@/Services/discountResolver'
 
 export const useCartStore = defineStore('cart', () => {
     const settStore    = usePosSettingsStore()
@@ -10,6 +11,8 @@ export const useCartStore = defineStore('cart', () => {
     const purchaseType = ref('Consumer') // 'Consumer' | 'Wholesale'
     const discount     = ref({ type: null, value: 0, applied_id: null, name: '' })
     const activeBranchDiscount = ref(null)
+    const itemDiscounts  = ref([])
+    const discountGroups = ref([])
     const consultationFee = ref(0)
     const payment      = ref({ method: 'Cash', cash: 0, bank_transfer: 0, amount_paid: 0 })
     const lastAddedKey = ref(null)
@@ -48,28 +51,19 @@ export const useCartStore = defineStore('cart', () => {
         items.value.reduce((sum, i) => sum + i.qty, 0)
     )
 
-    // ── Price Resolver Helper ──────────────────────────────────────────────
+    // ── Price & Discount Resolver Helper ────────────────────────────────────
     function getPriceForUnit(item, unit = 'unit', pType = purchaseType.value) {
-        const isWholesale = pType === 'Wholesale'
-        const u = (unit || 'unit').toLowerCase().trim()
-        const baseUnit = (item.unit_label || 'unit').toLowerCase().trim()
+        return getRawPriceForUnit(item, unit, pType)
+    }
 
-        if (u === 'unit' || u === baseUnit) {
-            return parseFloat(isWholesale && Number(item.wholesale_price) > 0 ? item.wholesale_price : (item.price || 0))
-        }
-
-        // 1. Check custom units / variants array
-        if (Array.isArray(item.units) && item.units.length > 0) {
-            const matched = item.units.find(un => (un.unit_name || '').toLowerCase().trim() === u || String(un.id) === String(unit))
-            if (matched) {
-                if (isWholesale && Number(matched.wholesale_price) > 0) {
-                    return parseFloat(matched.wholesale_price)
-                }
-                return parseFloat(matched.selling_price || 0)
-            }
-        }
-
-        return parseFloat(isWholesale && Number(item.wholesale_price) > 0 ? item.wholesale_price : item.price)
+    function resolveItemPriceDetails(item, unit = 'unit', pType = purchaseType.value) {
+        return resolveLineItemDiscount(
+            item,
+            unit,
+            pType,
+            itemDiscounts.value,
+            discountGroups.value
+        )
     }
 
     const hasUnassignedImeis = computed(() => {
@@ -77,10 +71,38 @@ export const useCartStore = defineStore('cart', () => {
     })
 
     // ── Actions ────────────────────────────────────────────────────────────
+    function setItemDiscounts(discs) {
+        itemDiscounts.value = Array.isArray(discs) ? discs : []
+        refreshAllDiscounts()
+    }
+
+    function setDiscountGroups(groups) {
+        discountGroups.value = Array.isArray(groups) ? groups : []
+        refreshAllDiscounts()
+    }
+
+    function refreshAllDiscounts() {
+        items.value.forEach(item => {
+            if (!item.price_locked) {
+                const details = resolveItemPriceDetails(item.raw_item || item, item.unit_used, purchaseType.value)
+                item.original_price  = details.original_price
+                item.unit_price      = details.unit_price
+                item.discount_amount = details.discount_amount
+                item.discount_layer  = details.discount_layer
+                item.discount_type   = details.discount_type
+                item.discount_value  = details.discount_value
+                item.discount_name   = details.discount_name
+                item.discount_id     = details.discount_id
+                item.line_total      = Math.round(details.unit_price * item.qty * 100) / 100
+            }
+        })
+    }
+
     function addItem(item, unit = 'unit', preselectedImei = null, forceNewRow = false) {
-        const unitUsed  = unit || 'unit'
-        const isImei    = !!(item.is_imei_tracked || item.raw_item?.is_imei_tracked)
-        const unitPrice = getPriceForUnit(item, unitUsed, purchaseType.value)
+        const unitUsed     = unit || 'unit'
+        const isImei       = !!(item.is_imei_tracked || item.raw_item?.is_imei_tracked)
+        const priceDetails = resolveItemPriceDetails(item, unitUsed, purchaseType.value)
+        const unitPrice    = priceDetails.unit_price
 
         // For IMEI-tracked items, each unit must be its own line so it can hold 1 unique serial/IMEI
         if (isImei) {
@@ -91,7 +113,14 @@ export const useCartStore = defineStore('cart', () => {
                 item_name:        item.item_name,
                 qty:              1,
                 unit_used:        'unit',
+                original_price:   priceDetails.original_price,
                 unit_price:       unitPrice,
+                discount_amount:  priceDetails.discount_amount,
+                discount_layer:   priceDetails.discount_layer,
+                discount_type:    priceDetails.discount_type,
+                discount_value:   priceDetails.discount_value,
+                discount_name:    priceDetails.discount_name,
+                discount_id:      priceDetails.discount_id,
                 buy_price:        parseFloat(item.buy_price || 0),
                 purchase_type:    purchaseType.value,
                 line_total:       Math.round(unitPrice * 100) / 100,
@@ -118,7 +147,14 @@ export const useCartStore = defineStore('cart', () => {
                 item_name:        item.item_name,
                 qty:              1,
                 unit_used:        unitUsed,
+                original_price:   priceDetails.original_price,
                 unit_price:       unitPrice,
+                discount_amount:  priceDetails.discount_amount,
+                discount_layer:   priceDetails.discount_layer,
+                discount_type:    priceDetails.discount_type,
+                discount_value:   priceDetails.discount_value,
+                discount_name:    priceDetails.discount_name,
+                discount_id:      priceDetails.discount_id,
                 buy_price:        parseFloat(item.buy_price || 0),
                 purchase_type:    purchaseType.value,
                 line_total:       Math.round(unitPrice * 100) / 100,
@@ -150,7 +186,14 @@ export const useCartStore = defineStore('cart', () => {
                 item_name:        item.item_name,
                 qty:              1,
                 unit_used:        unitUsed,
+                original_price:   priceDetails.original_price,
                 unit_price:       unitPrice,
+                discount_amount:  priceDetails.discount_amount,
+                discount_layer:   priceDetails.discount_layer,
+                discount_type:    priceDetails.discount_type,
+                discount_value:   priceDetails.discount_value,
+                discount_name:    priceDetails.discount_name,
+                discount_id:      priceDetails.discount_id,
                 buy_price:        parseFloat(item.buy_price || 0),
                 purchase_type:    purchaseType.value,
                 line_total:       Math.round(unitPrice * 100) / 100,
@@ -168,6 +211,7 @@ export const useCartStore = defineStore('cart', () => {
         }
     }
 
+
     function setItemImei(cartKey, imei) {
         const item = items.value.find(i => i.cart_key === cartKey)
         if (item) {
@@ -179,9 +223,10 @@ export const useCartStore = defineStore('cart', () => {
         const idx = items.value.findIndex(i => i.cart_key === cartKey)
         if (idx === -1) return
 
-        const item       = items.value[idx]
-        const newKey     = `${item.item_id}_${newUnit}`
-        const newPrice   = getPriceForUnit(item.raw_item || item, newUnit, purchaseType.value)
+        const item         = items.value[idx]
+        const newKey       = `${item.item_id}_${newUnit}`
+        const priceDetails = resolveItemPriceDetails(item.raw_item || item, newUnit, purchaseType.value)
+        const newPrice     = priceDetails.unit_price
 
         // If a row for the new unit already exists, merge qty into it and remove current row
         const existingIdx = items.value.findIndex((i, j) => j !== idx && i.cart_key === newKey)
@@ -193,10 +238,17 @@ export const useCartStore = defineStore('cart', () => {
             return
         }
 
-        item.unit_used  = newUnit
-        item.cart_key   = newKey
-        item.unit_price = newPrice
-        item.line_total = Math.round(newPrice * item.qty * 100) / 100
+        item.unit_used       = newUnit
+        item.cart_key        = newKey
+        item.original_price  = priceDetails.original_price
+        item.unit_price      = newPrice
+        item.discount_amount = priceDetails.discount_amount
+        item.discount_layer  = priceDetails.discount_layer
+        item.discount_type   = priceDetails.discount_type
+        item.discount_value  = priceDetails.discount_value
+        item.discount_name   = priceDetails.discount_name
+        item.discount_id     = priceDetails.discount_id
+        item.line_total      = Math.round(newPrice * item.qty * 100) / 100
     }
 
     function removeItem(cartKey) {
@@ -214,18 +266,16 @@ export const useCartStore = defineStore('cart', () => {
     function updatePrice(cartKey, price) {
         const item = items.value.find(i => i.cart_key === cartKey)
         if (!item) return
-        item.unit_price = parseFloat(price)
-        item.line_total = Math.round(item.unit_price * item.qty * 100) / 100
+        item.unit_price   = parseFloat(price)
+        item.price_locked = true
+        item.line_total   = Math.round(item.unit_price * item.qty * 100) / 100
     }
 
     function setPurchaseType(type) {
         purchaseType.value = type
-        items.value.forEach(item => {
-            item.purchase_type = type
-            item.unit_price    = getPriceForUnit(item.raw_item || item, item.unit_used, type)
-            item.line_total    = Math.round(item.unit_price * item.qty * 100) / 100
-        })
+        refreshAllDiscounts()
     }
+
 
     function setActiveBranchDiscount(disc) {
         activeBranchDiscount.value = disc || null
@@ -362,11 +412,13 @@ export const useCartStore = defineStore('cart', () => {
     }
 
     return {
-        items, customer, purchaseType, discount, activeBranchDiscount, consultationFee, payment,
+        items, customer, purchaseType, discount, activeBranchDiscount, itemDiscounts, discountGroups,
+        consultationFee, payment,
         lastAddedKey, lastAddedAt,
         subtotal, discountAmount, taxAmount, grandTotal, itemCount, hasUnassignedImeis,
         addItem, switchUnit, removeItem, updateQty, updatePrice, setItemImei,
         setPurchaseType, applyDiscount, clearDiscount, setActiveBranchDiscount, applyBranchDiscount,
+        setItemDiscounts, setDiscountGroups, refreshAllDiscounts, resolveItemPriceDetails,
         setCustomer, clearCustomer, setConsultationFee,
         clearCart, loadFromHeld, toPayload,
     }

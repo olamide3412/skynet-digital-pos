@@ -31,6 +31,8 @@ const props = defineProps({
     itemGrids:        Array,
     heldSales:        Array,
     activeDiscount:   Object,
+    itemDiscounts:    Array,
+    discountGroups:   Array,
     canEditPrice:     Boolean,
     canApplyDiscount: Boolean,
     now:              String,
@@ -49,9 +51,23 @@ const cart          = useCartStore()
 const settStore     = usePosSettingsStore()
 const productSearch = ref(null)   // ref to ProductSearch component
 settStore.set(props.settings)
+
 watch(() => props.activeDiscount, (disc) => {
     cart.setActiveBranchDiscount(disc)
 }, { immediate: true })
+
+watch(() => props.itemDiscounts, (discs) => {
+    if (Array.isArray(discs)) {
+        cart.setItemDiscounts(discs)
+    }
+}, { immediate: true })
+
+watch(() => props.discountGroups, (groups) => {
+    if (Array.isArray(groups)) {
+        cart.setDiscountGroups(groups)
+    }
+}, { immediate: true })
+
 
 // ── Splash Screen & Terminal Launch State ─────────────────────────────────────
 const isPosReady = ref(false)

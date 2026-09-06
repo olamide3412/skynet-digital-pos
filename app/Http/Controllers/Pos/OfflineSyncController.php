@@ -4,8 +4,10 @@ namespace App\Http\Controllers\Pos;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\DiscountGroup;
 use App\Models\Item;
 use App\Models\ItemDeviceUnit;
+use App\Models\ItemDiscount;
 use App\Models\PosCustomer;
 use App\Models\PosSettings;
 use App\Models\SaleDiscount;
@@ -69,12 +71,39 @@ class OfflineSyncController extends Controller
             ->select(['id', 'name'])
             ->get();
 
-        // Active Discount
+        // Active Overall Discount
         $activeDiscount = SaleDiscount::where('branch_id', $branch->id)
             ->where('is_apply', true)
             ->where('start_date_time', '<=', now())
             ->where('end_date_time', '>=', now())
             ->first();
+
+        // Active & scheduled Item Discounts
+        $itemDiscounts = ItemDiscount::where('branch_id', $branch->id)
+            ->where('is_active', true)
+            ->where('ends_at', '>=', now()->subDays(2))
+            ->select(['id', 'item_id', 'discount_type', 'discount_value', 'starts_at', 'ends_at', 'is_active'])
+            ->get();
+
+        // Active & scheduled Discount Groups (with assigned item IDs)
+        $discountGroups = DiscountGroup::where('branch_id', $branch->id)
+            ->where('is_active', true)
+            ->where('ends_at', '>=', now()->subDays(2))
+            ->with(['items:id'])
+            ->select(['id', 'name', 'discount_type', 'discount_value', 'starts_at', 'ends_at', 'is_active'])
+            ->get()
+            ->map(function ($g) {
+                return [
+                    'id'             => $g->id,
+                    'name'           => $g->name,
+                    'discount_type'  => $g->discount_type,
+                    'discount_value' => (float) $g->discount_value,
+                    'starts_at'      => $g->starts_at?->toIso8601String(),
+                    'ends_at'        => $g->ends_at?->toIso8601String(),
+                    'is_active'      => (bool) $g->is_active,
+                    'item_ids'       => $g->items->pluck('id')->all(),
+                ];
+            });
 
         return response()->json([
             'branch' => [
@@ -100,15 +129,18 @@ class OfflineSyncController extends Controller
                 'business_contact_number' => $branch->phone,
                 'business_email'          => $branch->email,
             ],
-            'items'          => $items,
-            'available_imeis'=> $availableImeis,
-            'customers'      => $customers,
-            'categories'     => $categories,
-            'activeDiscount' => $activeDiscount,
-            'quick_access'   => \App\Services\QuickAccessService::getQuickAccessData($branch),
-            'server_time'    => now()->toIso8601String(),
+            'items'           => $items,
+            'available_imeis' => $availableImeis,
+            'customers'       => $customers,
+            'categories'      => $categories,
+            'activeDiscount'  => $activeDiscount,
+            'item_discounts'  => $itemDiscounts,
+            'discount_groups' => $discountGroups,
+            'quick_access'    => \App\Services\QuickAccessService::getQuickAccessData($branch),
+            'server_time'     => now()->toIso8601String(),
         ]);
     }
+
 
     /**
      * API: Receive queued offline sales and sync them back to the server.

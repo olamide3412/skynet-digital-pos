@@ -143,7 +143,7 @@ function onUnitChange(newUnit) {
     >
         <!-- Top Row: Name, Badge & Remove -->
         <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-1.5 min-w-0">
+            <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
                 <span class="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300 font-mono text-[10px] font-bold flex items-center justify-center flex-shrink-0 shadow-xs border border-slate-200/80 dark:border-slate-600/60">
                     #{{ index + 1 }}
                 </span>
@@ -153,6 +153,13 @@ function onUnitChange(newUnit) {
                 </span>
                 <span v-else class="px-1.5 py-0.5 rounded text-[10px] uppercase font-bold bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30">
                     📱 Serial Unit
+                </span>
+                <span 
+                    v-if="item.discount_amount > 0" 
+                    :title="item.discount_name || 'Promotional Discount'"
+                    class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 flex items-center gap-0.5 animate-in fade-in"
+                >
+                    🏷️ {{ item.discount_type === 'percentage' ? `${item.discount_value}%` : format(item.discount_amount) }} off
                 </span>
             </div>
 
@@ -223,7 +230,14 @@ function onUnitChange(newUnit) {
         <!-- Bottom Row: Price, Qty Controls & Total -->
         <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
             <!-- Price Display / Input -->
-            <div class="flex items-center gap-1">
+            <div class="flex items-center gap-1.5 flex-wrap">
+                <span
+                    v-if="!editingPrice && item.original_price && item.original_price > item.unit_price"
+                    class="text-[11px] text-slate-400 dark:text-slate-500 line-through font-mono"
+                    title="Original Unit Price"
+                >
+                    {{ format(item.original_price) }}
+                </span>
                 <button
                     v-if="!editingPrice"
                     @click="startEditPrice"
@@ -246,6 +260,7 @@ function onUnitChange(newUnit) {
                 />
                 <span class="text-slate-500 dark:text-slate-400 text-xs">/ {{ isImeiItem ? 'Unit' : currentUnitLabel }}</span>
             </div>
+
 
             <!-- Qty Stepper Controls (Disabled for IMEI items since 1 line = 1 unit) -->
             <div v-if="!isImeiItem" class="flex items-center gap-1">

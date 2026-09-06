@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Pos;
 
 use App\Http\Controllers\Controller;
+use App\Models\DiscountGroup;
 use App\Models\Item;
+use App\Models\ItemDiscount;
 use App\Models\ItemGrid;
 use App\Models\PosSettings;
 use App\Models\PosCustomer;
@@ -25,6 +27,30 @@ class PosController extends Controller
             ->where('start_date_time', '<=', now())
             ->where('end_date_time',   '>=', now())
             ->first() : null;
+
+        $itemDiscounts = $branch ? ItemDiscount::where('branch_id', $branch->id)
+            ->where('is_active', true)
+            ->where('ends_at', '>=', now()->subDays(2))
+            ->get(['id', 'item_id', 'discount_type', 'discount_value', 'starts_at', 'ends_at', 'is_active'])
+            : collect();
+
+        $discountGroups = $branch ? DiscountGroup::where('branch_id', $branch->id)
+            ->where('is_active', true)
+            ->where('ends_at', '>=', now()->subDays(2))
+            ->with(['items:id'])
+            ->get(['id', 'name', 'discount_type', 'discount_value', 'starts_at', 'ends_at', 'is_active'])
+            ->map(fn($g) => [
+                'id'             => $g->id,
+                'name'           => $g->name,
+                'discount_type'  => $g->discount_type,
+                'discount_value' => (float) $g->discount_value,
+                'starts_at'      => $g->starts_at?->toIso8601String(),
+                'ends_at'        => $g->ends_at?->toIso8601String(),
+                'is_active'      => (bool) $g->is_active,
+                'item_ids'       => $g->items->pluck('id')->all(),
+            ])
+            : collect();
+
 
         // Quick Access Widget data (capped at 10 items)
         $quickAccess = $branch ? QuickAccessService::getQuickAccessData($branch) : [
@@ -104,6 +130,8 @@ class PosController extends Controller
             'itemGrids'        => $itemGrids,
             'heldSales'        => $heldSales,
             'activeDiscount'   => $activeDiscount,
+            'itemDiscounts'    => $itemDiscounts,
+            'discountGroups'   => $discountGroups,
             'canEditPrice'     => \App\Services\RoleService::canEditPrice(),
             'canApplyDiscount' => \App\Services\RoleService::canApplyDiscount(),
             'now'              => now()->toISOString(),

@@ -21,13 +21,25 @@ db.version(2).stores({
     held_sales:      'held_sale_id, created_at, status, sync_status',
 })
 
+db.version(3).stores({
+    items:           'id, barcode_number, item_name, category_id, is_imei_tracked, [category_id+is_imei_tracked]',
+    available_imeis: 'id, item_id, imei_or_device_id, status, [item_id+status]',
+    settings:        'key',
+    customers:       'id, name, phone',
+    categories:      'id, name',
+    queued_sales:    'offline_sale_id, created_at, sync_status',
+    held_sales:      'held_sale_id, created_at, status, sync_status',
+    item_discounts:  'id, item_id, is_active',
+    discount_groups: 'id, is_active',
+})
+
 /**
  * Ingest fresh bootstrap dataset from server into IndexedDB.
  */
 export async function saveBootstrapData(payload) {
     if (!payload) return
 
-    await db.transaction('rw', db.items, db.available_imeis, db.settings, db.customers, db.categories, async () => {
+    await db.transaction('rw', db.items, db.available_imeis, db.settings, db.customers, db.categories, db.item_discounts, db.discount_groups, async () => {
         if (payload.items && Array.isArray(payload.items)) {
             await db.items.clear()
             await db.items.bulkPut(payload.items)
@@ -46,6 +58,16 @@ export async function saveBootstrapData(payload) {
         if (payload.categories && Array.isArray(payload.categories)) {
             await db.categories.clear()
             await db.categories.bulkPut(payload.categories)
+        }
+
+        if (payload.item_discounts && Array.isArray(payload.item_discounts)) {
+            await db.item_discounts.clear()
+            await db.item_discounts.bulkPut(payload.item_discounts)
+        }
+
+        if (payload.discount_groups && Array.isArray(payload.discount_groups)) {
+            await db.discount_groups.clear()
+            await db.discount_groups.bulkPut(payload.discount_groups)
         }
 
         if (payload.settings) {
@@ -67,6 +89,7 @@ export async function saveBootstrapData(payload) {
         await db.settings.put({ key: 'last_sync_time', value: new Date().toISOString() })
     })
 }
+
 
 /**
  * Retrieve cached quick access widget data from IndexedDB.
@@ -540,4 +563,27 @@ export async function mergeServerHeldSales(serverSales = []) {
         }
     }
 }
+
+/**
+ * Retrieve cached item discounts from IndexedDB.
+ */
+export async function getLocalItemDiscounts() {
+    try {
+        return (await db.item_discounts.toArray()) || []
+    } catch (e) {
+        return []
+    }
+}
+
+/**
+ * Retrieve cached discount groups from IndexedDB.
+ */
+export async function getLocalDiscountGroups() {
+    try {
+        return (await db.discount_groups.toArray()) || []
+    } catch (e) {
+        return []
+    }
+}
+
 
