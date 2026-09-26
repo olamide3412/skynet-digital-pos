@@ -163,6 +163,10 @@ watch(() => userForm.role, (newRole) => {
             'canManageBarcodes',
             'canManageCustomers',
             'canManageUsers',
+            'canLogExpense',
+            'canManageExpenses',
+            'canViewExpenseReports',
+            'canViewExpiryReport',
         ]
     } else if (newRole === 'inventory-manager') {
         userForm.permissions = [
@@ -172,6 +176,7 @@ watch(() => userForm.role, (newRole) => {
             'canManagePurchases',
             'canManageItems',
             'canManageBarcodes',
+            'canViewExpiryReport',
         ]
     }
 }, { immediate: true })
@@ -307,6 +312,8 @@ const settingsForm = useForm({
     is_qty_deduction: Boolean(props.settings?.is_qty_deduction),
     out_of_stock: Number(props.settings?.out_of_stock ?? 25),
     is_check_expiration: Boolean(props.settings?.is_check_expiration),
+    batch_tracking_enabled: Boolean(props.settings?.batch_tracking_enabled),
+    expiry_alert_days: Number(props.settings?.expiry_alert_days ?? 30),
     is_imei_enabled: Boolean(props.settings?.is_imei_enabled),
     is_show_buy_price: Boolean(props.settings?.is_show_buy_price),
     is_use_profit_percentage: Boolean(props.settings?.is_use_profit_percentage),
@@ -1535,6 +1542,18 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                             <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Track Expiration Dates</span>
                         </label>
                         <label class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                            <input v-model="settingsForm.batch_tracking_enabled" type="checkbox" class="w-4 h-4 rounded text-indigo-600" />
+                            <div>
+                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Enable Item Expiry & Batch Tracking</span>
+                                <p class="text-[10px] text-slate-400">Supports multiple batches per item with individual expiry dates (Pharmacy / Perishables).</p>
+                            </div>
+                        </label>
+                        <div v-if="settingsForm.batch_tracking_enabled" class="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+                            <label class="block text-xs font-semibold text-slate-800 dark:text-slate-200 mb-1">Expiry Alert Warning Threshold (Days)</label>
+                            <input v-model="settingsForm.expiry_alert_days" type="number" min="1" max="365" class="w-full px-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white" />
+                            <p class="text-[10px] text-slate-400 mt-1">Batches expiring within this number of days will trigger dashboard warnings & notifications.</p>
+                        </div>
+                        <label class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
                             <input v-model="settingsForm.is_use_profit_percentage" type="checkbox" class="w-4 h-4 rounded text-indigo-600" />
                             <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Use Profit Margin Percentages</span>
                         </label>
@@ -1693,8 +1712,19 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                     <h2 class="text-lg font-bold text-slate-900 dark:text-white">Sales & Financial Activity</h2>
                     <p class="text-xs text-slate-500">Live sales receipts logged from {{ branch.name }} terminals.</p>
                 </div>
-                <!-- Export Dropdown -->
-                <div class="relative" ref="exportSalesDropdownRef">
+                <div class="flex items-center gap-2">
+                    <Link
+                        :href="route('superadmin.reports.expenses', { branch_id: branch.id })"
+                        class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold rounded-xl text-xs transition flex items-center space-x-1.5 cursor-pointer border border-slate-200 dark:border-slate-700"
+                    >
+                        <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <span>Branch Expenses</span>
+                    </Link>
+
+                    <!-- Export Dropdown -->
+                    <div class="relative" ref="exportSalesDropdownRef">
                     <button
                         type="button"
                         @click="exportSalesMenuOpen = !exportSalesMenuOpen"
@@ -1741,6 +1771,7 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                     </div>
                 </div>
             </div>
+        </div>
 
             <!-- Sales Filter Bar with Preset Pills, Start & End Date Pickers, Search, and Reset -->
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl shadow-xs space-y-3">

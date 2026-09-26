@@ -1,8 +1,9 @@
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { Link, router, usePage } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import { useCurrency } from '@/Composables/useCurrency'
+import CreateBatchModal from '@/Components/CreateBatchModal.vue'
 import dayjs from 'dayjs'
 
 defineOptions({ layout: PosLayout })
@@ -17,6 +18,23 @@ const itemsSubtotal = computed(() => {
         return props.order.items.reduce((sum, item) => sum + (Number(item.qty || 0) * Number(item.cost || 0)), 0)
     }
     return (Number(props.order?.total_amount) || 0) - (Number(props.order?.shipping_cost) || 0) + (Number(props.order?.discount) || 0)
+})
+
+const showBatchModal = ref(false)
+const batchPromptsQueue = ref([])
+
+onMounted(() => {
+    if (page.props.flash?.batch_prompts && page.props.flash.batch_prompts.length > 0) {
+        batchPromptsQueue.value = page.props.flash.batch_prompts
+        showBatchModal.value = true
+    }
+})
+
+watch(() => page.props.flash?.batch_prompts, (prompts) => {
+    if (prompts && prompts.length > 0) {
+        batchPromptsQueue.value = prompts
+        showBatchModal.value = true
+    }
 })
 
 function destroy() {
@@ -145,5 +163,11 @@ function destroy() {
                 </div>
             </div>
         </div>
+
+        <!-- Reusable Create Batch Modal (§5.2) -->
+        <CreateBatchModal
+            v-model="showBatchModal"
+            :queue="batchPromptsQueue"
+        />
     </div>
 </template>

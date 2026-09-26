@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { Head, Link, usePage } from '@inertiajs/vue3'
 import { computed, ref, onMounted, reactive } from 'vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'

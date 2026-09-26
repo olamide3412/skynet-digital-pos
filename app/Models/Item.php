@@ -12,7 +12,7 @@ class Item extends Model
         'branch_id', 'category_id', 'group_address_id',
         'item_name', 'barcode_number',
         'buy_price', 'stock_worth', 'price', 'wholesale_price',
-        'price_locked', 'is_imei_tracked',
+        'price_locked', 'is_imei_tracked', 'batch_tracking_enabled',
         'back_store_qty', 'front_store_qty',
         'reorder_point', 'reorder_unit',
         'unit_label',
@@ -26,6 +26,7 @@ class Item extends Model
         return [
             'price_locked'           => 'boolean',
             'is_imei_tracked'        => 'boolean',
+            'batch_tracking_enabled' => 'boolean',
             'buy_price'              => 'decimal:2',
             'stock_worth'            => 'decimal:2',
             'price'                  => 'decimal:2',
@@ -218,6 +219,27 @@ class Item extends Model
     public function barcodePrintLogs(): HasMany
     {
         return $this->hasMany(BarcodePrintLog::class);
+    }
+
+    public function batches(): HasMany
+    {
+        return $this->hasMany(ItemBatch::class);
+    }
+
+    public function batchSyncIssues(): HasMany
+    {
+        return $this->hasMany(ItemBatchSyncIssue::class);
+    }
+
+    public function getActiveBatchesTotalAttribute(): int
+    {
+        return (int) $this->batches()->where('status', 'active')->sum('quantity');
+    }
+
+    public function getBatchVarianceAttribute(): int
+    {
+        $actualStock = ((int) ($this->front_store_qty ?? 0)) + ((int) ($this->back_store_qty ?? 0));
+        return $actualStock - $this->active_batches_total;
     }
 
     // ── Status helpers ─────────────────────────────────────────────────────────

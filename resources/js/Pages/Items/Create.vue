@@ -38,6 +38,7 @@ const form = useForm({
     item_description:       props.clonedItem?.item_description ?? '',
     price_locked:           props.clonedItem?.price_locked ?? false,
     is_imei_tracked:        props.clonedItem?.is_imei_tracked ?? false,
+    batch_tracking_enabled: props.clonedItem?.batch_tracking_enabled ?? false,
     initial_imeis:          '',
     image:                  null,
     units:                  initialUnits,
@@ -372,6 +373,24 @@ function submit() {
                             Count of entered IMEIs will automatically set the starting in-stock quantity. You can also receive IMEIs later via Purchase Orders.
                         </p>
                     </div>
+                </div>
+
+                <!-- Batch / Expiry Tracking (When Enabled for Branch) -->
+                <div v-if="$page.props.pos_settings?.batch_tracking_enabled" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                            💊 Batch & Expiry Date Tracking
+                        </h2>
+                        <span class="text-xs text-slate-500">For pharmaceuticals, medicines & perishable stock</span>
+                    </div>
+
+                    <label class="flex items-center gap-3 cursor-pointer p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                        <input type="checkbox" v-model="form.batch_tracking_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                        <div>
+                            <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Batch & Expiry Date Tracking for this item</span>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Track multiple batches with differing expiry dates. Checkout will automatically deduct from soonest-expiring batches (FEFO).</p>
+                        </div>
+                    </label>
                 </div>
 
                 <!-- 5. Inventory Stock Levels (Base Units) -->

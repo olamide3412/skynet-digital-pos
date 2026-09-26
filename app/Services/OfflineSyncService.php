@@ -312,6 +312,9 @@ class OfflineSyncService
                         // Deduct stock normally
                         InventoryService::deduct($item, $baseQty, $receiptId, $user);
                     }
+
+                    // Silent FEFO batch deduction (non-blocking background side-effect per §4.1)
+                    \App\Services\BatchTrackingService::deductFefo($item, $baseQty, 'offline_sale', $receiptId, $user);
                 }
             }
 

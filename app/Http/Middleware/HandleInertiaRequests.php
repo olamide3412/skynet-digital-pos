@@ -19,14 +19,27 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = Auth::guard('web')->check() ? Auth::guard('web')->user() : null;
+        $segment1 = $request->segment(1);
+        $reservedPrefixes = ['superadmin', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
+        $urlBranch = ($segment1 && !in_array($segment1, $reservedPrefixes))
+            ? \App\Models\Branch::where('slug', $segment1)->first()
+            : null;
+
         $activeBranch = current_branch() 
+            ?? $urlBranch
             ?? ($user?->branch_id ? \App\Models\Branch::find($user->branch_id) : null);
+
+        if ($activeBranch && !app()->bound('current_branch')) {
+            app()->instance('current_branch', $activeBranch);
+        }
+
         $defaultBranch = \App\Models\Branch::orderBy('id')->first();
         $branch = $activeBranch ?? $defaultBranch;
 
-        if ($activeBranch) {
-            \Illuminate\Support\Facades\URL::defaults(['branch' => $activeBranch->slug]);
+        if ($branch) {
+            \Illuminate\Support\Facades\URL::defaults(['branch' => $branch->slug]);
         }
+
 
         return [
             ...parent::share($request),
@@ -105,6 +118,12 @@ class HandleInertiaRequests extends Middleware
             'unread_notifications_count' => fn() => $branch ? \App\Services\NotificationService::getUnreadCount($branch->id, $user?->id) : 0,
             'unresolved_conflicts_count' => fn() => $branch ? \App\Models\AppNotification::forBranch($branch->id)->forUser($user?->id)->whereIn('type', ['stock_conflict', 'imei_conflict'])->where('is_resolved', false)->count() : 0,
             'recent_notifications'       => fn() => $branch ? \App\Services\NotificationService::getRecentPreview($branch->id, 6, $user?->id) : [],
+
+            // ── POS Branch Settings ───────────────────────────────────────────
+            'pos_settings' => fn() => $branch ? [
+                'batch_tracking_enabled' => (bool) (\App\Models\PosSettings::forBranch($branch->id)->batch_tracking_enabled ?? false),
+                'expiry_alert_days'      => (int) (\App\Models\PosSettings::forBranch($branch->id)->expiry_alert_days ?? 30),
+            ] : null,
 
             'cart_count'     => fn() => 0,
             'compare_count'  => fn() => 0,

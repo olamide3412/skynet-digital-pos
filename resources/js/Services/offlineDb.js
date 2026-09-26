@@ -270,8 +270,33 @@ export async function deductLocalStock(itemId, baseQty) {
     const item = await db.items.get(Number(itemId))
     if (item) {
         const newQty = Math.max(0, (item.front_store_qty || 0) - Number(baseQty))
-        await db.items.update(item.id, { front_store_qty: newQty })
+        await db.items.update(item.id, { front_store_qty: newQty, qty: newQty })
     }
+
+    try {
+        const qaRecord = await db.settings.get('quick_access')
+        if (qaRecord?.value) {
+            let modified = false
+            const updateList = (list) => {
+                if (Array.isArray(list)) {
+                    list.forEach(i => {
+                        if (Number(i.id) === Number(itemId)) {
+                            i.front_store_qty = Math.max(0, (i.front_store_qty || 0) - Number(baseQty))
+                            i.qty = i.front_store_qty
+                            modified = true
+                        }
+                    })
+                }
+            }
+            updateList(qaRecord.value.items)
+            if (Array.isArray(qaRecord.value.categories)) {
+                qaRecord.value.categories.forEach(c => updateList(c.items))
+            }
+            if (modified) {
+                await db.settings.put({ key: 'quick_access', value: qaRecord.value })
+            }
+        }
+    } catch (e) {}
 }
 
 /**

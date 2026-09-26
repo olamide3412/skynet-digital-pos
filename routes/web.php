@@ -176,6 +176,10 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
         Route::get('/logs/export', [\App\Http\Controllers\SuperAdmin\ActivityLogController::class, 'export'])->name('logs.export');
         Route::get('/logs',        [\App\Http\Controllers\SuperAdmin\ActivityLogController::class, 'index'])->name('logs.index');
 
+        // Cross-branch Expense Reporting
+        Route::get('/reports/expenses',        [\App\Http\Controllers\SuperAdmin\CrossBranchExpenseController::class, 'index'])->name('reports.expenses');
+        Route::get('/reports/expenses/export', [\App\Http\Controllers\SuperAdmin\CrossBranchExpenseController::class, 'export'])->name('reports.expenses.export');
+
         Route::resource('global-items', GlobalItemController::class)
             ->except(['show'])
             ->names([
@@ -407,7 +411,36 @@ Route::prefix('{branch}')
                     ->middleware('pos.role:canManageDebt');
                 Route::get('/customer-debt/export', [\App\Http\Controllers\Pos\ReportController::class, 'customerDebtExport'])->name('customer-debt.export')
                     ->middleware('pos.role:canManageDebt');
+                Route::get('/expenses',               [\App\Http\Controllers\Pos\ExpenseReportController::class, 'index'])->name('expenses')
+                    ->middleware('pos.role:canViewExpenseReports');
+                Route::get('/expenses/export',        [\App\Http\Controllers\Pos\ExpenseReportController::class, 'export'])->name('expenses.export')
+                    ->middleware('pos.role:canViewExpenseReports');
+                Route::get('/expiry-overview',        [\App\Http\Controllers\Pos\ExpiryReportController::class, 'index'])->name('expiry-overview')
+                    ->middleware('pos.role:canViewExpiryReport');
+                Route::get('/expiry-overview/export', [\App\Http\Controllers\Pos\ExpiryReportController::class, 'export'])->name('expiry-overview.export')
+                    ->middleware('pos.role:canViewExpiryReport');
             });
+
+        // Expenses & Categories Management
+        Route::post('expenses', [\App\Http\Controllers\Pos\ExpenseController::class, 'store'])
+            ->name('expenses.store')
+            ->middleware('pos.role:canLogExpense');
+        Route::put('expenses/{expense}', [\App\Http\Controllers\Pos\ExpenseController::class, 'update'])
+            ->name('expenses.update')
+            ->middleware('pos.role:canManageExpenses');
+        Route::delete('expenses/{expense}', [\App\Http\Controllers\Pos\ExpenseController::class, 'destroy'])
+            ->name('expenses.destroy')
+            ->middleware('pos.role:canManageExpenses');
+
+        Route::post('expense-categories', [\App\Http\Controllers\Pos\ExpenseCategoryController::class, 'store'])
+            ->name('expense-categories.store')
+            ->middleware('pos.role:canLogExpense');
+        Route::put('expense-categories/{category}', [\App\Http\Controllers\Pos\ExpenseCategoryController::class, 'update'])
+            ->name('expense-categories.update')
+            ->middleware('pos.role:canManageExpenses');
+        Route::delete('expense-categories/{category}', [\App\Http\Controllers\Pos\ExpenseCategoryController::class, 'destroy'])
+            ->name('expense-categories.destroy')
+            ->middleware('pos.role:canManageExpenses');
 
         // Users & Roles
         Route::resource('users', \App\Http\Controllers\Pos\UserController::class)
@@ -464,6 +497,12 @@ Route::prefix('{branch}')
                 'destroy' => 'items.destroy',
             ])
             ->middleware('pos.role:canManageItems');
+
+        // Item Batches & Expiry Tracking
+        Route::post('batches',                       [\App\Http\Controllers\Pos\ItemBatchController::class, 'store'])->name('batches.store')->middleware('pos.role:canManageItems');
+        Route::put('batches/{batch}',                [\App\Http\Controllers\Pos\ItemBatchController::class, 'update'])->name('batches.update')->middleware('pos.role:canManageItems');
+        Route::delete('batches/{batch}',             [\App\Http\Controllers\Pos\ItemBatchController::class, 'destroy'])->name('batches.destroy')->middleware('pos.role:canManageItems');
+        Route::post('batches/issues/{issue}/resolve', [\App\Http\Controllers\Pos\ItemBatchController::class, 'resolveIssue'])->name('batches.resolve-issue')->middleware('pos.role:canManageItems');
 
         // Item Grids
         Route::resource('item-grids', ItemGridController::class)

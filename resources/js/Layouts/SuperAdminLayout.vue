@@ -30,6 +30,12 @@ const navLinks = [
         icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
     },
     {
+        label: 'Branch Expenses',
+        route: 'superadmin.reports.expenses',
+        match: 'SuperAdmin/Reports/Expenses',
+        icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z',
+    },
+    {
         label: 'Global Item Pool',
         route: 'superadmin.global-items.index',
         match: 'SuperAdmin/GlobalItems',

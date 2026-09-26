@@ -96,23 +96,63 @@ function applyTheme(themeColor, customPrimaryHex, customSecondaryHex, darkModeAc
     }
 }
 
-// Listen to Inertia navigation events to update Ziggy defaults & theme_color
-router.on('navigate', (event) => {
-    const props = event.detail.page.props;
-    const isSuperAdmin = window.location.pathname.startsWith('/superadmin');
-    const branchSlug = !isSuperAdmin ? (props.current_branch?.slug || props.default_branch?.slug) : null;
-    applyTheme(props.theme_color, props.custom_primary_hex, props.custom_secondary_hex, props.dark_mode_accent_mode, props.custom_dark_primary_hex);
+// Helper to reliably extract the active branch slug from props, URL, or defaults
+export function getActiveBranchSlug(pageProps) {
+    if (typeof window === 'undefined') return null;
+    const pathname = window.location.pathname;
+    const segments = pathname.split('/').filter(Boolean);
+    const firstSegment = segments[0] || '';
+    const reserved = ['superadmin', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
+    const urlBranch = (!reserved.includes(firstSegment) && firstSegment) ? firstSegment : null;
 
+    return pageProps?.current_branch?.slug
+        || pageProps?.branch?.slug
+        || pageProps?.default_branch?.slug
+        || urlBranch
+        || (window.Ziggy?.defaults?.branch || null);
+}
+
+function syncZiggyDefaults(branchSlug) {
     if (typeof window !== 'undefined' && window.Ziggy) {
+        if (!window.Ziggy.defaults || Array.isArray(window.Ziggy.defaults)) {
+            window.Ziggy.defaults = {};
+        }
         if (branchSlug) {
-            window.Ziggy.defaults = {
-                ...(window.Ziggy.defaults || {}),
-                branch: branchSlug,
-            };
-        } else if (isSuperAdmin && window.Ziggy.defaults?.branch) {
+            window.Ziggy.defaults.branch = branchSlug;
+        } else if (window.location.pathname.startsWith('/superadmin') && window.Ziggy.defaults.branch) {
             delete window.Ziggy.defaults.branch;
         }
     }
+}
+
+// Early sync on start of navigation
+router.on('start', (event) => {
+    try {
+        const urlStr = event?.detail?.visit?.url?.pathname || event?.detail?.visit?.url?.href || '';
+        const path = urlStr.startsWith('http') ? new URL(urlStr).pathname : urlStr;
+        const first = path.split('/').filter(Boolean)[0];
+        const reserved = ['superadmin', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
+        if (first && !reserved.includes(first)) {
+            syncZiggyDefaults(first);
+        }
+    } catch {
+        // Fallback silently
+    }
+});
+
+// Update on success (when page props arrive)
+router.on('success', (event) => {
+    const props = event.detail.page.props;
+    const branchSlug = getActiveBranchSlug(props);
+    syncZiggyDefaults(branchSlug);
+});
+
+// Update on navigate (final phase)
+router.on('navigate', (event) => {
+    const props = event.detail.page.props;
+    const branchSlug = getActiveBranchSlug(props);
+    applyTheme(props.theme_color, props.custom_primary_hex, props.custom_secondary_hex, props.dark_mode_accent_mode, props.custom_dark_primary_hex);
+    syncZiggyDefaults(branchSlug);
 });
 
 createInertiaApp({
@@ -180,19 +220,48 @@ createInertiaApp({
         // Initialize theme color and Ziggy defaults
         applyTheme(props.initialPage.props.theme_color, props.initialPage.props.custom_primary_hex, props.initialPage.props.custom_secondary_hex);
 
-        if (typeof window !== 'undefined' && window.Ziggy) {
-            const initialSlug = props.initialPage.props.current_branch?.slug || props.initialPage.props.default_branch?.slug;
-            window.Ziggy.defaults = {
-                ...(window.Ziggy.defaults || {}),
-                branch: initialSlug || window.Ziggy.defaults?.branch,
-            };
-        }
+        const initialSlug = getActiveBranchSlug(props.initialPage.props);
+        syncZiggyDefaults(initialSlug);
 
         const app = createApp({ render: () => h(App, props) });
         app.use(plugin)
             .use(ZiggyVue)
             .use(Toast)
             .use(pinia);
+
+        // Smart route wrapper to ensure 'pos.*' routes never throw due to missing branch parameter
+        const rawRoute = app.config.globalProperties.route || (typeof window !== 'undefined' ? window.route : null);
+        if (rawRoute) {
+            const smartRoute = (name, params, absolute, config) => {
+                if (typeof name === 'string' && name.startsWith('pos.')) {
+                    const currentSlug = window.Ziggy?.defaults?.branch || getActiveBranchSlug(props.initialPage.props);
+                    if (currentSlug) {
+                        syncZiggyDefaults(currentSlug);
+                    }
+
+                    if (params === undefined || params === null) {
+                        if (currentSlug) {
+                            params = { branch: currentSlug };
+                        }
+                    } else if (typeof params === 'object' && !Array.isArray(params)) {
+                        if (!params.branch && currentSlug) {
+                            params = { branch: currentSlug, ...params };
+                        }
+                    } else if (typeof params !== 'object') {
+                        if (currentSlug) {
+                            params = [currentSlug, params];
+                        }
+                    }
+                }
+                return rawRoute(name, params, absolute, config);
+            };
+
+            app.config.globalProperties.route = smartRoute;
+            app.provide('route', smartRoute);
+            if (typeof window !== 'undefined') {
+                window.route = smartRoute;
+            }
+        }
 
         const themeStore = useThemeStore();
         themeStore.loadTheme();

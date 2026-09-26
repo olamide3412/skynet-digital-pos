@@ -2,6 +2,7 @@
 import { computed, watch } from 'vue'
 import { useForm, Link } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
+import BatchesTab from '@/Pages/Items/BatchesTab.vue'
 
 defineOptions({ layout: PosLayout })
 
@@ -40,6 +41,7 @@ const form = useForm({
     item_description:       props.item.item_description ?? '',
     price_locked:           props.item.price_locked,
     is_imei_tracked:        !!props.item.is_imei_tracked,
+    batch_tracking_enabled: !!props.item.batch_tracking_enabled,
     image:                  null,
     units:                  initialUnits,
 })
@@ -345,6 +347,32 @@ function submit() {
                             <p class="text-xs text-slate-500 dark:text-slate-400">Each physical unit sold will require selecting or scanning its specific serial/IMEI at checkout.</p>
                         </div>
                     </label>
+                </div>
+
+                <!-- Batch / Expiry Tracking Toggle (When Enabled for Branch) -->
+                <div v-if="$page.props.pos_settings?.batch_tracking_enabled" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                            💊 Batch & Expiry Date Tracking
+                        </h2>
+                        <span class="text-xs text-slate-500">For pharmaceuticals, medicines & perishable stock</span>
+                    </div>
+
+                    <label class="flex items-center gap-3 cursor-pointer p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                        <input type="checkbox" v-model="form.batch_tracking_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                        <div>
+                            <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Batch & Expiry Date Tracking for this item</span>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Track multiple batches with differing expiry dates. Soonest-expiring batches will automatically deduct first on checkout.</p>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- Dedicated Batches Tab/Section (§6.4) -->
+                <div v-if="$page.props.pos_settings?.batch_tracking_enabled && item.batch_tracking_enabled" class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b border-slate-200 dark:border-slate-700 pb-2">
+                        Active Batches & Expiry Tracking
+                    </h2>
+                    <BatchesTab :item="item" />
                 </div>
 
                 <!-- 5. Inventory Stock Levels (Base Units) -->

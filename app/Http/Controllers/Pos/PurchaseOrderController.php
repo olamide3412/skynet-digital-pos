@@ -131,7 +131,9 @@ class PurchaseOrderController extends Controller
 
         $branch = current_branch();
 
-        DB::transaction(function () use ($data, $purchase, $branch) {
+        $batchPrompts = [];
+
+        DB::transaction(function () use ($data, $purchase, $branch, &$batchPrompts) {
             $allReceived = true;
             $itemsReceived = 0;
 
@@ -178,11 +180,16 @@ class PurchaseOrderController extends Controller
                 }
                 
                 if ($qtyToReceive > 0) {
-                    $purchase->receivedItems()->create([
-                        'item_id' => $poItem->item_id,
-                        'user_id' => Auth::id(),
-                        'qty'     => $qtyToReceive,
-                        'cost'    => $poItem->cost,
+                    // Record Item Receipt entry
+                    \App\Models\ReceivedItem::create([
+                        'purchase_order_id'      => $purchase->id,
+                        'purchase_order_item_id' => $poItem->id,
+                        'item_id'                => $poItem->item_id,
+                        'branch_id'              => $branch->id,
+                        'user_id'                => Auth::id(),
+                        'received_qty'           => $qtyToReceive,
+                        'location'               => $destLocation,
+                        'cost'                   => $poItem->cost,
                     ]);
 
                     $poItem->increment('received_qty', $qtyToReceive);
@@ -215,6 +222,17 @@ class PurchaseOrderController extends Controller
                     // Update base item buy_price based on new cost
                     Item::where('id', $poItem->item_id)->update(['buy_price' => $poItem->cost]);
                     $itemsReceived++;
+
+                    // Collect batch prompt payload for batch-tracked items (§5.2)
+                    if ($item && \App\Services\BatchTrackingService::isBatchTrackingActive($branch->id, $item)) {
+                        $batchPrompts[] = [
+                            'item_id'     => $item->id,
+                            'item_name'   => $item->item_name,
+                            'added_qty'   => $qtyToReceive,
+                            'cost_price'  => (float) $poItem->cost,
+                            'batch_label' => $purchase->po_number,
+                        ];
+                    }
                 }
 
                 if ($poItem->fresh()->received_qty < $poItem->qty) {
@@ -227,7 +245,12 @@ class PurchaseOrderController extends Controller
             }
         });
 
-        return redirect()->route('pos.purchases.show', $purchase)->with('success', 'Order reception processed.');
+        $redirect = redirect()->route('pos.purchases.show', $purchase)->with('success', 'Order reception processed.');
+        if (!empty($batchPrompts)) {
+            $redirect->with('batch_prompts', $batchPrompts);
+        }
+
+        return $redirect;
     }
 
     public function destroy($branchParam, PurchaseOrder $purchase)

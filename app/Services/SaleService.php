@@ -218,6 +218,9 @@ class SaleService
                     InventoryService::deduct($item, $baseQty, $receiptId, $user);
                 }
 
+                // Silent FEFO batch deduction (non-blocking background side-effect per §4.1)
+                \App\Services\BatchTrackingService::deductFefo($item, $baseQty, 'sale', $receiptId, $user);
+
                 // Track most-sold items
                 $mostSale = \App\Models\MostSaleItem::firstOrNew([
                     'branch_id' => $branch?->id,

@@ -1,12 +1,13 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useForm, Link } from '@inertiajs/vue3'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useForm, Link, usePage } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import axios from 'axios'
 
 defineOptions({ layout: PosLayout })
 
 const props = defineProps({ items: Array })
+const page = usePage()
 
 const form = useForm({
     item_id: '',
@@ -14,6 +15,7 @@ const form = useForm({
     type: 'Addition',
     qty: 1,
     reason: '',
+    deduct_from_batch: false,
 })
 
 // Search & Dropdown state
@@ -23,6 +25,10 @@ const isSearching = ref(false)
 const isDropdownOpen = ref(false)
 const selectedItem = ref(null)
 const dropdownContainer = ref(null)
+
+const isBatchTracked = computed(() => {
+    return Boolean(selectedItem.value?.batch_tracking_enabled && page.props.pos_settings?.batch_tracking_enabled)
+})
 
 let debounceTimer = null
 
@@ -216,6 +222,23 @@ function submit() {
                             <input v-model.number="form.qty" type="number" min="1" required class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 outline-none text-sm focus:border-emerald-500 transition font-mono" />
                             <p v-if="form.errors.qty" class="text-red-500 text-xs mt-1">{{ form.errors.qty }}</p>
                         </div>
+                    </div>
+
+                    <!-- Optional Batch Deduction (§4.2) -->
+                    <div v-if="form.type === 'Subtraction' && isBatchTracked" class="p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/60">
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                v-model="form.deduct_from_batch"
+                                class="mt-0.5 w-4 h-4 accent-amber-600 rounded cursor-pointer"
+                            />
+                            <div>
+                                <span class="text-xs font-bold text-slate-900 dark:text-white">Also deduct from batch?</span>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                    If checked, automatically reduces the soonest-expiring active batch (FEFO). If unchecked, core stock adjusts normally without altering batch numbers.
+                                </p>
+                            </div>
+                        </label>
                     </div>
 
                     <div>

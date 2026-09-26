@@ -155,6 +155,10 @@ class Branch extends Model
                     'canManageBarcodes',
                     'canManageCustomers',
                     'canManageUsers',
+                    'canLogExpense',
+                    'canManageExpenses',
+                    'canViewExpenseReports',
+                    'canViewExpiryReport',
                 ])->get();
             if ($managerPerms->isNotEmpty()) {
                 $managerRole->syncPermissions($managerPerms);

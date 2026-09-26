@@ -415,6 +415,8 @@ class BranchController extends Controller
             'is_qty_deduction'         => 'required|boolean',
             'out_of_stock'             => 'required|integer|min:0',
             'is_check_expiration'      => 'required|boolean',
+            'batch_tracking_enabled'   => 'nullable|boolean',
+            'expiry_alert_days'        => 'nullable|integer|min:1',
             'is_imei_enabled'          => 'required|boolean',
             'is_show_buy_price'        => 'required|boolean',
             'is_use_profit_percentage' => 'required|boolean',

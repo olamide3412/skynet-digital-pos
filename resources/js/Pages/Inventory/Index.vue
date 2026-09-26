@@ -1,7 +1,8 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-import { Link, router } from '@inertiajs/vue3'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { Link, router, usePage } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
+import CreateBatchModal from '@/Components/CreateBatchModal.vue'
 import dayjs from 'dayjs'
 
 defineOptions({ layout: PosLayout })
@@ -17,6 +18,10 @@ const from = ref(props.filters?.from ?? '')
 const to = ref(props.filters?.to ?? '')
 const exportMenuOpen = ref(false)
 const exportDropdownRef = ref(null)
+
+const page = usePage()
+const showBatchModal = ref(false)
+const batchPromptItem = ref(null)
 
 function doFilter() {
     router.get(
@@ -62,6 +67,17 @@ function handleClickOutside(e) {
 
 onMounted(() => {
     document.addEventListener('click', handleClickOutside)
+    if (page.props.flash?.batch_prompt) {
+        batchPromptItem.value = page.props.flash.batch_prompt
+        showBatchModal.value = true
+    }
+})
+
+watch(() => page.props.flash?.batch_prompt, (prompt) => {
+    if (prompt) {
+        batchPromptItem.value = prompt
+        showBatchModal.value = true
+    }
 })
 
 onUnmounted(() => {
@@ -345,5 +361,11 @@ function formatTypeBadge(rawType) {
                 </div>
             </div>
         </div>
+
+        <!-- Reusable Create Batch Modal (§5.2) -->
+        <CreateBatchModal
+            v-model="showBatchModal"
+            :item="batchPromptItem"
+        />
     </div>
 </template>

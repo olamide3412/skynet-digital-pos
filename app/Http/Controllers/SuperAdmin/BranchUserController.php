@@ -35,6 +35,10 @@ class BranchUserController extends Controller
         'canManageCustomers' => 'Manage Customers Directory',
         'canManageUsers'     => 'Manage Staff Accounts & Roles',
         'canEditSettings'    => 'Edit Branch Settings & POS Config',
+        'canLogExpense'        => 'Log Branch Expenses',
+        'canManageExpenses'    => 'Edit / Delete Expenses & Categories',
+        'canViewExpenseReports'=> 'View Expenses Report',
+        'canViewExpiryReport'  => 'View Expiry & Batch Report',
         'canResetPassword'   => 'Reset Staff Passwords (Super Admin Granted)',
     ];
 

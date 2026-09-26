@@ -111,6 +111,7 @@ class ItemController extends Controller
             'wholesale_price'        => 'nullable|numeric|min:0',
             'price_locked'           => 'boolean',
             'is_imei_tracked'        => 'nullable|boolean',
+            'batch_tracking_enabled' => 'nullable|boolean',
             'initial_imeis'          => 'nullable|string',
             'back_store_qty'         => 'nullable|integer|min:0',
             'front_store_qty'        => 'nullable|integer|min:0',
@@ -151,6 +152,7 @@ class ItemController extends Controller
         $data['wholesale_price'] = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? (float) $data['wholesale_price'] : (float) $data['price'];
         $data['price_locked'] = !empty($data['price_locked']);
         $data['is_imei_tracked'] = !empty($data['is_imei_tracked']);
+        $data['batch_tracking_enabled'] = !empty($data['batch_tracking_enabled']);
         $data['front_store_qty'] = $data['front_store_qty'] ?? 0;
         $data['back_store_qty'] = $data['back_store_qty'] ?? 0;
         $data['unit_label'] = !empty($data['unit_label']) ? $data['unit_label'] : 'Unit';
@@ -214,8 +216,17 @@ class ItemController extends Controller
         $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
         $this->authorizeBranch($item, $branch);
 
+        $item->load([
+            'category',
+            'units',
+            'batches' => fn($q) => $q->orderBy('expiry_date', 'asc'),
+        ]);
+
         return Inertia::render('Items/Edit', [
-            'item' => $item->load(['category', 'units']),
+            'item' => array_merge($item->toArray(), [
+                'active_batches_total' => $item->active_batches_total,
+                'batch_variance'       => $item->batch_variance,
+            ]),
             'categories' => \App\Models\Category::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),
             'groupAddresses' => \App\Models\GroupAddress::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
@@ -239,6 +250,7 @@ class ItemController extends Controller
             'wholesale_price'        => 'nullable|numeric|min:0',
             'price_locked'           => 'nullable|boolean',
             'is_imei_tracked'        => 'nullable|boolean',
+            'batch_tracking_enabled' => 'nullable|boolean',
             'unit_label'             => 'nullable|string|max:50',
             'front_store_qty'        => 'nullable|integer|min:0',
             'back_store_qty'         => 'nullable|integer|min:0',
@@ -275,6 +287,7 @@ class ItemController extends Controller
         $data['wholesale_price'] = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? (float) $data['wholesale_price'] : (float) $data['price'];
         $data['price_locked'] = !empty($data['price_locked']);
         $data['is_imei_tracked'] = !empty($data['is_imei_tracked']);
+        $data['batch_tracking_enabled'] = !empty($data['batch_tracking_enabled']);
         $data['unit_label'] = !empty($data['unit_label']) ? $data['unit_label'] : 'Unit';
 
         if ($request->hasFile('image')) {
@@ -490,6 +503,7 @@ class ItemController extends Controller
                 'expiry_date',
                 'price_locked',
                 'is_imei_tracked',
+                'batch_tracking_enabled',
                 'category_id',
                 'image_path',
                 'unit_label'

@@ -70,6 +70,8 @@ class SettingsController extends Controller
             'is_qty_deduction'         => 'nullable|boolean',
             'out_of_stock'             => 'required|integer|min:0',
             'is_check_expiration'      => 'nullable|boolean',
+            'batch_tracking_enabled'   => 'nullable|boolean',
+            'expiry_alert_days'        => 'nullable|integer|min:1',
             'is_imei_enabled'               => 'nullable|boolean',
             'is_grid_separate_rows'         => 'nullable|boolean',
             'is_cart_auto_scroll_highlight' => 'nullable|boolean',

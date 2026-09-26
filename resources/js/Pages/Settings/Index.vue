@@ -29,6 +29,8 @@ const form = useForm({
     is_qty_deduction:              !!props.settings.is_qty_deduction,
     out_of_stock:                  props.settings.out_of_stock ?? 25,
     is_check_expiration:           !!props.settings.is_check_expiration,
+    batch_tracking_enabled:        !!props.settings.batch_tracking_enabled,
+    expiry_alert_days:             props.settings.expiry_alert_days ?? 30,
     is_imei_enabled:               !!props.settings.is_imei_enabled,
     is_grid_separate_rows:         !!props.settings.is_grid_separate_rows,
     is_cart_auto_scroll_highlight: props.settings.is_cart_auto_scroll_highlight !== false && props.settings.is_cart_auto_scroll_highlight !== 0,
@@ -527,6 +529,31 @@ function submit() {
                                 <p class="text-xs text-slate-500 dark:text-slate-400">Allows unit-level serial & IMEI tracking for gadgets, phones, laptops, and electronics</p>
                             </div>
                         </label>
+
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" v-model="form.batch_tracking_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                            <div>
+                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Item Expiry & Batch Tracking</span>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Enables batch/lot recording, FEFO checkout deduction, and expiry alert overview for this branch</p>
+                            </div>
+                        </label>
+
+                        <div v-if="form.batch_tracking_enabled" class="p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                Expiry Alert Threshold (Days before expiry)
+                            </label>
+                            <input
+                                v-model.number="form.expiry_alert_days"
+                                type="number"
+                                min="1"
+                                max="365"
+                                required
+                                class="w-full sm:w-48 bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition font-mono"
+                            />
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                                Batches expiring within this number of days (default 30) will trigger notifications and appear in the Expiring Soon filter.
+                            </p>
+                        </div>
 
                         <label class="flex items-center gap-3 cursor-pointer">
                             <input type="checkbox" v-model="form.is_grid_separate_rows" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />

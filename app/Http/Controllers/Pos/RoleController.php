@@ -20,7 +20,7 @@ class RoleController extends Controller
         'canViewReports', 'canViewProfitLoss', 'canManageDebt', 'canGiveDebt',
         'canAdjustStock', 'canTransferStock', 'canManagePurchases', 'canManageItems',
         'canManageBarcodes', 'canManageCustomers', 'canManageUsers', 'canEditSettings',
-        'canViewReorderPoints',
+        'canViewReorderPoints', 'canLogExpense', 'canManageExpenses', 'canViewExpenseReports', 'canViewExpiryReport',
     ];
 
     public function index()

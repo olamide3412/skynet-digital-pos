@@ -174,9 +174,9 @@ class InventoryController extends Controller
         $branch = current_branch();
         return Inertia::render('Inventory/Adjust', [
             'items' => Item::where('branch_id', $branch->id)
-                ->select('id', 'item_name', 'barcode_number', 'front_store_qty', 'back_store_qty')
+                ->select('id', 'item_name', 'barcode_number', 'front_store_qty', 'back_store_qty', 'batch_tracking_enabled', 'buy_price')
                 ->orderBy('item_name')
-                ->limit(25)
+                ->limit(50)
                 ->get()
         ]);
     }
@@ -185,11 +185,12 @@ class InventoryController extends Controller
     {
         $branch = current_branch();
         $data = $request->validate([
-            'item_id'  => 'required|exists:items,id',
-            'location' => 'required|in:front_store,back_store',
-            'type'     => 'required|in:Addition,Subtraction',
-            'qty'      => 'required|integer|min:1',
-            'reason'   => 'required|string|max:255',
+            'item_id'           => 'required|exists:items,id',
+            'location'          => 'required|in:front_store,back_store',
+            'type'              => 'required|in:Addition,Subtraction',
+            'qty'               => 'required|integer|min:1',
+            'reason'            => 'required|string|max:255',
+            'deduct_from_batch' => 'nullable|boolean',
         ]);
 
         $item = Item::where('branch_id', $branch->id)->findOrFail($data['item_id']);
@@ -204,6 +205,7 @@ class InventoryController extends Controller
 
         $adjType = $data['type'] === 'Addition' ? 'add' : 'subtract';
         
+        // 1. Stock update happens first and independently (§3, §4.2, §5.1)
         InventoryService::adjust(
             $data['item_id'],
             $adjType,
@@ -213,6 +215,31 @@ class InventoryController extends Controller
             $data['location']
         );
 
-        return redirect()->route('pos.inventory.index')->with('success', 'Inventory successfully adjusted.');
+        // 2. Batch handling layered on
+        if ($data['type'] === 'Subtraction' && !empty($data['deduct_from_batch'])) {
+            \App\Services\BatchTrackingService::deductFefo(
+                $item,
+                (int) $data['qty'],
+                'adjustment',
+                "ADJ-" . time(),
+                Auth::user(),
+                $data['reason']
+            );
+        }
+
+        // For additions on batch-tracked items, provide prompt payload for the Create Batch modal (§5.2)
+        if ($data['type'] === 'Addition' && \App\Services\BatchTrackingService::isBatchTrackingActive($branch->id, $item)) {
+            return redirect()->route('pos.inventory.index', ['branch' => $branch->slug])->with([
+                'success' => 'Inventory successfully adjusted.',
+                'batch_prompt' => [
+                    'item_id'     => $item->id,
+                    'item_name'   => $item->item_name,
+                    'added_qty'   => (int) $data['qty'],
+                    'cost_price'  => (float) $item->buy_price,
+                ]
+            ]);
+        }
+
+        return redirect()->route('pos.inventory.index', ['branch' => $branch->slug])->with('success', 'Inventory successfully adjusted.');
     }
 }

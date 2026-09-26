@@ -34,6 +34,10 @@ class BranchRoleController extends Controller
         'canManageUsers'     => 'Manage Staff Accounts & Roles',
         'canEditSettings'    => 'Edit Branch Settings & POS Config',
         'canViewReorderPoints' => 'View Reorder Points & Stock Alerts',
+        'canLogExpense'        => 'Log Branch Expenses',
+        'canManageExpenses'    => 'Edit / Delete Expenses & Categories',
+        'canViewExpenseReports'=> 'View Expenses Report',
+        'canViewExpiryReport'  => 'View Expiry & Batch Report',
     ];
 
     public function index(Branch $branch)

@@ -102,8 +102,10 @@ const allNavLinks = [
         children: [
             { label: 'Dashboard',      route: 'pos.reports.index',        match: 'Reports/Index' },
             { label: 'Sales Report',   route: 'pos.reports.daily-sales',  match: 'Reports/DailySales' },
+            { label: 'Expenses',       route: 'pos.reports.expenses',     match: 'Reports/Expenses', perm: 'canViewExpenseReports' },
             { label: 'Returned Items', route: 'pos.reports.returns',      match: 'Reports/Returns' },
             { label: 'Profit & Loss',  route: 'pos.reports.profit-loss',  match: 'Reports/ProfitLoss', perm: 'canViewProfitLoss' },
+            { label: 'Expiry Overview', route: 'pos.reports.expiry-overview', match: 'Reports/ExpiryOverview', perm: 'canViewExpiryReport', condition: () => Boolean(page.props.pos_settings?.batch_tracking_enabled) },
             { label: 'Reorder Points', route: 'pos.inventory.reorder-points', match: 'Inventory/ReorderPoints', perm: 'canViewReorderPoints' },
             { label: 'Low Stock',      route: 'pos.reports.low-stock',    match: 'Reports/LowStock' },
             { label: 'Customer Debt',  route: 'pos.reports.customer-debt',match: 'Reports/CustomerDebt', perm: 'canManageDebt' },
@@ -151,20 +153,21 @@ const allNavLinks = [
     },
 ]
 
-// Filter nav links based on permissions
+// Filter nav links based on permissions and condition
 const navLinks = computed(() => {
     return allNavLinks
         .filter(link => {
+            if (link.condition && !link.condition()) return false
             if (link.always) return true
             if (!link.perm || perms.value[link.perm]) return true
-            if (link.children && link.children.some(c => !c.perm || perms.value[c.perm])) return true
+            if (link.children && link.children.some(c => (!c.perm || perms.value[c.perm]) && (!c.condition || c.condition()))) return true
             return false
         })
         .map(link => {
             if (!link.children) return link
             return {
                 ...link,
-                children: link.children.filter(c => !c.perm || perms.value[c.perm])
+                children: link.children.filter(c => (!c.perm || perms.value[c.perm]) && (!c.condition || c.condition()))
             }
         })
         .filter(link => !link.children || link.children.length > 0)

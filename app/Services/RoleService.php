@@ -227,8 +227,12 @@ class RoleService
             'canManageBarcodes'  => static::canManageBarcodes(),
             'canManageCustomers' => static::canManageCustomers(),
             'canViewReorderPoints' => static::canViewReorderPoints(),
-            'isBranchAdmin'      => $user?->isBranchAdmin() ?? false,
-            'isSuperAdmin'       => $user?->isSuperAdmin() ?? false,
+            'canLogExpense'        => static::canLogExpense(),
+            'canManageExpenses'    => static::canManageExpenses(),
+            'canViewExpenseReports'=> static::canViewExpenseReports(),
+            'canViewExpiryReport'  => static::canViewExpiryReport(),
+            'isBranchAdmin'        => $user?->isBranchAdmin() ?? false,
+            'isSuperAdmin'         => $user?->isSuperAdmin() ?? false,
         ];
     }
 
@@ -237,5 +241,25 @@ class RoleService
         return static::can('canViewReorderPoints')
             || static::canManageItems()
             || static::canAdjustStock();
+    }
+
+    public static function canLogExpense(): bool
+    {
+        return static::can('canLogExpense');
+    }
+
+    public static function canManageExpenses(): bool
+    {
+        return static::can('canManageExpenses');
+    }
+
+    public static function canViewExpenseReports(): bool
+    {
+        return static::can('canViewExpenseReports') || static::canViewReports();
+    }
+
+    public static function canViewExpiryReport(): bool
+    {
+        return static::can('canViewExpiryReport') || static::canViewReports();
     }
 }
