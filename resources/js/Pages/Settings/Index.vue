@@ -27,6 +27,7 @@ const form = useForm({
     quick_access_category_ids:     Array.isArray(props.settings.quick_access_category_ids) ? [...props.settings.quick_access_category_ids] : [],
     is_price_editable:             !!props.settings.is_price_editable,
     is_qty_deduction:              !!props.settings.is_qty_deduction,
+    is_offline_qty_deduction:      !!props.settings.is_offline_qty_deduction,
     out_of_stock:                  props.settings.out_of_stock ?? 25,
     is_check_expiration:           !!props.settings.is_check_expiration,
     batch_tracking_enabled:        !!props.settings.batch_tracking_enabled,
@@ -511,6 +512,14 @@ function submit() {
                             <div>
                                 <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Auto Stock Deduction</span>
                                 <p class="text-xs text-slate-500 dark:text-slate-400">Deducts inventory levels automatically when sales are completed</p>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" v-model="form.is_offline_qty_deduction" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                            <div>
+                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Local Quantity Deduction when Offline</span>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Validate available stock on Payment Modal and deduct local inventory when offline (uncheck to skip offline stock blocking)</p>
                             </div>
                         </label>
 

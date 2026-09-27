@@ -1,7 +1,9 @@
-﻿<script setup>
+<script setup>
 import { Head, Link, usePage } from '@inertiajs/vue3'
 import { computed, ref, onMounted, reactive } from 'vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
+import Navbar from '@/Components/Storefront/Navbar.vue'
+import Footer from '@/Components/Storefront/Footer.vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
@@ -45,6 +47,10 @@ const props = defineProps({
             app_tagline: 'AI-Powered Cloud & Offline Point of Sale',
         }),
     },
+    pricing: {
+        type: Object,
+        default: null,
+    },
 })
 
 const page = usePage()
@@ -63,12 +69,12 @@ const posUrl = computed(() => {
 })
 
 const currentYear = new Date().getFullYear()
-const scrolled = ref(false)
-const mobileMenuOpen = ref(false)
+
+const pricingSectionEnabled = computed(() => {
+    return Boolean(props.pricing?.enabled && props.pricing?.settings?.show_pricing_section)
+})
 
 onMounted(() => {
-    window.addEventListener('scroll', () => { scrolled.value = window.scrollY > 30 })
-
     // Smooth Scroll Reveal Intersection Observer
     if (typeof window !== 'undefined' && 'IntersectionObserver' in window) {
         const observer = new IntersectionObserver((entries, obs) => {
@@ -96,6 +102,15 @@ const whatsappUrl = computed(() => {
     const msg = encodeURIComponent(`Hello ${companyName.value}, I am interested in acquiring your AI-Powered POS & Multi-Branch Inventory Management System for my business. Please share pricing and setup details.`)
     return `https://wa.me/${phone}?text=${msg}`
 })
+
+function planWhatsappUrl(planName) {
+    const phone = props.contact_info?.clean_phone || '2348032072831'
+    const msg = encodeURIComponent(`Hello ${companyName.value}, I am interested in getting started with the ${planName} Plan for my store. Please share setup and rollout details.`)
+    return `https://wa.me/${phone}?text=${msg}`
+}
+
+const retailPlans = computed(() => (props.pricing?.plans || []).slice(0, 3))
+const enterprisePlans = computed(() => (props.pricing?.plans || []).slice(3))
 
 
 // ── Interactive AI Assistant Simulator State ──────────────────────────────────
@@ -306,91 +321,14 @@ function toggleFaq(index) {
     <div class="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 selection:bg-violet-600 selection:text-white font-sans antialiased overflow-x-hidden transition-colors duration-300">
 
         <!-- ══ 1. TOP NAVIGATION ═════════════════════════════════════════ -->
-        <header :class="[
-            'fixed inset-x-0 top-0 z-50 transition-all duration-300',
-            scrolled 
-                ? 'bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 shadow-xl dark:shadow-2xl dark:shadow-black/60 py-3' 
-                : 'bg-transparent py-4'
-        ]">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-                <!-- Brand -->
-                <Link :href="route('home')" class="flex items-center gap-3 group">
-                    <div class="relative flex items-center justify-center">
-                        <div class="absolute -inset-1.5 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-indigo-600 rounded-xl opacity-40 blur-sm group-hover:opacity-80 transition duration-300"></div>
-                        <img v-if="logoUrl" :src="logoUrl" class="relative w-9 h-9 rounded-xl object-contain bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-1 shadow-sm" alt="Logo" />
-                        <div v-else class="relative w-9 h-9 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center font-black text-base text-white shadow-lg">
-                            {{ companyName.charAt(0).toUpperCase() }}
-                        </div>
-                    </div>
-                    <div>
-                        <span class="font-extrabold text-base tracking-tight text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
-                            {{ companyName }}
-                        </span>
-                        <span class="text-[10px] text-slate-500 dark:text-slate-400 font-semibold tracking-wide block leading-none mt-0.5">{{ appTagline }}</span>
-                    </div>
-                </Link>
-
-                <!-- Desktop Nav Links -->
-                <nav class="hidden xl:flex items-center gap-6 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                    <a href="#how-it-works" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">How It Works</a>
-                    <a href="#ai-intelligence" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors flex items-center gap-1.5">
-                        <span class="w-1.5 h-1.5 rounded-full bg-violet-500 animate-pulse"></span>
-                        AI Copilot
-                    </a>
-                    <a href="#variants" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Product Variants</a>
-                    <a href="#features" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Core Features</a>
-                    <a href="#hardware" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Hardware</a>
-                    <a href="#industries" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">Industries</a>
-                    <a href="#faq" class="hover:text-violet-600 dark:hover:text-violet-400 transition-colors">FAQ</a>
-                </nav>
-
-                <!-- Action CTAs & Controls -->
-                <div class="flex items-center gap-2 sm:gap-3">
-                    <ThemeToggle />
-
-                    <!-- Primary Launch POS -->
-                    <Link
-                        :href="posUrl"
-                        class="relative group inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-violet-600/30 dark:shadow-violet-900/40 hover:shadow-violet-600/50 active:scale-95"
-                    >
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
-                        </svg>
-                        <span>Launch POS</span>
-                    </Link>
-
-                    <!-- Mobile Menu Toggle Button -->
-                    <button
-                        @click="mobileMenuOpen = !mobileMenuOpen"
-                        class="xl:hidden p-2 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
-                        aria-label="Toggle Menu"
-                    >
-                        <svg v-if="!mobileMenuOpen" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
-                        </svg>
-                        <svg v-else class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Mobile Navigation Drawer -->
-            <div v-if="mobileMenuOpen" class="xl:hidden px-6 pt-4 pb-6 bg-white/95 dark:bg-slate-950/95 border-b border-slate-200 dark:border-slate-800 space-y-4 shadow-xl">
-                <div class="flex flex-col space-y-3 text-sm font-semibold text-slate-700 dark:text-slate-300">
-                    <a @click="mobileMenuOpen = false" href="#how-it-works" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">How It Works</a>
-                    <a @click="mobileMenuOpen = false" href="#ai-intelligence" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">AI Copilot Engine</a>
-                    <a @click="mobileMenuOpen = false" href="#variants" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Product Variants &amp; Tiers</a>
-                    <a @click="mobileMenuOpen = false" href="#features" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Core Features</a>
-                    <a @click="mobileMenuOpen = false" href="#hardware" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Supported Hardware</a>
-                    <a @click="mobileMenuOpen = false" href="#industries" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Industries &amp; Solutions</a>
-                    <a @click="mobileMenuOpen = false" href="#faq" class="hover:text-violet-600 dark:hover:text-violet-400 py-1">Frequently Asked Questions</a>
-                    <Link :href="posUrl" class="text-violet-600 dark:text-violet-400 py-1 flex items-center gap-2 font-bold">
-                        <span>Launch POS Register →</span>
-                    </Link>
-                </div>
-            </div>
-        </header>
+        <Navbar
+            :company-name="companyName"
+            :app-tagline="appTagline"
+            :logo-url="logoUrl"
+            :pos-url="posUrl"
+            :whatsapp-url="whatsappUrl"
+            :pricing-enabled="pricingSectionEnabled"
+        />
 
         <!-- ══ 2. HERO SECTION ═════════════════════════════════════════════ -->
         <section class="relative min-h-[90vh] flex flex-col items-center justify-center text-center px-4 sm:px-6 pt-32 pb-20 overflow-hidden">
@@ -913,13 +851,13 @@ function toggleFaq(index) {
             <div class="max-w-7xl mx-auto space-y-16">
                 <div class="reveal-up text-center space-y-4 max-w-3xl mx-auto">
                     <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-500/10 border border-emerald-300 dark:border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-xs font-extrabold uppercase tracking-wider">
-                        Versatile Solutions
+                        Industry Solutions
                     </div>
                     <h2 class="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight">
-                        Tailored for Every Retail Vertical
+                        Built for Every Type of Retail Business
                     </h2>
                     <p class="text-slate-600 dark:text-slate-400 text-sm sm:text-base">
-                        Whether you operate a high-volume supermarket, a specialized gadget store with IMEI tracking, or a multi-warehouse distributor, our POS molds perfectly to your business workflow.
+                        Whether you operate a high-volume supermarket, a pharmacy, an electronics shop with IMEI tracking, a boutique, or a wholesale distributor, our POS adapts seamlessly to your store's daily workflow.
                     </p>
                 </div>
 
@@ -1069,7 +1007,344 @@ function toggleFaq(index) {
             </div>
         </section>
 
-        <!-- ══ 12. FAQ ACCORDION ════════════════════════════════════════════ -->
+        <!-- ══ 12. PRICING & PLANS SECTION (SUPER ADMIN MANAGED) ════════════ -->
+        <section
+            v-if="pricingSectionEnabled"
+            id="pricing"
+            class="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden bg-slate-50/70 dark:bg-slate-950/80 border-t border-slate-200 dark:border-slate-800"
+        >
+            <!-- Ambient Glow Mesh -->
+            <div class="absolute inset-0 pointer-events-none overflow-hidden">
+                <div class="absolute top-1/3 left-1/2 -translate-x-1/2 w-[900px] h-[500px] rounded-full bg-gradient-to-tr from-violet-600/10 via-amber-500/10 to-indigo-600/10 blur-[130px]"></div>
+            </div>
+
+            <div class="max-w-7xl mx-auto space-y-16 relative z-10">
+                <!-- 4-Column Marketing Value Props Strip -->
+                <div
+                    v-if="pricing?.value_props && pricing.value_props.length"
+                    class="reveal-zoom delay-100 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-md"
+                >
+                    <div
+                        v-for="(vp, vpIdx) in pricing.value_props"
+                        :key="vpIdx"
+                        class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-100 dark:border-slate-800/80 space-y-1 hover:border-violet-500/40 transition-colors"
+                    >
+                        <div class="text-xs font-black tracking-wider uppercase text-transparent bg-clip-text bg-gradient-to-r from-violet-600 to-indigo-600 dark:from-violet-400 dark:to-indigo-400">
+                            {{ vp.title }}
+                        </div>
+                        <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-snug font-medium">
+                            {{ vp.subtext }}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Intro Heading & Description -->
+                <div class="reveal-up text-center space-y-4 max-w-3xl mx-auto">
+                    <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-violet-100 dark:bg-violet-500/10 border border-violet-300 dark:border-violet-500/30 text-violet-700 dark:text-violet-400 text-xs font-extrabold uppercase tracking-wider">
+                        Pricing &amp; Investment
+                    </div>
+                    <h2 class="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight">
+                        {{ pricing?.settings?.pricing_intro_heading || 'Smart Retail Management for Growing Businesses' }}
+                    </h2>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm sm:text-base leading-relaxed">
+                        {{ pricing?.settings?.pricing_intro_text || 'Manage sales, inventory, staff, customers and multiple branches from anywhere. Transparent pricing designed to help you start easily and scale confidently.' }}
+                    </p>
+                </div>
+
+                <!-- Baseline "What Every Plan Includes" Strip -->
+                <div
+                    v-if="pricing?.included_items && pricing.included_items.length"
+                    class="reveal-up delay-150 max-w-5xl mx-auto p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-violet-900/10 via-purple-900/5 to-indigo-900/10 border border-violet-200 dark:border-violet-800/60 shadow-xs"
+                >
+                    <div class="flex items-center gap-2 mb-4">
+                        <span class="text-lg">✨</span>
+                        <h3 class="text-xs sm:text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                            {{ pricing?.settings?.whats_included_heading || 'What Every Plan Includes' }}
+                        </h3>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div
+                            v-for="(item, iIdx) in pricing.included_items"
+                            :key="iIdx"
+                            class="flex items-start gap-2.5 text-xs text-slate-700 dark:text-slate-300 font-medium"
+                        >
+                            <span class="text-emerald-500 font-bold flex-shrink-0">✓</span>
+                            <span>{{ item.item_text }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Plan Cards: Spacious 3-col Standard + 2-col Enterprise Layout -->
+                <div class="space-y-12">
+                    <!-- Group 1: Standard Retail Plans (Starter, Bronze, Silver [Most Popular & Comprehensive]) -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
+                        <div
+                            v-for="(plan, pIdx) in retailPlans"
+                            :key="plan.id"
+                            :class="[
+                                'reveal-up group relative rounded-3xl p-7 sm:p-8 flex flex-col justify-between transition-all duration-300',
+                                plan.is_highlighted
+                                    ? 'bg-gradient-to-b from-amber-500/[0.09] via-amber-500/[0.03] to-white dark:to-slate-900 border-2 border-amber-400 dark:border-amber-500 shadow-2xl shadow-amber-500/20 ring-4 ring-amber-400/20 scale-[1.02] z-10'
+                                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-violet-400 dark:hover:border-violet-500/80 hover:-translate-y-1.5',
+                                'delay-' + ((pIdx + 1) * 100)
+                            ]"
+                        >
+                            <!-- Top Tag / Pill for Highlighted Plan (Silver) -->
+                            <div
+                                v-if="plan.is_highlighted"
+                                class="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-slate-950 font-black text-[11px] tracking-wider uppercase shadow-lg shadow-amber-500/30 flex items-center gap-1.5 whitespace-nowrap"
+                            >
+                                <span>⭐ Most Popular &amp; Comprehensive</span>
+                            </div>
+
+                            <!-- Card Header & Pricing -->
+                            <div class="space-y-5">
+                                <div class="pt-2">
+                                    <h3 class="text-2xl font-black text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                                        {{ plan.name }}
+                                    </h3>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 min-h-[32px] leading-relaxed">
+                                        {{ plan.tagline }}
+                                    </p>
+                                </div>
+
+                                <!-- Price Display -->
+                                <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-100 dark:border-slate-800/80">
+                                    <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">First Year Setup &amp; License</div>
+                                    <div class="text-3xl font-black text-slate-900 dark:text-white font-mono mt-0.5 tracking-tight">
+                                        {{ plan.first_year_price }}
+                                    </div>
+                                    <div class="text-xs font-bold text-slate-500 dark:text-slate-400 font-mono mt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 pt-2 flex items-center justify-between">
+                                        <span>Annual Renewal:</span>
+                                        <span>{{ plan.renewal_price }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Plan Capacity / Operational Limits -->
+                                <div class="space-y-2 text-xs border-y border-slate-100 dark:border-slate-800/80 py-3.5">
+                                    <div class="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                                        <span class="text-slate-400">Branches:</span>
+                                        <span class="font-extrabold">{{ plan.branches_limit }}</span>
+                                    </div>
+                                    <div class="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                                        <span class="text-slate-400">Users:</span>
+                                        <span class="font-extrabold">{{ plan.users_limit }}</span>
+                                    </div>
+                                    <div v-if="plan.ai_credits" class="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                                        <span class="text-slate-400">AI Queries:</span>
+                                        <span class="font-bold text-xs text-violet-600 dark:text-violet-400 text-right">{{ plan.ai_credits }}</span>
+                                    </div>
+                                    <div v-if="plan.support_level" class="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                                        <span class="text-slate-400">Support:</span>
+                                        <span class="font-medium text-xs text-right">{{ plan.support_level }}</span>
+                                    </div>
+                                </div>
+
+                                <!-- Bullet Features List -->
+                                <div class="space-y-2.5 pt-1">
+                                    <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                                        Included Capabilities
+                                    </div>
+                                    <ul class="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                                        <li
+                                            v-for="(f, featIdx) in plan.features"
+                                            :key="featIdx"
+                                            class="flex items-start gap-2.5 leading-snug"
+                                        >
+                                            <span :class="['font-bold text-xs mt-0.5 shrink-0', plan.is_highlighted ? 'text-amber-500' : 'text-emerald-500']">✓</span>
+                                            <span>{{ f.feature_text }}</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <!-- Card CTA -->
+                            <div class="pt-6">
+                                <a
+                                    :href="planWhatsappUrl(plan.name)"
+                                    target="_blank"
+                                    rel="noopener"
+                                    :class="[
+                                        'w-full py-3.5 px-4 rounded-xl font-extrabold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95',
+                                        plan.is_highlighted
+                                            ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-amber-500/25'
+                                            : 'bg-violet-600 hover:bg-violet-500 text-white shadow-violet-600/20'
+                                    ]"
+                                >
+                                    <span>Get Started on WhatsApp</span>
+                                    <span>→</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Group 2: High-Volume Chains & Enterprise Conglomerates (Gold, Enterprise) -->
+                    <div v-if="enterprisePlans.length" class="pt-8 border-t border-slate-200 dark:border-slate-800/80 space-y-6">
+                        <div class="text-center space-y-2 max-w-2xl mx-auto">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-violet-100 dark:bg-violet-950/70 border border-violet-200 dark:border-violet-800 text-violet-800 dark:text-violet-300 text-xs font-bold uppercase tracking-wider">
+                                Multi-Warehouse &amp; Enterprise Conglomerates
+                            </span>
+                            <h3 class="text-2xl font-black text-slate-900 dark:text-white">
+                                High-Volume Chains &amp; Custom Deployments
+                            </h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                Supermarket chains and enterprise retail groups requiring multi-warehouse distribution, custom ERP integration, and dedicated technical engineers.
+                            </p>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto items-stretch">
+                            <div
+                                v-for="(plan, epIdx) in enterprisePlans"
+                                :key="plan.id"
+                                :class="[
+                                    'reveal-up group relative rounded-3xl p-7 sm:p-8 flex flex-col justify-between transition-all duration-300 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-xl hover:border-violet-400 dark:hover:border-violet-500/80 hover:-translate-y-1.5',
+                                    'delay-' + ((epIdx + 1) * 150)
+                                ]"
+                            >
+                                <div class="space-y-5">
+                                    <div class="pt-1">
+                                        <div class="flex items-center justify-between">
+                                            <h3 class="text-2xl font-black text-slate-900 dark:text-white group-hover:text-violet-600 dark:group-hover:text-violet-400 transition-colors">
+                                                {{ plan.name }}
+                                            </h3>
+                                            <span class="text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                                Enterprise Tier
+                                            </span>
+                                        </div>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 min-h-[32px] leading-relaxed">
+                                            {{ plan.tagline }}
+                                        </p>
+                                    </div>
+
+                                    <!-- Price Display -->
+                                    <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/70 border border-slate-100 dark:border-slate-800/80">
+                                        <div class="text-[10px] font-bold uppercase tracking-wider text-slate-400">First Year Setup &amp; License</div>
+                                        <div class="text-3xl font-black text-slate-900 dark:text-white font-mono mt-0.5 tracking-tight">
+                                            {{ plan.first_year_price }}
+                                        </div>
+                                        <div class="text-xs font-bold text-slate-500 dark:text-slate-400 font-mono mt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 pt-2 flex items-center justify-between">
+                                            <span>Annual Renewal:</span>
+                                            <span>{{ plan.renewal_price }}</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Plan Capacity -->
+                                    <div class="space-y-2 text-xs border-y border-slate-100 dark:border-slate-800/80 py-3.5">
+                                        <div class="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                                            <span class="text-slate-400">Branches:</span>
+                                            <span class="font-extrabold">{{ plan.branches_limit }}</span>
+                                        </div>
+                                        <div class="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                                            <span class="text-slate-400">Users:</span>
+                                            <span class="font-extrabold">{{ plan.users_limit }}</span>
+                                        </div>
+                                        <div v-if="plan.ai_credits" class="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                                            <span class="text-slate-400">AI Queries:</span>
+                                            <span class="font-bold text-xs text-violet-600 dark:text-violet-400 text-right">{{ plan.ai_credits }}</span>
+                                        </div>
+                                        <div v-if="plan.support_level" class="flex items-center justify-between text-slate-700 dark:text-slate-300">
+                                            <span class="text-slate-400">Support:</span>
+                                            <span class="font-medium text-xs text-right">{{ plan.support_level }}</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Bullet Features -->
+                                    <div class="space-y-2.5 pt-1">
+                                        <div class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                                            Included Capabilities
+                                        </div>
+                                        <ul class="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+                                            <li
+                                                v-for="(f, featIdx) in plan.features"
+                                                :key="featIdx"
+                                                class="flex items-start gap-2.5 leading-snug"
+                                            >
+                                                <span class="font-bold text-xs mt-0.5 text-emerald-500 shrink-0">✓</span>
+                                                <span>{{ f.feature_text }}</span>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+
+                                <div class="pt-6">
+                                    <a
+                                        :href="planWhatsappUrl(plan.name)"
+                                        target="_blank"
+                                        rel="noopener"
+                                        class="w-full py-3.5 px-4 rounded-xl font-extrabold text-xs transition-all shadow-md flex items-center justify-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 bg-violet-600 hover:bg-violet-500 text-white shadow-violet-600/20"
+                                    >
+                                        <span>Get Started on WhatsApp</span>
+                                        <span>→</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add-Ons & Commercial Notes (Rendered Markdown) -->
+                <div
+                    v-if="pricing?.settings?.addons_content || pricing?.settings?.commercial_notes_content"
+                    class="reveal-up delay-200 grid grid-cols-1 lg:grid-cols-2 gap-8 pt-4"
+                >
+                    <!-- Left: Optional Add-Ons -->
+                    <div
+                        v-if="pricing?.settings?.addons_content"
+                        class="p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4"
+                    >
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">🧩</span>
+                            <h3 class="text-base font-black text-slate-900 dark:text-white">
+                                {{ pricing?.settings?.addons_heading || 'Optional Add-Ons & Expansions' }}
+                            </h3>
+                        </div>
+                        <div
+                            class="pricing-markdown-content text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed"
+                            v-html="renderMarkdown(pricing.settings.addons_content)"
+                        ></div>
+                    </div>
+
+                    <!-- Right: Commercial Notes -->
+                    <div
+                        v-if="pricing?.settings?.commercial_notes_content"
+                        class="p-6 sm:p-8 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-4"
+                    >
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">📋</span>
+                            <h3 class="text-base font-black text-slate-900 dark:text-white">
+                                {{ pricing?.settings?.commercial_notes_heading || 'Important Commercial Notes' }}
+                            </h3>
+                        </div>
+                        <div
+                            class="pricing-markdown-content text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed"
+                            v-html="renderMarkdown(pricing.settings.commercial_notes_content)"
+                        ></div>
+                    </div>
+                </div>
+
+                <!-- Section Footer Banner -->
+                <div class="reveal-zoom delay-250 p-6 sm:p-8 rounded-3xl bg-gradient-to-r from-violet-600 via-purple-600 to-indigo-600 text-white flex flex-col sm:flex-row items-center justify-between gap-6 shadow-xl shadow-violet-600/20">
+                    <div class="space-y-1 text-center sm:text-left">
+                        <h4 class="text-lg sm:text-xl font-black">
+                            Have unique multi-branch retail requirements?
+                        </h4>
+                        <p class="text-xs sm:text-sm text-violet-100">
+                            Our enterprise engineering specialists will tailor a custom architecture quote and rollout strategy.
+                        </p>
+                    </div>
+                    <a
+                        :href="whatsappUrl"
+                        target="_blank"
+                        rel="noopener"
+                        class="flex-shrink-0 px-6 py-3.5 rounded-2xl bg-white text-violet-950 font-black text-xs hover:bg-slate-100 transition shadow-lg hover:scale-105 active:scale-95 flex items-center gap-2 cursor-pointer"
+                    >
+                        <span>💬 Talk to Sales on WhatsApp</span>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══ 13. FAQ ACCORDION ════════════════════════════════════════════ -->
         <section id="faq" class="py-24 px-4 sm:px-6 lg:px-8 max-w-4xl mx-auto space-y-12">
             <div class="reveal-up text-center space-y-3">
                 <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-violet-100 dark:bg-violet-500/10 border border-violet-300 dark:border-violet-500/30 text-violet-700 dark:text-violet-400 text-xs font-extrabold uppercase tracking-wider">
@@ -1143,68 +1418,14 @@ function toggleFaq(index) {
         </section>
 
         <!-- ══ 13. COMPREHENSIVE FOOTER ════════════════════════════════════ -->
-        <footer class="border-t border-slate-200 dark:border-slate-800/80 bg-white dark:bg-slate-950 pt-16 pb-12 px-4 sm:px-6 lg:px-8 text-slate-600 dark:text-slate-400 text-xs">
-            <div class="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-4 gap-10 pb-12 border-b border-slate-200 dark:border-slate-800/60">
-                
-                <!-- Col 1: Brand & Bio -->
-                <div class="space-y-4 md:col-span-2">
-                    <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 flex items-center justify-center font-black text-sm text-white shadow-md">
-                            {{ companyName.charAt(0).toUpperCase() }}
-                        </div>
-                        <span class="font-extrabold text-base text-slate-900 dark:text-white tracking-tight">{{ companyName }}</span>
-                    </div>
-                    <p class="text-slate-500 dark:text-slate-400 text-xs leading-relaxed max-w-md">
-                        {{ companyName }} is the enterprise point of sale and multi-branch inventory engine trusted by supermarkets, pharmacies, electronic retailers, and wholesale merchants for speed, offline resilience, and conversational AI analytics.
-                    </p>
-                    <div class="pt-2 text-slate-700 dark:text-slate-300 font-semibold space-y-1">
-                        <div>📞 Support: <a :href="'tel:' + contact_info.phone" class="hover:text-violet-600 dark:hover:text-violet-400 font-mono">{{ contact_info.phone }}</a></div>
-                        <div>✉️ Email: <a :href="'mailto:' + contact_info.email" class="hover:text-violet-600 dark:hover:text-violet-400 font-mono">{{ contact_info.email }}</a></div>
-                    </div>
-                </div>
-
-                <!-- Col 2: Quick Links -->
-                <div class="space-y-3">
-                    <h4 class="font-extrabold text-slate-900 dark:text-white text-xs uppercase tracking-wider">Navigation</h4>
-                    <ul class="space-y-2 font-medium">
-                        <li><a href="#how-it-works" class="hover:text-violet-600 dark:hover:text-white transition">How It Works</a></li>
-                        <li><a href="#ai-intelligence" class="hover:text-violet-600 dark:hover:text-white transition">AI Copilot</a></li>
-                        <li><a href="#variants" class="hover:text-violet-600 dark:hover:text-white transition">Product Variants &amp; Tiers</a></li>
-                        <li><a href="#features" class="hover:text-violet-600 dark:hover:text-white transition">Core Features</a></li>
-                        <li><a href="#hardware" class="hover:text-violet-600 dark:hover:text-white transition">Supported Hardware</a></li>
-                        <li><a href="#industries" class="hover:text-violet-600 dark:hover:text-white transition">Industry Solutions</a></li>
-                        <li><a href="#faq" class="hover:text-violet-600 dark:hover:text-white transition">FAQ</a></li>
-                    </ul>
-                </div>
-
-                <!-- Col 3: Portal Launchers -->
-                <div class="space-y-3">
-                    <h4 class="font-extrabold text-slate-900 dark:text-white text-xs uppercase tracking-wider">Quick Actions</h4>
-                    <ul class="space-y-2 font-medium">
-                        <li>
-                            <Link :href="posUrl" class="text-violet-600 dark:text-violet-400 font-bold hover:underline">
-                                Launch POS Register →
-                            </Link>
-                        </li>
-                        <li>
-                            <a :href="whatsappUrl" target="_blank" rel="noopener" class="text-emerald-600 dark:text-emerald-400 hover:underline">
-                                WhatsApp Live Support 💬
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-
-            </div>
-
-            <div class="max-w-7xl mx-auto pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-slate-500">
-                <div>
-                    &copy; {{ currentYear }} {{ companyName }}. All rights reserved. &nbsp;·&nbsp; Enterprise Cloud POS
-                </div>
-                <div class="flex items-center gap-3">
-                    <span>Built with ❤️ for High-Growth Retail</span>
-                </div>
-            </div>
-        </footer>
+        <Footer
+            :company-name="companyName"
+            :support-phone="contact_info.phone"
+            :support-email="contact_info.email"
+            :pos-url="posUrl"
+            :whatsapp-url="whatsappUrl"
+            :pricing-enabled="pricingSectionEnabled"
+        />
 
     </div>
 </template>
@@ -1334,5 +1555,29 @@ function toggleFaq(index) {
     font-family: monospace;
     color: #8b5cf6;
     font-size: 0.8em;
+}
+:deep(.pricing-markdown-content) p {
+    margin-bottom: 0.65rem;
+}
+:deep(.pricing-markdown-content) p:last-child {
+    margin-bottom: 0;
+}
+:deep(.pricing-markdown-content) strong,
+:deep(.pricing-markdown-content) b {
+    font-weight: 700;
+}
+:deep(.pricing-markdown-content) ul {
+    list-style-type: disc;
+    padding-left: 1.25rem;
+    margin-bottom: 0.65rem;
+}
+:deep(.pricing-markdown-content) ol {
+    list-style-type: decimal;
+    padding-left: 1.25rem;
+    margin-bottom: 0.65rem;
+}
+:deep(.pricing-markdown-content) li {
+    margin-bottom: 0.4rem;
+    line-height: 1.5;
 }
 </style>

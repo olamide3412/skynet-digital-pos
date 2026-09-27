@@ -5,17 +5,23 @@ namespace App\Modules\AI\Services;
 use App\Models\AppNotification;
 use App\Models\Branch;
 use App\Models\DebtPayment;
+use App\Models\Expense;
+use App\Models\ExpenseCategory;
+use App\Models\HeldSale;
+use App\Models\HeldSaleItem;
 use App\Models\InventoryTransaction;
 use App\Models\Item;
 use App\Models\ItemDeviceUnit;
 use App\Models\PosCustomer;
 use App\Models\PosLog;
 use App\Models\Sale;
+use App\Models\SaleDiscount;
 use App\Models\SaleOrder;
 use App\Models\SaleReturnItem;
 use App\Models\StockConflict;
 use App\Models\User;
 use App\Modules\AI\Models\AiConversationLog;
+use App\Services\RoleService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -66,7 +72,11 @@ class ChatQueryTranslationService
         $providerUsed = 'template_fallback';
         $modelUsed = 'local_rules';
 
-        if ($aiManager->isBranchEnabled($branch)) {
+        if ($intent === 'permission_denied') {
+            $providerUsed = 'local_rules';
+            $modelUsed = 'rbac_guard';
+            $aiResponse = self::formatPermissionDeniedSummary($payload);
+        } elseif ($aiManager->isBranchEnabled($branch)) {
             try {
                 $provider = $aiManager->getActiveProvider();
                 if ($provider) {
@@ -87,12 +97,32 @@ Core Analytical & Presentation Guidelines:
    - Explicitly mention the EXACT LAST TIME it was sold (date, time, cashier name, quantity sold, receipt number, and total price).
    - Provide 30-day sales volume and any restock history.
    - If in Super Admin scope, display stock availability across other active store branches.
-3. If asked about STAFF ACTIVITY or AUDIT LOGS:
+3. If looking up a RECEIPT / SALE RECORD:
+   - Provide a short plain-language summary of the sale (total amount, store branch, date/time, cashier name, payment method, discounts, and customer).
+   - Present a clean Markdown Table of all items purchased (item name, unit/variant, quantity, unit price, total price, and IMEI serials if present).
+   - Show subtotal, discounts, tax, and final amount paid.
+4. If asked about HELD SALES:
+   - State the exact number of open held sales and total monetary value currently held.
+   - If requested, highlight held sales older than 24 hours.
+   - Present a table detailing hold name, customer, cashier, item count, total value, and when it was placed on hold.
+5. If asked about BRANCH EXPENSES:
+   - State the total operating expenses for the requested period directly.
+   - Provide category breakdown with amounts and percentages in a Markdown Table.
+   - If comparative (e.g. this month vs last month), clearly state the expense variance, monetary difference, and percentage change.
+6. If asked about INVENTORY VALUATION / TOTAL ITEM WORTH:
+   - State total inventory value at cost price (buy price) and retail selling value.
+   - If for a specific item, state its total quantity (front + back store), unit cost, unit price, total cost worth, and retail value.
+   - If comparing branches, rank branches by inventory value.
+7. If asked about CUSTOMER DEBT & DEBT ANALYSIS:
+   - State total outstanding debt across customers and recovery amount.
+   - If looking up a specific customer, state their current balance, contact, and recent payment history.
+   - If analyzing overdue debt (e.g. >30 days without payment), highlight aged balances and list overdue debtors.
+8. If asked about STAFF ACTIVITY or AUDIT LOGS:
    - Provide a clear breakdown or Markdown Table of recent staff actions, cashier sales, inventory adjustments, and timestamped activity logs.
-4. Format all monetary values cleanly using the Nigerian Naira currency symbol (₦) with commas (e.g. ₦1,250,000.00).
-5. When presenting multiple comparative metrics, rankings, inventory lists, or activity logs, ALWAYS format them in clean Markdown Tables using the '|' pipe syntax.
-6. Highlight key takeaways, product quantities, timestamps, or risk flags using **bold text**.
-7. NEVER speculate or fabricate figures not present in the verified database payload.
+9. Format all monetary values cleanly using the Nigerian Naira currency symbol (₦) with commas (e.g. ₦1,250,000.00).
+10. When presenting multiple comparative metrics, rankings, inventory lists, or activity logs, ALWAYS format them in clean Markdown Tables using the '|' pipe syntax.
+11. Highlight key takeaways, product quantities, timestamps, or risk flags using **bold text**.
+12. NEVER speculate or fabricate figures not present in the verified database payload.
 SYS;
 
                     $payloadJson = json_encode($payload, JSON_PRETTY_PRINT);
@@ -164,7 +194,44 @@ USER_PROMPT;
     {
         $scopeName = $branch ? $branch->name : 'All System Branches (Cross-Branch)';
 
-        // ── 0. FIRST PRIORITY: Specific Item / Product Search ────────────────
+        // ── 0. ABSOLUTE PRIORITY: Specific Receipt Lookup ────────────────────
+        // Direct pattern check for receipt/invoice numbers (e.g. "RC202609260173", "SKN-483920", "OFFLINE-...", "receipt #173")
+        $receiptCandidate = self::detectReceiptNumber($q);
+        if ($receiptCandidate) {
+            return self::resolveReceiptLookup($receiptCandidate, $branch, $user, $scopeName);
+        }
+
+        // ── 1. Held Sales & Carts on Hold ────────────────────────────────────
+        if (
+            str_contains($q, 'held sale') || str_contains($q, 'held sales') ||
+            str_contains($q, 'held cart') || str_contains($q, 'hold cart') ||
+            str_contains($q, 'sales on hold') || str_contains($q, 'held orders') ||
+            str_contains($q, 'held order') ||
+            (str_contains($q, 'hold') && (str_contains($q, 'open') || str_contains($q, 'value') || str_contains($q, 'total') || str_contains($q, 'how many') || str_contains($q, 'show') || str_contains($q, 'older')))
+        ) {
+            return self::resolveHeldSales($q, $branch, $user, $scopeName);
+        }
+
+        // ── 2. Branch Operating Expenses ─────────────────────────────────────
+        if (
+            str_contains($q, 'expense') || str_contains($q, 'expenses') ||
+            str_contains($q, 'spending') || str_contains($q, 'spend on') ||
+            str_contains($q, 'spent on') || str_contains($q, 'did i spend') ||
+            str_contains($q, 'did we spend') || str_contains($q, 'operating cost') ||
+            str_contains($q, 'overhead')
+        ) {
+            return self::resolveBranchExpenses($q, $branch, $user, $scopeName);
+        }
+
+        // ── 3. Inventory Valuation & Total Item Worth ────────────────────────
+        if (
+            (str_contains($q, 'inventory') || str_contains($q, 'stock') || str_contains($q, 'item') || str_contains($q, 'goods')) &&
+            (str_contains($q, 'worth') || str_contains($q, 'valuation') || str_contains($q, 'carrying the most') || str_contains($q, 'most value') || str_contains($q, 'total value') || str_contains($q, 'stock value'))
+        ) {
+            return self::resolveInventoryValuation($q, $branch, $user, $scopeName);
+        }
+
+        // ── 4. Specific Item / Product Search ────────────────────────────────
         // If query asks about a particular item, stock count, price, last sold, or mentions an item name
         $itemSearchResults = self::searchSpecificItemData($q, $branch, $user);
         if (!empty($itemSearchResults['items'])) {
@@ -610,42 +677,14 @@ USER_PROMPT;
             ];
         }
 
-        // ── 9. Debt & Customer Credit Health ─────────────────────────────────
+        // ── 9. Customer Debt & Debt Analysis ─────────────────────────────────
         if (
             str_contains($q, 'debt') || str_contains($q, 'credit') || str_contains($q, 'debtor') ||
-            str_contains($q, 'unpaid') || str_contains($q, 'owing') || str_contains($q, 'recover')
+            str_contains($q, 'unpaid') || str_contains($q, 'owing') || str_contains($q, 'recover') ||
+            str_contains($q, 'owe') || str_contains($q, 'haven\'t paid') || str_contains($q, 'havent paid') ||
+            (str_contains($q, 'balance') && (str_contains($q, 'customer') || str_contains($q, 'current') || str_contains($q, '\'s balance')))
         ) {
-            $debtors = PosCustomer::when($branch, fn($query) => $query->where('branch_id', $branch->id))
-                ->where('debt_bal', '>', 0)
-                ->orderByDesc('debt_bal')
-                ->limit(8)
-                ->get();
-
-            $totalOutstanding = PosCustomer::when($branch, fn($query) => $query->where('branch_id', $branch->id))
-                ->where('debt_bal', '>', 0)
-                ->sum('debt_bal');
-
-            $debtRecoveredThisMonth = DebtPayment::when($branch, fn($query) => $query->where('branch_id', $branch->id))
-                ->where('type', 'credit')
-                ->whereMonth('created_at', now()->month)
-                ->whereYear('created_at', now()->year)
-                ->sum('amount');
-
-            return [
-                'intent'    => 'debt_and_credit_health',
-                'grounding' => 'Aggregated customer debt ledgers, outstanding balances, and monthly recovery payments.',
-                'data'      => [
-                    'scope'                 => $scopeName,
-                    'total_outstanding'     => (float)$totalOutstanding,
-                    'debt_recovered_month'  => (float)$debtRecoveredThisMonth,
-                    'debtors_count'         => $debtors->count(),
-                    'top_debtors'           => $debtors->map(fn($d) => [
-                        'customer_name'     => $d->name,
-                        'phone'             => $d->phone ?? 'N/A',
-                        'balance_owing'     => (float)$d->debt_bal,
-                    ])->values()->all(),
-                ],
-            ];
+            return self::resolveCustomerDebtAnalysis($q, $branch, $user, $scopeName);
         }
 
         // ── 10. Tax & VAT Collected ──────────────────────────────────────────
@@ -1051,11 +1090,718 @@ USER_PROMPT;
     }
 
     /**
+     * RBAC helper to verify specific permission capability on a user instance.
+     */
+    protected static function userCan(User $user, string $permission): bool
+    {
+        if ($user->isSuperAdmin() || $user->isBranchAdmin()) {
+            return true;
+        }
+        if ($user->branch_id) {
+            setPermissionsTeamId($user->branch_id);
+        }
+        try {
+            if ($user->permissions->isNotEmpty() && $user->hasDirectPermission($permission)) {
+                return true;
+            }
+            return $user->hasPermissionTo($permission);
+        } catch (\Throwable $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Detect if an input query is a receipt/invoice identifier or specific sale inquiry.
+     */
+    public static function detectReceiptNumber(string $query): ?string
+    {
+        $q = trim($query);
+        $stopWords = ['are', 'is', 'the', 'open', 'closed', 'held', 'sales', 'order', 'orders', 'details', 'left', 'stock', 'today', 'yesterday', 'what', 'how', 'many'];
+
+        // 1. Standalone receipt/offline identifier (e.g. "RC202609260173", "SKN-483920", "OFFLINE-1788594698-A")
+        if (preg_match('/^(?:rc|skn|rec|offline)[a-z0-9\-_]+$/i', $q, $m)) {
+            return $m[0];
+        }
+
+        // 2. Query mentioning receipt or invoice (e.g. "receipt #173", "receipt 173", "show receipt RC202609260173")
+        if (preg_match('/\b(?:receipt|invoice)\s*(?:#|no\.?|num\.?|number)?\s*([a-z0-9\-_]+)/i', $q, $m)) {
+            $candidate = trim($m[1]);
+            if (!in_array(strtolower($candidate), $stopWords) && (preg_match('/[0-9]/', $candidate) || strlen($candidate) >= 4)) {
+                return $candidate;
+            }
+        }
+
+        // 3. Query mentioning specific sale number or ID (e.g. "sale #173", "sale number 174")
+        if (preg_match('/\b(?:sale)\s+(?:#|no\.?|number|id)\s*([a-z0-9\-_]+)/i', $q, $m)) {
+            $candidate = trim($m[1]);
+            if (!in_array(strtolower($candidate), $stopWords) && preg_match('/[0-9]/', $candidate)) {
+                return $candidate;
+            }
+        }
+
+        // 4. Embedded receipt code pattern inside a query (e.g. "Can you check RC202609260173 for me?")
+        if (preg_match('/\b(rc\d{4,}|skn-?[a-z0-9]+|offline-[a-z0-9\-]+)\b/i', $q, $m)) {
+            return $m[1];
+        }
+
+        // 5. Exact match against existing receipt_id or offline_sale_id in database
+        $cleaned = preg_replace('/^#/', '', $q);
+        if (strlen($cleaned) >= 4 && Sale::where('receipt_id', $cleaned)->orWhere('offline_sale_id', $cleaned)->exists()) {
+            return $cleaned;
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve exact receipt lookup with full line item details and plain-language summary.
+     */
+    protected static function resolveReceiptLookup(string $receiptCode, ?Branch $branch, User $user, string $scopeName): array
+    {
+        // 1. Permission check
+        $canViewSales = self::userCan($user, 'canViewSales') || RoleService::canViewSales();
+        if (!$canViewSales) {
+            return [
+                'intent'    => 'permission_denied',
+                'grounding' => 'Enforced RBAC permission boundary for sale receipt lookup.',
+                'data'      => [
+                    'feature'             => 'Receipt & Sale Records',
+                    'required_permission' => 'canViewSales',
+                    'message'             => 'You do not have permission to view sales records or receipt details.',
+                ],
+            ];
+        }
+
+        $cleaned = trim($receiptCode);
+        $saleQuery = Sale::with([
+            'branch:id,name,slug',
+            'user:id,name,username',
+            'customer:id,name,phone,address',
+            'saleDiscount',
+            'saleOrders.item:id,item_name,barcode_number,unit_label,price,wholesale_price',
+            'saleOrders.deviceUnit:id,imei_or_device_id',
+            'returnItems',
+        ]);
+
+        $foundSale = null;
+        if (is_numeric($cleaned)) {
+            $foundSale = (clone $saleQuery)->where('id', (int)$cleaned)->first()
+                      ?: (clone $saleQuery)->where('receipt_id', $cleaned)->first();
+        }
+        if (!$foundSale) {
+            $foundSale = (clone $saleQuery)->where('receipt_id', $cleaned)->first()
+                      ?: (clone $saleQuery)->where('offline_sale_id', $cleaned)->first();
+        }
+        if (!$foundSale && strlen($cleaned) >= 4) {
+            $foundSale = (clone $saleQuery)->where('receipt_id', 'like', "%{$cleaned}%")
+                      ->orWhere('offline_sale_id', 'like', "%{$cleaned}%")
+                      ->latest()
+                      ->first();
+        }
+
+        // Branch-scoping rule: Branch Admin can only view their own branch
+        if ($foundSale && !$user->is_super_admin) {
+            $userBranchId = $branch ? $branch->id : $user->branch_id;
+            if ($userBranchId && $foundSale->branch_id !== $userBranchId) {
+                return [
+                    'intent'    => 'receipt_lookup',
+                    'grounding' => 'Enforced branch isolation boundary for sale receipt lookup.',
+                    'data'      => [
+                        'receipt_no' => $receiptCode,
+                        'found'      => false,
+                        'error'      => 'cross_branch_denied',
+                        'message'    => "Receipt **{$receiptCode}** exists in the system but belongs to another branch (**{$foundSale->branch?->name}**). As a branch user, you can only look up receipts issued at **" . ($branch?->name ?? 'your branch') . "**.",
+                    ],
+                ];
+            }
+        }
+
+        if (!$foundSale) {
+            return [
+                'intent'    => 'receipt_lookup',
+                'grounding' => 'Queried live sales table by receipt_id, offline_sale_id, and primary key ID.',
+                'data'      => [
+                    'receipt_no' => $receiptCode,
+                    'found'      => false,
+                    'message'    => "No sale record was found matching receipt number **\"{$receiptCode}\"** in {$scopeName}. Please verify the receipt number and try again.",
+                ],
+            ];
+        }
+
+        // Transform sale items
+        $itemsPurchased = $foundSale->saleOrders->map(function ($order) {
+            return [
+                'item_name'     => $order->item_name ?: ($order->item?->item_name ?? 'Custom Item'),
+                'variant_unit'  => $order->unit_used ?: ($order->item?->unit_label ?: 'Unit'),
+                'purchase_type' => $order->purchase_type ?: 'Consumer',
+                'qty'           => (int) $order->qty,
+                'unit_price'    => (float) $order->selling_price,
+                'total_price'   => (float) $order->total_selling_price,
+                'imei_serial'   => $order->imei_or_device_id ?: ($order->deviceUnit?->imei_or_device_id ?? null),
+            ];
+        })->values()->all();
+
+        $subtotal = (float) $foundSale->saleOrders->sum('total_selling_price');
+        $discountAmount = (float) $foundSale->discount_amount;
+        $taxAmount = (float) $foundSale->tax_amount;
+        $finalTotal = (float) $foundSale->final_total;
+
+        $saleDetails = [
+            'receipt_no'        => $foundSale->receipt_id ?: "Sale #{$foundSale->id}",
+            'offline_sale_id'   => $foundSale->offline_sale_id,
+            'is_offline_sale'   => (bool) $foundSale->is_offline_sale,
+            'sale_id'           => $foundSale->id,
+            'branch_name'       => $foundSale->branch?->name ?? 'Main Branch',
+            'date_formatted'    => $foundSale->created_at->format('F j, Y \a\t g:i A'),
+            'date_human'        => $foundSale->created_at->diffForHumans(),
+            'cashier_name'      => $foundSale->user?->name ?? 'Cashier',
+            'cashier_username'  => $foundSale->user?->username ?? '',
+            'customer_name'     => $foundSale->customer?->name ?? 'Walk-in Customer',
+            'customer_phone'    => $foundSale->customer?->phone ?? 'N/A',
+            'payment_method'    => ucfirst($foundSale->payment_method ?: 'Cash'),
+            'cash_paid'         => (float) $foundSale->cash,
+            'bank_transfer'     => (float) $foundSale->bank_transfer,
+            'change_given'      => (float) $foundSale->change_bal,
+            'is_debt'           => (bool) $foundSale->is_debt,
+            'subtotal'          => $subtotal,
+            'discount_amount'   => $discountAmount,
+            'discount_details'  => $foundSale->saleDiscount?->description ?? ($discountAmount > 0 ? 'Applied Sale Discount' : 'None'),
+            'tax_amount'        => $taxAmount,
+            'tax_percentage'    => (float) $foundSale->tax_percentage,
+            'final_total'       => $finalTotal,
+            'items'             => $itemsPurchased,
+            'total_items_count' => count($itemsPurchased),
+        ];
+
+        // Short AI-friendly summary sentence
+        $summaryParts = [];
+        $summaryParts[] = "This was a ₦" . number_format($finalTotal, 2) . " sale at " . $saleDetails['branch_name'] . " on " . $foundSale->created_at->format('M j, Y') . ", paid by " . strtolower($saleDetails['payment_method']) . ".";
+        if ($discountAmount > 0) {
+            $summaryParts[] = "Includes a ₦" . number_format($discountAmount, 2) . " discount.";
+        }
+        if (count($itemsPurchased) === 1) {
+            $summaryParts[] = "Purchased: {$itemsPurchased[0]['qty']}x {$itemsPurchased[0]['item_name']}.";
+        } else {
+            $summaryParts[] = "Purchased " . count($itemsPurchased) . " item types (Total quantity: " . $foundSale->saleOrders->sum('qty') . ").";
+        }
+        $aiSummaryText = implode(' ', $summaryParts);
+
+        return [
+            'intent'    => 'receipt_lookup',
+            'grounding' => 'Queried verified sale transaction, cashier audit, customer ledger, line items, and discounts.',
+            'data'      => [
+                'scope'      => $scopeName,
+                'found'      => true,
+                'ai_summary' => $aiSummaryText,
+                'sale'       => $saleDetails,
+            ],
+        ];
+    }
+
+    /**
+     * Resolve held sales overview, total value sitting in held carts, and aged carts.
+     */
+    protected static function resolveHeldSales(string $q, ?Branch $branch, User $user, string $scopeName): array
+    {
+        $isOlderThanDay = str_contains($q, 'older than a day') ||
+                          str_contains($q, 'older than 1 day') ||
+                          str_contains($q, 'older than 24 hours') ||
+                          str_contains($q, 'past day') ||
+                          str_contains($q, 'aged');
+
+        $query = HeldSale::where('status', 'Held')
+            ->when($branch, fn($query) => $query->where('branch_id', $branch->id))
+            ->when($isOlderThanDay, fn($query) => $query->where('created_at', '<=', now()->subHours(24)))
+            ->with([
+                'branch:id,name',
+                'user:id,name,username',
+                'customer:id,name,phone',
+                'items.item:id,item_name,unit_label',
+            ])
+            ->orderBy('created_at', 'asc');
+
+        $heldSales = $query->get();
+
+        $totalCount = $heldSales->count();
+        $totalValue = (float) $heldSales->sum(function ($h) {
+            return $h->items->sum(fn($i) => (float)$i->price * (int)$i->qty);
+        });
+
+        $totalUnits = (int) $heldSales->sum(function ($h) {
+            return $h->items->sum('qty');
+        });
+
+        $mappedSales = $heldSales->map(function ($h) {
+            $cartVal = (float) $h->items->sum(fn($i) => (float)$i->price * (int)$i->qty);
+            $itemsList = $h->items->map(fn($i) => [
+                'item_name' => $i->item_name ?: ($i->item?->item_name ?? 'Item'),
+                'qty'       => (int) $i->qty,
+                'price'     => (float) $i->price,
+                'unit'      => $i->unit_used ?: 'unit',
+            ])->values()->all();
+
+            return [
+                'id'            => $h->id,
+                'uuid'          => $h->held_sale_uuid,
+                'hold_name'     => $h->hold_name ?: "Cart #{$h->id}",
+                'branch_name'   => $h->branch?->name ?? 'Main',
+                'customer_name' => $h->customer?->name ?? 'Walk-in Customer',
+                'cashier_name'  => $h->user?->name ?? 'Cashier',
+                'created_at'    => $h->created_at->format('M j, Y h:i A'),
+                'time_human'    => $h->created_at->diffForHumans(),
+                'hours_open'    => round(now()->diffInHours($h->created_at, true), 1),
+                'items_count'   => count($itemsList),
+                'total_units'   => (int) $h->items->sum('qty'),
+                'total_value'   => $cartVal,
+                'items_preview' => $itemsList,
+            ];
+        })->values()->all();
+
+        return [
+            'intent'    => 'held_sales_overview',
+            'grounding' => 'Queried live held_sales and held_sale_items tables for open active held carts.',
+            'data'      => [
+                'scope'             => $scopeName,
+                'filter'            => $isOlderThanDay ? 'Older than 24 hours' : 'All Currently Open Held Sales',
+                'total_held_sales'  => $totalCount,
+                'total_held_value'  => $totalValue,
+                'total_held_units'  => $totalUnits,
+                'held_sales_list'   => $mappedSales,
+            ],
+        ];
+    }
+
+    /**
+     * Resolve operating expenses with date ranges, categories, and permission checks.
+     */
+    protected static function resolveBranchExpenses(string $q, ?Branch $branch, User $user, string $scopeName): array
+    {
+        // 1. Permission Check
+        $canView = self::userCan($user, 'canViewExpenseReports') || self::userCan($user, 'canViewReports') || RoleService::canViewExpenseReports();
+        if (!$canView) {
+            return [
+                'intent'    => 'permission_denied',
+                'grounding' => 'Enforced RBAC permission boundary for operating expense reports.',
+                'data'      => [
+                    'feature'             => 'Operating Expenses',
+                    'required_permission' => 'canViewExpenseReports',
+                    'message'             => 'You do not have permission to view branch expense data or reports.',
+                ],
+            ];
+        }
+
+        // Determine date range
+        $isLastMonth = str_contains($q, 'last month');
+        $isThisWeek = str_contains($q, 'this week');
+        $isLastWeek = str_contains($q, 'last week');
+        $isToday = str_contains($q, 'today');
+        $isYesterday = str_contains($q, 'yesterday');
+        $isComparative = str_contains($q, 'compare') || str_contains($q, 'compared');
+
+        if ($isLastMonth) {
+            $startDate = now()->subMonth()->startOfMonth();
+            $endDate = now()->subMonth()->endOfMonth();
+            $periodLabel = 'Last Month (' . $startDate->format('F Y') . ')';
+        } elseif ($isLastWeek) {
+            $startDate = now()->subWeek()->startOfWeek();
+            $endDate = now()->subWeek()->endOfWeek();
+            $periodLabel = 'Last Week (' . $startDate->format('M j') . ' - ' . $endDate->format('M j, Y') . ')';
+        } elseif ($isThisWeek) {
+            $startDate = now()->startOfWeek();
+            $endDate = now()->endOfWeek();
+            $periodLabel = 'This Week (' . $startDate->format('M j') . ' - ' . $endDate->format('M j, Y') . ')';
+        } elseif ($isToday) {
+            $startDate = today()->startOfDay();
+            $endDate = today()->endOfDay();
+            $periodLabel = 'Today (' . today()->format('M j, Y') . ')';
+        } elseif ($isYesterday) {
+            $startDate = today()->subDay()->startOfDay();
+            $endDate = today()->subDay()->endOfDay();
+            $periodLabel = 'Yesterday (' . today()->subDay()->format('M j, Y') . ')';
+        } else {
+            // Default to This Month
+            $startDate = now()->startOfMonth();
+            $endDate = now()->endOfMonth();
+            $periodLabel = 'This Month (' . $startDate->format('F Y') . ')';
+        }
+
+        // Check for specific category mention
+        $matchedCategory = null;
+        $allCategories = ExpenseCategory::all();
+        foreach ($allCategories as $cat) {
+            if (str_contains($q, strtolower($cat->name))) {
+                $matchedCategory = $cat;
+                break;
+            }
+        }
+        if (!$matchedCategory) {
+            if (str_contains($q, 'transport') || str_contains($q, 'logistics')) {
+                $matchedCategory = ExpenseCategory::where('name', 'like', '%transport%')->first();
+            } elseif (str_contains($q, 'fuel') || str_contains($q, 'diesel') || str_contains($q, 'petrol')) {
+                $matchedCategory = ExpenseCategory::where('name', 'like', '%fuel%')->first();
+            } elseif (str_contains($q, 'salary') || str_contains($q, 'salaries') || str_contains($q, 'wage')) {
+                $matchedCategory = ExpenseCategory::where('name', 'like', '%salary%')->orWhere('name', 'like', '%wage%')->first();
+            }
+        }
+
+        // Query primary period expenses
+        $baseQuery = Expense::when($branch, fn($query) => $query->where('branch_id', $branch->id))
+            ->whereBetween('expense_date', [$startDate->toDateString(), $endDate->toDateString()]);
+
+        if ($matchedCategory) {
+            $baseQuery->where('expense_category_id', $matchedCategory->id);
+        }
+
+        $totalAmount = (float) (clone $baseQuery)->sum('amount');
+        $totalCount = (int) (clone $baseQuery)->count();
+        $daysCount = max(1, (int) $startDate->diffInDays($endDate) + 1);
+        $dailyAverage = round($totalAmount / $daysCount, 2);
+
+        // Category breakdown
+        $categoryBreakdown = Expense::when($branch, fn($query) => $query->where('expenses.branch_id', $branch->id))
+            ->whereBetween('expenses.expense_date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->when($matchedCategory, fn($query) => $query->where('expenses.expense_category_id', $matchedCategory->id))
+            ->join('expense_categories', 'expenses.expense_category_id', '=', 'expense_categories.id')
+            ->select(
+                'expense_categories.name as category_name',
+                DB::raw('COUNT(expenses.id) as count'),
+                DB::raw('SUM(expenses.amount) as total_amount')
+            )
+            ->groupBy('expense_categories.id', 'expense_categories.name')
+            ->orderByDesc('total_amount')
+            ->get()
+            ->map(fn($row) => [
+                'category_name' => $row->category_name,
+                'count'         => (int) $row->count,
+                'total_amount'  => (float) $row->total_amount,
+                'percentage'    => $totalAmount > 0 ? round(((float)$row->total_amount / $totalAmount) * 100, 1) : 0,
+            ])->values()->all();
+
+        // Comparative period calculations if comparative requested or comparing months
+        $comparativeData = null;
+        if ($isComparative || (str_contains($q, 'compare') && str_contains($q, 'last month'))) {
+            $prevStart = now()->subMonth()->startOfMonth();
+            $prevEnd = now()->subMonth()->endOfMonth();
+
+            $prevQuery = Expense::when($branch, fn($query) => $query->where('branch_id', $branch->id))
+                ->whereBetween('expense_date', [$prevStart->toDateString(), $prevEnd->toDateString()]);
+
+            if ($matchedCategory) {
+                $prevQuery->where('expense_category_id', $matchedCategory->id);
+            }
+
+            $prevTotal = (float) $prevQuery->sum('amount');
+            $prevCount = (int) $prevQuery->count();
+            $diffAmount = $totalAmount - $prevTotal;
+            $diffPct = $prevTotal > 0 ? round(($diffAmount / $prevTotal) * 100, 1) : 0;
+
+            $comparativeData = [
+                'previous_period'   => 'Last Month (' . $prevStart->format('F Y') . ')',
+                'previous_total'    => $prevTotal,
+                'previous_count'    => $prevCount,
+                'difference_amount' => $diffAmount,
+                'difference_pct'    => $diffPct,
+                'trend'             => $diffAmount > 0 ? 'Increased' : ($diffAmount < 0 ? 'Decreased' : 'Unchanged'),
+            ];
+        }
+
+        return [
+            'intent'    => 'branch_expenses_overview',
+            'grounding' => 'Queried expenses and expense_categories tables respecting RBAC expense reporting boundaries.',
+            'data'      => [
+                'scope'               => $scopeName,
+                'period'              => $periodLabel,
+                'category_filter'     => $matchedCategory ? $matchedCategory->name : 'All Categories',
+                'total_expense'       => $totalAmount,
+                'expense_count'       => $totalCount,
+                'daily_average'       => $dailyAverage,
+                'category_breakdown'  => $categoryBreakdown,
+                'top_category'        => $categoryBreakdown[0] ?? null,
+                'comparative'         => $comparativeData,
+            ],
+        ];
+    }
+
+    /**
+     * Resolve inventory valuation at cost price (buy price) and retail selling value.
+     */
+    protected static function resolveInventoryValuation(string $q, ?Branch $branch, User $user, string $scopeName): array
+    {
+        // 1. Check if asking about a specific item (e.g. "What's the stock value of Peak Milk Sachet?")
+        $itemResults = self::searchSpecificItemData($q, $branch, $user);
+        if (!empty($itemResults['items']) && count($itemResults['items']) <= 3) {
+            $item = $itemResults['items'][0];
+            $costValuation = (float)$item['buy_price'] * (int)$item['total_stock_qty'];
+            $retailValuation = (float)$item['selling_price'] * (int)$item['total_stock_qty'];
+            $estimatedProfit = $retailValuation - $costValuation;
+            $marginPct = $retailValuation > 0 ? round(($estimatedProfit / $retailValuation) * 100, 1) : 0;
+
+            return [
+                'intent'    => 'inventory_valuation',
+                'grounding' => 'Calculated cost valuation and retail selling potential for specific matched inventory item.',
+                'data'      => [
+                    'scope'                 => $scopeName,
+                    'type'                  => 'specific_item',
+                    'item_name'             => $item['item_name'],
+                    'barcode'               => $item['barcode_number'],
+                    'category'              => $item['category'],
+                    'total_stock_qty'       => (int)$item['total_stock_qty'],
+                    'front_store_qty'       => (int)$item['front_store_qty'],
+                    'back_store_qty'        => (int)$item['back_store_qty'],
+                    'unit_label'            => $item['unit_label'],
+                    'buy_price'             => (float)$item['buy_price'],
+                    'selling_price'         => (float)$item['selling_price'],
+                    'wholesale_price'       => (float)$item['wholesale_price'],
+                    'cost_valuation'        => round($costValuation, 2),
+                    'retail_valuation'      => round($retailValuation, 2),
+                    'potential_profit'      => round($estimatedProfit, 2),
+                    'gross_margin_pct'      => $marginPct,
+                    'cross_branch_stock'    => $item['cross_branch_stock'] ?? [],
+                ],
+            ];
+        }
+
+        // 2. Check if asking cross-branch comparison: "Which branch is carrying the most inventory value?"
+        $isCrossBranch = (!$branch || str_contains($q, 'which branch') || str_contains($q, 'across branches') || str_contains($q, 'most inventory value') || str_contains($q, 'compare branches'));
+        if ($isCrossBranch && $user->is_super_admin) {
+            $branches = Branch::where('is_active', true)->get();
+            $branchValuations = $branches->map(function ($b) {
+                $items = Item::where('branch_id', $b->id)->get();
+                $costVal = (float) $items->sum('stock_worth');
+                $retailVal = (float) $items->sum(fn($i) => (float)$i->price * ((int)$i->front_store_qty + (int)$i->back_store_qty));
+                $totalUnits = (int) $items->sum(fn($i) => (int)$i->front_store_qty + (int)$i->back_store_qty);
+
+                return [
+                    'branch_id'        => $b->id,
+                    'branch_name'      => $b->name,
+                    'total_products'   => $items->count(),
+                    'total_units'      => $totalUnits,
+                    'cost_valuation'   => round($costVal, 2),
+                    'retail_valuation' => round($retailVal, 2),
+                    'potential_profit' => round($retailVal - $costVal, 2),
+                ];
+            })->sortByDesc('cost_valuation')->values()->map(fn($row, $idx) => array_merge($row, ['rank' => $idx + 1]))->all();
+
+            $topBranch = $branchValuations[0] ?? null;
+
+            return [
+                'intent'    => 'inventory_valuation',
+                'grounding' => 'Aggregated total stock_worth and retail valuation across all registered active branches.',
+                'data'      => [
+                    'scope'                 => 'All Active Branches (Super Admin)',
+                    'type'                  => 'cross_branch_ranking',
+                    'top_branch'            => $topBranch ? $topBranch['branch_name'] : 'N/A',
+                    'top_branch_value'      => $topBranch ? $topBranch['cost_valuation'] : 0,
+                    'total_system_cost_val' => (float) array_sum(array_column($branchValuations, 'cost_valuation')),
+                    'branch_rankings'       => $branchValuations,
+                ],
+            ];
+        }
+
+        // 3. General Branch / Store Inventory Worth
+        $itemsQuery = Item::when($branch, fn($query) => $query->where('branch_id', $branch->id));
+        $allItems = $itemsQuery->get();
+
+        $totalCostValuation = (float) $allItems->sum('stock_worth');
+        $totalRetailValuation = (float) $allItems->sum(fn($i) => (float)$i->price * ((int)$i->front_store_qty + (int)$i->back_store_qty));
+        $totalFrontUnits = (int) $allItems->sum('front_store_qty');
+        $totalBackUnits = (int) $allItems->sum('back_store_qty');
+        $totalUnits = $totalFrontUnits + $totalBackUnits;
+        $potentialProfit = $totalRetailValuation - $totalCostValuation;
+        $grossMarginPct = $totalRetailValuation > 0 ? round(($potentialProfit / $totalRetailValuation) * 100, 1) : 0;
+
+        // Top 5 highest-worth items
+        $topValuedItems = $allItems->sortByDesc('stock_worth')->take(5)->map(fn($i) => [
+            'item_name'       => $i->item_name,
+            'total_qty'       => (int) ($i->front_store_qty + $i->back_store_qty),
+            'cost_price'      => (float) $i->buy_price,
+            'retail_price'    => (float) $i->price,
+            'stock_worth'     => (float) $i->stock_worth,
+            'retail_worth'    => round((float)$i->price * ((int)$i->front_store_qty + (int)$i->back_store_qty), 2),
+        ])->values()->all();
+
+        return [
+            'intent'    => 'inventory_valuation',
+            'grounding' => 'Queried live items catalog computing cost valuation (stock_worth) and retail asset potential.',
+            'data'      => [
+                'scope'                  => $scopeName,
+                'type'                   => 'general_valuation',
+                'total_cost_valuation'   => round($totalCostValuation, 2),
+                'total_retail_valuation' => round($totalRetailValuation, 2),
+                'potential_gross_profit' => round($potentialProfit, 2),
+                'gross_margin_pct'       => $grossMarginPct,
+                'total_catalog_products' => $allItems->count(),
+                'total_units_in_stock'   => $totalUnits,
+                'front_store_units'      => $totalFrontUnits,
+                'back_store_units'       => $totalBackUnits,
+                'top_value_items'        => $topValuedItems,
+            ],
+        ];
+    }
+
+    /**
+     * Resolve customer debt queries, aging analysis (>30 days), and individual balance lookups.
+     */
+    protected static function resolveCustomerDebtAnalysis(string $q, ?Branch $branch, User $user, string $scopeName): array
+    {
+        // 1. Permission check: canManageDebt
+        $canManageDebt = self::userCan($user, 'canManageDebt') || self::userCan($user, 'canManageCustomers') || RoleService::canManageDebt();
+        if (!$canManageDebt) {
+            return [
+                'intent'    => 'permission_denied',
+                'grounding' => 'Enforced RBAC permission boundary for customer debt ledger and credit balances.',
+                'data'      => [
+                    'feature'             => 'Customer Debt Ledger',
+                    'required_permission' => 'canManageDebt',
+                    'message'             => 'You do not have permission to view customer debt balances or the debt ledger.',
+                ],
+            ];
+        }
+
+        // 2. Check if looking up a specific customer (e.g. "What's Felix's current balance?", "balance of John")
+        $matchedCustomer = null;
+        $customers = PosCustomer::when($branch, fn($query) => $query->where('branch_id', $branch->id))->get();
+        foreach ($customers as $c) {
+            if (
+                (!empty($c->name) && str_contains($q, strtolower($c->name))) ||
+                (!empty($c->phone) && str_contains($q, $c->phone))
+            ) {
+                $matchedCustomer = $c;
+                break;
+            }
+        }
+
+        if ($matchedCustomer) {
+            // Load ledger entries
+            $payments = DebtPayment::where('customer_id', $matchedCustomer->id)
+                ->with('user:id,name')
+                ->orderByDesc('created_at')
+                ->limit(5)
+                ->get();
+
+            $lastCredit = DebtPayment::where('customer_id', $matchedCustomer->id)
+                ->where('type', 'credit')
+                ->latest('created_at')
+                ->first();
+
+            $totalDebited = (float) DebtPayment::where('customer_id', $matchedCustomer->id)->where('type', 'debit')->sum('amount');
+            $totalCredited = (float) DebtPayment::where('customer_id', $matchedCustomer->id)->where('type', 'credit')->sum('amount');
+
+            return [
+                'intent'    => 'customer_debt_analysis',
+                'grounding' => 'Queried specific customer debt ledger and running balance history.',
+                'data'      => [
+                    'scope'                 => $scopeName,
+                    'type'                  => 'specific_customer',
+                    'customer_id'           => $matchedCustomer->id,
+                    'customer_name'         => $matchedCustomer->name,
+                    'phone'                 => $matchedCustomer->phone ?? 'N/A',
+                    'current_balance'       => (float) $matchedCustomer->debt_bal,
+                    'watch_list'            => (bool) $matchedCustomer->watch_list,
+                    'total_debited'         => $totalDebited,
+                    'total_credited'        => $totalCredited,
+                    'last_payment_date'     => $lastCredit ? $lastCredit->created_at->format('M j, Y h:i A') : 'No payments recorded',
+                    'last_payment_amount'   => $lastCredit ? (float)$lastCredit->amount : 0,
+                    'recent_ledger_history' => $payments->map(fn($p) => [
+                        'type'           => $p->type,
+                        'amount'         => (float) $p->amount,
+                        'balance_after'  => (float) $p->balance_after,
+                        'narration'      => $p->narration,
+                        'staff'          => $p->user?->name ?? 'Staff',
+                        'date'           => $p->created_at ? $p->created_at->format('Y-m-d H:i') : 'Recent',
+                    ])->values()->all(),
+                ],
+            ];
+        }
+
+        // 3. Overdue debt analysis: "Which customers haven't paid in over 30 days?"
+        $isOverdueQuery = str_contains($q, '30 days') ||
+                          str_contains($q, 'haven\'t paid') ||
+                          str_contains($q, 'havent paid') ||
+                          str_contains($q, 'not paid') ||
+                          str_contains($q, 'overdue');
+
+        $activeDebtorsQuery = PosCustomer::when($branch, fn($query) => $query->where('branch_id', $branch->id))
+            ->where('debt_bal', '>', 0);
+
+        $activeDebtors = $activeDebtorsQuery->get();
+        $totalOutstandingDebt = (float) $activeDebtors->sum('debt_bal');
+
+        // Debt recovered this month
+        $debtRecoveredMonth = (float) DebtPayment::when($branch, fn($query) => $query->where('branch_id', $branch->id))
+            ->where('type', 'credit')
+            ->whereMonth('created_at', now()->month)
+            ->whereYear('created_at', now()->year)
+            ->sum('amount');
+
+        // Analyze debtor aging (last payment date)
+        $enrichedDebtors = $activeDebtors->map(function ($d) {
+            $lastPayment = DebtPayment::where('customer_id', $d->id)
+                ->where('type', 'credit')
+                ->latest('created_at')
+                ->first();
+
+            $lastDate = $lastPayment ? $lastPayment->created_at : $d->created_at;
+            $daysSincePayment = $lastDate ? (int) $lastDate->diffInDays(now()) : 999;
+
+            return [
+                'customer_id'         => $d->id,
+                'customer_name'       => $d->name,
+                'phone'               => $d->phone ?? 'N/A',
+                'debt_bal'            => (float) $d->debt_bal,
+                'last_payment_date'   => $lastPayment ? $lastPayment->created_at->format('M j, Y') : 'Never Paid',
+                'days_since_payment'  => $daysSincePayment,
+                'is_overdue_30d'      => $daysSincePayment >= 30,
+            ];
+        });
+
+        if ($isOverdueQuery) {
+            $overdueList = $enrichedDebtors->filter(fn($d) => $d['is_overdue_30d'])->sortByDesc('debt_bal')->values()->all();
+            $overdueTotal = (float) array_sum(array_column($overdueList, 'debt_bal'));
+
+            return [
+                'intent'    => 'customer_debt_analysis',
+                'grounding' => 'Queried customer debt ledgers cross-referenced with 30-day payment activity timestamps.',
+                'data'      => [
+                    'scope'                 => $scopeName,
+                    'type'                  => 'overdue_30_days',
+                    'total_overdue_amount'  => $overdueTotal,
+                    'overdue_debtors_count' => count($overdueList),
+                    'total_debtors'         => $activeDebtors->count(),
+                    'overdue_debtors'       => $overdueList,
+                ],
+            ];
+        }
+
+        // Top debtors ranking / General debt overview
+        $topDebtors = $enrichedDebtors->sortByDesc('debt_bal')->take(10)->values()->all();
+
+        return [
+            'intent'    => 'customer_debt_analysis',
+            'grounding' => 'Aggregated outstanding customer balances, debt recovery rates, and debtor ledger rankings.',
+            'data'      => [
+                'scope'                 => $scopeName,
+                'type'                  => 'debt_overview',
+                'total_outstanding'     => $totalOutstandingDebt,
+                'debtors_count'         => $activeDebtors->count(),
+                'debt_recovered_month'  => $debtRecoveredMonth,
+                'top_debtors'           => $topDebtors,
+            ],
+        ];
+    }
+
+    /**
      * Generate fallback rich markdown summary when external AI provider is offline or not configured.
      */
     protected static function generateRuleBasedSummary(string $intent, array $payload, string $question): string
     {
         return match ($intent) {
+            'permission_denied'            => self::formatPermissionDeniedSummary($payload),
+            'receipt_lookup'               => self::formatReceiptLookupSummary($payload),
+            'held_sales_overview'          => self::formatHeldSalesSummary($payload),
+            'branch_expenses_overview'     => self::formatBranchExpensesSummary($payload),
+            'inventory_valuation'          => self::formatInventoryValuationSummary($payload),
+            'customer_debt_analysis'       => self::formatCustomerDebtSummary($payload),
             'item_specific_lookup'         => self::formatItemSpecificSummary($payload),
             'staff_activity_audit'         => self::formatStaffActivitySummary($payload),
             'suspicious_activity_audit'    => self::formatSuspiciousActivitySummary($payload),
@@ -1362,4 +2108,258 @@ USER_PROMPT;
         $out .= "- **Active Catalog**: Managing **{$p['total_products']} products** with **{$p['low_stock_count']} low-stock items** needing attention.";
         return $out;
     }
+
+    private static function formatPermissionDeniedSummary(array $p): string
+    {
+        $out = "### ⛔ Access Restricted\n\n";
+        $out .= $p['message'] . "\n\n";
+        if (!empty($p['required_permission'])) {
+            $out .= "*Under company security policy, this data requires the `{$p['required_permission']}` permission.*";
+        }
+        return $out;
+    }
+
+    private static function formatReceiptLookupSummary(array $p): string
+    {
+        if (empty($p['found'])) {
+            return "### 🔍 Receipt Lookup Result\n\n" . ($p['message'] ?? 'Receipt not found.');
+        }
+
+        $sale = $p['sale'];
+        $out = "### 🧾 Receipt Details: `{$sale['receipt_no']}`\n\n";
+        if (!empty($p['ai_summary'])) {
+            $out .= "> **Summary**: " . $p['ai_summary'] . "\n\n";
+        }
+
+        $out .= "#### 📋 Transaction Information\n\n";
+        $out .= "| Property | Details |\n";
+        $out .= "| :--- | :--- |\n";
+        $out .= "| **Store Branch** | {$sale['branch_name']} |\n";
+        $out .= "| **Date & Time** | {$sale['date_formatted']} ({$sale['date_human']}) |\n";
+        $out .= "| **Cashier** | {$sale['cashier_name']} |\n";
+        $out .= "| **Customer** | {$sale['customer_name']} (" . ($sale['customer_phone'] ?: 'N/A') . ") |\n";
+        $out .= "| **Payment Method** | **{$sale['payment_method']}** " . ($sale['is_debt'] ? '(Debt Sale)' : '') . " |\n";
+        if ($sale['offline_sale_id']) {
+            $out .= "| **Offline Sale UUID** | `{$sale['offline_sale_id']}` |\n";
+        }
+        $out .= "\n";
+
+        $out .= "#### 🛒 Purchased Line Items\n\n";
+        $out .= "| Item Name | Unit / Tier | Type | Qty | Unit Price (₦) | Total (₦) | IMEI / Serial |\n";
+        $out .= "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n";
+        foreach ($sale['items'] as $item) {
+            $imei = $item['imei_serial'] ? "`{$item['imei_serial']}`" : '—';
+            $out .= "| **{$item['item_name']}** | {$item['variant_unit']} | {$item['purchase_type']} | {$item['qty']} | ₦" . number_format($item['unit_price'], 2) . " | **₦" . number_format($item['total_price'], 2) . "** | {$imei} |\n";
+        }
+        $out .= "\n";
+
+        $out .= "#### 💳 Payment & Settlement Breakdown\n\n";
+        $out .= "- **Items Subtotal**: ₦" . number_format($sale['subtotal'], 2) . "\n";
+        if ($sale['discount_amount'] > 0) {
+            $out .= "- **Discount Applied**: **-₦" . number_format($sale['discount_amount'], 2) . "** ({$sale['discount_details']})\n";
+        }
+        if ($sale['tax_amount'] > 0) {
+            $out .= "- **Tax / VAT ({$sale['tax_percentage']}%)**: ₦" . number_format($sale['tax_amount'], 2) . "\n";
+        }
+        $out .= "- **Final Total Paid**: **₦" . number_format($sale['final_total'], 2) . "**\n";
+        if ($sale['cash_paid'] > 0) {
+            $out .= "- **Cash Tendered**: ₦" . number_format($sale['cash_paid'], 2) . ($sale['change_given'] > 0 ? " (Change Given: ₦" . number_format($sale['change_given'], 2) . ")" : '') . "\n";
+        }
+        if ($sale['bank_transfer'] > 0) {
+            $out .= "- **Bank Transfer**: ₦" . number_format($sale['bank_transfer'], 2) . "\n";
+        }
+
+        return $out;
+    }
+
+    private static function formatHeldSalesSummary(array $p): string
+    {
+        $out = "### ⏸️ Open Held Sales & Cart Holds\n\n";
+        $out .= "**Scope**: {$p['scope']} | **Filter**: {$p['filter']}\n\n";
+        $out .= "- **Currently Open Held Carts**: **{$p['total_held_sales']} open sales**\n";
+        $out .= "- **Total Value in Held Carts**: **₦" . number_format($p['total_held_value'], 2) . "**\n";
+        $out .= "- **Total Units on Hold**: **{$p['total_held_units']} pcs**\n\n";
+
+        if (!empty($p['held_sales_list'])) {
+            $out .= "#### 📑 Open Held Carts Directory\n\n";
+            $out .= "| Hold Reference | Customer | Cashier | Units | Cart Value (₦) | Held Since |\n";
+            $out .= "| :--- | :--- | :--- | :--- | :--- | :--- |\n";
+            foreach ($p['held_sales_list'] as $h) {
+                $out .= "| **{$h['hold_name']}** | {$h['customer_name']} | {$h['cashier_name']} | {$h['total_units']} pcs | **₦" . number_format($h['total_value'], 2) . "** | {$h['time_human']} |\n";
+            }
+            $out .= "\n";
+
+            $out .= "#### 📦 Cart Item Breakdowns\n\n";
+            foreach ($p['held_sales_list'] as $h) {
+                $out .= "- **{$h['hold_name']}** (by {$h['cashier_name']}): ";
+                $itemStrs = array_map(fn($it) => "{$it['qty']}x {$it['item_name']} (@ ₦" . number_format($it['price'], 2) . ")", $h['items_preview']);
+                $out .= implode(', ', $itemStrs) . "\n";
+            }
+        } else {
+            $out .= "No held sales match the specified filter at this time. All sales carts are settled or clear.";
+        }
+
+        return $out;
+    }
+
+    private static function formatBranchExpensesSummary(array $p): string
+    {
+        $out = "### 💸 Operating Expenses Report\n\n";
+        $out .= "**Scope**: {$p['scope']} | **Period**: {$p['period']}\n\n";
+        $out .= "- **Total Operating Expenses**: **₦" . number_format($p['total_expense'], 2) . "** across {$p['expense_count']} logged entries\n";
+        $out .= "- **Daily Average Spend**: **₦" . number_format($p['daily_average'], 2) . "/day**\n";
+        if ($p['category_filter'] !== 'All Categories') {
+            $out .= "- **Category Filter**: `{$p['category_filter']}`\n";
+        }
+        $out .= "\n";
+
+        if (!empty($p['comparative'])) {
+            $comp = $p['comparative'];
+            $diffSign = $comp['difference_amount'] >= 0 ? '+' : '';
+            $out .= "#### 📊 Period Comparison ({$comp['previous_period']})\n\n";
+            $out .= "- **Previous Period Total**: ₦" . number_format($comp['previous_total'], 2) . "\n";
+            $out .= "- **Variance / Change**: **{$diffSign}₦" . number_format($comp['difference_amount'], 2) . "** ({$diffSign}{$comp['difference_pct']}% - **{$comp['trend']}**)\n\n";
+        }
+
+        if (!empty($p['category_breakdown'])) {
+            $out .= "#### 🏷️ Expense Breakdown by Category\n\n";
+            $out .= "| Expense Category | Entries | Total Spent (₦) | Share of Budget |\n";
+            $out .= "| :--- | :--- | :--- | :--- |\n";
+            foreach ($p['category_breakdown'] as $c) {
+                $out .= "| **{$c['category_name']}** | {$c['count']} | ₦" . number_format($c['total_amount'], 2) . " | **{$c['percentage']}%** |\n";
+            }
+            $out .= "\n";
+        }
+
+        return $out;
+    }
+
+    private static function formatInventoryValuationSummary(array $p): string
+    {
+        $out = "### 💎 Inventory Valuation & Stock Asset Report\n\n";
+        $out .= "**Scope**: {$p['scope']}\n\n";
+
+        if ($p['type'] === 'specific_item') {
+            $out .= "## **{$p['item_name']}**\n";
+            $out .= "- **Barcode / SKU**: `{$p['barcode']}` | **Category**: {$p['category']}\n";
+            $out .= "- **Total Stock on Hand**: **{$p['total_stock_qty']} {$p['unit_label']}** (Shelf: {$p['front_store_qty']}, Warehouse: {$p['back_store_qty']})\n";
+            $out .= "- **Cost Price (Buy Cost)**: ₦" . number_format($p['buy_price'], 2) . " per unit\n";
+            $out .= "- **Retail Selling Price**: ₦" . number_format($p['selling_price'], 2) . " per unit\n\n";
+
+            $out .= "#### 💰 Valuation Metrics\n\n";
+            $out .= "| Asset Metric | Value (₦) |\n";
+            $out .= "| :--- | :--- |\n";
+            $out .= "| **Total Stock Worth (at Cost)** | **₦" . number_format($p['cost_valuation'], 2) . "** |\n";
+            $out .= "| **Total Potential Retail Value** | **₦" . number_format($p['retail_valuation'], 2) . "** |\n";
+            $out .= "| **Estimated Potential Gross Profit** | **₦" . number_format($p['potential_profit'], 2) . "** |\n";
+            $out .= "| **Projected Gross Margin** | **{$p['gross_margin_pct']}%** |\n\n";
+
+            if (!empty($p['cross_branch_stock'])) {
+                $out .= "#### 🏬 Stock Across Other Branches\n\n";
+                $out .= "| Branch Name | Shelf Stock | Warehouse Stock | Total Stock |\n";
+                $out .= "| :--- | :--- | :--- | :--- |\n";
+                foreach ($p['cross_branch_stock'] as $b) {
+                    $out .= "| {$b['branch_name']} | {$b['front_stock']} pcs | {$b['back_stock']} pcs | **{$b['total_stock']} pcs** |\n";
+                }
+            }
+            return $out;
+        }
+
+        if ($p['type'] === 'cross_branch_ranking') {
+            $out .= "#### 🏬 Inventory Valuation by Store Branch\n\n";
+            $out .= "- **Leading Branch**: **{$p['top_branch']}** (Carrying **₦" . number_format($p['top_branch_value'], 2) . "** in stock worth)\n";
+            $out .= "- **Total System Inventory Worth**: **₦" . number_format($p['total_system_cost_val'], 2) . "**\n\n";
+
+            $out .= "| Rank | Branch / Store | Products | Units in Stock | Cost Valuation (₦) | Retail Value (₦) |\n";
+            $out .= "| :--- | :--- | :--- | :--- | :--- | :--- |\n";
+            foreach ($p['branch_rankings'] as $b) {
+                $out .= "| #{$b['rank']} | **{$b['branch_name']}** | {$b['total_products']} | {$b['total_units']} pcs | **₦" . number_format($b['cost_valuation'], 2) . "** | ₦" . number_format($b['retail_valuation'], 2) . " |\n";
+            }
+            return $out;
+        }
+
+        // General valuation
+        $out .= "| Valuation Metric | Amount (₦) |\n";
+        $out .= "| :--- | :--- |\n";
+        $out .= "| **Total Stock Worth (at Cost)** | **₦" . number_format($p['total_cost_valuation'], 2) . "** |\n";
+        $out .= "| **Total Potential Retail Value** | **₦" . number_format($p['total_retail_valuation'], 2) . "** |\n";
+        $out .= "| **Potential Gross Profit** | **₦" . number_format($p['potential_gross_profit'], 2) . "** |\n";
+        $out .= "| **Projected Gross Margin** | **{$p['gross_margin_pct']}%** |\n\n";
+
+        $out .= "#### 📦 Stock Physical Volume\n\n";
+        $out .= "- **Total Catalog Products**: **{$p['total_catalog_products']} unique items**\n";
+        $out .= "- **Total Units in Stock**: **{$p['total_units_in_stock']} total physical pieces** (Front Shelf: {$p['front_store_units']} pcs, Back Warehouse: {$p['back_store_units']} pcs)\n\n";
+
+        if (!empty($p['top_value_items'])) {
+            $out .= "#### 🏆 Top 5 Highest-Valued Inventory Assets\n\n";
+            $out .= "| Item Name | Total Units | Cost Price (₦) | Total Cost Worth (₦) | Retail Value (₦) |\n";
+            $out .= "| :--- | :--- | :--- | :--- |\n";
+            foreach ($p['top_value_items'] as $item) {
+                $out .= "| **{$item['item_name']}** | {$item['total_qty']} pcs | ₦" . number_format($item['cost_price'], 2) . " | **₦" . number_format($item['stock_worth'], 2) . "** | ₦" . number_format($item['retail_worth'], 2) . " |\n";
+            }
+        }
+
+        return $out;
+    }
+
+    private static function formatCustomerDebtSummary(array $p): string
+    {
+        $out = "### 💳 Customer Debt Ledger & Credit Analysis\n\n";
+        $out .= "**Scope**: {$p['scope']}\n\n";
+
+        if ($p['type'] === 'specific_customer') {
+            $watchBadge = $p['watch_list'] ? ' ⚠️ *(Watchlist)*' : '';
+            $out .= "## **{$p['customer_name']}**{$watchBadge}\n";
+            $out .= "- **Phone Number**: {$p['phone']}\n";
+            $out .= "- **Current Outstanding Balance**: **₦" . number_format($p['current_balance'], 2) . "**\n";
+            $out .= "- **Lifetime Debited (Purchases/Charges)**: ₦" . number_format($p['total_debited'], 2) . "\n";
+            $out .= "- **Lifetime Credited (Payments)**: ₦" . number_format($p['total_credited'], 2) . "\n";
+            $out .= "- **Last Payment Received**: " . ($p['last_payment_amount'] > 0 ? "₦" . number_format($p['last_payment_amount'], 2) . " on " . $p['last_payment_date'] : $p['last_payment_date']) . "\n\n";
+
+            if (!empty($p['recent_ledger_history'])) {
+                $out .= "#### 📑 Recent Debt Ledger Entries\n\n";
+                $out .= "| Date | Type | Amount (₦) | Balance After (₦) | Staff | Narration |\n";
+                $out .= "| :--- | :--- | :--- | :--- | :--- | :--- |\n";
+                foreach ($p['recent_ledger_history'] as $e) {
+                    $typeBadge = $e['type'] === 'credit' ? '✅ Payment (Credit)' : '⚠️ Charge (Debit)';
+                    $out .= "| {$e['date']} | {$typeBadge} | ₦" . number_format($e['amount'], 2) . " | ₦" . number_format($e['balance_after'], 2) . " | {$e['staff']} | {$e['narration']} |\n";
+                }
+            }
+            return $out;
+        }
+
+        if ($p['type'] === 'overdue_30_days') {
+            $out .= "#### ⏰ Aging Debt Analysis (>30 Days Without Payment)\n\n";
+            $out .= "- **Total Overdue Debt (>30 Days)**: **₦" . number_format($p['total_overdue_amount'], 2) . "**\n";
+            $out .= "- **Overdue Customer Accounts**: **{$p['overdue_debtors_count']} customers** (out of {$p['total_debtors']} total debtors)\n\n";
+
+            if (!empty($p['overdue_debtors'])) {
+                $out .= "| Customer Name | Phone | Balance Owing (₦) | Last Payment | Days Overdue |\n";
+                $out .= "| :--- | :--- | :--- | :--- | :--- |\n";
+                foreach ($p['overdue_debtors'] as $d) {
+                    $out .= "| **{$d['customer_name']}** | {$d['phone']} | **₦" . number_format($d['debt_bal'], 2) . "** | {$d['last_payment_date']} | {$d['days_since_payment']} days ago |\n";
+                }
+            } else {
+                $out .= "No customer debts are overdue past 30 days! All debtor accounts have active recent payment activity.\n";
+            }
+            return $out;
+        }
+
+        // General debt overview
+        $out .= "- **Total Outstanding Debt**: **₦" . number_format($p['total_outstanding'], 2) . "**\n";
+        $out .= "- **Active Debtors**: **{$p['debtors_count']} customers**\n";
+        $out .= "- **Debt Recovered This Month**: **₦" . number_format($p['debt_recovered_month'], 2) . "**\n\n";
+
+        if (!empty($p['top_debtors'])) {
+            $out .= "#### 👥 Highest Outstanding Debt Balances\n\n";
+            $out .= "| Customer Name | Phone Number | Balance Owing (₦) | Last Payment Date |\n";
+            $out .= "| :--- | :--- | :--- | :--- |\n";
+            foreach ($p['top_debtors'] as $d) {
+                $out .= "| **{$d['customer_name']}** | {$d['phone']} | **₦" . number_format($d['balance_owing'], 2) . "** | {$d['last_payment_date']} |\n";
+            }
+        }
+
+        return $out;
+    }
 }
+

@@ -68,6 +68,7 @@ class SettingsController extends Controller
             'quick_access_category_ids.*' => 'integer',
             'is_price_editable'        => 'nullable|boolean',
             'is_qty_deduction'         => 'nullable|boolean',
+            'is_offline_qty_deduction' => 'nullable|boolean',
             'out_of_stock'             => 'required|integer|min:0',
             'is_check_expiration'      => 'nullable|boolean',
             'batch_tracking_enabled'   => 'nullable|boolean',

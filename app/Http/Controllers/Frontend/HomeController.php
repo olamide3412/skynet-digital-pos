@@ -7,11 +7,15 @@ use App\Models\Branch;
 use App\Models\Item;
 use App\Models\Sale;
 use App\Models\SystemSetting;
+use App\Models\PricingIncludedItem;
+use App\Models\PricingPlan;
+use App\Models\PricingSetting;
+use App\Models\PricingValueProp;
 use Inertia\Inertia;
 
 class HomeController extends Controller
 {
-    public function index()
+    private function getCommonData(): array
     {
         $defaultBranch = Branch::where('is_active', true)
             ->orderBy('id')
@@ -37,7 +41,30 @@ class HomeController extends Controller
         $companyName   = SystemSetting::get('company_name', 'Skynet Digital POS');
         $appTagline    = SystemSetting::get('app_tagline', 'AI-Powered Cloud & Offline Point of Sale');
 
-        return Inertia::render('Home', [
+        $pricingSettings = PricingSetting::current();
+        $pricingData = null;
+
+        if ($pricingSettings && $pricingSettings->show_pricing_section) {
+            $pricingPlans = PricingPlan::where('is_active', true)
+                ->with(['features' => function ($q) {
+                    $q->orderBy('sort_order');
+                }])
+                ->orderBy('sort_order')
+                ->get();
+
+            $includedItems = PricingIncludedItem::orderBy('sort_order')->get();
+            $valueProps = PricingValueProp::orderBy('sort_order')->get();
+
+            $pricingData = [
+                'enabled'        => true,
+                'settings'       => $pricingSettings,
+                'plans'          => $pricingPlans,
+                'included_items' => $includedItems,
+                'value_props'    => $valueProps,
+            ];
+        }
+
+        return [
             'default_branch' => $defaultBranchData,
             'stats'          => [
                 'items_count'      => $itemsCount,
@@ -48,9 +75,56 @@ class HomeController extends Controller
                 'clean_phone'    => $cleanPhone,
                 'email'          => SystemSetting::get('support_email', 'support@skynetdigitalltd.com'),
                 'whatsapp'       => $cleanPhone,
-                'company_name'   => $companyName,
-                'app_tagline'    => $appTagline,
+                'company_name'       => $companyName,
+                'company_short_name' => SystemSetting::get('company_short_name', 'Skynet'),
+                'app_tagline'        => $appTagline,
+                'address'            => SystemSetting::get('company_address', SystemSetting::get('business_address', 'Delta State, Nigeria')),
             ],
-        ]);
+            'pricing'        => $pricingData,
+        ];
+    }
+
+    public function index()
+    {
+        return Inertia::render('Home', $this->getCommonData());
+    }
+
+    public function features()
+    {
+        return Inertia::render('Features', $this->getCommonData());
+    }
+
+    public function industries()
+    {
+        return Inertia::render('Industries', $this->getCommonData());
+    }
+
+    public function pricing()
+    {
+        $data = $this->getCommonData();
+        if (!$data['pricing'] || !$data['pricing']['enabled']) {
+            return redirect()->route('home');
+        }
+        return Inertia::render('Pricing', $data);
+    }
+
+    public function terms()
+    {
+        return Inertia::render('Terms', $this->getCommonData());
+    }
+
+    public function privacy()
+    {
+        return Inertia::render('Privacy', $this->getCommonData());
+    }
+
+    public function refundPolicy()
+    {
+        return Inertia::render('RefundPolicy', $this->getCommonData());
+    }
+
+    public function security()
+    {
+        return Inertia::render('Security', $this->getCommonData());
     }
 }

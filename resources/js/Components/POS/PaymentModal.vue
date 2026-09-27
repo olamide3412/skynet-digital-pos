@@ -84,7 +84,28 @@ function getCartItemMultiplier(item) {
 
 const stockErrors = ref([])
 
+async function getEffectiveOfflineQtyDeduction() {
+    if (typeof props.settings?.is_offline_qty_deduction === 'boolean') {
+        return props.settings.is_offline_qty_deduction
+    }
+    try {
+        const rec = await db.settings.get('branch_settings')
+        if (rec?.value && typeof rec.value.is_offline_qty_deduction === 'boolean') {
+            return rec.value.is_offline_qty_deduction
+        }
+    } catch (e) {}
+    return false
+}
+
 async function validateCartStock() {
+    const isDeviceOffline = !isOnline.value || (typeof navigator !== 'undefined' && !navigator.onLine)
+    const isOfflineDeductionEnabled = await getEffectiveOfflineQtyDeduction()
+
+    // If device is offline and offline quantity deduction is disabled, skip offline validation
+    if (isDeviceOffline && !isOfflineDeductionEnabled) {
+        return []
+    }
+
     if (props.settings?.is_qty_deduction === false) return []
 
     const list = []
@@ -136,7 +157,8 @@ onMounted(async () => {
 })
 
 async function processOfflineSale(payload) {
-    if (props.settings?.is_qty_deduction !== false) {
+    const isOfflineDeductionEnabled = await getEffectiveOfflineQtyDeduction()
+    if (props.settings?.is_qty_deduction !== false && isOfflineDeductionEnabled) {
         const errorsList = await validateCartStock()
         if (errorsList.length > 0) {
             throw new Error(errorsList[0])
@@ -178,14 +200,16 @@ async function processOfflineSale(payload) {
     // Save locally into IndexedDB queue
     await queueOfflineSale(offlineSale)
 
-    // Update local cache: decrement front store stock and consume IMEIs
+    // Update local cache: decrement front store stock (if enabled) and consume IMEIs
     for (const item of cart.items) {
         if (item.selected_imei) {
             await consumeLocalImei(item.item_id, item.selected_imei)
         }
-        const mult = getCartItemMultiplier(item)
-        const baseQty = (Number(item.qty) || 1) * mult
-        await deductLocalStock(item.item_id, baseQty)
+        if (isOfflineDeductionEnabled) {
+            const mult = getCartItemMultiplier(item)
+            const baseQty = (Number(item.qty) || 1) * mult
+            await deductLocalStock(item.item_id, baseQty)
+        }
     }
 
     // Refresh pending count and queued list immediately so the UI updates live while offline
@@ -205,11 +229,16 @@ async function submitSale() {
         return
     }
 
+    const isDeviceOffline = !isOnline.value || (typeof navigator !== 'undefined' && !navigator.onLine)
+    const isOfflineDeductionEnabled = await getEffectiveOfflineQtyDeduction()
+
     if (props.settings?.is_qty_deduction !== false) {
-        stockErrors.value = await validateCartStock()
-        if (stockErrors.value.length > 0) {
-            errors.value = { sale: stockErrors.value[0] }
-            return
+        if (!(isDeviceOffline && !isOfflineDeductionEnabled)) {
+            stockErrors.value = await validateCartStock()
+            if (stockErrors.value.length > 0) {
+                errors.value = { sale: stockErrors.value[0] }
+                return
+            }
         }
     }
 
@@ -226,7 +255,6 @@ async function submitSale() {
     }
 
     // If terminal is offline and offline mode is enabled, immediately record locally with zero network delay
-    const isDeviceOffline = !isOnline.value || (typeof navigator !== 'undefined' && !navigator.onLine)
     if (props.settings?.is_offline_enabled && isDeviceOffline) {
         try {
             await processOfflineSale(payload)

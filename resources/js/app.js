@@ -239,17 +239,31 @@ createInertiaApp({
                         syncZiggyDefaults(currentSlug);
                     }
 
-                    if (params === undefined || params === null) {
-                        if (currentSlug) {
-                            params = { branch: currentSlug };
-                        }
-                    } else if (typeof params === 'object' && !Array.isArray(params)) {
-                        if (!params.branch && currentSlug) {
-                            params = { branch: currentSlug, ...params };
-                        }
-                    } else if (typeof params !== 'object') {
-                        if (currentSlug) {
-                            params = [currentSlug, params];
+                    const ziggyConfig = config || (typeof window !== 'undefined' ? window.Ziggy : null);
+                    const routeDef = ziggyConfig?.routes?.[name];
+                    const routeParams = routeDef?.parameters || [];
+                    const hasBranch = routeParams.includes('branch');
+                    const nonBranchParams = routeParams.filter(p => p !== 'branch');
+
+                    if (hasBranch) {
+                        if (params === undefined || params === null) {
+                            if (currentSlug) {
+                                params = { branch: currentSlug };
+                            }
+                        } else if (Array.isArray(params)) {
+                            if (params.length === 1 && nonBranchParams.length === 1) {
+                                params = { branch: currentSlug, [nonBranchParams[0]]: params[0] };
+                            }
+                        } else if (typeof params === 'object') {
+                            if (!params.branch && currentSlug) {
+                                params = { branch: currentSlug, ...params };
+                            }
+                        } else if (typeof params !== 'object') {
+                            if (nonBranchParams.length === 1) {
+                                params = { branch: currentSlug, [nonBranchParams[0]]: params };
+                            } else if (currentSlug) {
+                                params = { branch: currentSlug, id: params };
+                            }
                         }
                     }
                 }

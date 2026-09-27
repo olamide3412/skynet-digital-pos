@@ -15,7 +15,7 @@ class PosSettings extends Model
 
     protected $fillable = [
         'branch_id',
-        'is_price_editable', 'is_qty_deduction', 'out_of_stock',
+        'is_price_editable', 'is_qty_deduction', 'is_offline_qty_deduction', 'out_of_stock',
         'is_check_expiration', 'batch_tracking_enabled', 'expiry_alert_days', 'is_imei_enabled', 'is_offline_enabled', 'held_sales_visibility', 'is_turnstile_enabled', 'offline_receipt_prefix',
         'is_show_buy_price', 'is_use_profit_percentage',
         'is_tax_enabled', 'tax_percentage',
@@ -31,6 +31,7 @@ class PosSettings extends Model
         return [
             'is_price_editable'             => 'boolean',
             'is_qty_deduction'              => 'boolean',
+            'is_offline_qty_deduction'      => 'boolean',
             'is_check_expiration'           => 'boolean',
             'batch_tracking_enabled'        => 'boolean',
             'expiry_alert_days'             => 'integer',
@@ -91,6 +92,7 @@ class PosSettings extends Model
                 'out_of_stock'               => 25,
                 'batch_tracking_enabled'     => false,
                 'expiry_alert_days'          => 30,
+                'is_offline_qty_deduction'   => false,
                 'held_sales_visibility'      => 'device_only',
                 'receipt_paper_size'         => '80mm',
                 'receipt_printer_name'       => 'Default POS Printer',
@@ -115,6 +117,7 @@ class PosSettings extends Model
             return new static([
                 'is_price_editable'          => false,
                 'is_qty_deduction'           => true,
+                'is_offline_qty_deduction'   => false,
                 'is_check_expiration'        => true,
                 'is_show_buy_price'          => false,
                 'out_of_stock'               => 25,

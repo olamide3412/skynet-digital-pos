@@ -26,10 +26,16 @@ use App\Http\Controllers\Frontend\HomeController;
 
 use Illuminate\Support\Facades\Route;
 
-/* ══════════════════════════════════════════════════════════════════════════════
- *  PUBLIC & AUTH FALLBACK ROUTES
- * ══════════════════════════════════════════════════════════════════════════════ */
-Route::get('/', [HomeController::class, 'index'])->name('home');
+Route::get('/',                      [HomeController::class, 'index'])->name('home');
+Route::get('/features',              [HomeController::class, 'features'])->name('features');
+Route::get('/industries',            [HomeController::class, 'industries'])->name('industries');
+Route::get('/pricing',               [HomeController::class, 'pricing'])->name('pricing');
+Route::get('/terms',                 [HomeController::class, 'terms'])->name('terms');
+Route::get('/terms-and-conditions',  [HomeController::class, 'terms'])->name('terms.alias');
+Route::get('/privacy',               [HomeController::class, 'privacy'])->name('privacy');
+Route::get('/privacy-policy',        [HomeController::class, 'privacy'])->name('privacy.alias');
+Route::get('/refund-policy',         [HomeController::class, 'refundPolicy'])->name('refund-policy');
+Route::get('/security',              [HomeController::class, 'security'])->name('security');
 
 // PWA Service Worker & Web Manifest routes (guarantees HTTP 200 even if static routing is missed)
 Route::get('/sw.js', function () {
@@ -128,6 +134,8 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.toggle');
         Route::post('/branches/{branch}/toggle-offline', [BranchController::class, 'toggleOffline'])
             ->name('branches.toggle-offline');
+        Route::post('/branches/{branch}/toggle-offline-qty-deduction', [BranchController::class, 'toggleOfflineQtyDeduction'])
+            ->name('branches.toggle-offline-qty-deduction');
         Route::post('/branches/{branch}/toggle-turnstile', [BranchController::class, 'toggleTurnstile'])
             ->name('branches.toggle-turnstile');
         Route::post('/branches/{branch}/toggle-ai', [BranchController::class, 'toggleAi'])
@@ -225,6 +233,21 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
         // Mail Server Configuration
         Route::post('settings/mail',      [\App\Http\Controllers\SuperAdmin\SystemSettingController::class, 'updateMail'])->name('settings.mail');
         Route::post('settings/mail/test', [\App\Http\Controllers\SuperAdmin\SystemSettingController::class, 'testMail'])->name('settings.mail.test');
+
+        // Pricing Plans & Marketing Homepage Content Management
+        Route::prefix('pricing-plans')->name('pricing-plans.')->group(function () {
+            Route::get('/',                           [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'index'])->name('index');
+            Route::post('/plans',                     [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'storePlan'])->name('plans.store');
+            Route::put('/plans/{plan}',               [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'updatePlan'])->name('plans.update');
+            Route::delete('/plans/{plan}',            [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'destroyPlan'])->name('plans.destroy');
+            Route::post('/plans/{plan}/toggle',       [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'togglePlan'])->name('plans.toggle');
+            Route::post('/plans/{plan}/highlight',    [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'toggleHighlight'])->name('plans.highlight');
+            Route::post('/plans/reorder',             [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'reorderPlans'])->name('plans.reorder');
+            Route::put('/settings',                   [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'updateSettings'])->name('settings.update');
+            Route::post('/toggle-section',            [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'togglePricingSection'])->name('toggle-section');
+            Route::put('/included-items',             [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'updateIncludedItems'])->name('included-items.update');
+            Route::put('/value-props',                [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'updateValueProps'])->name('value-props.update');
+        });
     });
 });
 

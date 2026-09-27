@@ -310,6 +310,7 @@ const settingsForm = useForm({
     offline_receipt_prefix: props.settings?.offline_receipt_prefix || 'OFF',
     is_price_editable: Boolean(props.settings?.is_price_editable),
     is_qty_deduction: Boolean(props.settings?.is_qty_deduction),
+    is_offline_qty_deduction: Boolean(props.settings?.is_offline_qty_deduction),
     out_of_stock: Number(props.settings?.out_of_stock ?? 25),
     is_check_expiration: Boolean(props.settings?.is_check_expiration),
     batch_tracking_enabled: Boolean(props.settings?.batch_tracking_enabled),
@@ -685,6 +686,7 @@ const submitCsvImport = () => {
 const formatNaira = (val) => new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(val || 0)
 const toggleBranchStatus = () => router.post(route('superadmin.branches.toggle', { branch: props.branch.slug }))
 const toggleBranchOffline = () => router.post(route('superadmin.branches.toggle-offline', { branch: props.branch.slug }))
+const toggleBranchOfflineQty = () => router.post(route('superadmin.branches.toggle-offline-qty-deduction', { branch: props.branch.slug }))
 const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', { branch: props.branch.slug }))
 </script>
 
@@ -750,6 +752,14 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                 <span class="w-1.5 h-1.5 rounded-full" :class="settings.is_offline_enabled ? 'bg-indigo-500' : 'bg-slate-400'"></span>
                                 {{ settings.is_offline_enabled ? 'Offline Sales Active' : 'Offline Disabled' }}
                             </span>
+                            <span
+                                v-if="settings.is_offline_enabled"
+                                :class="settings.is_offline_qty_deduction ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30' : 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/30'"
+                                class="px-2.5 py-0.5 rounded-full text-xs font-semibold border flex items-center gap-1"
+                            >
+                                <span class="w-1.5 h-1.5 rounded-full" :class="settings.is_offline_qty_deduction ? 'bg-emerald-500' : 'bg-amber-500'"></span>
+                                {{ settings.is_offline_qty_deduction ? 'Offline Stock Deduction Active' : 'Offline Stock Deduction Skipped' }}
+                            </span>
                         </div>
 
                         <!-- Full Shareable Link & Contact Row -->
@@ -811,6 +821,15 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                         class="px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer"
                     >
                         {{ settings.is_offline_enabled ? 'Disable Offline' : 'Enable Offline' }}
+                    </button>
+                    <button
+                        v-if="settings.is_offline_enabled"
+                        @click="toggleBranchOfflineQty"
+                        :class="settings.is_offline_qty_deduction ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900 hover:bg-amber-100' : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900 hover:bg-emerald-100'"
+                        class="px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer"
+                        :title="settings.is_offline_qty_deduction ? 'Click to skip offline quantity deduction' : 'Click to enforce offline quantity deduction'"
+                    >
+                        {{ settings.is_offline_qty_deduction ? 'Skip Offline Qty Deduction' : 'Enforce Offline Qty Deduction' }}
                     </button>
                     <button
                         type="button"
@@ -1268,6 +1287,18 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                 />
                             </div>
 
+                            <div class="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                                <div class="pr-4">
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Local Quantity Deduction when Offline</div>
+                                    <div class="text-[11px] text-slate-500">Enforce stock validation on Payment Modal and deduct local inventory when offline. Uncheck to skip offline quantity deduction (server validates stock during sync).</div>
+                                </div>
+                                <input
+                                    v-model="settingsForm.is_offline_qty_deduction"
+                                    type="checkbox"
+                                    class="w-5 h-5 rounded text-indigo-600 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer shrink-0"
+                                />
+                            </div>
+
                             <div>
                                 <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Held Sales Visibility Mode</label>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
@@ -1528,6 +1559,13 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                         <label class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
                             <input v-model="settingsForm.is_qty_deduction" type="checkbox" class="w-4 h-4 rounded text-indigo-600" />
                             <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Auto Deduct Stock Qty on Sale</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                            <input v-model="settingsForm.is_offline_qty_deduction" type="checkbox" class="w-4 h-4 rounded text-indigo-600" />
+                            <div>
+                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Deduct Qty When Offline</span>
+                                <p class="text-[10px] text-slate-400">Enforce local stock limit & deduction offline.</p>
+                            </div>
                         </label>
                         <label class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
                             <input v-model="settingsForm.is_show_buy_price" type="checkbox" class="w-4 h-4 rounded text-indigo-600" />

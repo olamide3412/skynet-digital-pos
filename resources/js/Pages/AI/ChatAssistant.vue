@@ -75,13 +75,16 @@ const selectedBranchId = ref(props.branch?.id || '')
 const messagesContainer = ref(null)
 
 const suggestedPrompts = [
+    "How many held sales are currently open?",
+    "What were my expenses this month?",
+    "What's my total inventory worth right now?",
+    "Which customers owe the most right now?",
+    "Which customers haven't paid in over 30 days?",
     "Who performed most among our cashiers and staff this month?",
     "Check if there is any suspicious activity, high discounts, or fraud risks",
     "Is our business growing and at what rate?",
     "Analyze our rate of sale, peak rush hours, and payment method distribution",
     "What are our top 8 selling items and profit margins?",
-    "Show total outstanding customer debt and recovery health",
-    "Is any inventory item running low or out of stock?",
     "Show total tax collected this month",
 ]
 

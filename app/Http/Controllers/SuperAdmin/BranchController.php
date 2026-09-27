@@ -69,6 +69,7 @@ class BranchController extends Controller
             'phone'              => 'nullable|string|max:50',
             'email'              => 'nullable|email|max:255',
             'is_offline_enabled'   => 'nullable|boolean',
+            'is_offline_qty_deduction' => 'nullable|boolean',
             'held_sales_visibility'=> 'nullable|string|in:device_only,shared_across_branch',
             'is_turnstile_enabled' => 'nullable|boolean',
             // Branch Admin account details
@@ -114,6 +115,9 @@ class BranchController extends Controller
             }
             if (!empty($data['held_sales_visibility'])) {
                 $settingsUpdates['held_sales_visibility'] = $data['held_sales_visibility'];
+            }
+            if (isset($data['is_offline_qty_deduction'])) {
+                $settingsUpdates['is_offline_qty_deduction'] = (bool)$data['is_offline_qty_deduction'];
             }
             if (isset($data['is_turnstile_enabled'])) {
                 $settingsUpdates['is_turnstile_enabled'] = (bool)$data['is_turnstile_enabled'];
@@ -413,6 +417,7 @@ class BranchController extends Controller
             'offline_receipt_prefix'   => 'nullable|string|max:10',
             'is_price_editable'        => 'required|boolean',
             'is_qty_deduction'         => 'required|boolean',
+            'is_offline_qty_deduction' => 'nullable|boolean',
             'out_of_stock'             => 'required|integer|min:0',
             'is_check_expiration'      => 'required|boolean',
             'batch_tracking_enabled'   => 'nullable|boolean',
@@ -512,6 +517,25 @@ class BranchController extends Controller
         );
 
         return back()->with('success', "Cloudflare Turnstile CAPTCHA {$status} for {$branch->name}.");
+    }
+
+    /**
+     * Toggle branch local offline quantity deduction requirement.
+     */
+    public function toggleOfflineQtyDeduction(Branch $branch)
+    {
+        $settings = $branch->getSettings();
+        $newState = !($settings->is_offline_qty_deduction ?? false);
+        $settings->update(['is_offline_qty_deduction' => $newState]);
+        $status = $newState ? 'enabled (strict offline stock validation)' : 'skipped (offline sales proceed; verified on sync)';
+
+        ActivityLogger::log(
+            'setting',
+            "Super Admin set offline quantity deduction to {$status} for branch '{$branch->name}'",
+            $branch->id
+        );
+
+        return back()->with('success', "Offline quantity deduction {$status} for {$branch->name}.");
     }
 
     /**

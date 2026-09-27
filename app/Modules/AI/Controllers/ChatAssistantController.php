@@ -15,6 +15,10 @@ class ChatAssistantController extends Controller
     public function index(Request $request, $branchParam = null)
     {
         $user = auth()->user();
+        if ($user && $user->isCashier() && !$user->isSuperAdmin() && !$user->isBranchAdmin()) {
+            abort(403, 'Cashiers do not have access to the AI Chat Assistant.');
+        }
+
         if (!$user->is_super_admin) {
             $branch = current_branch() ?: ($user->branch_id ? Branch::find($user->branch_id) : null);
         } else {
@@ -78,6 +82,10 @@ class ChatAssistantController extends Controller
         ]);
 
         $user = auth()->user();
+        if ($user && $user->isCashier() && !$user->isSuperAdmin() && !$user->isBranchAdmin()) {
+            abort(403, 'Cashiers do not have access to the AI Chat Assistant.');
+        }
+
         if (!$user->is_super_admin) {
             $branch = current_branch() ?: ($user->branch_id ? Branch::find($user->branch_id) : null);
         } else {

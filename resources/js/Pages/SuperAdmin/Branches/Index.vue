@@ -19,6 +19,7 @@ const form = useForm({
     phone: '',
     email: '',
     is_offline_enabled: false,
+    is_offline_qty_deduction: false,
     held_sales_visibility: 'device_only',
     is_turnstile_enabled: true,
     admin_name: '',
@@ -505,6 +506,14 @@ const triggerExport = () => {
                                 <div>
                                     <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Enable Offline Sales Mode (PWA)</span>
                                     <p class="text-[11px] text-slate-500 dark:text-slate-400">Allows cashiers at this branch to sell and print receipts when offline</p>
+                                </div>
+                            </label>
+
+                            <label v-if="form.is_offline_enabled" class="flex items-center gap-2.5 cursor-pointer pl-6">
+                                <input v-model="form.is_offline_qty_deduction" type="checkbox" class="w-4 h-4 accent-indigo-600 rounded cursor-pointer" />
+                                <div>
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Local Quantity Deduction when Offline</span>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Validate and deduct stock locally when offline; uncheck to skip local quantity deduction</p>
                                 </div>
                             </label>
 

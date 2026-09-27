@@ -116,6 +116,8 @@ class OfflineSyncController extends Controller
             ],
             'settings' => [
                 'is_offline_enabled'      => (bool) $settings->is_offline_enabled,
+                'is_qty_deduction'        => (bool) $settings->is_qty_deduction,
+                'is_offline_qty_deduction'=> (bool) $settings->is_offline_qty_deduction,
                 'held_sales_visibility'  => $settings->held_sales_visibility ?: 'device_only',
                 'offline_receipt_prefix' => $settings->offline_receipt_prefix ?: 'OFF',
                 'is_tax_enabled'          => (bool) $settings->is_tax_enabled,

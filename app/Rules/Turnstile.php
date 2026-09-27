@@ -17,7 +17,11 @@ class Turnstile implements ValidationRule
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {
-       try {
+        if (app()->environment('local', 'testing') && (empty($value) || $value === 'dummy' || config('services.turnstile.secret_key') === '1x0000000000000000000000000000000AA')) {
+            return;
+        }
+
+        try {
             $response = Http::asForm()->timeout(10)->post('https://challenges.cloudflare.com/turnstile/v0/siteverify', [
                 'secret' => config('services.turnstile.secret_key'),
                 'response' => $value,
