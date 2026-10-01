@@ -20,7 +20,7 @@ class HeldSaleController extends Controller
         $settings = $branch ? PosSettings::forBranch($branch->id) : null;
         $isShared = ($settings?->held_sales_visibility === 'shared_across_branch');
 
-        $query = HeldSale::with(['items.item', 'customer'])
+        $query = HeldSale::with(['items.item', 'customer', 'user'])
             ->where('status', 'Held');
 
         if ($branch) {
@@ -38,6 +38,13 @@ class HeldSaleController extends Controller
                 'held_sale_id'   => $held->held_sale_uuid ?: (string) $held->id,
                 'held_sale_uuid' => $held->held_sale_uuid,
                 'hold_name'      => $held->hold_name,
+                'user_id'        => $held->user_id,
+                'cashier_name'   => $held->cashier_display_name,
+                'user'           => $held->user ? [
+                    'id'        => $held->user->id,
+                    'name'      => $held->user->name,
+                    'full_name' => $held->user->full_name ?? $held->user->name,
+                ] : null,
                 'customer_id'    => $held->customer_id,
                 'customer'       => $held->customer ? [
                     'id'    => $held->customer->id,
@@ -70,17 +77,19 @@ class HeldSaleController extends Controller
     public function apiStore(Request $request, $branchParam = null)
     {
         $data = $request->validate([
-            'held_sale_id'          => 'nullable|string|max:100',
-            'held_sale_uuid'        => 'nullable|string|max:100',
-            'hold_name'             => 'nullable|string|max:255',
-            'customer_id'           => 'nullable|integer|exists:pos_customers,id',
-            'items'                 => 'required|array|min:1',
-            'items.*.item_id'       => 'required|integer|exists:items,id',
-            'items.*.qty'           => 'required|integer|min:1',
-            'items.*.price'         => 'required|numeric|min:0',
-            'items.*.unit_used'     => 'nullable|string|max:100',
-            'items.*.item_name'     => 'nullable|string',
-            'items.*.purchase_type' => 'nullable|in:Wholesale,Consumer',
+            'held_sale_id'              => 'nullable|string|max:100',
+            'held_sale_uuid'            => 'nullable|string|max:100',
+            'hold_name'                 => 'nullable|string|max:255',
+            'user_id'                   => 'nullable|integer',
+            'cashier_name'              => 'nullable|string|max:150',
+            'customer_id'               => 'nullable|integer|exists:pos_customers,id',
+            'items'                     => 'required|array|min:1',
+            'items.*.item_id'           => 'required|integer|exists:items,id',
+            'items.*.qty'               => 'required|integer|min:1',
+            'items.*.price'             => 'required|numeric|min:0',
+            'items.*.unit_used'         => 'nullable|string|max:100',
+            'items.*.item_name'         => 'nullable|string',
+            'items.*.purchase_type'     => 'nullable|in:Wholesale,Consumer',
             'items.*.imei_or_device_id' => 'nullable|string|max:100',
         ]);
 
@@ -88,20 +97,26 @@ class HeldSaleController extends Controller
         $heldSaleUuid = $data['held_sale_uuid'] ?? $data['held_sale_id'] ?? (string) Str::uuid();
 
         $held = DB::transaction(function () use ($data, $branch, $heldSaleUuid) {
+            $authUser = Auth::user();
+            $cashierName = $data['cashier_name'] ?? ($authUser?->full_name ?: ($authUser?->name ?: 'Staff'));
+            $userId = $data['user_id'] ?? Auth::id() ?: 1;
+
             $heldSale = HeldSale::where('held_sale_uuid', $heldSaleUuid)->first();
 
             if ($heldSale) {
                 $heldSale->update([
-                    'hold_name'   => $data['hold_name'] ?? $heldSale->hold_name,
-                    'status'      => 'Held',
-                    'customer_id' => $data['customer_id'] ?? null,
+                    'hold_name'    => $data['hold_name'] ?? $heldSale->hold_name,
+                    'status'       => 'Held',
+                    'customer_id'  => $data['customer_id'] ?? null,
+                    'cashier_name' => $cashierName,
                 ]);
                 $heldSale->items()->delete();
             } else {
                 $heldSale = HeldSale::create([
                     'branch_id'      => $branch?->id,
                     'held_sale_uuid' => $heldSaleUuid,
-                    'user_id'        => Auth::id() ?: 1,
+                    'user_id'        => $userId,
+                    'cashier_name'   => $cashierName,
                     'hold_name'      => $data['hold_name'] ?? null,
                     'status'         => 'Held',
                     'customer_id'    => $data['customer_id'] ?? null,
@@ -121,7 +136,7 @@ class HeldSaleController extends Controller
                 ]);
             }
 
-            return $heldSale->load(['items.item', 'customer']);
+            return $heldSale->load(['items.item', 'customer', 'user']);
         });
 
         return response()->json([
@@ -129,6 +144,13 @@ class HeldSaleController extends Controller
             'held_sale_id'   => $held->held_sale_uuid ?: (string) $held->id,
             'held_sale_uuid' => $held->held_sale_uuid,
             'hold_name'      => $held->hold_name,
+            'user_id'        => $held->user_id,
+            'cashier_name'   => $held->cashier_display_name,
+            'user'           => $held->user ? [
+                'id'        => $held->user->id,
+                'name'      => $held->user->name,
+                'full_name' => $held->user->full_name ?? $held->user->name,
+            ] : null,
             'customer_id'    => $held->customer_id,
             'customer'       => $held->customer,
             'items'          => $held->items,
@@ -190,19 +212,34 @@ class HeldSaleController extends Controller
                     continue;
                 }
 
+                $targetUserId = $holdData['user_id'] ?? $holdData['cashier_id'] ?? null;
+                $resolvedUserId = ($targetUserId && \App\Models\User::where('id', $targetUserId)->exists())
+                    ? (int) $targetUserId
+                    : (Auth::id() ?: 1);
+
+                $cashierName = $holdData['cashier_name']
+                    ?? (Auth::user()?->full_name ?: (Auth::user()?->name ?: null));
+
+                if (!$cashierName && $resolvedUserId) {
+                    $userRecord = \App\Models\User::find($resolvedUserId);
+                    $cashierName = $userRecord?->full_name ?: ($userRecord?->name ?: 'Staff');
+                }
+
                 $heldSale = HeldSale::where('held_sale_uuid', $uuid)->first();
                 if ($heldSale) {
                     $heldSale->update([
-                        'hold_name'   => $holdData['hold_name'] ?? $heldSale->hold_name,
-                        'status'      => 'Held',
-                        'customer_id' => $holdData['customer_id'] ?? $heldSale->customer_id,
+                        'hold_name'    => $holdData['hold_name'] ?? $heldSale->hold_name,
+                        'status'       => 'Held',
+                        'customer_id'  => $holdData['customer_id'] ?? $heldSale->customer_id,
+                        'cashier_name' => $cashierName ?: $heldSale->cashier_name,
                     ]);
                     $heldSale->items()->delete();
                 } else {
                     $heldSale = HeldSale::create([
                         'branch_id'      => $branch?->id,
                         'held_sale_uuid' => $uuid,
-                        'user_id'        => Auth::id() ?: ($holdData['cashier_id'] ?? 1),
+                        'user_id'        => $resolvedUserId,
+                        'cashier_name'   => $cashierName ?: 'Staff',
                         'hold_name'      => $holdData['hold_name'] ?? null,
                         'status'         => 'Held',
                         'customer_id'    => $holdData['customer_id'] ?? null,

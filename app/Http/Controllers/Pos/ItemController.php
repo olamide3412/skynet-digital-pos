@@ -216,16 +216,22 @@ class ItemController extends Controller
         $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
         $this->authorizeBranch($item, $branch);
 
+        $totalBatchesCount  = $item->batches()->count();
+        $activeBatchesTotal = (int) $item->batches()->where('status', 'active')->sum('quantity');
+        $actualStock        = ((int) ($item->front_store_qty ?? 0)) + ((int) ($item->back_store_qty ?? 0));
+        $batchVariance      = $actualStock - $activeBatchesTotal;
+
         $item->load([
             'category',
             'units',
-            'batches' => fn($q) => $q->orderBy('expiry_date', 'asc'),
+            'batches' => fn($q) => $q->orderBy('expiry_date', 'asc')->take(5),
         ]);
 
         return Inertia::render('Items/Edit', [
             'item' => array_merge($item->toArray(), [
-                'active_batches_total' => $item->active_batches_total,
-                'batch_variance'       => $item->batch_variance,
+                'active_batches_total' => $activeBatchesTotal,
+                'batch_variance'       => $batchVariance,
+                'total_batches_count'  => $totalBatchesCount,
             ]),
             'categories' => \App\Models\Category::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),

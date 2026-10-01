@@ -5,6 +5,7 @@ import PosLayout from '@/Layouts/PosLayout.vue'
 import dayjs from 'dayjs'
 import { useCurrency } from '@/Composables/useCurrency'
 import CreateBatchModal from '@/Components/CreateBatchModal.vue'
+import PaginationLinks from '@/Components/PaginationLinks.vue'
 
 defineOptions({ layout: PosLayout })
 
@@ -138,24 +139,41 @@ function exportExcel() {
     <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
         <!-- Header -->
         <div class="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
-            <div>
-                <h1 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
-                    <span>💊</span>
-                    <span>Item Expiry & Batch Overview</span>
-                </h1>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                    Track soonest-expiring stock, audit untracked variances, and monitor batch synchronization
-                </p>
+            <div class="flex items-center gap-3">
+                <Link :href="route('pos.reports.index')" class="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                </Link>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-violet-100 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 text-sm">
+                            🏷️
+                        </span>
+                        <h1 class="text-xl font-bold text-slate-900 dark:text-white">Batch Expiry Report</h1>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-violet-100 text-violet-700 dark:bg-violet-950/60 dark:text-violet-300 border border-violet-200 dark:border-violet-800">
+                            Lot & Batch Tracking
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Track batch lot shelf-life, audit untracked inventory variances, and monitor batch synchronization.
+                    </p>
+                </div>
             </div>
 
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 flex-wrap">
+                <Link
+                    :href="route('pos.reports.item-expiry', { branch: branchSlug })"
+                    class="px-3 py-1.5 bg-amber-50 dark:bg-amber-950/40 hover:bg-amber-100 dark:hover:bg-amber-900/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition"
+                >
+                    <span>📦 Switch to Item Expiry Report</span>
+                </Link>
+
                 <button
                     type="button"
                     @click="exportExcel"
-                    class="px-3.5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl border border-slate-300 dark:border-slate-600 transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 transition shadow-xs cursor-pointer"
                 >
-                    <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    Export Excel
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    <span>Export Excel</span>
                 </button>
             </div>
         </div>
@@ -482,6 +500,11 @@ function exportExcel() {
                         </tbody>
                     </table>
                 </div>
+
+                <!-- Sync Issues Pagination -->
+                <div v-if="sync_issues?.links && (sync_issues.total > sync_issues.per_page || sync_issues.links.length > 3)" class="border-t border-slate-200 dark:border-slate-700">
+                    <PaginationLinks :links="sync_issues.links" :meta="sync_issues.meta ?? sync_issues" />
+                </div>
             </div>
 
             <!-- TABS: All Batches / Expiring Soon / Expired -->
@@ -558,6 +581,11 @@ function exportExcel() {
                         </tr>
                     </tbody>
                 </table>
+
+                <!-- Batches Pagination -->
+                <div v-if="batches?.links && (batches.total > batches.per_page || batches.links.length > 3)" class="border-t border-slate-200 dark:border-slate-700">
+                    <PaginationLinks :links="batches.links" :meta="batches.meta ?? batches" />
+                </div>
             </div>
         </div>
 

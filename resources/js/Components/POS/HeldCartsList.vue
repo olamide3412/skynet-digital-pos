@@ -44,6 +44,19 @@ const formattedLastRefresh = computed(() => {
     }
 })
 
+function formatHoldDate(dateStr) {
+    if (!dateStr) return ''
+    try {
+        const d = new Date(dateStr)
+        const now = new Date()
+        const isToday = d.toDateString() === now.toDateString()
+        const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        return isToday ? `Today at ${timeStr}` : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${timeStr}`
+    } catch {
+        return ''
+    }
+}
+
 async function onRefreshClick() {
     if (!isOnline.value) {
         alert('You are currently offline. Held sales are loaded from your local device storage.')
@@ -150,7 +163,7 @@ async function discardCart(held) {
                                 Wholesale
                             </span>
                         </div>
-                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <div class="text-xs text-slate-500 dark:text-slate-400 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                             <span class="font-medium text-slate-700 dark:text-slate-300">
                                 {{ held.items?.length || 0 }} {{ (held.items?.length === 1) ? 'item' : 'items' }}
                             </span>
@@ -159,6 +172,14 @@ async function discardCart(held) {
                             </span>
                             <span v-if="held.customer_name || held.customer?.name" class="text-slate-600 dark:text-slate-300">
                                 · 👤 {{ held.customer_name || held.customer?.name }}
+                            </span>
+                            <!-- Created by Cashier Badge -->
+                            <span class="inline-flex items-center gap-1 text-[11px] font-medium text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/60 px-2 py-0.5 rounded-md border border-violet-200/70 dark:border-violet-800/60">
+                                <span class="text-violet-500 dark:text-violet-400">👤 Held by:</span>
+                                <span class="font-bold">{{ held.cashier_name || 'Staff' }}</span>
+                            </span>
+                            <span v-if="held.created_at" class="text-slate-400 dark:text-slate-500 text-[10px]">
+                                · 🕒 {{ formatHoldDate(held.created_at) }}
                             </span>
                         </div>
                     </div>

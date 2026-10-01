@@ -159,6 +159,7 @@ class Branch extends Model
                     'canManageExpenses',
                     'canViewExpenseReports',
                     'canViewExpiryReport',
+                    'canViewBatchExpiryReport',
                 ])->get();
             if ($managerPerms->isNotEmpty()) {
                 $managerRole->syncPermissions($managerPerms);
@@ -180,6 +181,8 @@ class Branch extends Model
                     'canManagePurchases',
                     'canManageItems',
                     'canManageBarcodes',
+                    'canViewExpiryReport',
+                    'canViewBatchExpiryReport',
                 ])->get();
             if ($inventoryPerms->isNotEmpty()) {
                 $inventoryRole->syncPermissions($inventoryPerms);

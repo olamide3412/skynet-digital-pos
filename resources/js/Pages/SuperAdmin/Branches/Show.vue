@@ -167,6 +167,7 @@ watch(() => userForm.role, (newRole) => {
             'canManageExpenses',
             'canViewExpenseReports',
             'canViewExpiryReport',
+            'canViewBatchExpiryReport',
         ]
     } else if (newRole === 'inventory-manager') {
         userForm.permissions = [
@@ -177,6 +178,7 @@ watch(() => userForm.role, (newRole) => {
             'canManageItems',
             'canManageBarcodes',
             'canViewExpiryReport',
+            'canViewBatchExpiryReport',
         ]
     }
 }, { immediate: true })

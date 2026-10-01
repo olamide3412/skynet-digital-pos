@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import { usePage } from '@inertiajs/vue3'
 import { useCartStore } from '@/Stores/cart'
 import { usePosSettingsStore } from '@/Stores/posSettings'
 import { saveLocalHeldSale } from '@/Services/offlineDb'
@@ -10,6 +11,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'held'])
+const page = usePage()
 const cart = useCartStore()
 const settStore = usePosSettingsStore()
 const { isOnline, updateHeldSales, syncHeldSales } = useOfflineSync()
@@ -17,6 +19,34 @@ const { isOnline, updateHeldSales, syncHeldSales } = useOfflineSync()
 const holdName = ref('')
 const saving = ref(false)
 const error = ref('')
+
+function getCurrentCashier() {
+    const u = page?.props?.auth?.user
+    if (u) {
+        try {
+            localStorage.setItem('pos_active_cashier', JSON.stringify({
+                id: u.id,
+                name: u.name,
+                full_name: u.full_name || u.name,
+            }))
+        } catch (e) {}
+        return {
+            id: u.id,
+            name: u.full_name || u.name || 'Cashier',
+        }
+    }
+    try {
+        const cached = localStorage.getItem('pos_active_cashier')
+        if (cached) {
+            const parsed = JSON.parse(cached)
+            return {
+                id: parsed.id ?? null,
+                name: parsed.full_name || parsed.name || 'Cashier',
+            }
+        }
+    } catch (e) {}
+    return { id: null, name: 'Cashier' }
+}
 
 async function holdCart() {
     if (!cart.items.length) return
@@ -29,10 +59,14 @@ async function holdCart() {
             : 'held_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6)
 
         const visibilityMode = props.settings?.held_sales_visibility || settStore.settings?.held_sales_visibility || 'device_only'
+        const cashier = getCurrentCashier()
 
         const heldPayload = {
             held_sale_id:     heldSaleId,
             hold_name:        holdName.value.trim() || 'Held Cart',
+            user_id:          cashier.id,
+            cashier_id:       cashier.id,
+            cashier_name:     cashier.name,
             customer:         cart.customer ? JSON.parse(JSON.stringify(cart.customer)) : null,
             customer_id:      cart.customer?.id ?? null,
             customer_name:    cart.customer?.name ?? null,

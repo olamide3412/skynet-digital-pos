@@ -7,12 +7,106 @@ use App\Models\Branch;
 use App\Models\Item;
 use App\Models\ItemBatch;
 use App\Models\ItemBatchSyncIssue;
+use App\Models\PosSettings;
 use App\Services\BatchTrackingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
 
 class ItemBatchController extends Controller
 {
+    /**
+     * Display a paginated list of batches for a specific item.
+     */
+    public function index(Request $request, $branchParam, Item $item)
+    {
+        $branch = current_branch() ?? ($branchParam ? Branch::where('slug', $branchParam)->firstOrFail() : null);
+        if (!$branch || $item->branch_id !== $branch->id) {
+            abort(403, 'Unauthorized.');
+        }
+
+        $search = trim((string) $request->input('search', ''));
+        $status = $request->input('status', 'all');
+
+        $query = ItemBatch::where('branch_id', $branch->id)
+            ->where('item_id', $item->id);
+
+        if ($search !== '') {
+            $query->where(function ($q) use ($search) {
+                $q->where('batch_label', 'like', "%{$search}%")
+                  ->orWhere('id', 'like', "%{$search}%");
+            });
+        }
+
+        $now = now();
+        $settings = PosSettings::current();
+        $alertDays = (int) ($settings->expiry_alert_days ?? 30);
+        $alertDate = now()->addDays($alertDays);
+
+        if ($status === 'active') {
+            $query->where('status', 'active');
+        } elseif ($status === 'expiring_soon') {
+            $query->where('status', 'active')
+                ->whereBetween('expiry_date', [$now->toDateString(), $alertDate->toDateString()]);
+        } elseif ($status === 'expired') {
+            $query->where(function ($q) use ($now) {
+                $q->where('status', 'expired')
+                  ->orWhere(fn($sub) => $sub->where('status', 'active')->where('expiry_date', '<', $now->toDateString()));
+            });
+        } elseif ($status === 'cleared') {
+            $query->where('status', 'cleared');
+        }
+
+        // FEFO order: soonest expiry date first, then id
+        $batches = $query->orderBy('expiry_date', 'asc')
+            ->orderBy('id', 'asc')
+            ->paginate(15)
+            ->withQueryString();
+
+        $actualStock = ((int) ($item->front_store_qty ?? 0)) + ((int) ($item->back_store_qty ?? 0));
+        $activeBatchesTotal = (int) $item->batches()->where('status', 'active')->sum('quantity');
+        $batchVariance = $actualStock - $activeBatchesTotal;
+
+        $stats = [
+            'total_batches'       => $item->batches()->count(),
+            'active_batches'      => $item->batches()->where('status', 'active')->count(),
+            'active_batches_qty'  => $activeBatchesTotal,
+            'actual_stock'        => $actualStock,
+            'batch_variance'      => $batchVariance,
+            'expiring_soon_count' => $item->batches()->where('status', 'active')
+                ->whereBetween('expiry_date', [$now->toDateString(), $alertDate->toDateString()])
+                ->count(),
+            'expired_count'       => $item->batches()->where(function ($q) use ($now) {
+                $q->where('status', 'expired')
+                  ->orWhere(fn($sub) => $sub->where('status', 'active')->where('expiry_date', '<', $now->toDateString()));
+            })->count(),
+            'cleared_count'       => $item->batches()->where('status', 'cleared')->count(),
+            'alert_days'          => $alertDays,
+        ];
+
+        return Inertia::render('Items/Batches', [
+            'item' => [
+                'id'                     => $item->id,
+                'item_name'              => $item->item_name,
+                'barcode_number'         => $item->barcode_number,
+                'unit_label'             => $item->unit_label ?? 'Unit',
+                'front_store_qty'        => $item->front_store_qty ?? 0,
+                'back_store_qty'         => $item->back_store_qty ?? 0,
+                'buy_price'              => $item->buy_price,
+                'price'                  => $item->price,
+                'batch_tracking_enabled' => (bool) $item->batch_tracking_enabled,
+                'category_name'          => $item->category?->name ?? 'Uncategorized',
+            ],
+            'batches' => $batches,
+            'stats'   => $stats,
+            'filters' => [
+                'search' => $search,
+                'status' => $status,
+            ],
+            'settings' => $settings,
+        ]);
+    }
+
     /**
      * Store a new batch record for an item.
      */

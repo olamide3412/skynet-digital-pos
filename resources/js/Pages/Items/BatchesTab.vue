@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { router, usePage } from '@inertiajs/vue3'
+import { router, usePage, Link } from '@inertiajs/vue3'
 import dayjs from 'dayjs'
 import CreateBatchModal from '@/Components/CreateBatchModal.vue'
 import { useCurrency } from '@/Composables/useCurrency'
@@ -19,9 +19,13 @@ const showEditModal = ref(false)
 const editingBatch = ref(null)
 
 const batches = computed(() => props.item.batches || [])
+const totalBatchesCount = computed(() => props.item.total_batches_count ?? batches.value.length)
 
-// Total active batch count
+// Total active batch count & variance from backend if provided, else computed locally
 const totalBatchQty = computed(() => {
+    if (props.item.active_batches_total !== undefined && props.item.active_batches_total !== null) {
+        return Number(props.item.active_batches_total)
+    }
     return batches.value
         .filter(b => b.status === 'active' && Number(b.quantity) > 0)
         .reduce((sum, b) => sum + Number(b.quantity || 0), 0)
@@ -32,6 +36,9 @@ const actualStock = computed(() => {
 })
 
 const variance = computed(() => {
+    if (props.item.batch_variance !== undefined && props.item.batch_variance !== null) {
+        return Number(props.item.batch_variance)
+    }
     return actualStock.value - totalBatchQty.value
 })
 
@@ -159,14 +166,31 @@ function onBatchCreated() {
 
         <!-- 2. Batches Table -->
         <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
-            <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+            <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                    <h2 class="text-sm font-bold text-slate-900 dark:text-white">Active & Past Batches</h2>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Sorted by soonest expiry date (FEFO priority)</p>
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-sm font-bold text-slate-900 dark:text-white">Active & Past Batches</h2>
+                        <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                            Showing {{ batches.length }} of {{ totalBatchesCount }} batch{{ totalBatchesCount === 1 ? '' : 'es' }}
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        {{ totalBatchesCount > 5 ? 'Top 5 soonest-expiring batches (FEFO priority)' : 'Sorted by soonest expiry date (FEFO priority)' }}
+                    </p>
                 </div>
-                <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                    {{ batches.length }} batch{{ batches.length === 1 ? '' : 'es' }} recorded
-                </span>
+
+                <div class="flex items-center gap-2">
+                    <Link
+                        :href="route('pos.items.batches', { branch: branchSlug, item: item.id })"
+                        class="px-3 py-1.5 rounded-xl text-xs font-bold bg-violet-50 hover:bg-violet-100 dark:bg-violet-950/40 dark:hover:bg-violet-900/60 text-violet-700 dark:text-violet-300 border border-violet-200 dark:border-violet-800 transition flex items-center gap-1.5 shadow-2xs"
+                    >
+                        <span>View All Batches</span>
+                        <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-violet-200/70 dark:bg-violet-800 text-violet-800 dark:text-violet-200 font-bold">
+                            {{ totalBatchesCount }}
+                        </span>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </Link>
+                </div>
             </div>
 
             <div v-if="!batches.length" class="p-8 text-center text-slate-400 space-y-3">
@@ -240,6 +264,23 @@ function onBatchCreated() {
                         </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Footer for navigating to full paginated page if more batches exist -->
+            <div
+                v-if="totalBatchesCount > batches.length"
+                class="px-5 py-3 border-t border-slate-100 dark:border-slate-700/60 bg-slate-50/70 dark:bg-slate-800/50 flex flex-wrap items-center justify-between gap-3 text-xs"
+            >
+                <span class="text-slate-500 dark:text-slate-400">
+                    Showing top 5 soonest-expiring batches. There are {{ totalBatchesCount - batches.length }} more recorded batch{{ (totalBatchesCount - batches.length) === 1 ? '' : 'es' }}.
+                </span>
+                <Link
+                    :href="route('pos.items.batches', { branch: branchSlug, item: item.id })"
+                    class="font-bold text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:hover:text-violet-300 flex items-center gap-1.5 transition"
+                >
+                    <span>View all {{ totalBatchesCount }} batches with pagination</span>
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                </Link>
             </div>
         </div>
 

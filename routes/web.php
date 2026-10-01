@@ -436,12 +436,21 @@ Route::prefix('{branch}')
                     ->middleware('pos.role:canManageDebt');
                 Route::get('/expenses',               [\App\Http\Controllers\Pos\ExpenseReportController::class, 'index'])->name('expenses')
                     ->middleware('pos.role:canViewExpenseReports');
-                Route::get('/expenses/export',        [\App\Http\Controllers\Pos\ExpenseReportController::class, 'export'])->name('expenses.export')
-                    ->middleware('pos.role:canViewExpenseReports');
+                // Item Expiry Report (Direct product expiry tracking)
+                Route::get('/item-expiry',            [\App\Http\Controllers\Pos\ItemExpiryReportController::class, 'index'])->name('item-expiry')
+                    ->middleware('pos.role:canViewExpiryReport');
+                Route::get('/item-expiry/export',     [\App\Http\Controllers\Pos\ItemExpiryReportController::class, 'export'])->name('item-expiry.export')
+                    ->middleware('pos.role:canViewExpiryReport');
+
+                // Batch Expiry Report (Batch lot tracking & expiry)
+                Route::get('/batch-expiry',           [\App\Http\Controllers\Pos\ExpiryReportController::class, 'index'])->name('batch-expiry')
+                    ->middleware('pos.role:canViewBatchExpiryReport');
+                Route::get('/batch-expiry/export',    [\App\Http\Controllers\Pos\ExpiryReportController::class, 'export'])->name('batch-expiry.export')
+                    ->middleware('pos.role:canViewBatchExpiryReport');
                 Route::get('/expiry-overview',        [\App\Http\Controllers\Pos\ExpiryReportController::class, 'index'])->name('expiry-overview')
-                    ->middleware('pos.role:canViewExpiryReport');
+                    ->middleware('pos.role:canViewBatchExpiryReport');
                 Route::get('/expiry-overview/export', [\App\Http\Controllers\Pos\ExpiryReportController::class, 'export'])->name('expiry-overview.export')
-                    ->middleware('pos.role:canViewExpiryReport');
+                    ->middleware('pos.role:canViewBatchExpiryReport');
             });
 
         // Expenses & Categories Management
@@ -522,6 +531,7 @@ Route::prefix('{branch}')
             ->middleware('pos.role:canManageItems');
 
         // Item Batches & Expiry Tracking
+        Route::get('items/{item}/batches',           [\App\Http\Controllers\Pos\ItemBatchController::class, 'index'])->name('items.batches')->middleware('pos.role:canManageItems');
         Route::post('batches',                       [\App\Http\Controllers\Pos\ItemBatchController::class, 'store'])->name('batches.store')->middleware('pos.role:canManageItems');
         Route::put('batches/{batch}',                [\App\Http\Controllers\Pos\ItemBatchController::class, 'update'])->name('batches.update')->middleware('pos.role:canManageItems');
         Route::delete('batches/{batch}',             [\App\Http\Controllers\Pos\ItemBatchController::class, 'destroy'])->name('batches.destroy')->middleware('pos.role:canManageItems');

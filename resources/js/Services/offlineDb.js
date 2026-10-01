@@ -409,6 +409,8 @@ export async function saveLocalHeldSale(data) {
         held_sale_id:     String(heldSaleId),
         server_id:        data.server_id || data.id || null,
         hold_name:        String(data.hold_name || data.hold_reference || 'Held Order'),
+        user_id:          data.user_id ?? (data.user?.id ?? null),
+        cashier_name:     String(data.cashier_name || data.user?.full_name || data.user?.name || 'Staff'),
         customer:         data.customer ? JSON.parse(JSON.stringify(data.customer)) : null,
         customer_id:      data.customer_id ?? (data.customer?.id ?? null),
         customer_name:    data.customer_name ?? (data.customer?.name ?? null),
@@ -554,6 +556,8 @@ export async function mergeServerHeldSales(serverSales = []) {
                 held_sale_id:     heldSaleId,
                 server_id:        s.id,
                 hold_name:        s.hold_name || s.hold_reference || 'Held Order',
+                user_id:          s.user_id ?? (s.user?.id ?? null),
+                cashier_name:     String(s.cashier_name || s.user?.full_name || s.user?.name || 'Staff'),
                 customer:         s.customer || null,
                 customer_id:      s.customer_id ?? (s.customer?.id ?? null),
                 customer_name:    s.customer_name ?? (s.customer?.name ?? null),
@@ -582,8 +586,9 @@ export async function mergeServerHeldSales(serverSales = []) {
             await reserveLocalImeisForHold(record.items)
         } else if (local.status === 'active') {
             await db.held_sales.update(local.held_sale_id, {
-                server_id: s.id,
-                sync_status: 'synced',
+                server_id:    s.id,
+                cashier_name: local.cashier_name || s.cashier_name || s.user?.full_name || s.user?.name || 'Staff',
+                sync_status:  'synced',
             })
         }
     }

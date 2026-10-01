@@ -230,9 +230,10 @@ class RoleService
             'canLogExpense'        => static::canLogExpense(),
             'canManageExpenses'    => static::canManageExpenses(),
             'canViewExpenseReports'=> static::canViewExpenseReports(),
-            'canViewExpiryReport'  => static::canViewExpiryReport(),
-            'isBranchAdmin'        => $user?->isBranchAdmin() ?? false,
-            'isSuperAdmin'         => $user?->isSuperAdmin() ?? false,
+            'canViewExpiryReport'      => static::canViewExpiryReport(),
+            'canViewBatchExpiryReport' => static::canViewBatchExpiryReport(),
+            'isBranchAdmin'            => $user?->isBranchAdmin() ?? false,
+            'isSuperAdmin'             => $user?->isSuperAdmin() ?? false,
         ];
     }
 
@@ -261,5 +262,10 @@ class RoleService
     public static function canViewExpiryReport(): bool
     {
         return static::can('canViewExpiryReport') || static::canViewReports();
+    }
+
+    public static function canViewBatchExpiryReport(): bool
+    {
+        return static::can('canViewBatchExpiryReport') || static::can('canViewExpiryReport') || static::canViewReports();
     }
 }

@@ -37,7 +37,8 @@ class BranchRoleController extends Controller
         'canLogExpense'        => 'Log Branch Expenses',
         'canManageExpenses'    => 'Edit / Delete Expenses & Categories',
         'canViewExpenseReports'=> 'View Expenses Report',
-        'canViewExpiryReport'  => 'View Expiry & Batch Report',
+        'canViewExpiryReport'  => 'View Item Expiry Report',
+        'canViewBatchExpiryReport' => 'View Batch Expiry Report',
     ];
 
     public function index(Branch $branch)
