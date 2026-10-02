@@ -81,6 +81,12 @@ class BranchUserController extends Controller
 
     public function store(Request $request, Branch $branch)
     {
+        if (!$branch->canCreateUser()) {
+            return back()->withErrors([
+                'name' => "This branch has reached the staff limit ({$branch->getUserLimit()} users) allowed on its organization's plan. Upgrade the plan to add more staff.",
+            ]);
+        }
+
         // Treat empty string email as null so unique validation doesn't clash on empty strings
         if ($request->has('email') && trim((string)$request->email) === '') {
             $request->merge(['email' => null]);

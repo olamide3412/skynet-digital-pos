@@ -25,6 +25,7 @@ class ActivityLogController extends Controller
         if ($format === 'csv') {
             $writer = new CsvWriter($spreadsheet);
             $writer->setUseBOM(true);
+            $writer->setPreCalculateFormulas(false);
             $contentType = 'text/csv; charset=UTF-8';
         } else {
             $writer = new XlsxWriter($spreadsheet);

@@ -28,7 +28,9 @@ const config = computed(() => {
                 iconColor: 'text-red-400',
                 iconBg:    'bg-red-500/10 border-red-500/20',
                 label:     'Access Denied',
-                hint:      'Your account does not have permission to view this page. Contact your administrator if you believe this is a mistake.',
+                hint:      (props.message && props.message !== 'An error occurred.')
+                    ? props.message
+                    : 'Your account does not have permission to view this page. Contact your administrator if you believe this is a mistake.',
                 back:      true,
             }
         case 404:

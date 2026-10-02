@@ -20,8 +20,8 @@ class HandleInertiaRequests extends Middleware
     {
         $user = Auth::guard('web')->check() ? Auth::guard('web')->user() : null;
         $segment1 = $request->segment(1);
-        $reservedPrefixes = ['superadmin', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
-        $urlBranch = ($segment1 && !in_array($segment1, $reservedPrefixes))
+        $reservedPrefixes = ['org', 'superadmin', 'admin', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
+        $urlBranch = ($segment1 && !in_array($segment1, $reservedPrefixes, true))
             ? \App\Models\Branch::where('slug', $segment1)->first()
             : null;
 
@@ -33,12 +33,12 @@ class HandleInertiaRequests extends Middleware
             app()->instance('current_branch', $activeBranch);
         }
 
+        if ($activeBranch) {
+            \Illuminate\Support\Facades\URL::defaults(['branch' => $activeBranch->slug]);
+        }
+
         $defaultBranch = \App\Models\Branch::orderBy('id')->first();
         $branch = $activeBranch ?? $defaultBranch;
-
-        if ($branch) {
-            \Illuminate\Support\Facades\URL::defaults(['branch' => $branch->slug]);
-        }
 
 
         return [
@@ -61,7 +61,72 @@ class HandleInertiaRequests extends Middleware
                 'phone' => $branch->phone,
                 'email' => $branch->email,
                 'address' => $branch->address,
+                'organization_id' => $branch->organization_id,
             ] : null,
+
+            // ── Current Organization Subscription (Read-only for all branch/org panels) ──
+            'current_subscription' => function () use ($user, $branch) {
+                $org = null;
+                if ($user?->organization_id) {
+                    $org = $user->organization;
+                } elseif ($branch?->organization_id) {
+                    $org = $branch->organization;
+                }
+
+                if (!$org) {
+                    return null;
+                }
+
+                $sub = $org->subscription()->with('pricingPlan')->first();
+                if (!$sub) {
+                    return null;
+                }
+
+                return [
+                    'organization_id'    => $org->id,
+                    'organization_name'  => $org->name,
+                    'plan_name'          => $sub->pricingPlan?->name ?? 'None',
+                    'plan_tagline'       => $sub->pricingPlan?->tagline,
+                    'started_at'         => $sub->started_at?->format('d M Y'),
+                    'renewal_date'       => $sub->renewal_date?->format('d M Y'),
+                    'days_until_renewal' => $sub->daysUntilRenewal(),
+                    'status'             => $sub->status,
+                    'computed_status'    => $sub->computedStatus(),
+                    'is_expiring_soon'   => $sub->isExpiringSoon(),
+                    'is_past_due'        => $sub->isPastDue(),
+                ];
+            },
+
+            // ── Current Plan Features & Limits (Granular capability flags) ────
+            'plan_features' => function () use ($user, $branch) {
+                $org = null;
+                if ($branch?->organization_id) {
+                    $org = $branch->organization;
+                } elseif ($user?->organization_id) {
+                    $org = $user->organization;
+                }
+
+                if (!$org) {
+                    return [
+                        'is_restricted'              => false,
+                        'max_branches'               => null,
+                        'max_users_per_branch'       => null,
+                        'multi_branch'               => true,
+                        'debt_customer_accounts'     => true,
+                        'discounts'                  => true,
+                        'batch_expiry_tracking'      => true,
+                        'imei_tracking'              => true,
+                        'barcode_label_printing'     => true,
+                        'inventory_import'           => true,
+                        'advanced_staff_permissions' => true,
+                        'ai_chat_assistant'          => true,
+                        'ai_reorder_prediction'      => true,
+                        'broadcast_notifications'    => true,
+                    ];
+                }
+
+                return $org->getFeatureSummary();
+            },
 
             // ── Default Branch (first created branch in database) ─────────────
             'default_branch' => fn() => $defaultBranch ? [
@@ -102,6 +167,7 @@ class HandleInertiaRequests extends Middleware
 
             'csrf_token' => csrf_token(),
             'turnstileSiteKey' => config('services.turnstile.site_key'),
+            'organizations_enabled' => (bool) config('organizations.enabled'),
 
             // ── POS permissions (Spatie-backed, branch-scoped) ─────────────────
             'pos_permissions' => fn() => ($user && !$user->isSuperAdmin())

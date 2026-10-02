@@ -1,6 +1,7 @@
 <script setup>
 import { Head, useForm, usePage } from '@inertiajs/vue3'
 import { ref, onMounted, computed, nextTick } from 'vue'
+import ThemeToggle from '@/Components/ThemeToggle.vue'
 
 const props = defineProps({
     turnstileSiteKey: String,
@@ -121,45 +122,50 @@ const submit = () => {
 
 <template>
     <Head :title="($page.props.system_config?.company_name || 'SuperAdmin') + ' - System Portal Login'" />
-    <div class="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans">
-        <div class="my-auto max-w-md w-full bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl space-y-6">
+    <div class="min-h-screen bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col items-center justify-between p-4 sm:p-6 font-sans transition-colors duration-200">
+        <!-- Top Row: Theme Toggle -->
+        <div class="w-full max-w-md flex justify-end pt-2 pb-1">
+            <ThemeToggle />
+        </div>
+
+        <div class="my-auto max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl dark:shadow-2xl space-y-6 transition-colors duration-200">
             <div class="text-center space-y-2">
-                <img v-if="$page.props.system_config?.company_logo_url" :src="$page.props.system_config.company_logo_url" class="w-14 h-14 rounded-2xl object-cover mx-auto shadow-lg" alt="Company Logo" />
+                <img v-if="$page.props.system_config?.company_logo_url" :src="$page.props.system_config.company_logo_url" class="h-14 max-w-[200px] object-contain mx-auto shadow-sm rounded-xl" alt="Company Logo" />
                 <div v-else class="w-14 h-14 bg-theme rounded-2xl mx-auto flex items-center justify-center font-black text-2xl text-white shadow-lg">
                     {{ ($page.props.system_config?.company_name || 'S').charAt(0).toUpperCase() }}
                 </div>
-                <h1 class="text-2xl font-bold text-slate-100 tracking-tight">{{ $page.props.system_config?.company_name || 'Skynet' }} SuperAdmin Portal</h1>
-                <p class="text-xs text-slate-400">{{ $page.props.system_config?.app_tagline || 'Platform Management Terminal' }}</p>
+                <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">{{ $page.props.system_config?.company_name || 'Skynet' }} SuperAdmin Portal</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400">{{ $page.props.system_config?.app_tagline || 'Platform Management Terminal' }}</p>
             </div>
 
             <form @submit.prevent="submit" class="space-y-4">
                 <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Email or Username</label>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-1">Email or Username</label>
                     <input
                         v-model="form.login"
                         type="text"
                         required
                         autofocus
-                        class="w-full bg-slate-950 border border-slate-800 focus:border-theme rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-theme transition-all"
+                        class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 focus:border-theme rounded-xl px-4 py-3 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-theme transition-all"
                         placeholder="superadmin@skynetpos.com"
                     />
-                    <div v-if="form.errors.login" class="text-rose-400 text-xs mt-1">{{ form.errors.login }}</div>
+                    <div v-if="form.errors.login" class="text-rose-500 dark:text-rose-400 text-xs mt-1">{{ form.errors.login }}</div>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-400 mb-1">Password</label>
+                    <label class="block text-xs font-semibold uppercase text-slate-600 dark:text-slate-400 mb-1">Password</label>
                     <div class="relative flex items-center">
                         <input
                             v-model="form.password"
                             :type="showPassword ? 'text' : 'password'"
                             required
-                            class="w-full bg-slate-950 border border-slate-800 focus:border-theme rounded-xl px-4 py-3 pr-11 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-theme transition-all"
+                            class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 focus:border-theme rounded-xl px-4 py-3 pr-11 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-theme transition-all"
                             placeholder="••••••••"
                         />
                         <button
                             type="button"
                             @click="showPassword = !showPassword"
-                            class="absolute right-3.5 text-slate-400 hover:text-slate-200 transition focus:outline-none"
+                            class="absolute right-3.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition focus:outline-none cursor-pointer"
                             :title="showPassword ? 'Hide password' : 'Show password'"
                         >
                             <svg v-if="!showPassword" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -171,16 +177,16 @@ const submit = () => {
                             </svg>
                         </button>
                     </div>
-                    <div v-if="form.errors.password" class="text-rose-400 text-xs mt-1">{{ form.errors.password }}</div>
+                    <div v-if="form.errors.password" class="text-rose-500 dark:text-rose-400 text-xs mt-1">{{ form.errors.password }}</div>
                 </div>
 
                 <!-- Cloudflare Turnstile Widget (If siteKey is present) -->
                 <div v-if="siteKey" class="flex flex-col items-center gap-1 pt-1">
                     <div id="cf-turnstile-widget" class="cf-turnstile"></div>
-                    <div v-if="turnstileError" class="text-rose-400 text-xs text-center font-medium">
+                    <div v-if="turnstileError" class="text-rose-600 dark:text-rose-400 text-xs text-center font-medium">
                         {{ turnstileError }}
                     </div>
-                    <div v-if="form.errors.cf_turnstile_response" class="text-rose-400 text-xs text-center font-medium">
+                    <div v-if="form.errors.cf_turnstile_response" class="text-rose-600 dark:text-rose-400 text-xs text-center font-medium">
                         {{ form.errors.cf_turnstile_response }}
                     </div>
                 </div>
@@ -188,20 +194,20 @@ const submit = () => {
                 <button
                     type="submit"
                     :disabled="form.processing"
-                    class="w-full py-3 bg-theme hover:opacity-90 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition-all shadow-lg"
+                    class="w-full py-3 bg-theme hover:opacity-90 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition-all shadow-lg cursor-pointer"
                 >
                     {{ form.processing ? 'Authenticating...' : 'Sign In as Super Admin' }}
                 </button>
 
                 <!-- Powered by Branding -->
-                <p class="text-center text-[11px] text-slate-500 font-medium tracking-wide pt-1">
-                    Powered by <span class="font-bold text-slate-400">{{ $page.props.system_config?.company_name || 'Skynet Digital' }}</span>
+                <p class="text-center text-[11px] text-slate-400 dark:text-slate-500 font-medium tracking-wide pt-1">
+                    Powered by <span class="font-bold text-slate-600 dark:text-slate-400">{{ $page.props.system_config?.company_name || 'Skynet Digital' }}</span>
                 </p>
             </form>
         </div>
 
-        <footer class="hidden py-2 text-center text-xs text-slate-500">
-            Developed by <a href="https://skynetdigitalltd.com" target="_blank" rel="noopener noreferrer" class="hover:text-slate-400 font-semibold transition">Skynet Digital Limited.</a>
+        <footer class="hidden py-2 text-center text-xs text-slate-500 dark:text-slate-400">
+            Developed by <a href="https://skynetdigitalltd.com" target="_blank" rel="noopener noreferrer" class="hover:text-slate-700 dark:hover:text-slate-300 font-semibold transition">Skynet Digital Limited.</a>
         </footer>
     </div>
 </template>

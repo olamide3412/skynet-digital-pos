@@ -33,4 +33,9 @@ class PricingPlan extends Model
     {
         return $this->hasMany(PricingPlanFeature::class, 'pricing_plan_id')->orderBy('sort_order');
     }
+
+    public function capabilities(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(PlanCapability::class, 'pricing_plan_id');
+    }
 }

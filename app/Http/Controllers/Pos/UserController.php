@@ -65,6 +65,12 @@ class UserController extends Controller
     {
         $branch = current_branch();
 
+        if ($branch && !$branch->canCreateUser()) {
+            return back()->withErrors([
+                'name' => "This branch has reached the staff limit ({$branch->getUserLimit()} users) allowed on its organization's plan. Upgrade the plan to add more staff.",
+            ]);
+        }
+
         $data = $request->validate([
             'name'        => 'required|string|max:255',
             'username'    => 'required|string|max:50|unique:users,username',
@@ -133,7 +139,9 @@ class UserController extends Controller
 
     public function destroy($branchParam, User $user)
     {
-        return back()->withErrors(['user' => 'Only Super Admins can delete user accounts. You can disable the user account to revoke access.']);
+        return back()
+            ->with('error', 'Only Super Admins can delete user accounts. You can disable the user account to revoke access.')
+            ->withErrors(['user' => 'Only Super Admins can delete user accounts. You can disable the user account to revoke access.']);
     }
 
     public function toggle($branchParam, User $user)
@@ -142,7 +150,9 @@ class UserController extends Controller
         $this->authorizeBranch($user, $branch);
 
         if ($user->id === auth()->id()) {
-            return back()->withErrors(['user' => 'You cannot disable your own account.']);
+            return back()
+                ->with('error', 'You cannot disable your own account.')
+                ->withErrors(['user' => 'You cannot disable your own account.']);
         }
 
         $user->update(['is_active' => !$user->is_active]);

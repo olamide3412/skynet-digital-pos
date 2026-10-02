@@ -1,5 +1,5 @@
 <script setup>
-import { ref, provide } from 'vue'
+import { ref, provide, computed } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 import FlashMessages from '@/Components/FlashMessages.vue'
@@ -16,19 +16,32 @@ provide('isMobileSidebarOpen', isMobileOpen)
 
 const page = usePage()
 
-const navLinks = [
-    {
-        label: 'Dashboard',
-        route: 'superadmin.dashboard',
-        match: 'SuperAdmin/Dashboard',
-        icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
-    },
-    {
-        label: 'Manage Branches',
-        route: 'superadmin.branches.index',
-        match: 'SuperAdmin/Branches',
-        icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
-    },
+const navLinks = computed(() => {
+    const list = [
+        {
+            label: 'Dashboard',
+            route: 'superadmin.dashboard',
+            match: 'SuperAdmin/Dashboard',
+            icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
+        },
+    ]
+
+    if (page.props.organizations_enabled) {
+        list.push({
+            label: 'Organizations',
+            route: 'superadmin.organizations.index',
+            match: 'SuperAdmin/Organizations',
+            icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
+        })
+    }
+
+    list.push(
+        {
+            label: 'Manage Branches',
+            route: 'superadmin.branches.index',
+            match: 'SuperAdmin/Branches',
+            icon: 'M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z',
+        },
     {
         label: 'Branch Expenses',
         route: 'superadmin.reports.expenses',
@@ -94,8 +107,10 @@ const navLinks = [
         route: 'superadmin.profile.index',
         match: 'SuperAdmin/Profile',
         icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',
-    },
-]
+    })
+
+    return list
+})
 
 function isActive(link) {
     return page.component.startsWith(link.match)

@@ -57,6 +57,12 @@ class Item extends Model
         return $this->image_path ? asset('storage/' . $this->image_path) : null;
     }
 
+    /** Alias for price to support code referencing unit_price. */
+    public function getUnitPriceAttribute(): float
+    {
+        return (float) ($this->price ?? 0);
+    }
+
     /** Combined total stock (back + front) for display/reporting. */
     public function getTotalQtyAttribute(): int
     {

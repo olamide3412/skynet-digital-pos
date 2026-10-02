@@ -4,6 +4,7 @@ namespace App\Modules\AI\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Modules\AI\Services\AiCreditService;
 use App\Modules\AI\Services\AiManager;
 use App\Modules\AI\Services\ReorderPredictionService;
 use Illuminate\Http\Request;
@@ -42,6 +43,7 @@ class ReorderPredictionController extends Controller
             'predictions'    => $predictionData['predictions'],
             'aiInsight'      => null, // Loaded asynchronously on client
             'isAiConfigured' => $isAiConfigured,
+            'creditSummary'  => $branch ? $branch->getAiCreditSummary() : null,
             'filters'        => [
                 'velocity_days'  => $velocityDays,
                 'threshold_days' => $thresholdDays,
@@ -64,6 +66,9 @@ class ReorderPredictionController extends Controller
             $branch = Branch::find($request->get('branch_id'));
         }
 
+        $user = auth()->user();
+        $org = $branch?->organization ?? $user?->organization;
+
         $velocityDays  = (int) $request->get('velocity_days', 14);
         $thresholdDays = (int) $request->get('threshold_days', 7);
 
@@ -72,12 +77,34 @@ class ReorderPredictionController extends Controller
         $aiManager = app(AiManager::class);
         $isAiConfigured = $aiManager->isBranchEnabled($branch);
 
+        // Credit check: verify remaining AI credits before generating narrative
+        if ($org && $user && !$user->is_super_admin) {
+            if (!AiCreditService::hasCreditsRemaining($org, $branch, 1)) {
+                $summary = AiCreditService::getSummary($org, $branch);
+                return response()->json([
+                    'insight'        => "Monthly AI credit limit reached ({$summary['used']}/{$summary['monthly_quota']} used). Credits reset on {$summary['resets_at']}. Contact administrator to upgrade.",
+                    'is_configured'  => $isAiConfigured,
+                    'is_exhausted'   => true,
+                    'summary'        => $predictionData['summary'],
+                    'credit_summary' => $summary,
+                ]);
+            }
+        }
+
         $insight = ReorderPredictionService::generateAiInsight($predictionData, $branch);
 
+        // Deduct AI credit on success
+        if ($org && $user && !$user->is_super_admin && $insight) {
+            AiCreditService::consumeCredit($org, $branch, $user, 'reorder_prediction', 1, [
+                'branch_id' => $branch?->id,
+            ]);
+        }
+
         return response()->json([
-            'insight'       => $insight,
-            'is_configured' => $isAiConfigured,
-            'summary'       => $predictionData['summary'],
+            'insight'        => $insight,
+            'is_configured'  => $isAiConfigured,
+            'summary'        => $predictionData['summary'],
+            'credit_summary' => $org ? AiCreditService::getSummary($org, $branch) : null,
         ]);
     }
 

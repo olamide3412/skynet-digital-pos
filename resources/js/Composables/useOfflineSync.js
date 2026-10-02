@@ -53,13 +53,22 @@ export function useOfflineSync() {
         }
     }
 
+    function getBranchSlug() {
+        if (typeof window === 'undefined') return ''
+        const seg = window.location.pathname.split('/').filter(Boolean)[0]
+        const reserved = ['superadmin', 'org', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password']
+        if (seg && !reserved.includes(seg)) return seg
+        return window.Ziggy?.defaults?.branch || ''
+    }
+
     /**
      * Download fresh branch dataset from server and prime local IndexedDB store.
      */
     async function refreshCatalog() {
         if (!isOnline.value) return false
         try {
-            const res = await axios.get(route('pos.api.offline.bootstrap'), { timeout: 10000 })
+            const branch = getBranchSlug()
+            const res = await axios.get(route('pos.api.offline.bootstrap', branch ? { branch } : undefined), { timeout: 10000 })
             if (res.data) {
                 await saveBootstrapData(res.data)
                 lastSyncTime.value = new Date().toISOString()
@@ -80,7 +89,8 @@ export function useOfflineSync() {
             return false
         }
         try {
-            await axios.get(route('pos.api.settings.show'), { timeout: 4000 })
+            const branch = getBranchSlug()
+            await axios.get(route('pos.api.settings.show', branch ? { branch } : undefined), { timeout: 4000 })
             isOnline.value = true
             return true
         } catch (e) {
@@ -122,8 +132,9 @@ export function useOfflineSync() {
 
                 // Extract the payloads
                 const salesPayloads = pendingSales.map(s => s.payload)
+                const branch = getBranchSlug()
 
-                const res = await axios.post(route('pos.api.offline.sync'), {
+                const res = await axios.post(route('pos.api.offline.sync', branch ? { branch } : undefined), {
                     sales: salesPayloads,
                 }, { timeout: 45000 })
 
@@ -173,7 +184,8 @@ export function useOfflineSync() {
             const pendingHolds = await getPendingHeldSales(50)
             if (!pendingHolds || !pendingHolds.length) return
 
-            const res = await axios.post(route('pos.api.held-sales.sync'), {
+            const branch = getBranchSlug()
+            const res = await axios.post(route('pos.api.held-sales.sync', branch ? { branch } : undefined), {
                 held_sales: pendingHolds,
             }, { timeout: 15000 })
 
@@ -204,7 +216,8 @@ export function useOfflineSync() {
                 return false
             }
 
-            const res = await axios.get(route('pos.api.held-sales.index'), { timeout: 10000 })
+            const branch = getBranchSlug()
+            const res = await axios.get(route('pos.api.held-sales.index', branch ? { branch } : undefined), { timeout: 10000 })
             if (res.data && Array.isArray(res.data)) {
                 await mergeServerHeldSales(res.data)
                 lastHeldRefreshTime.value = new Date().toISOString()

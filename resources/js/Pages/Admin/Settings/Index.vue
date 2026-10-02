@@ -119,6 +119,42 @@ const toggleSwitch = `relative w-11 h-6 bg-gray-200 peer-focus:outline-none peer
                 </button>
             </div>
 
+            <!-- ─── Organization Subscription (Read-Only) ────────────────────────── -->
+            <div v-if="$page.props.current_subscription" class="bg-gradient-to-r from-slate-900 to-indigo-950 text-white rounded-2xl p-6 shadow-sm border border-slate-700/60 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="space-y-1">
+                    <div class="flex items-center gap-2.5">
+                        <span class="text-xs uppercase font-extrabold tracking-wider bg-white/10 text-indigo-300 px-2.5 py-0.5 rounded-full">
+                            Organization Plan
+                        </span>
+                        <span
+                            :class="{
+                                'bg-emerald-500/20 text-emerald-300 border-emerald-500/40': $page.props.current_subscription.computed_status === 'active',
+                                'bg-amber-500/20 text-amber-300 border-amber-500/40': $page.props.current_subscription.computed_status === 'grace_period',
+                                'bg-rose-500/20 text-rose-300 border-rose-500/40': $page.props.current_subscription.computed_status === 'expired'
+                            }"
+                            class="px-2 py-0.5 rounded-full text-[11px] font-bold border capitalize"
+                        >
+                            {{ $page.props.current_subscription.computed_status.replace('_', ' ') }}
+                        </span>
+                    </div>
+                    <h3 class="text-xl font-black text-white">
+                        {{ $page.props.current_subscription.plan_name }} Plan
+                    </h3>
+                    <p class="text-xs text-indigo-200/80">
+                        Assigned to <strong>{{ $page.props.current_subscription.organization_name }}</strong> • Renewal due: <strong>{{ $page.props.current_subscription.renewal_date }}</strong>
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="bg-white/10 backdrop-blur-xs px-4 py-2 rounded-xl text-center">
+                        <span class="text-[10px] uppercase text-indigo-200 block font-semibold">Renewal Status</span>
+                        <span class="text-sm font-extrabold text-white">
+                            {{ $page.props.current_subscription.days_until_renewal >= 0 ? `${$page.props.current_subscription.days_until_renewal} Days Left` : 'Renewal Due' }}
+                        </span>
+                    </div>
+                </div>
+            </div>
+
             <form @submit.prevent="save" class="space-y-8">
 
                 <!-- ─── Company Branding ───────────────────────────────────── -->

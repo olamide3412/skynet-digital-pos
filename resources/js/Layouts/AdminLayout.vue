@@ -245,8 +245,23 @@ onMounted(() => {
                     </button>
                     <h2 class="text-lg font-semibold text-gray-800 dark:text-gray-100 hidden sm:block">Control Panel</h2>
                 </div>
+
                 <div class="flex items-center gap-4">
                     <ThemeToggle/>
+
+                    <!-- Organization Plan Badge (Read-Only) -->
+                    <div v-if="$page.props.current_subscription" class="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 dark:bg-gray-700/60 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300">
+                        <span
+                            :class="{
+                                'bg-emerald-500': $page.props.current_subscription.computed_status === 'active',
+                                'bg-amber-500': $page.props.current_subscription.computed_status === 'grace_period',
+                                'bg-rose-500': $page.props.current_subscription.computed_status === 'expired'
+                            }"
+                            class="w-2 h-2 rounded-full inline-block"
+                        ></span>
+                        <span>{{ $page.props.current_subscription.plan_name }} Plan</span>
+                    </div>
+
                     <div class="hidden sm:flex items-center gap-2">
                         <div class="h-8 w-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold text-sm">
                             {{ $page.props.auth.user?.name?.charAt(0)?.toUpperCase() || 'A' }}
@@ -258,6 +273,20 @@ onMounted(() => {
 
             <!-- Page Content -->
             <div class="flex-1 min-h-0 overflow-x-hidden overflow-y-auto bg-gray-50 dark:bg-gray-900 p-4 sm:p-6 lg:p-8">
+                <!-- Soft Non-Blocking Renewal Warning -->
+                <div v-if="$page.props.current_subscription?.is_past_due" class="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between gap-3 shadow-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">⚠️</span>
+                        <span><strong>Renewal Notice:</strong> Your organization's subscription renewal was due on <strong>{{ $page.props.current_subscription.renewal_date }}</strong>. Services remain fully active. Please contact your platform administrator to renew.</span>
+                    </div>
+                </div>
+                <div v-else-if="$page.props.current_subscription?.is_expiring_soon" class="mb-6 p-4 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-800 dark:text-indigo-200 flex items-center justify-between gap-3 shadow-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="text-base">ℹ️</span>
+                        <span><strong>Subscription Notice:</strong> Your subscription renews in <strong>{{ $page.props.current_subscription.days_until_renewal }} day(s)</strong> ({{ $page.props.current_subscription.renewal_date }}).</span>
+                    </div>
+                </div>
+
                 <slot/>
             </div>
         </main>

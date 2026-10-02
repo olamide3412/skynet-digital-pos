@@ -17,7 +17,9 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 use PhpOffice\PhpSpreadsheet\Writer\Csv as CsvWriter;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
 class ReportController extends Controller
 {
@@ -53,6 +55,7 @@ class ReportController extends Controller
         if ($format === 'csv') {
             $writer = new CsvWriter($spreadsheet);
             $writer->setUseBOM(true);
+            $writer->setPreCalculateFormulas(false);
             $contentType = 'text/csv; charset=UTF-8';
         } else {
             $writer = new XlsxWriter($spreadsheet);
@@ -731,6 +734,7 @@ class ReportController extends Controller
             ->setFillType(Fill::FILL_SOLID)
             ->getStartColor()->setRGB('059669'); // Emerald
 
+        $format = $request->get('format', 'xlsx');
         $rowNum = 2;
         foreach ($items as $idx => $item) {
             $totalStock = (int) $item->front_store_qty + (int) $item->back_store_qty;
@@ -738,7 +742,17 @@ class ReportController extends Controller
 
             $col = 1;
             $sheet->setCellValue([$col++, $rowNum], $idx + 1);
-            $sheet->setCellValue([$col++, $rowNum], $item->barcode_number ?: '-');
+            if (!empty($item->barcode_number)) {
+                $barcodeVal = (string) $item->barcode_number;
+                if ($format === 'csv') {
+                    $sheet->setCellValueExplicit([$col++, $rowNum], '="' . $barcodeVal . '"', DataType::TYPE_STRING);
+                } else {
+                    $sheet->setCellValueExplicit([$col++, $rowNum], $barcodeVal, DataType::TYPE_STRING);
+                    $sheet->getStyle([$col - 1, $rowNum])->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+                }
+            } else {
+                $sheet->setCellValue([$col++, $rowNum], '-');
+            }
             $sheet->setCellValue([$col++, $rowNum], $item->item_name);
             $sheet->setCellValue([$col++, $rowNum], $item->category?->name ?: 'Uncategorized');
             $sheet->setCellValue([$col++, $rowNum], (int) $item->front_store_qty);
@@ -753,11 +767,15 @@ class ReportController extends Controller
             $rowNum++;
         }
 
+        if ($format !== 'csv' && $rowNum > 2) {
+            $sheet->getStyle('B2:B' . ($rowNum - 1))->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        }
+
         for ($c = 1; $c <= count($headers); $c++) {
             $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($c))->setAutoSize(true);
         }
 
-        return $this->streamExcelOrCsv($spreadsheet, 'low_stock_alerts_' . $branch->slug, $request->get('format', 'xlsx'));
+        return $this->streamExcelOrCsv($spreadsheet, 'low_stock_alerts_' . $branch->slug, $format);
     }
 
     public function customerDebt(Request $request)

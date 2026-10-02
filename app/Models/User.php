@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
@@ -15,7 +16,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'name', 'full_name', 'username', 'email', 'password',
-        'is_active', 'is_super_admin', 'branch_id', 'staff_id',
+        'is_active', 'is_super_admin', 'branch_id', 'organization_id', 'staff_id',
     ];
 
     protected $hidden = [
@@ -34,6 +35,11 @@ class User extends Authenticatable
     }
 
     // ── Relations ─────────────────────────────────────────────────────────────
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class);
+    }
+
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
@@ -79,6 +85,20 @@ class User extends Authenticatable
     public function isSuperAdmin(): bool
     {
         return (bool) $this->is_super_admin;
+    }
+
+    public function isOrganizationAdmin(): bool
+    {
+        if ($this->organization_id === null) {
+            return false;
+        }
+
+        return DB::table('model_has_roles')
+            ->join('roles', 'roles.id', '=', 'model_has_roles.role_id')
+            ->where('model_has_roles.model_id', $this->id)
+            ->where('model_has_roles.model_type', get_class($this))
+            ->where('roles.name', 'organization_admin')
+            ->exists();
     }
 
     public function isBranchAdmin(): bool

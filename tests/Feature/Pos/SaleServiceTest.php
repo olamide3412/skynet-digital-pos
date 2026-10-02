@@ -3,24 +3,31 @@
 namespace Tests\Feature;
 
 use App\Models\Branch;
+use App\Models\Organization;
 use App\Models\PosCustomer;
 use App\Models\Item;
 use App\Models\User;
 use App\Models\PosSettings;
 use App\Services\SaleService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
 class SaleServiceTest extends TestCase
 {
-    use RefreshDatabase;
+    use DatabaseTransactions;
 
     public function test_process_creates_a_sale_and_deducts_inventory()
     {
+        $org = Organization::create([
+            'name'   => 'Test Org ' . uniqid(),
+            'status' => 'active',
+        ]);
+
         // 1. Create branch
         $branch = Branch::create([
+            'organization_id' => $org->id,
             'name' => 'Test Branch',
-            'slug' => 'test-branch',
+            'slug' => 'test-branch-' . uniqid(),
             'is_active' => true,
         ]);
 

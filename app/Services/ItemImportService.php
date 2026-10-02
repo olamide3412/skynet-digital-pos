@@ -34,18 +34,18 @@ class ItemImportService
         'item_ref'               => ['item_ref', 'item ref', 'ref', 'item_code', 'group_ref', 'reference', 'item_id'],
         'item_name'              => ['item_name', 'item name', 'name', 'product_name', 'product name', 'item', 'title', 'product'],
         'category'               => ['category', 'category_name', 'category name', 'category_hint', 'dept', 'department'],
-        'group_address'          => ['group_address_name', 'group_address', 'group address', 'group', 'storage_location', 'storage location', 'shelf', 'shelf_location', 'shelf location', 'rack', 'location'],
-        'barcode'                => ['barcode', 'barcode_number', 'barcode number', 'sku', 'upc', 'ean', 'code'],
+        'group_address'          => ['group_address_name', 'group_address', 'group address', 'group address shelf', 'group address / shelf', 'shelf group address', 'group shelf', 'shelf location', 'shelf_location', 'group', 'storage_location', 'storage location', 'shelf', 'rack', 'location'],
+        'barcode'                => ['barcode', 'barcode_number', 'barcode number', 'barcode sku', 'barcode / sku', 'sku barcode', 'sku / barcode', 'barcode or sku', 'sku', 'upc', 'ean', 'code'],
         'description'            => ['description', 'item_description', 'details', 'item description', 'notes'],
-        'cost_price'             => ['cost_price', 'cost price', 'cost', 'buy_price', 'buy price', 'purchase_price', 'buying_price'],
+        'cost_price'             => ['cost_price', 'cost price', 'cost', 'buy_price', 'buy price', 'purchase_price', 'buying_price', 'cost price ₦', 'cost price n', 'cost price ngn', 'cost price $', 'cost price usd'],
         'unit_name'              => ['unit_name', 'unit name', 'unit_label', 'unit label', 'unit', 'base_unit_name', 'base_unit', 'variant_name', 'variant name', 'packaging_name', 'pack_unit_name', 'carton_unit_name'],
         'quantity_in_base_units' => ['quantity_in_base_units', 'quantity in base units', 'base_quantity', 'qty_in_base', 'multiplier', 'units_per_pack', 'pack_quantity', 'carton_quantity', 'conversion_qty', 'unit_quantity'],
-        'selling_price'          => ['selling_price', 'selling price', 'price', 'retail_price', 'retail price', 'base_unit_price', 'unit_price', 'pack_price', 'carton_price'],
-        'wholesale_price'        => ['wholesale_price', 'wholesale price', 'ws_price', 'wholesale', 'base_wholesale_price', 'unit_wholesale_price', 'pack_wholesale_price', 'carton_wholesale_price'],
+        'selling_price'          => ['selling_price', 'selling price', 'price', 'retail_price', 'retail price', 'base_unit_price', 'unit_price', 'pack_price', 'carton_price', 'selling price ₦', 'selling price n', 'selling price ngn', 'selling price $', 'selling price usd', 'price ₦', 'unit price ₦'],
+        'wholesale_price'        => ['wholesale_price', 'wholesale price', 'ws_price', 'wholesale', 'base_wholesale_price', 'unit_wholesale_price', 'pack_wholesale_price', 'carton_wholesale_price', 'wholesale price ₦', 'wholesale price n', 'wholesale price ngn', 'wholesale price $', 'wholesale price usd'],
         'is_base_unit'           => ['is_base_unit', 'is base unit', 'base_unit', 'is_base', 'base', 'is base', 'is_based_unit'],
-        'track_by_imei'          => ['track_by_imei', 'track by imei', 'is_imei_tracked', 'imei_tracked', 'imei tracking', 'imei', 'track_imei'],
-        'initial_stock_quantity' => ['initial_stock_quantity', 'initial stock quantity', 'initial_stock', 'initial stock', 'stock', 'stock_qty', 'qty', 'quantity', 'front_store_qty', 'front_qty'],
-        'back_store_quantity'    => ['back_store_qty', 'back_store_quantity', 'back store quantity', 'back_qty', 'warehouse_qty'],
+        'track_by_imei'          => ['track_by_imei', 'track by imei', 'is_imei_tracked', 'imei_tracked', 'imei tracked', 'imei tracking', 'imei', 'track_imei'],
+        'initial_stock_quantity' => ['initial_stock_quantity', 'initial stock quantity', 'initial_stock', 'initial stock', 'stock', 'stock_qty', 'qty', 'quantity', 'front_store_qty', 'front_qty', 'front store qty', 'front store quantity', 'front store stock', 'front store', 'total_stock_qty', 'total stock qty', 'total_stock', 'total stock', 'total_stock_quantity', 'total stock quantity'],
+        'back_store_quantity'    => ['back_store_qty', 'back_store_quantity', 'back store quantity', 'back store qty', 'back store stock', 'back store', 'back_qty', 'warehouse_qty', 'warehouse quantity'],
         'expiry_date'            => ['expiry_date', 'expiry date', 'expiration_date', 'expiration date', 'expiry', 'exp_date'],
     ];
 
@@ -107,9 +107,38 @@ class ItemImportService
         $hasIsBaseUnitCol = false;
 
         foreach ($headerRow as $colLetter => $headerText) {
-            $normalizedHeader = strtolower(trim(preg_replace('/[\s\-_]+/', ' ', (string) $headerText)));
+            $rawText = (string) $headerText;
+            if (trim($rawText) === '') {
+                continue;
+            }
+
+            // Strip parenthetical content such as currency notes: (₦), (NGN), ($), (USD), (units), etc.
+            $clean = preg_replace('/\([^)]*\)/u', '', $rawText);
+            // Replace slashes, backslashes, and pipes with spaces: 'Barcode / SKU' -> 'Barcode   SKU'
+            $clean = str_replace(['/', '\\', '|'], ' ', $clean);
+            // Strip standalone currency symbols
+            $clean = preg_replace('/[₦$€£]/u', '', $clean);
+            // Normalize spaces/hyphens/underscores to single space
+            $normalizedHeader = strtolower(trim(preg_replace('/[\s\-_]+/u', ' ', $clean)));
+            $rawNormalized = strtolower(trim(preg_replace('/[\s\-_]+/u', ' ', $rawText)));
+
             foreach (self::$headerAliases as $standardKey => $aliases) {
-                if (in_array($normalizedHeader, $aliases, true)) {
+                if (in_array($normalizedHeader, $aliases, true) || in_array($rawNormalized, $aliases, true)) {
+                    // Check if standardKey was already mapped to a column
+                    if (in_array($standardKey, $columnMap, true)) {
+                        // Special handling for initial_stock_quantity:
+                        // 'front store qty' is more specific than 'total stock qty'.
+                        // If previously mapped column wasn't front store, but current one is, reassign to current.
+                        if ($standardKey === 'initial_stock_quantity' && str_contains($normalizedHeader, 'front')) {
+                            $prevCol = array_search('initial_stock_quantity', $columnMap, true);
+                            if ($prevCol !== false) {
+                                unset($columnMap[$prevCol]);
+                            }
+                            $columnMap[$colLetter] = $standardKey;
+                        }
+                        continue;
+                    }
+
                     $columnMap[$colLetter] = $standardKey;
                     if ($standardKey === 'item_ref') {
                         $hasItemRefCol = true;
@@ -173,11 +202,19 @@ class ItemImportService
                 switch ($key) {
                     case 'item_ref':
                     case 'item_name':
-                    case 'category':
-                    case 'group_address':
                     case 'description':
                     case 'unit_name':
                         $mappedData[$key] = $val !== '' ? $val : null;
+                        break;
+
+                    case 'category':
+                    case 'group_address':
+                        $valStr = trim((string) $val);
+                        if ($valStr === '' || in_array(strtoupper($valStr), ['-', '--', '---', 'N/A', 'NONE', 'NULL'], true)) {
+                            $mappedData[$key] = null;
+                        } else {
+                            $mappedData[$key] = $valStr;
+                        }
                         break;
 
                     case 'barcode':
@@ -199,7 +236,7 @@ class ItemImportService
                         }
 
                         $valUpper = strtoupper($valStr);
-                        if ($valStr === '' || in_array($valUpper, ['NULL', 'N/A', 'NONE', 'NO_BARCODE', 'NO-BARCODE'], true)) {
+                        if ($valStr === '' || in_array($valUpper, ['NULL', 'N/A', 'NONE', 'NO_BARCODE', 'NO-BARCODE', '-', '--', '---'], true)) {
                             $mappedData[$key] = null;
                         } else {
                             $mappedData[$key] = $valStr;
@@ -351,7 +388,16 @@ class ItemImportService
                     $groupErrors[] = "Item Name is required.";
                 }
 
-                if ($baseRow['data']['selling_price'] === null || $baseRow['data']['selling_price'] < 0) {
+                // If selling price is empty or 0, fall back to wholesale price or cost price if available
+                if ($baseRow['data']['selling_price'] === null || (float) $baseRow['data']['selling_price'] <= 0) {
+                    if (!empty($baseRow['data']['wholesale_price']) && (float) $baseRow['data']['wholesale_price'] > 0) {
+                        $baseRow['data']['selling_price'] = (float) $baseRow['data']['wholesale_price'];
+                    } elseif (!empty($baseRow['data']['cost_price']) && (float) $baseRow['data']['cost_price'] > 0) {
+                        $baseRow['data']['selling_price'] = (float) $baseRow['data']['cost_price'];
+                    }
+                }
+
+                if ($baseRow['data']['selling_price'] === null || (float) $baseRow['data']['selling_price'] < 0) {
                     $baseRow['errors'][] = "Base Unit Selling Price must be a valid positive number.";
                     $groupErrors[] = "Base Unit Selling Price must be a valid positive number.";
                 }
@@ -372,7 +418,14 @@ class ItemImportService
                         $vRow['errors'][] = "Variant quantity_in_base_units must be a whole number greater than 0.";
                         $groupErrors[] = "Variant conversion quantity must be > 0.";
                     }
-                    if ($vRow['data']['selling_price'] === null || $vRow['data']['selling_price'] < 0) {
+                    if ($vRow['data']['selling_price'] === null || (float) $vRow['data']['selling_price'] <= 0) {
+                        if (!empty($vRow['data']['wholesale_price']) && (float) $vRow['data']['wholesale_price'] > 0) {
+                            $vRow['data']['selling_price'] = (float) $vRow['data']['wholesale_price'];
+                        } elseif (!empty($baseRow['data']['selling_price']) && (float) $baseRow['data']['selling_price'] > 0) {
+                            $vRow['data']['selling_price'] = (float) $baseRow['data']['selling_price'];
+                        }
+                    }
+                    if ($vRow['data']['selling_price'] === null || (float) $vRow['data']['selling_price'] < 0) {
                         $vRow['errors'][] = "Variant Selling Price must be a valid positive number.";
                         $groupErrors[] = "Variant Selling Price must be a valid positive number.";
                     }
@@ -590,7 +643,7 @@ class ItemImportService
                 $barcode = !empty($baseRow['barcode']) ? trim((string) $baseRow['barcode']) : null;
                 if ($barcode !== null) {
                     $valUpper = strtoupper($barcode);
-                    if ($valUpper === '' || in_array($valUpper, ['NULL', 'N/A', 'NONE', 'NO_BARCODE', 'NO-BARCODE'], true)) {
+                    if ($valUpper === '' || in_array($valUpper, ['NULL', 'N/A', 'NONE', 'NO_BARCODE', 'NO-BARCODE', '-', '--', '---'], true)) {
                         $barcode = null;
                     }
                 }

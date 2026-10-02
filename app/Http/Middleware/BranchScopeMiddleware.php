@@ -38,11 +38,21 @@ class BranchScopeMiddleware
             return $next($request);
         }
 
+        // Organization Admin may access branches belonging to their organization
+        if ($user->isOrganizationAdmin() && $user->organization_id && (int) $branch->organization_id === (int) $user->organization_id) {
+            return $next($request);
+        }
+
         // User is not active
         if (!$user->is_active) {
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();
+
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'Your account has been disabled.'], 403);
+            }
+
             return redirect()
                 ->route('pos.login', ['branch' => $branch->slug])
                 ->withErrors(['login' => 'Your account has been disabled.']);
@@ -50,6 +60,17 @@ class BranchScopeMiddleware
 
         // User belongs to a different branch
         if ($user->branch_id !== $branch->id) {
+            if ($request->expectsJson()) {
+                return response()->json(['message' => 'You do not have access to this branch.'], 403);
+            }
+
+            // If user belongs to another branch, redirect them safely to their own branch instead of destructively destroying their session
+            if ($user->branch_id && $user->branch) {
+                return redirect()
+                    ->route('pos.index', ['branch' => $user->branch->slug])
+                    ->withErrors(['login' => "You do not have access to branch '{$branch->name}'. Redirected to your branch."]);
+            }
+
             Auth::guard('web')->logout();
             $request->session()->invalidate();
             $request->session()->regenerateToken();

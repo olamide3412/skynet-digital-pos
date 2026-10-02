@@ -22,6 +22,12 @@ class ResolveBranchMiddleware
             return $next($request);
         }
 
+        // Never attempt to resolve reserved portal prefixes as branch slugs
+        $reserved = config('organizations.reserved_slugs', ['org', 'superadmin', 'admin', 'api']);
+        if (in_array(strtolower((string) $slug), $reserved, true)) {
+            return $this->branchNotFound($request);
+        }
+
         // Resolve branch by slug
         $branch = Branch::where('slug', $slug)->first();
 

@@ -4,7 +4,13 @@ import { computed } from 'vue';
 
 defineEmits(['close']);
 const page = usePage();
-const branchSlug = computed(() => page.props.current_branch?.slug || 'felix-enterprise');
+const branchSlug = computed(() => {
+    return page.props.current_branch?.slug 
+        || page.props.branch?.slug 
+        || page.props.auth?.user?.branch?.slug 
+        || (typeof window !== 'undefined' ? window.location.pathname.split('/').filter(Boolean)[0] : '')
+        || ''
+});
 const liClasses = 'block px-2 py-0 text-gray-700 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-700';
 </script>
 

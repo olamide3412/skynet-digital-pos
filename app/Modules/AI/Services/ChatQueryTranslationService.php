@@ -43,7 +43,7 @@ class ChatQueryTranslationService
 
         $q = strtolower(trim($question));
 
-        // 0. Super Admin dynamic branch resolution from question
+        // 0. Branch resolution from question (enforcing user role boundaries)
         if ($user->is_super_admin) {
             $allBranches = Branch::where('is_active', true)->get();
             foreach ($allBranches as $b) {
@@ -54,6 +54,24 @@ class ChatQueryTranslationService
                     $branch = $b;
                     break;
                 }
+            }
+        } elseif ($user->isOrganizationAdmin()) {
+            // Organization Admin: strictly scope to branches in their organization
+            $orgBranches = Branch::where('organization_id', $user->organization_id)->get();
+            $matched = null;
+            foreach ($orgBranches as $b) {
+                if (
+                    str_contains($q, strtolower($b->name)) ||
+                    (!empty($b->slug) && str_contains($q, strtolower($b->slug)))
+                ) {
+                    $matched = $b;
+                    break;
+                }
+            }
+            if ($matched) {
+                $branch = $matched;
+            } elseif ($branch && $branch->organization_id !== $user->organization_id) {
+                $branch = null;
             }
         } else {
             // Branch user: strictly isolate to their assigned branch
@@ -224,9 +242,36 @@ USER_PROMPT;
         }
 
         // ── 3. Inventory Valuation & Total Item Worth ────────────────────────
+        $hasInventoryWord = str_contains($q, 'inventory') ||
+            str_contains($q, 'stock') ||
+            str_contains($q, 'sock') || // common typo for stock
+            str_contains($q, 'item') ||
+            str_contains($q, 'items') ||
+            str_contains($q, 'goods') ||
+            str_contains($q, 'catalog');
+
+        $hasValuationWord = str_contains($q, 'worth') ||
+            str_contains($q, 'wort') || // common typo for worth
+            str_contains($q, 'valuation') ||
+            str_contains($q, 'value') ||
+            str_contains($q, 'carrying the most') ||
+            str_contains($q, 'most value') ||
+            str_contains($q, 'total value') ||
+            str_contains($q, 'stock value') ||
+            str_contains($q, 'cost value') ||
+            str_contains($q, 'how much is') ||
+            str_contains($q, 'how much are');
+
         if (
-            (str_contains($q, 'inventory') || str_contains($q, 'stock') || str_contains($q, 'item') || str_contains($q, 'goods')) &&
-            (str_contains($q, 'worth') || str_contains($q, 'valuation') || str_contains($q, 'carrying the most') || str_contains($q, 'most value') || str_contains($q, 'total value') || str_contains($q, 'stock value'))
+            ($hasInventoryWord && $hasValuationWord) ||
+            str_contains($q, 'inventory worth') ||
+            str_contains($q, 'stock worth') ||
+            str_contains($q, 'inventory value') ||
+            str_contains($q, 'stock valuation') ||
+            str_contains($q, 'worth of the stock') ||
+            str_contains($q, 'worth of stock') ||
+            str_contains($q, 'value of stock') ||
+            str_contains($q, 'value of the stock')
         ) {
             return self::resolveInventoryValuation($q, $branch, $user, $scopeName);
         }
@@ -817,7 +862,11 @@ USER_PROMPT;
             'date', 'do', 'we', 'have', 'can', 'you', 'tell', 'me', 'about', 'details',
             'give', 'check', 'search', 'lookup', 'available', 'remaining', 'count', 'quantity',
             'warehouse', 'store', 'front', 'back', 'item', 'product', 'please', 'there',
-            'at', 'our', 'branch', 'shop', 'business', 'currently', 'show', 'find', 'get'
+            'at', 'our', 'branch', 'shop', 'business', 'currently', 'show', 'find', 'get',
+            // Valuation & General Inventory inquiry tokens to prevent accidental product matches:
+            'total', 'inventory', 'worth', 'wort', 'value', 'valuation', 'my', 'right', 'now',
+            'all', 'overall', 'entire', 'whole', 'current', 'today', 'goods', 'sock', 'level',
+            'levels', 'summary', 'report', 'worthwhile', 'whats', 'what\'s', 'calculate', 'bring'
         ];
 
         $tokens = preg_split('/[\s,;:\?\!]+/', $q);
@@ -1094,7 +1143,7 @@ USER_PROMPT;
      */
     protected static function userCan(User $user, string $permission): bool
     {
-        if ($user->isSuperAdmin() || $user->isBranchAdmin()) {
+        if ($user->isSuperAdmin() || $user->isBranchAdmin() || $user->isOrganizationAdmin()) {
             return true;
         }
         if ($user->branch_id) {
@@ -1199,20 +1248,39 @@ USER_PROMPT;
                       ->first();
         }
 
-        // Branch-scoping rule: Branch Admin can only view their own branch
+        // Tenant scoping rule:
+        // Platform Super Admin -> can view all receipts
+        // Organization Admin -> can only view receipts from branches within their organization
+        // Branch staff -> can only view receipts from their assigned branch
         if ($foundSale && !$user->is_super_admin) {
-            $userBranchId = $branch ? $branch->id : $user->branch_id;
-            if ($userBranchId && $foundSale->branch_id !== $userBranchId) {
-                return [
-                    'intent'    => 'receipt_lookup',
-                    'grounding' => 'Enforced branch isolation boundary for sale receipt lookup.',
-                    'data'      => [
-                        'receipt_no' => $receiptCode,
-                        'found'      => false,
-                        'error'      => 'cross_branch_denied',
-                        'message'    => "Receipt **{$receiptCode}** exists in the system but belongs to another branch (**{$foundSale->branch?->name}**). As a branch user, you can only look up receipts issued at **" . ($branch?->name ?? 'your branch') . "**.",
-                    ],
-                ];
+            if ($user->isOrganizationAdmin()) {
+                $orgBranchIds = Branch::where('organization_id', $user->organization_id)->pluck('id')->all();
+                if (!in_array($foundSale->branch_id, $orgBranchIds)) {
+                    return [
+                        'intent'    => 'receipt_lookup',
+                        'grounding' => 'Enforced organization tenant isolation boundary for sale receipt lookup.',
+                        'data'      => [
+                            'receipt_no' => $receiptCode,
+                            'found'      => false,
+                            'error'      => 'cross_org_denied',
+                            'message'    => "Receipt **{$receiptCode}** exists in the system but belongs to another organization. You can only look up receipts issued by your organization's branches.",
+                        ],
+                    ];
+                }
+            } else {
+                $userBranchId = $branch ? $branch->id : $user->branch_id;
+                if ($userBranchId && $foundSale->branch_id !== $userBranchId) {
+                    return [
+                        'intent'    => 'receipt_lookup',
+                        'grounding' => 'Enforced branch isolation boundary for sale receipt lookup.',
+                        'data'      => [
+                            'receipt_no' => $receiptCode,
+                            'found'      => false,
+                            'error'      => 'cross_branch_denied',
+                            'message'    => "Receipt **{$receiptCode}** exists in the system but belongs to another branch (**{$foundSale->branch?->name}**). As a branch user, you can only look up receipts issued at **" . ($branch?->name ?? 'your branch') . "**.",
+                        ],
+                    ];
+                }
             }
         }
 
@@ -1527,47 +1595,13 @@ USER_PROMPT;
      */
     protected static function resolveInventoryValuation(string $q, ?Branch $branch, User $user, string $scopeName): array
     {
-        // 1. Check if asking about a specific item (e.g. "What's the stock value of Peak Milk Sachet?")
-        $itemResults = self::searchSpecificItemData($q, $branch, $user);
-        if (!empty($itemResults['items']) && count($itemResults['items']) <= 3) {
-            $item = $itemResults['items'][0];
-            $costValuation = (float)$item['buy_price'] * (int)$item['total_stock_qty'];
-            $retailValuation = (float)$item['selling_price'] * (int)$item['total_stock_qty'];
-            $estimatedProfit = $retailValuation - $costValuation;
-            $marginPct = $retailValuation > 0 ? round(($estimatedProfit / $retailValuation) * 100, 1) : 0;
-
-            return [
-                'intent'    => 'inventory_valuation',
-                'grounding' => 'Calculated cost valuation and retail selling potential for specific matched inventory item.',
-                'data'      => [
-                    'scope'                 => $scopeName,
-                    'type'                  => 'specific_item',
-                    'item_name'             => $item['item_name'],
-                    'barcode'               => $item['barcode_number'],
-                    'category'              => $item['category'],
-                    'total_stock_qty'       => (int)$item['total_stock_qty'],
-                    'front_store_qty'       => (int)$item['front_store_qty'],
-                    'back_store_qty'        => (int)$item['back_store_qty'],
-                    'unit_label'            => $item['unit_label'],
-                    'buy_price'             => (float)$item['buy_price'],
-                    'selling_price'         => (float)$item['selling_price'],
-                    'wholesale_price'       => (float)$item['wholesale_price'],
-                    'cost_valuation'        => round($costValuation, 2),
-                    'retail_valuation'      => round($retailValuation, 2),
-                    'potential_profit'      => round($estimatedProfit, 2),
-                    'gross_margin_pct'      => $marginPct,
-                    'cross_branch_stock'    => $item['cross_branch_stock'] ?? [],
-                ],
-            ];
-        }
-
-        // 2. Check if asking cross-branch comparison: "Which branch is carrying the most inventory value?"
+        // 1. Check if asking cross-branch comparison: "Which branch is carrying the most inventory value?"
         $isCrossBranch = (!$branch || str_contains($q, 'which branch') || str_contains($q, 'across branches') || str_contains($q, 'most inventory value') || str_contains($q, 'compare branches'));
         if ($isCrossBranch && $user->is_super_admin) {
             $branches = Branch::where('is_active', true)->get();
             $branchValuations = $branches->map(function ($b) {
                 $items = Item::where('branch_id', $b->id)->get();
-                $costVal = (float) $items->sum('stock_worth');
+                $costVal = (float) $items->sum(fn($i) => (float)($i->stock_worth > 0 ? $i->stock_worth : ((float)$i->buy_price * ((int)$i->front_store_qty + (int)$i->back_store_qty))));
                 $retailVal = (float) $items->sum(fn($i) => (float)$i->price * ((int)$i->front_store_qty + (int)$i->back_store_qty));
                 $totalUnits = (int) $items->sum(fn($i) => (int)$i->front_store_qty + (int)$i->back_store_qty);
 
@@ -1598,11 +1632,83 @@ USER_PROMPT;
             ];
         }
 
+        // 2. Check if asking about a specific item (e.g. "What's the stock value of Peak Milk Sachet?")
+        // NOTE: Only consider specific item if query is NOT explicitly asking for total / overall / store inventory worth!
+        $isGeneralValuation = str_contains($q, 'total') ||
+            str_contains($q, 'overall') ||
+            str_contains($q, 'entire') ||
+            str_contains($q, 'whole') ||
+            str_contains($q, 'all') ||
+            str_contains($q, 'in the store') ||
+            str_contains($q, 'in store') ||
+            str_contains($q, 'in the shop') ||
+            str_contains($q, 'in shop') ||
+            str_contains($q, 'my inventory') ||
+            str_contains($q, 'our inventory') ||
+            str_contains($q, 'the inventory') ||
+            str_contains($q, 'my stock') ||
+            str_contains($q, 'our stock') ||
+            str_contains($q, 'the stock') ||
+            str_contains($q, 'right now') ||
+            str_contains($q, 'currently') ||
+            str_contains($q, 'today') ||
+            str_contains($q, 'worth of the sock') ||
+            str_contains($q, 'wort of the sock') ||
+            str_contains($q, 'worth of the stock') ||
+            str_contains($q, 'sock in the store') ||
+            str_contains($q, 'inventory worth') ||
+            str_contains($q, 'stock worth') ||
+            str_contains($q, 'inventory value') ||
+            str_contains($q, 'stock valuation') ||
+            str_contains($q, 'inventory valuation') ||
+            !str_contains($q, ' of ');
+
+        if (!$isGeneralValuation) {
+            $itemResults = self::searchSpecificItemData($q, $branch, $user);
+            if (!empty($itemResults['items']) && count($itemResults['items']) <= 3) {
+                $item = $itemResults['items'][0];
+                $costValuation = (float)$item['buy_price'] * (int)$item['total_stock_qty'];
+                $retailValuation = (float)$item['selling_price'] * (int)$item['total_stock_qty'];
+                $estimatedProfit = $retailValuation - $costValuation;
+                $marginPct = $retailValuation > 0 ? round(($estimatedProfit / $retailValuation) * 100, 1) : 0;
+
+                return [
+                    'intent'    => 'inventory_valuation',
+                    'grounding' => 'Calculated cost valuation and retail selling potential for specific matched inventory item.',
+                    'data'      => [
+                        'scope'                 => $scopeName,
+                        'type'                  => 'specific_item',
+                        'item_name'             => $item['item_name'],
+                        'barcode'               => $item['barcode_number'],
+                        'category'              => $item['category'],
+                        'total_stock_qty'       => (int)$item['total_stock_qty'],
+                        'front_store_qty'       => (int)$item['front_store_qty'],
+                        'back_store_qty'        => (int)$item['back_store_qty'],
+                        'unit_label'            => $item['unit_label'],
+                        'buy_price'             => (float)$item['buy_price'],
+                        'selling_price'         => (float)$item['selling_price'],
+                        'wholesale_price'       => (float)$item['wholesale_price'],
+                        'cost_valuation'        => round($costValuation, 2),
+                        'retail_valuation'      => round($retailValuation, 2),
+                        'potential_profit'      => round($estimatedProfit, 2),
+                        'gross_margin_pct'      => $marginPct,
+                        'cross_branch_stock'    => $item['cross_branch_stock'] ?? [],
+                    ],
+                ];
+            }
+        }
+
         // 3. General Branch / Store Inventory Worth
         $itemsQuery = Item::when($branch, fn($query) => $query->where('branch_id', $branch->id));
         $allItems = $itemsQuery->get();
 
-        $totalCostValuation = (float) $allItems->sum('stock_worth');
+        $totalCostValuation = (float) $allItems->sum(function($i) {
+            $qty = (int)$i->front_store_qty + (int)$i->back_store_qty;
+            if ($i->stock_worth > 0) {
+                return (float) $i->stock_worth;
+            }
+            return (float)$i->buy_price * $qty;
+        });
         $totalRetailValuation = (float) $allItems->sum(fn($i) => (float)$i->price * ((int)$i->front_store_qty + (int)$i->back_store_qty));
         $totalFrontUnits = (int) $allItems->sum('front_store_qty');
         $totalBackUnits = (int) $allItems->sum('back_store_qty');
@@ -1611,14 +1717,21 @@ USER_PROMPT;
         $grossMarginPct = $totalRetailValuation > 0 ? round(($potentialProfit / $totalRetailValuation) * 100, 1) : 0;
 
         // Top 5 highest-worth items
-        $topValuedItems = $allItems->sortByDesc('stock_worth')->take(5)->map(fn($i) => [
-            'item_name'       => $i->item_name,
-            'total_qty'       => (int) ($i->front_store_qty + $i->back_store_qty),
-            'cost_price'      => (float) $i->buy_price,
-            'retail_price'    => (float) $i->price,
-            'stock_worth'     => (float) $i->stock_worth,
-            'retail_worth'    => round((float)$i->price * ((int)$i->front_store_qty + (int)$i->back_store_qty), 2),
-        ])->values()->all();
+        $topValuedItems = $allItems->sortByDesc(function($i) {
+            $qty = (int)$i->front_store_qty + (int)$i->back_store_qty;
+            return (float)($i->stock_worth > 0 ? $i->stock_worth : ((float)$i->buy_price * $qty));
+        })->take(5)->map(function($i) {
+            $qty = (int)$i->front_store_qty + (int)$i->back_store_qty;
+            $worth = (float)($i->stock_worth > 0 ? $i->stock_worth : ((float)$i->buy_price * $qty));
+            return [
+                'item_name'       => $i->item_name,
+                'total_qty'       => $qty,
+                'cost_price'      => (float) $i->buy_price,
+                'retail_price'    => (float) $i->price,
+                'stock_worth'     => round($worth, 2),
+                'retail_worth'    => round((float)$i->price * $qty, 2),
+            ];
+        })->values()->all();
 
         return [
             'intent'    => 'inventory_valuation',
@@ -2279,6 +2392,8 @@ USER_PROMPT;
         }
 
         // General valuation
+        $out .= "Your current inventory in stock is worth **₦" . number_format($p['total_cost_valuation'], 2) . "** at purchase cost price, with an estimated retail selling value of **₦" . number_format($p['total_retail_valuation'], 2) . "** across {$p['total_catalog_products']} products ({$p['total_units_in_stock']} total units on hand).\n\n";
+
         $out .= "| Valuation Metric | Amount (₦) |\n";
         $out .= "| :--- | :--- |\n";
         $out .= "| **Total Stock Worth (at Cost)** | **₦" . number_format($p['total_cost_valuation'], 2) . "** |\n";

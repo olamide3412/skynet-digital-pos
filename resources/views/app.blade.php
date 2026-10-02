@@ -267,8 +267,7 @@
     @inertiaHead()
     @php
         $activeBranchSlug = $currentBranch?->slug 
-            ?? (\Illuminate\Support\Facades\URL::getDefaultParameters()['branch'] ?? null)
-            ?? \App\Models\Branch::orderBy('id')->value('slug');
+            ?? (\Illuminate\Support\Facades\URL::getDefaultParameters()['branch'] ?? null);
         if ($activeBranchSlug) {
             \Illuminate\Support\Facades\URL::defaults(['branch' => $activeBranchSlug]);
         }

@@ -12,7 +12,9 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 use PhpOffice\PhpSpreadsheet\Writer\Csv as CsvWriter;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
 class ReorderPointController extends Controller
 {
@@ -178,6 +180,7 @@ class ReorderPointController extends Controller
             ->setFillType(Fill::FILL_SOLID)
             ->getStartColor()->setRGB('059669'); // Emerald
 
+        $format = strtolower($request->get('format', 'xlsx')) === 'csv' ? 'csv' : 'xlsx';
         $rowNum = 2;
         $idx = 1;
         foreach ($filtered as $item) {
@@ -197,7 +200,17 @@ class ReorderPointController extends Controller
             $col = 1;
             $sheet->setCellValue([$col++, $rowNum], $idx++);
             $sheet->setCellValue([$col++, $rowNum], $item->item_name);
-            $sheet->setCellValue([$col++, $rowNum], $item->barcode_number ?: '-');
+            if (!empty($item->barcode_number)) {
+                $barcodeVal = (string) $item->barcode_number;
+                if ($format === 'csv') {
+                    $sheet->setCellValueExplicit([$col++, $rowNum], '="' . $barcodeVal . '"', DataType::TYPE_STRING);
+                } else {
+                    $sheet->setCellValueExplicit([$col++, $rowNum], $barcodeVal, DataType::TYPE_STRING);
+                    $sheet->getStyle([$col - 1, $rowNum])->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+                }
+            } else {
+                $sheet->setCellValue([$col++, $rowNum], '-');
+            }
             $sheet->setCellValue([$col++, $rowNum], $item->category?->name ?: 'Uncategorized');
             $sheet->setCellValue([$col++, $rowNum], (int) $item->front_store_qty);
             $sheet->setCellValue([$col++, $rowNum], (int) $item->back_store_qty);
@@ -212,16 +225,20 @@ class ReorderPointController extends Controller
             $rowNum++;
         }
 
+        if ($format !== 'csv' && $rowNum > 2) {
+            $sheet->getStyle('C2:C' . ($rowNum - 1))->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        }
+
         for ($c = 1; $c <= count($headers); $c++) {
             $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($c))->setAutoSize(true);
         }
 
-        $format = strtolower($request->get('format', 'xlsx')) === 'csv' ? 'csv' : 'xlsx';
         $filename = 'reorder_points_' . $branch->slug . '_' . date('Y-m-d_His') . '.' . $format;
 
         if ($format === 'csv') {
             $writer = new CsvWriter($spreadsheet);
             $writer->setUseBOM(true);
+            $writer->setPreCalculateFormulas(false);
             $contentType = 'text/csv; charset=UTF-8';
         } else {
             $writer = new XlsxWriter($spreadsheet);

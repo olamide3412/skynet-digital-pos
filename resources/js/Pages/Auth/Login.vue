@@ -3,6 +3,7 @@ import { useForm, usePage, Head } from '@inertiajs/vue3'
 import { ref, computed, onMounted } from 'vue'
 import Logo from '../../../images/logo.png'
 import TextInput from '@/Components/Forms/TextInput.vue'
+import ThemeToggle from '@/Components/ThemeToggle.vue'
 import { useToast } from 'vue-toastification'
 
 const props = defineProps({
@@ -160,9 +161,14 @@ const handleLogin = () => {
         <meta name="robots" content="noindex, nofollow" />
     </Head>
 
-    <div class="min-h-screen flex items-center justify-center px-4 py-8 bg-slate-100 dark:bg-slate-950 transition-colors">
+    <div class="min-h-screen flex flex-col items-center justify-between p-4 sm:p-6 bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-200 font-sans">
+        <!-- Top Row: Theme Toggle -->
+        <div class="w-full max-w-md flex justify-end pt-2 pb-1">
+            <ThemeToggle />
+        </div>
+
         <!-- Login Card -->
-        <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-6">
+        <div class="my-auto w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-6 transition-colors duration-200">
             
             <!-- Customized Branch Branding Header -->
             <div class="text-center space-y-2">

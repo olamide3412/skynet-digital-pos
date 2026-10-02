@@ -102,13 +102,14 @@ export function getActiveBranchSlug(pageProps) {
     const pathname = window.location.pathname;
     const segments = pathname.split('/').filter(Boolean);
     const firstSegment = segments[0] || '';
-    const reserved = ['superadmin', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
+    const reserved = ['superadmin', 'org', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
     const urlBranch = (!reserved.includes(firstSegment) && firstSegment) ? firstSegment : null;
 
-    return pageProps?.current_branch?.slug
+    return urlBranch
+        || pageProps?.current_branch?.slug
         || pageProps?.branch?.slug
+        || pageProps?.auth?.user?.branch?.slug
         || pageProps?.default_branch?.slug
-        || urlBranch
         || (window.Ziggy?.defaults?.branch || null);
 }
 
@@ -119,7 +120,10 @@ function syncZiggyDefaults(branchSlug) {
         }
         if (branchSlug) {
             window.Ziggy.defaults.branch = branchSlug;
-        } else if (window.location.pathname.startsWith('/superadmin') && window.Ziggy.defaults.branch) {
+        } else if (
+            (window.location.pathname.startsWith('/superadmin') || window.location.pathname.startsWith('/org')) &&
+            window.Ziggy.defaults.branch
+        ) {
             delete window.Ziggy.defaults.branch;
         }
     }
@@ -131,7 +135,7 @@ router.on('start', (event) => {
         const urlStr = event?.detail?.visit?.url?.pathname || event?.detail?.visit?.url?.href || '';
         const path = urlStr.startsWith('http') ? new URL(urlStr).pathname : urlStr;
         const first = path.split('/').filter(Boolean)[0];
-        const reserved = ['superadmin', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
+        const reserved = ['superadmin', 'org', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
         if (first && !reserved.includes(first)) {
             syncZiggyDefaults(first);
         }
@@ -173,6 +177,7 @@ createInertiaApp({
                 if (
                     name.startsWith('Admin/') ||
                     name.startsWith('SuperAdmin/') ||
+                    name.startsWith('Org/') ||
                     name.startsWith('AI/') ||
                     name.startsWith('Auth/') ||
                     name.startsWith('Notifications/') ||
@@ -234,7 +239,9 @@ createInertiaApp({
         if (rawRoute) {
             const smartRoute = (name, params, absolute, config) => {
                 if (typeof name === 'string' && name.startsWith('pos.')) {
-                    const currentSlug = window.Ziggy?.defaults?.branch || getActiveBranchSlug(props.initialPage.props);
+                    const currentSlug = getActiveBranchSlug(router.page?.props)
+                        || window.Ziggy?.defaults?.branch
+                        || getActiveBranchSlug(props.initialPage.props);
                     if (currentSlug) {
                         syncZiggyDefaults(currentSlug);
                     }

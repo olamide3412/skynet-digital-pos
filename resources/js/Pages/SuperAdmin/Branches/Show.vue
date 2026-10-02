@@ -7,6 +7,10 @@ defineOptions({ layout: SuperAdminLayout })
 
 const props = defineProps({
     branch: Object,
+    all_organizations: {
+        type: Array,
+        default: () => [],
+    },
     settings: Object,
     stats: Object,
     users: Array,
@@ -71,6 +75,21 @@ const handleProfileSubmit = () => {
 const submitProfile = () => {
     showSlugWarningModal.value = false
     profileForm.put(route('superadmin.branches.update', { branch: props.branch.slug }))
+}
+
+// ── Organization & Move Action ────────────────────────────────────────────────
+const showMoveOrgModal = ref(false)
+const moveOrgForm = useForm({
+    organization_id: props.branch.organization?.id || '',
+})
+
+const submitMoveOrg = () => {
+    moveOrgForm.post(route('superadmin.branches.move-organization', { branch: props.branch.slug }), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showMoveOrgModal.value = false
+        }
+    })
 }
 
 // ── Logo Upload ───────────────────────────────────────────────────────────────
@@ -762,6 +781,15 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                 <span class="w-1.5 h-1.5 rounded-full" :class="settings.is_offline_qty_deduction ? 'bg-emerald-500' : 'bg-amber-500'"></span>
                                 {{ settings.is_offline_qty_deduction ? 'Offline Stock Deduction Active' : 'Offline Stock Deduction Skipped' }}
                             </span>
+                            <Link
+                                v-if="$page.props.organizations_enabled && branch.organization"
+                                :href="route('superadmin.organizations.show', branch.organization.id)"
+                                class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 transition flex items-center gap-1.5"
+                                title="View parent organization"
+                            >
+                                <span>🏢</span>
+                                <span>Org: <strong>{{ branch.organization.name }}</strong></span>
+                            </Link>
                         </div>
 
                         <!-- Full Shareable Link & Contact Row -->
@@ -1071,6 +1099,21 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                     <!-- Meta Information Card -->
                     <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-3 text-xs">
                         <h2 class="text-sm font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-800 pb-2">Branch Meta</h2>
+                        <div v-if="$page.props.organizations_enabled" class="flex items-center justify-between py-1 border-b border-slate-100 dark:border-slate-800/60">
+                            <span class="text-slate-400">Organization:</span>
+                            <div class="flex items-center gap-2">
+                                <span class="font-semibold text-purple-700 dark:text-purple-300">
+                                    {{ branch.organization?.name || 'Unassigned' }}
+                                </span>
+                                <button
+                                    @click="showMoveOrgModal = true"
+                                    type="button"
+                                    class="px-2 py-0.5 text-[11px] font-bold bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/50 dark:hover:bg-purple-900/50 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-md transition cursor-pointer"
+                                >
+                                    Move
+                                </button>
+                            </div>
+                        </div>
                         <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-800/60">
                             <span class="text-slate-400">Created On:</span>
                             <span class="font-semibold text-slate-700 dark:text-slate-300">{{ branch.created_at }}</span>
@@ -2986,6 +3029,66 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                         <span>Download {{ exportForm.format.toUpperCase() }}</span>
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Move Branch Organization Modal -->
+        <div v-if="showMoveOrgModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 flex items-center justify-center text-sm font-bold">
+                            🏢
+                        </div>
+                        <h2 class="font-bold text-slate-900 dark:text-slate-100 text-sm">Move Branch Organization</h2>
+                    </div>
+                    <button @click="showMoveOrgModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold">&times;</button>
+                </div>
+
+                <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1.5 leading-relaxed bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200 dark:border-slate-700/60">
+                    <div>Branch: <strong class="text-slate-900 dark:text-slate-100 font-bold">{{ branch.name }}</strong> (<code>{{ branch.slug }}</code>)</div>
+                    <div>Current Org: <strong class="text-purple-600 dark:text-purple-400 font-semibold">{{ branch.organization?.name || 'Unassigned' }}</strong></div>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 pt-1">
+                        Moving only reassigns this branch to a different client organization. All transactional sales, stock, staff accounts, and history stay intact.
+                    </p>
+                </div>
+
+                <form @submit.prevent="submitMoveOrg" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Destination Organization <span class="text-rose-500">*</span>
+                        </label>
+                        <select
+                            v-model="moveOrgForm.organization_id"
+                            required
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-purple-500 transition cursor-pointer"
+                        >
+                            <option value="" disabled>-- Select Destination Organization --</option>
+                            <option v-for="org in all_organizations" :key="org.id" :value="org.id">
+                                {{ org.name }}
+                            </option>
+                        </select>
+                        <div v-if="moveOrgForm.errors.organization_id" class="text-rose-500 text-xs mt-1">{{ moveOrgForm.errors.organization_id }}</div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5">
+                        <button
+                            type="button"
+                            @click="showMoveOrgModal = false"
+                            class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="moveOrgForm.processing || !moveOrgForm.organization_id"
+                            class="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition shadow-sm disabled:opacity-50 cursor-pointer"
+                        >
+                            <span v-if="moveOrgForm.processing">Moving...</span>
+                            <span v-else>Confirm & Move</span>
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
 

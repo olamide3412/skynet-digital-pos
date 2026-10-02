@@ -121,7 +121,14 @@ function submit() {
 
 function destroy(user) {
     if (confirm(`Are you sure you want to delete user "${user.username}"?`)) {
-        router.delete(route('pos.users.destroy', user.id))
+        router.delete(route('pos.users.destroy', user.id), {
+            preserveScroll: true,
+            onError: (errors) => {
+                if (errors.user) {
+                    alert(errors.user)
+                }
+            }
+        })
     }
 }
 
@@ -134,7 +141,14 @@ const resetForm = useForm({
 function toggleUserStatus(user) {
     const action = user.is_active ? 'disable' : 'enable'
     if (confirm(`Are you sure you want to ${action} user account "${user.username}"?`)) {
-        router.post(route('pos.users.toggle', user.id))
+        router.post(route('pos.users.toggle', user.id), {
+            preserveScroll: true,
+            onError: (errors) => {
+                if (errors.user) {
+                    alert(errors.user)
+                }
+            }
+        })
     }
 }
 
@@ -172,6 +186,12 @@ function submitResetPassword() {
         </div>
 
         <div class="flex-1 overflow-y-auto px-6 py-4">
+            <!-- Inline Error Banner if user error returned -->
+            <div v-if="$page.props.errors?.user" class="mb-4 p-3.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-600 dark:text-red-400 text-xs font-semibold flex items-center gap-2.5">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <span>{{ $page.props.errors.user }}</span>
+            </div>
+
             <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
                 <table class="w-full text-sm">
                     <thead class="bg-slate-100 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">

@@ -21,6 +21,11 @@ class Authenticate extends Middleware
             return route('superadmin.login');
         }
 
+        // Organization portal → organization login
+        if ($request->is('org') || $request->is('org/*')) {
+            return route('org.login');
+        }
+
         // Branch POS routes → branch-specific login
         // The first URL segment is the branch slug: /{branch}/...
         $slug = $request->segment(1);

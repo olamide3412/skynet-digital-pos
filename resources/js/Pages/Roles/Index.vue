@@ -44,9 +44,28 @@ function submit() {
     }
 }
 
+const isCoreRole = (name) => {
+    return ['branch-admin', 'admin', 'cashier'].includes((name || '').toLowerCase())
+}
+
 function destroy(role) {
+    if (isCoreRole(role.name)) {
+        alert(`Role "${role.name}" is a core system role and cannot be deleted.`)
+        return
+    }
+    if (role.users_count > 0) {
+        alert(`Cannot delete role "${role.name}" because it is currently assigned to ${role.users_count} user(s). Please reassign them to another role first.`)
+        return
+    }
     if (confirm(`Are you sure you want to delete role "${role.name}"?`)) {
-        router.delete(route('pos.roles.destroy', role.id))
+        router.delete(route('pos.roles.destroy', role.id), {
+            preserveScroll: true,
+            onError: (errors) => {
+                if (errors.role) {
+                    alert(errors.role)
+                }
+            }
+        })
     }
 }
 </script>
@@ -65,7 +84,13 @@ function destroy(role) {
             </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-6 flex justify-center">
+        <div class="flex-1 overflow-y-auto p-6 flex flex-col items-center">
+            <!-- Inline Error Banner if role error returned -->
+            <div v-if="$page.props.errors?.role" class="w-full max-w-3xl mb-4 p-3.5 bg-red-500/10 border border-red-500/30 rounded-xl text-red-600 dark:text-red-400 text-xs font-semibold flex items-center gap-2.5">
+                <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <span>{{ $page.props.errors.role }}</span>
+            </div>
+
             <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden w-full max-w-3xl h-fit shadow-xs">
                 <table class="w-full text-sm">
                     <thead class="bg-slate-100 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
@@ -73,12 +98,15 @@ function destroy(role) {
                             <th class="text-left px-5 py-3 font-semibold w-1/3">Role Name</th>
                             <th class="text-left px-5 py-3 font-semibold">Description</th>
                             <th class="text-center px-5 py-3 font-semibold w-24">Users</th>
-                            <th class="px-5 py-3 w-28"></th>
+                            <th class="px-5 py-3 w-32 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">
                         <tr v-for="role in roles" :key="role.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
-                            <td class="px-5 py-3 text-slate-900 dark:text-white font-bold tracking-wide uppercase text-xs">{{ role.name }}</td>
+                            <td class="px-5 py-3 text-slate-900 dark:text-white font-bold tracking-wide uppercase text-xs flex items-center gap-2">
+                                <span>{{ role.name }}</span>
+                                <span v-if="isCoreRole(role.name)" class="px-1.5 py-0.5 text-[10px] font-bold rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">System</span>
+                            </td>
                             <td class="px-5 py-3 text-slate-600 dark:text-slate-400">{{ role.description || '—' }}</td>
                             <td class="px-5 py-3 text-center">
                                 <span class="bg-slate-100 dark:bg-slate-700 px-2.5 py-0.5 rounded text-emerald-600 dark:text-emerald-400 font-bold font-mono text-xs border border-slate-200 dark:border-slate-600">{{ role.users_count }}</span>
@@ -86,7 +114,8 @@ function destroy(role) {
                             <td class="px-5 py-3 text-right">
                                 <div class="flex items-center justify-end gap-3 text-xs">
                                     <button @click="openEditModal(role)" class="text-blue-600 dark:text-blue-400 hover:text-blue-500 font-semibold transition">Edit</button>
-                                    <button v-if="!['admin','cashier'].includes(role.name.toLowerCase())" @click="destroy(role)" class="text-red-600 dark:text-red-400 hover:text-red-500 font-semibold transition">Delete</button>
+                                    <button v-if="!isCoreRole(role.name)" @click="destroy(role)" class="text-red-600 dark:text-red-400 hover:text-red-500 font-semibold transition">Delete</button>
+                                    <span v-else class="text-slate-400 dark:text-slate-500 text-[11px] italic select-none">Protected</span>
                                 </div>
                             </td>
                         </tr>

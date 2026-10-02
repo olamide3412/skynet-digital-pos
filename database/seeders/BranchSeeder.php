@@ -3,7 +3,11 @@
 namespace Database\Seeders;
 
 use App\Models\Branch;
+use App\Models\Organization;
+use App\Models\PricingPlan;
+use App\Models\Subscription;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Spatie\Permission\Models\Permission;
@@ -16,77 +20,147 @@ class BranchSeeder extends Seeder
     {
         app()[PermissionRegistrar::class]->forgetCachedPermissions();
 
-        // ── Sample branch: Felix Enterprise ──────────────────────────────────
-        $branch = Branch::firstOrCreate(
-            ['slug' => 'hub-enterprise'],
+        // ── Ensure Default Organization Exists ───────────────────────────────
+        $org = Organization::firstOrCreate(
+            ['name' => 'SkyNet Digital Technologies'],
             [
-                'name' => 'HUB Enterprise',
+                'status' => 'active',
+            ]
+        );
+
+        $enterprisePlan = PricingPlan::where('name', 'Enterprise')->first() ?: PricingPlan::first();
+        if ($enterprisePlan && !Subscription::where('organization_id', $org->id)->exists()) {
+            Subscription::create([
+                'organization_id' => $org->id,
+                'pricing_plan_id' => $enterprisePlan->id,
+                'status'          => 'active',
+                'started_at'      => Carbon::now()->subMonths(1)->toDateString(),
+                'renewal_date'    => Carbon::now()->addYears(2)->toDateString(),
+            ]);
+        }
+
+        // ── Seed Org Admin ────────────────────────────────────────────────────
+        Role::firstOrCreate(['name' => 'organization_admin', 'guard_name' => 'web']);
+        $orgAdmin = User::updateOrCreate(
+            ['email' => 'orgadmin@skynetpos.com'],
+            [
+                'name'            => 'Org Admin',
+                'full_name'       => 'SkyNet Organization Admin',
+                'username'        => 'orgadmin',
+                'email'           => 'orgadmin@skynetpos.com',
+                'password'        => Hash::make('admin123'),
+                'is_active'       => true,
+                'is_super_admin'  => false,
+                'organization_id' => $org->id,
+            ]
+        );
+        setPermissionsTeamId(0);
+        $orgAdmin->syncRoles(['organization_admin']);
+
+        // ── Branches to seed ─────────────────────────────────────────────────
+        $branchesData = [
+            [
+                'slug'    => 'skynet-digital-enterprise',
+                'name'    => 'SkyNet Digital Enterprise',
+                'address' => 'Plot 4 Victoria Island, Lagos',
+                'phone'   => '+2348000000000',
+                'email'   => 'enterprise@skynetpos.com',
+            ],
+            [
+                'slug'    => 'felix-enterprise',
+                'name'    => 'Felix Enterprise',
+                'address' => '24 Broad Street, Lagos',
+                'phone'   => '+2348023456789',
+                'email'   => 'felix@gmail.com',
+            ],
+            [
+                'slug'    => 'hub-enterprise',
+                'name'    => 'HUB Enterprise',
                 'address' => '12 Commercial Road, Asaba, Delta State',
-                'phone' => '+2348012345678',
-                'email' => 'hub@gmail.com',
-                'is_active' => true,
-            ]
-        );
+                'phone'   => '+2348012345678',
+                'email'   => 'hub@gmail.com',
+            ],
+        ];
 
-        // ── Create branch-scoped roles (team_id = branch_id) ────────────────
-        setPermissionsTeamId($branch->id);
+        foreach ($branchesData as $bData) {
+            $branch = Branch::firstOrCreate(
+                ['slug' => $bData['slug']],
+                [
+                    'name'            => $bData['name'],
+                    'organization_id' => $org->id,
+                    'address'         => $bData['address'],
+                    'phone'           => $bData['phone'],
+                    'email'           => $bData['email'],
+                    'is_active'       => true,
+                ]
+            );
 
-        $branchAdminRole = Role::firstOrCreate([
-            'name' => 'branch-admin',
-            'guard_name' => 'web',
-            'team_id' => $branch->id,
-        ]);
-        $branchAdminRole->syncPermissions(Permission::where('name', '!=', 'canResetPassword')->get());
+            // ── Create branch-scoped roles (team_id = branch_id) ────────────
+            setPermissionsTeamId($branch->id);
 
-        $cashierRole = Role::firstOrCreate([
-            'name' => 'cashier',
-            'guard_name' => 'web',
-            'team_id' => $branch->id,
-        ]);
-        $cashierRole->syncPermissions([
-            'canAccessPos',
-            'canViewEndOfDay',
-            'canProcessReturn',
-            'canManageCustomers',
-        ]);
+            $branchAdminRole = Role::firstOrCreate([
+                'name'       => 'branch-admin',
+                'guard_name' => 'web',
+                'team_id'    => $branch->id,
+            ]);
+            $branchAdminRole->syncPermissions(Permission::where('name', '!=', 'canResetPassword')->get());
 
-        // ── Branch Admin user ─────────────────────────────────────────────────
-        $admin = User::updateOrCreate(
-            ['username' => 'admin'],
-            [
-                'name' => 'Hub Admin',
-                'full_name' => 'Hub Enterprise Admin',
-                'username' => 'admin',
-                'email' => 'admin@hub.com',
-                'password' => Hash::make('admin123'),
-                'is_active' => true,
-                'is_super_admin' => false,
-                'branch_id' => $branch->id,
-            ]
-        );
-        setPermissionsTeamId($branch->id);
-        $admin->syncRoles(['branch-admin']);
+            $cashierRole = Role::firstOrCreate([
+                'name'       => 'cashier',
+                'guard_name' => 'web',
+                'team_id'    => $branch->id,
+            ]);
+            $cashierRole->syncPermissions([
+                'canAccessPos',
+                'canViewEndOfDay',
+                'canProcessReturn',
+                'canManageCustomers',
+            ]);
 
-        // ── Sample Cashier ────────────────────────────────────────────────────
-        $cashier = User::updateOrCreate(
-            ['username' => 'cashier1'],
-            [
-                'name' => 'Jane Cashier',
-                'full_name' => 'Jane Cashier',
-                'username' => 'cashier1',
-                'email' => 'cashier@gmail.com',
-                'password' => Hash::make('cashier123'),
-                'is_active' => true,
-                'is_super_admin' => false,
-                'branch_id' => $branch->id,
-            ]
-        );
-        setPermissionsTeamId($branch->id);
-        $cashier->syncRoles(['cashier']);
+            // ── Initialize branch settings ────────────────────────────────────
+            $branch->getSettings();
+        }
 
-        // ── Initialize branch settings ────────────────────────────────────────
-        $branch->getSettings();
+        // ── Primary Branch Admin for main/skynet-digital-enterprise branch ────
+        $mainBranch = Branch::where('slug', 'skynet-digital-enterprise')->first();
+        if ($mainBranch) {
+            $admin = User::updateOrCreate(
+                ['username' => 'admin'],
+                [
+                    'name'            => 'Branch Admin',
+                    'full_name'       => 'SkyNet Branch Admin',
+                    'username'        => 'admin',
+                    'email'           => 'admin@skynetpos.com',
+                    'password'        => Hash::make('admin123'),
+                    'is_active'       => true,
+                    'is_super_admin'  => false,
+                    'organization_id' => $org->id,
+                    'branch_id'       => $mainBranch->id,
+                ]
+            );
+            setPermissionsTeamId($mainBranch->id);
+            $admin->syncRoles(['branch-admin']);
 
-        $this->command->info("Branch '{$branch->name}' seeded with admin + cashier accounts.");
+            // ── Sample Cashier ────────────────────────────────────────────────
+            $cashier = User::updateOrCreate(
+                ['username' => 'cashier1'],
+                [
+                    'name'            => 'Jane Cashier',
+                    'full_name'       => 'Jane Cashier',
+                    'username'        => 'cashier1',
+                    'email'           => 'cashier@skynetpos.com',
+                    'password'        => Hash::make('cashier123'),
+                    'is_active'       => true,
+                    'is_super_admin'  => false,
+                    'organization_id' => $org->id,
+                    'branch_id'       => $mainBranch->id,
+                ]
+            );
+            setPermissionsTeamId($mainBranch->id);
+            $cashier->syncRoles(['cashier']);
+        }
+
+        $this->command?->info("Default branches and users seeded successfully.");
     }
 }
+

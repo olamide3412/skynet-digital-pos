@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Spatie\Permission\Models\Permission;
@@ -11,7 +12,7 @@ use Spatie\Permission\Models\Role;
 class Branch extends Model
 {
     protected $fillable = [
-        'name', 'slug', 'address', 'logo_path',
+        'organization_id', 'name', 'slug', 'address', 'logo_path',
         'phone', 'email', 'is_active', 'is_ai_enabled',
     ];
 
@@ -30,6 +31,85 @@ class Branch extends Model
     }
 
     // ── Relations ─────────────────────────────────────────────────────────────
+    public function organization(): BelongsTo
+    {
+        return $this->belongsTo(Organization::class);
+    }
+
+    /**
+     * Get the active subscription of the branch's parent organization.
+     */
+    public function getSubscriptionAttribute(): ?Subscription
+    {
+        return $this->organization?->subscription;
+    }
+
+    public function getAiCreditSummary(): array
+    {
+        if (!$this->organization) {
+            return [
+                'plan_name'     => 'Unset',
+                'pool_type'     => 'per_branch',
+                'monthly_quota' => 0,
+                'used'          => 0,
+                'remaining'     => 0,
+                'is_unmetered'  => false,
+                'is_exhausted'  => true,
+                'resets_at'     => now()->addMonth()->startOfMonth()->format('M j, Y'),
+            ];
+        }
+
+        return \App\Modules\AI\Services\AiCreditService::getSummary($this->organization, $this);
+    }
+
+    public function hasAiCreditsRemaining(int $amount = 1): bool
+    {
+        if (!$this->organization) {
+            return false;
+        }
+
+        return \App\Modules\AI\Services\AiCreditService::hasCreditsRemaining($this->organization, $this, $amount);
+    }
+
+    public function consumeAiCredit(?User $user, string $feature = 'chat_query', int $amount = 1, array $metadata = []): bool
+    {
+        if (!$this->organization) {
+            return false;
+        }
+
+        return \App\Modules\AI\Services\AiCreditService::consumeCredit($this->organization, $this, $user, $feature, $amount, $metadata);
+    }
+
+    /**
+     * Scope query to branches visible to the given user.
+     *
+     * Platform Super Admin -> all branches
+     * Organization Admin -> branches belonging to their organization
+     * Branch users -> their own branch
+     */
+    public function scopeVisibleTo($query, ?User $user = null)
+    {
+        $user = $user ?: auth()->user();
+
+        if (!$user) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if ($user->isSuperAdmin()) {
+            return $query;
+        }
+
+        if ($user->isOrganizationAdmin()) {
+            return $query->where('organization_id', $user->organization_id);
+        }
+
+        if ($user->branch_id) {
+            return $query->where('id', $user->branch_id);
+        }
+
+        return $query->whereRaw('1 = 0');
+    }
+
     public function users(): HasMany
     {
         return $this->hasMany(User::class);
@@ -188,5 +268,22 @@ class Branch extends Model
                 $inventoryRole->syncPermissions($inventoryPerms);
             }
         }
+    }
+
+    // ── Plan Feature & Limit Delegation ────────────────────────────────────────
+
+    public function hasFeature(string $feature): bool
+    {
+        return $this->organization ? $this->organization->hasFeature($feature) : true;
+    }
+
+    public function getUserLimit(): ?int
+    {
+        return $this->organization?->getUserLimit();
+    }
+
+    public function canCreateUser(): bool
+    {
+        return $this->organization ? $this->organization->canCreateUser($this) : true;
     }
 }

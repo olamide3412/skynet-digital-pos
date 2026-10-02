@@ -16,25 +16,64 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Spatie\Permission\Models\Role;
+use App\Models\Organization;
+use App\Models\OrganizationActivityLog;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx as XlsxWriter;
 use PhpOffice\PhpSpreadsheet\Writer\Csv as CsvWriter;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\NumberFormat;
 
 class BranchController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $branches = Branch::with(['settings'])
+        $search = trim($request->input('search', ''));
+        $organizationId = $request->input('organization_id');
+        $status = $request->input('status');
+
+        $query = Branch::with(['settings', 'organization:id,name'])
             ->withCount(['users', 'items', 'sales'])
-            ->latest()
-            ->get()
-            ->map(fn (Branch $b) => [
+            ->when($search, function ($query, $search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                      ->orWhere('slug', 'like', "%{$search}%")
+                      ->orWhere('phone', 'like', "%{$search}%")
+                      ->orWhere('email', 'like', "%{$search}%")
+                      ->orWhere('address', 'like', "%{$search}%")
+                      ->orWhereHas('organization', function ($orgQuery) use ($search) {
+                          $orgQuery->where('name', 'like', "%{$search}%");
+                      });
+                });
+            })
+            ->when($organizationId, function ($query, $orgId) {
+                if ($orgId === 'unassigned') {
+                    $query->whereNull('organization_id');
+                } else {
+                    $query->where('organization_id', $orgId);
+                }
+            })
+            ->when($status !== null && $status !== '', function ($query) use ($status) {
+                if ($status === 'active') {
+                    $query->where('is_active', true);
+                } elseif ($status === 'disabled') {
+                    $query->where('is_active', false);
+                }
+            });
+
+        $branches = $query->latest()
+            ->paginate(12)
+            ->withQueryString()
+            ->through(fn (Branch $b) => [
                 'id'                 => $b->id,
+                'organization_id'    => $b->organization_id,
+                'organization'       => $b->organization ? ['id' => $b->organization->id, 'name' => $b->organization->name] : null,
                 'name'               => $b->name,
                 'slug'               => $b->slug,
                 'address'            => $b->address,
@@ -50,56 +89,88 @@ class BranchController extends Controller
                 'created_at'         => $b->created_at?->format('d M Y'),
             ]);
 
+        $organizations = Organization::where('status', 'active')->orderBy('name')->get(['id', 'name']);
+
         return Inertia::render('SuperAdmin/Branches/Index', [
-            'branches' => $branches,
+            'branches'      => $branches,
+            'organizations' => $organizations,
+            'filters'       => [
+                'search'          => $search,
+                'organization_id' => $organizationId,
+                'status'          => $status,
+            ],
         ]);
     }
 
     public function create()
     {
-        return Inertia::render('SuperAdmin/Branches/Create');
+        $organizations = Organization::where('status', 'active')->orderBy('name')->get(['id', 'name']);
+
+        return Inertia::render('SuperAdmin/Branches/Create', [
+            'organizations' => $organizations,
+        ]);
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name'               => 'required|string|max:255',
-            'slug'               => 'required|string|max:100|unique:branches|regex:/^[a-z0-9\-]+$/',
-            'address'            => 'nullable|string|max:500',
-            'phone'              => 'nullable|string|max:50',
-            'email'              => 'nullable|email|max:255',
+            'organization_id'      => 'required|integer|exists:organizations,id',
+            'name'                 => 'required|string|max:255',
+            'slug'                 => [
+                'required',
+                'string',
+                'max:100',
+                'unique:branches,slug',
+                'regex:/^[a-z0-9\-]+$/',
+                Rule::notIn(config('organizations.reserved_slugs', [])),
+            ],
+            'address'              => 'nullable|string|max:500',
+            'phone'                => 'nullable|string|max:50',
+            'email'                => 'nullable|email|max:255',
             'is_offline_enabled'   => 'nullable|boolean',
             'is_offline_qty_deduction' => 'nullable|boolean',
             'held_sales_visibility'=> 'nullable|string|in:device_only,shared_across_branch',
             'is_turnstile_enabled' => 'nullable|boolean',
             // Branch Admin account details
-            'admin_name'         => 'required|string|max:255',
-            'admin_username'     => 'required|string|max:50|unique:users,username',
-            'admin_email'        => 'required|email|max:255|unique:users,email',
-            'admin_password'     => 'required|string|min:8',
+            'admin_name'           => 'required|string|max:255',
+            'admin_username'       => 'required|string|max:50|unique:users,username',
+            'admin_email'          => 'required|email|max:255|unique:users,email',
+            'admin_password'       => 'required|string|min:8',
+        ], [
+            'organization_id.required' => 'Please choose an Organization for this branch. Every branch must belong to an organization.',
+            'slug.not_in'              => "The slug ':input' is reserved by the system and cannot be used for a branch URL.",
         ]);
 
+        $org = Organization::findOrFail($data['organization_id']);
+        if ($org->isBranchLimitReached()) {
+            return back()->withErrors([
+                'organization_id' => "This organization's plan allows up to {$org->getBranchLimit()} branch(es). Upgrade the plan to add more branches.",
+            ]);
+        }
+
         $createdBranch = DB::transaction(function () use ($data) {
-            // Create branch
+            // Create branch bound to selected organization
             $branch = Branch::create([
-                'name'      => $data['name'],
-                'slug'      => $data['slug'],
-                'address'   => $data['address'],
-                'phone'     => $data['phone'],
-                'email'     => $data['email'],
-                'is_active' => true,
+                'organization_id' => $data['organization_id'],
+                'name'            => $data['name'],
+                'slug'            => $data['slug'],
+                'address'         => $data['address'] ?? null,
+                'phone'           => $data['phone'] ?? null,
+                'email'           => $data['email'] ?? null,
+                'is_active'       => true,
             ]);
 
             // Auto-create default Branch Admin user
             $admin = User::create([
-                'name'           => $data['admin_name'],
-                'full_name'      => $data['admin_name'],
-                'username'       => $data['admin_username'],
-                'email'          => $data['admin_email'],
-                'password'       => Hash::make($data['admin_password']),
-                'is_active'      => true,
-                'is_super_admin' => false,
-                'branch_id'      => $branch->id,
+                'name'            => $data['admin_name'],
+                'full_name'       => $data['admin_name'],
+                'username'        => $data['admin_username'],
+                'email'           => $data['admin_email'],
+                'password'        => Hash::make($data['admin_password']),
+                'is_active'       => true,
+                'is_super_admin'  => false,
+                'branch_id'       => $branch->id,
+                'organization_id' => $data['organization_id'],
             ]);
 
             // Set Spatie team context, ensure default roles, then assign branch-admin role
@@ -131,6 +202,19 @@ class BranchController extends Controller
                 "Created new branch '{$branch->name}' with admin account @{$admin->username}",
                 $branch->id
             );
+
+            OrganizationActivityLog::create([
+                'organization_id' => $branch->organization_id,
+                'actor_user_id'   => Auth::id(),
+                'action'          => 'branch_created',
+                'details'         => [
+                    'branch_id'   => $branch->id,
+                    'branch_name' => $branch->name,
+                    'branch_slug' => $branch->slug,
+                    'admin_user'  => $admin->username,
+                ],
+                'created_at'      => now(),
+            ]);
 
             return $branch;
         });
@@ -189,10 +273,12 @@ class BranchController extends Controller
         $search = $request->query('item_search', '');
         $branchItems = Item::where('branch_id', $branch->id)
             ->with('category:id,name')
-            ->when($search, fn ($q) => $q
-                ->where('item_name', 'like', "%{$search}%")
-                ->orWhere('barcode_number', 'like', "%{$search}%")
-            )
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($sq) use ($search) {
+                    $sq->where('item_name', 'like', "%{$search}%")
+                       ->orWhere('barcode_number', 'like', "%{$search}%");
+                });
+            })
             ->latest()
             ->paginate(15, ['*'], 'items_page')
             ->withQueryString();
@@ -292,7 +378,9 @@ class BranchController extends Controller
                 'logo_url'      => $branch->logo_path ? asset('storage/' . $branch->logo_path) : null,
                 'created_at'    => $branch->created_at?->format('d M Y, h:i A'),
                 'updated_at'    => $branch->updated_at?->format('d M Y, h:i A'),
+                'organization'  => $branch->organization ? ['id' => $branch->organization->id, 'name' => $branch->organization->name] : null,
             ],
+            'all_organizations' => Organization::where('status', 'active')->orderBy('name')->get(['id', 'name']),
             'settings' => $settings,
             'stats' => [
                 'users_count'   => $totalUsersCount,
@@ -337,11 +425,20 @@ class BranchController extends Controller
     {
         $data = $request->validate([
             'name'      => 'required|string|max:255',
-            'slug'      => 'required|string|max:100|unique:branches,slug,' . $branch->id . '|regex:/^[a-z0-9\-]+$/',
+            'slug'      => [
+                'required',
+                'string',
+                'max:100',
+                'unique:branches,slug,' . $branch->id,
+                'regex:/^[a-z0-9\-]+$/',
+                Rule::notIn(config('organizations.reserved_slugs', [])),
+            ],
             'address'   => 'nullable|string|max:500',
             'phone'     => 'nullable|string|max:50',
             'email'     => 'nullable|email|max:255',
             'is_active' => 'nullable|boolean',
+        ], [
+            'slug.not_in' => "The slug ':input' is reserved by the system and cannot be used for a branch URL.",
         ]);
 
         $oldSlug = $branch->slug;
@@ -362,6 +459,56 @@ class BranchController extends Controller
         }
 
         return back()->with('success', 'Branch profile details updated successfully.');
+    }
+
+    /**
+     * Move a branch to another organization.
+     */
+    public function moveOrganization(Request $request, Branch $branch)
+    {
+        $data = $request->validate([
+            'organization_id' => 'required|integer|exists:organizations,id',
+        ], [
+            'organization_id.required' => 'Please select the destination organization.',
+            'organization_id.exists'   => 'Selected organization does not exist.',
+        ]);
+
+        $oldOrgId = $branch->organization_id;
+        $newOrgId = (int) $data['organization_id'];
+
+        if ($oldOrgId === $newOrgId) {
+            return back()->with('info', 'Branch is already assigned to this organization.');
+        }
+
+        $oldOrg = $oldOrgId ? Organization::find($oldOrgId) : null;
+        $newOrg = Organization::findOrFail($newOrgId);
+
+        $branch->organization_id = $newOrgId;
+        $branch->save();
+
+        OrganizationActivityLog::create([
+            'organization_id' => $newOrgId,
+            'actor_user_id'   => Auth::id(),
+            'action'          => 'branch_moved',
+            'details'         => [
+                'branch_id'              => $branch->id,
+                'branch_name'            => $branch->name,
+                'branch_slug'            => $branch->slug,
+                'from_organization_id'   => $oldOrgId,
+                'from_organization_name' => $oldOrg?->name ?? 'None',
+                'to_organization_id'     => $newOrgId,
+                'to_organization_name'   => $newOrg->name,
+            ],
+            'created_at'      => now(),
+        ]);
+
+        ActivityLogger::log(
+            'branch',
+            "Super Admin moved branch '{$branch->name}' from '" . ($oldOrg?->name ?? 'None') . "' to '{$newOrg->name}'",
+            $branch->id
+        );
+
+        return back()->with('success', "Branch '{$branch->name}' moved to organization '{$newOrg->name}' successfully.");
     }
 
     /**
@@ -584,6 +731,7 @@ class BranchController extends Controller
         if ($format === 'csv') {
             $writer = new CsvWriter($spreadsheet);
             $writer->setUseBOM(true);
+            $writer->setPreCalculateFormulas(false);
             $contentType = 'text/csv; charset=UTF-8';
         } else {
             $writer = new XlsxWriter($spreadsheet);
@@ -678,7 +826,17 @@ class BranchController extends Controller
 
             $col = 1;
             $sheet->setCellValue([$col++, $rowNum], $idx + 1);
-            $sheet->setCellValue([$col++, $rowNum], $item->barcode_number ?: '-');
+            if (!empty($item->barcode_number)) {
+                $barcodeVal = (string) $item->barcode_number;
+                if ($format === 'csv') {
+                    $sheet->setCellValueExplicit([$col++, $rowNum], '="' . $barcodeVal . '"', DataType::TYPE_STRING);
+                } else {
+                    $sheet->setCellValueExplicit([$col++, $rowNum], $barcodeVal, DataType::TYPE_STRING);
+                    $sheet->getStyle([$col - 1, $rowNum])->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+                }
+            } else {
+                $sheet->setCellValue([$col++, $rowNum], '-');
+            }
             $sheet->setCellValue([$col++, $rowNum], $item->item_name);
             $sheet->setCellValue([$col++, $rowNum], $item->category?->name ?: 'Uncategorized');
             $sheet->setCellValue([$col++, $rowNum], $item->groupAddress?->name ?: '-');
@@ -695,13 +853,17 @@ class BranchController extends Controller
 
             $sheet->setCellValue([$col++, $rowNum], $item->unit_label ?: ($item->unit ?: 'unit'));
             $sheet->setCellValue([$col++, $rowNum], (float) $item->buy_price);
-            $sheet->setCellValue([$col++, $rowNum], (float) $item->unit_price);
+            $sheet->setCellValue([$col++, $rowNum], (float) ($item->price ?? 0));
             $sheet->setCellValue([$col++, $rowNum], (float) ($item->wholesale_price ?? 0));
             $sheet->setCellValue([$col++, $rowNum], $item->expiry_date ?: '-');
             $sheet->setCellValue([$col++, $rowNum], $item->is_imei ? 'YES' : 'No');
             $sheet->setCellValue([$col++, $rowNum], $status);
 
             $rowNum++;
+        }
+
+        if ($format !== 'csv' && $rowNum > 2) {
+            $sheet->getStyle('B2:B' . ($rowNum - 1))->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
         }
 
         for ($c = 1; $c <= count($headers); $c++) {
@@ -803,11 +965,21 @@ class BranchController extends Controller
 
             $col = 1;
             $sheet->setCellValue([$col++, $rowNum], $idx + 1);
-            $sheet->setCellValue([$col++, $rowNum], $s->receipt_id ?: "REC-{$s->id}");
+            $receiptVal = (string) ($s->receipt_id ?: "REC-{$s->id}");
+            $sheet->setCellValueExplicit([$col++, $rowNum], $receiptVal, DataType::TYPE_STRING);
             $sheet->setCellValue([$col++, $rowNum], $s->created_at ? $s->created_at->format('Y-m-d H:i:s') : '-');
             $sheet->setCellValue([$col++, $rowNum], $staffName);
             $sheet->setCellValue([$col++, $rowNum], $custName);
-            $sheet->setCellValue([$col++, $rowNum], $custPhone);
+            if ($custPhone && $custPhone !== '-') {
+                if ($format === 'csv') {
+                    $sheet->setCellValueExplicit([$col++, $rowNum], '="' . $custPhone . '"', DataType::TYPE_STRING);
+                } else {
+                    $sheet->setCellValueExplicit([$col++, $rowNum], (string) $custPhone, DataType::TYPE_STRING);
+                    $sheet->getStyle([$col - 1, $rowNum])->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+                }
+            } else {
+                $sheet->setCellValue([$col++, $rowNum], '-');
+            }
             $sheet->setCellValue([$col++, $rowNum], $payMethod);
             $sheet->setCellValue([$col++, $rowNum], (int) $itemCount);
             $sheet->setCellValue([$col++, $rowNum], (float) ($s->amount_cost ?: $s->final_total));
@@ -817,6 +989,11 @@ class BranchController extends Controller
             $sheet->setCellValue([$col++, $rowNum], $status);
 
             $rowNum++;
+        }
+
+        if ($format !== 'csv' && $rowNum > 2) {
+            $sheet->getStyle('B2:B' . ($rowNum - 1))->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+            $sheet->getStyle('F2:F' . ($rowNum - 1))->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
         }
 
         for ($c = 1; $c <= count($headers); $c++) {

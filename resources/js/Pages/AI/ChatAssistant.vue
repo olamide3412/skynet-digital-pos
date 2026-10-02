@@ -56,8 +56,11 @@ const props = defineProps({
     sessionId:      String,
     initialLogs:    Array,
     isAiConfigured: Boolean,
+    creditSummary:  Object,
     activeProvider: Object,
 })
+
+const creditSummary = ref(props.creditSummary || null)
 
 const layoutComponent = computed(() => {
     if (isSuperAdmin.value && !props.branch) {
@@ -122,6 +125,29 @@ function scrollToBottom() {
     })
 }
 
+function scrollToNewMessage(domId) {
+    nextTick(() => {
+        setTimeout(() => {
+            const container = messagesContainer.value
+            if (!container) return
+            const targetEl = document.getElementById(domId)
+            if (!targetEl) {
+                container.scrollTop = container.scrollHeight
+                return
+            }
+
+            const containerRect = container.getBoundingClientRect()
+            const targetRect = targetEl.getBoundingClientRect()
+            const scrollTarget = container.scrollTop + (targetRect.top - containerRect.top) - 16
+
+            container.scrollTo({
+                top: Math.max(0, scrollTarget),
+                behavior: 'smooth',
+            })
+        }, 80)
+    })
+}
+
 onMounted(() => {
     scrollToBottom()
     resetTextareaHeight()
@@ -150,6 +176,8 @@ async function sendMessage(text) {
         ? route('superadmin.ai.chat.ask')
         : route('pos.ai.chat.ask', { branch: branchSlug })
 
+    let assistantMsgId = null
+
     try {
         const res = await axios.post(askRoute, {
             question:   promptToSend,
@@ -157,8 +185,26 @@ async function sendMessage(text) {
             branch_id:  selectedBranchId.value || undefined,
         })
 
+        if (res.data.credit_summary) {
+            creditSummary.value = res.data.credit_summary
+        }
+
+        assistantMsgId = Date.now() + 1
+
+        if (res.data.intent === 'credits_exhausted') {
+            messages.value.push({
+                id:                 assistantMsgId,
+                role:               'assistant',
+                message:            res.data.response,
+                detected_intent:    'credits_exhausted',
+                structured_payload: res.data.structured_data,
+                created_at:         new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            })
+            return
+        }
+
         messages.value.push({
-            id:                 Date.now() + 1,
+            id:                 assistantMsgId,
             role:               'assistant',
             message:            res.data.ai_response,
             detected_intent:    res.data.intent,
@@ -170,8 +216,9 @@ async function sendMessage(text) {
             created_at:         new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         })
     } catch (err) {
+        assistantMsgId = Date.now() + 1
         messages.value.push({
-            id: Date.now() + 1,
+            id: assistantMsgId,
             role: 'assistant',
             message: "Sorry, I encountered an error processing your query: " + (err.response?.data?.message || err.message),
             is_error: true,
@@ -179,7 +226,11 @@ async function sendMessage(text) {
         })
     } finally {
         isSending.value = false
-        scrollToBottom()
+        if (assistantMsgId) {
+            scrollToNewMessage('chat-msg-' + assistantMsgId)
+        } else {
+            scrollToBottom()
+        }
     }
 }
 
@@ -273,6 +324,18 @@ function copyMessage(text) {
                             </select>
                         </div>
 
+                        <!-- AI Credit Meter Badge -->
+                        <div v-if="creditSummary" class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold border transition-colors shadow-2xs"
+                            :class="creditSummary.is_exhausted
+                                ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30'
+                                : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25'">
+                            <span class="w-1.5 h-1.5 rounded-full" :class="creditSummary.is_exhausted ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'"></span>
+                            <span v-if="creditSummary.is_unmetered">Unmetered AI</span>
+                            <span v-else>
+                                {{ creditSummary.remaining }} / {{ creditSummary.monthly_quota }} Credits
+                            </span>
+                        </div>
+
                         <!-- Provider Badge -->
                         <div v-if="activeProvider" class="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
                             <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
@@ -331,6 +394,7 @@ function copyMessage(text) {
                     <div
                         v-for="msg in messages"
                         :key="msg.id"
+                        :id="'chat-msg-' + msg.id"
                         class="flex flex-col space-y-2 max-w-3xl"
                         :class="msg.role === 'user' ? 'ml-auto items-end' : 'mr-auto items-start'"
                     >
@@ -496,23 +560,36 @@ function copyMessage(text) {
 
                 <!-- ── Input Bar (Multi-line up to 4 lines) ───────────────────────── -->
                 <div class="p-3 sm:p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex-shrink-0">
+                    <!-- Credit Exhaustion Banner -->
+                    <div v-if="creditSummary?.is_exhausted" class="mb-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-xs flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">⚠️</span>
+                            <span><strong>Monthly AI credit limit reached</strong> ({{ creditSummary.used }}/{{ creditSummary.monthly_quota }} used). Resets on {{ creditSummary.resets_at }}.</span>
+                        </div>
+                        <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/20 text-amber-800 dark:text-amber-200 flex-shrink-0">
+                            {{ creditSummary.plan_name }} Plan
+                        </span>
+                    </div>
+
                     <form @submit.prevent="sendMessage()" class="flex items-end gap-2 sm:gap-3">
                         <div class="relative flex-1">
                             <textarea
                                 ref="textareaRef"
                                 v-model="inputPrompt"
                                 rows="1"
-                                :disabled="isSending"
+                                :disabled="isSending || (creditSummary?.is_exhausted && !isSuperAdmin)"
                                 @input="adjustTextareaHeight"
                                 @keydown.enter.exact.prevent="handleEnterKey"
-                                placeholder="Ask a question about sales, inventory velocity, staff, tax, or IMEIs... (Press Enter to send, Shift+Enter for new line)"
+                                :placeholder="creditSummary?.is_exhausted && !isSuperAdmin
+                                    ? 'Monthly AI credit limit reached. Credits reset on ' + creditSummary.resets_at + ' or contact administrator to upgrade.'
+                                    : 'Ask a question about sales, inventory velocity, staff, tax, or IMEIs... (Press Enter to send, Shift+Enter for new line)'"
                                 class="w-full bg-slate-50 dark:bg-slate-800/90 text-slate-900 dark:text-white px-4 py-2.5 text-xs sm:text-sm rounded-2xl border border-slate-300 dark:border-slate-700 focus:border-emerald-500 dark:focus:border-emerald-400 focus:ring-1 focus:ring-emerald-500 outline-none transition-all resize-none max-h-[108px] overflow-y-auto leading-relaxed disabled:opacity-50 shadow-inner"
                             ></textarea>
                         </div>
 
                         <button
                             type="submit"
-                            :disabled="!inputPrompt.trim() || isSending"
+                            :disabled="!inputPrompt.trim() || isSending || (creditSummary?.is_exhausted && !isSuperAdmin)"
                             class="px-4 sm:px-5 py-2.5 sm:py-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs sm:text-sm font-bold rounded-2xl shadow-md shadow-emerald-900/20 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-1.5 flex-shrink-0 min-h-[42px]"
                         >
                             <span v-if="!isSending" class="flex items-center gap-1.5">

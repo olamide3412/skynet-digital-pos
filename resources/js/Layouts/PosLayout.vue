@@ -16,6 +16,13 @@ provide('isMobileSidebarOpen', isMobileOpen)
 
 const page = usePage()
 const perms = computed(() => page.props.pos_permissions ?? {})
+const planFeatures = computed(() => page.props.plan_features ?? null)
+
+function isPlanFeatureEnabled(key) {
+    if (!key) return true
+    if (!planFeatures.value) return true // Unrestricted / grandfathered
+    return Boolean(planFeatures.value[key] ?? true)
+}
 
 function handleLogout() {
     if (typeof document !== 'undefined' && (document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement)) {
@@ -46,12 +53,12 @@ const allNavLinks = [
         perm: 'canManageItems',
         children: [
             { label: 'All Items',              route: 'pos.items.index',           match: 'Items/Index' },
-            { label: 'IMEI / Device Tracking', route: 'pos.items.imeis',           match: 'Items/Imeis' },
-            { label: 'Print Barcodes',         route: 'pos.items.barcodes',        match: 'Items/Barcodes', perm: 'canManageBarcodes' },
+            { label: 'IMEI / Device Tracking', route: 'pos.items.imeis',           match: 'Items/Imeis', feature: 'imei_tracking' },
+            { label: 'Print Barcodes',         route: 'pos.items.barcodes',        match: 'Items/Barcodes', perm: 'canManageBarcodes', feature: 'barcode_label_printing' },
             { label: 'Categories',             route: 'pos.categories.index',      match: 'Categories/Index' },
             { label: 'Group / Address',        route: 'pos.group-addresses.index', match: 'GroupAddresses/Index' },
             { label: 'Item Grid Config',       route: 'pos.item-grids.index',      match: 'Items/Grid' },
-            { label: 'Active Discounts',       route: 'pos.discounts.index',       match: 'Discounts/Index', perm: 'canApplyDiscount' },
+            { label: 'Active Discounts',       route: 'pos.discounts.index',       match: 'Discounts/Index', perm: 'canApplyDiscount', feature: 'discounts' },
         ],
     },
     {
@@ -106,10 +113,10 @@ const allNavLinks = [
             { label: 'Returned Items', route: 'pos.reports.returns',      match: 'Reports/Returns' },
             { label: 'Profit & Loss',       route: 'pos.reports.profit-loss',  match: 'Reports/ProfitLoss', perm: 'canViewProfitLoss' },
             { label: 'Item Expiry Report',  route: 'pos.reports.item-expiry',  match: 'Reports/ItemExpiry', perm: 'canViewExpiryReport' },
-            { label: 'Batch Expiry Report', route: 'pos.reports.batch-expiry', match: 'Reports/ExpiryOverview', perm: 'canViewBatchExpiryReport', condition: () => Boolean(page.props.pos_settings?.batch_tracking_enabled) },
+            { label: 'Batch Expiry Report', route: 'pos.reports.batch-expiry', match: 'Reports/ExpiryOverview', perm: 'canViewBatchExpiryReport', feature: 'batch_expiry_tracking', condition: () => Boolean(page.props.pos_settings?.batch_tracking_enabled) },
             { label: 'Reorder Points', route: 'pos.inventory.reorder-points', match: 'Inventory/ReorderPoints', perm: 'canViewReorderPoints' },
             { label: 'Low Stock',      route: 'pos.reports.low-stock',    match: 'Reports/LowStock' },
-            { label: 'Customer Debt',  route: 'pos.reports.customer-debt',match: 'Reports/CustomerDebt', perm: 'canManageDebt' },
+            { label: 'Customer Debt',  route: 'pos.reports.customer-debt',match: 'Reports/CustomerDebt', perm: 'canManageDebt', feature: 'debt_customer_accounts' },
         ],
     },
     {
@@ -126,8 +133,8 @@ const allNavLinks = [
         icon:  'M13 10V3L4 14h7v7l9-11h-7z',
         perm:  'canViewReports',
         children: [
-            { label: 'Ask-Your-Business AI', route: 'pos.ai.chat',    match: 'AI/ChatAssistant' },
-            { label: 'Reorder Predictions',  route: 'pos.ai.reorder', match: 'AI/ReorderPredictions' },
+            { label: 'Ask-Your-Business AI', route: 'pos.ai.chat',    match: 'AI/ChatAssistant', feature: 'ai_chat_assistant' },
+            { label: 'Reorder Predictions',  route: 'pos.ai.reorder', match: 'AI/ReorderPredictions', feature: 'ai_reorder_prediction' },
         ],
     },
     {
@@ -136,7 +143,8 @@ const allNavLinks = [
         match: 'Notifications/Index',
         icon:  'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9',
         badgeKey: 'unread_notifications_count',
-        always: true,
+        feature: 'broadcast_notifications',
+        always: false,
     },
     {
         label: 'Printer Setup',
@@ -154,21 +162,22 @@ const allNavLinks = [
     },
 ]
 
-// Filter nav links based on permissions and condition
+// Filter nav links based on permissions, condition, and plan feature capabilities
 const navLinks = computed(() => {
     return allNavLinks
         .filter(link => {
+            if (link.feature && !isPlanFeatureEnabled(link.feature)) return false
             if (link.condition && !link.condition()) return false
             if (link.always) return true
             if (!link.perm || perms.value[link.perm]) return true
-            if (link.children && link.children.some(c => (!c.perm || perms.value[c.perm]) && (!c.condition || c.condition()))) return true
+            if (link.children && link.children.some(c => (!c.feature || isPlanFeatureEnabled(c.feature)) && (!c.perm || perms.value[c.perm]) && (!c.condition || c.condition()))) return true
             return false
         })
         .map(link => {
             if (!link.children) return link
             return {
                 ...link,
-                children: link.children.filter(c => (!c.perm || perms.value[c.perm]) && (!c.condition || c.condition()))
+                children: link.children.filter(c => (!c.feature || isPlanFeatureEnabled(c.feature)) && (!c.perm || perms.value[c.perm]) && (!c.condition || c.condition()))
             }
         })
         .filter(link => !link.children || link.children.length > 0)
@@ -197,7 +206,15 @@ const toggleMenu = (label) => {
 }
 
 const currentBranchSlug = computed(() => {
-    return page.props.current_branch?.slug || page.props.branch?.slug || route().params?.branch || 'felix-enterprise'
+    if (page.props.current_branch?.slug) return page.props.current_branch.slug
+    if (page.props.branch?.slug) return page.props.branch.slug
+    if (page.props.auth?.user?.branch?.slug) return page.props.auth.user.branch.slug
+    if (typeof window !== 'undefined') {
+        const seg = window.location.pathname.split('/').filter(Boolean)[0]
+        const reserved = ['superadmin', 'org', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password']
+        if (seg && !reserved.includes(seg)) return seg
+    }
+    return route().params?.branch || ''
 })
 
 const safeRoute = (routeName) => {

@@ -19,10 +19,12 @@ class BranchItemController extends Controller
         // Branch items
         $branchItems = Item::where('branch_id', $branch->id)
             ->with('category')
-            ->when($request->search, fn($q) => $q
-                ->where('item_name', 'like', '%' . $request->search . '%')
-                ->orWhere('barcode_number', 'like', '%' . $request->search . '%')
-            )
+            ->when($request->search, function ($q) use ($request) {
+                $q->where(function ($sq) use ($request) {
+                    $sq->where('item_name', 'like', '%' . $request->search . '%')
+                       ->orWhere('barcode_number', 'like', '%' . $request->search . '%');
+                });
+            })
             ->latest()
             ->paginate(25)
             ->withQueryString();

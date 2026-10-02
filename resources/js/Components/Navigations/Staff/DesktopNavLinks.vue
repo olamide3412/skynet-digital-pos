@@ -3,7 +3,13 @@ import { usePage } from '@inertiajs/vue3';
 import { computed } from 'vue';
 
 const page = usePage();
-const branchSlug = computed(() => page.props.current_branch?.slug || 'felix-enterprise');
+const branchSlug = computed(() => {
+    return page.props.current_branch?.slug 
+        || page.props.branch?.slug 
+        || page.props.auth?.user?.branch?.slug 
+        || (typeof window !== 'undefined' ? window.location.pathname.split('/').filter(Boolean)[0] : '')
+        || ''
+});
 const liClasses = 'block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-100 dark:hover:bg-gray-700';
 </script>
 <template>

@@ -107,12 +107,16 @@ class RoleController extends Controller
         $this->authorizeBranchRole($role, $branch);
 
         // Prevent deleting core system roles
-        if (in_array(strtolower($role->name), ['branch-admin', 'cashier'])) {
-            return back()->withErrors(['role' => 'Cannot delete a core system role.']);
+        if (in_array(strtolower($role->name), ['branch-admin', 'admin', 'cashier'])) {
+            return back()
+                ->with('error', 'Cannot delete core system role "' . $role->name . '". This role is required by the system.')
+                ->withErrors(['role' => 'Cannot delete core system role "' . $role->name . '". This role is required by the system.']);
         }
 
         if ($role->users()->count() > 0) {
-            return back()->withErrors(['role' => 'Cannot delete a role that is assigned to users.']);
+            return back()
+                ->with('error', 'Cannot delete role "' . $role->name . '" because it is currently assigned to ' . $role->users()->count() . ' user(s). Please reassign them first.')
+                ->withErrors(['role' => 'Cannot delete role "' . $role->name . '" because it is currently assigned to ' . $role->users()->count() . ' user(s). Please reassign them first.']);
         }
 
         $role->delete();

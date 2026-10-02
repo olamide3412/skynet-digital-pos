@@ -22,9 +22,12 @@ class ItemController extends Controller
 
         $items = Item::where('branch_id', $branch->id)
             ->with(['category:id,name', 'groupAddress:id,name', 'units'])
-            ->when($request->search, fn($q) => $q
-                ->where('item_name', 'like', '%' . $request->search . '%')
-                ->orWhere('barcode_number', 'like', '%' . $request->search . '%'))
+            ->when($request->search, function ($q) use ($request) {
+                $q->where(function ($sq) use ($request) {
+                    $sq->where('item_name', 'like', '%' . $request->search . '%')
+                       ->orWhere('barcode_number', 'like', '%' . $request->search . '%');
+                });
+            })
             ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))
             ->when($request->group_address_id, fn($q) => $q->where('group_address_id', $request->group_address_id))
             ->latest()
@@ -45,11 +48,11 @@ class ItemController extends Controller
             ->get(['id', 'name']);
 
         return Inertia::render('Items/Index', [
-            'items'          => $items,
-            'categories'     => $categories,
+            'items' => $items,
+            'categories' => $categories,
             'groupAddresses' => $groupAddresses,
-            'filters'        => $request->only('search', 'category_id', 'group_address_id'),
-            'totalWorth'     => (float) $totalWorth,
+            'filters' => $request->only('search', 'category_id', 'group_address_id'),
+            'totalWorth' => (float) $totalWorth,
         ]);
     }
 
@@ -62,36 +65,36 @@ class ItemController extends Controller
             $cloned = Item::where('branch_id', $branch->id)->with('units')->find($request->clone_from);
             if ($cloned) {
                 $clonedItem = [
-                    'item_name'              => $cloned->item_name . ' (Copy)',
-                    'category_id'            => $cloned->category_id,
-                    'group_address_id'       => $cloned->group_address_id,
-                    'buy_price'              => $cloned->buy_price,
-                    'price'                  => $cloned->price,
-                    'wholesale_price'        => $cloned->wholesale_price,
-                    'unit_label'             => $cloned->unit_label,
-                    'item_description'       => $cloned->item_description,
-                    'is_imei_tracked'        => $cloned->is_imei_tracked,
-                    'price_locked'           => $cloned->price_locked,
-                    'expiry_date'            => $cloned->expiry_date?->format('Y-m-d'),
-                    'units'                  => $cloned->units->map(fn($u) => [
-                        'unit_name'              => $u->unit_name,
+                    'item_name' => $cloned->item_name . ' (Copy)',
+                    'category_id' => $cloned->category_id,
+                    'group_address_id' => $cloned->group_address_id,
+                    'buy_price' => $cloned->buy_price,
+                    'price' => $cloned->price,
+                    'wholesale_price' => $cloned->wholesale_price,
+                    'unit_label' => $cloned->unit_label,
+                    'item_description' => $cloned->item_description,
+                    'is_imei_tracked' => $cloned->is_imei_tracked,
+                    'price_locked' => $cloned->price_locked,
+                    'expiry_date' => $cloned->expiry_date?->format('Y-m-d'),
+                    'units' => $cloned->units->map(fn($u) => [
+                        'unit_name' => $u->unit_name,
                         'quantity_in_base_units' => (int) $u->quantity_in_base_units,
-                        'selling_price'          => (float) $u->selling_price,
-                        'wholesale_price'        => (float) $u->wholesale_price,
-                        'sort_order'             => (int) $u->sort_order,
-                        'status'                 => $u->status,
+                        'selling_price' => (float) $u->selling_price,
+                        'wholesale_price' => (float) $u->wholesale_price,
+                        'sort_order' => (int) $u->sort_order,
+                        'status' => $u->status,
                     ])->values()->all(),
                 ];
             }
         }
 
         return Inertia::render('Items/Create', [
-            'clonedItem'     => $clonedItem,
-            'categories'     => \App\Models\Category::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
+            'clonedItem' => $clonedItem,
+            'categories' => \App\Models\Category::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),
             'groupAddresses' => \App\Models\GroupAddress::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),
-            'settings'       => \App\Models\PosSettings::current(),
+            'settings' => \App\Models\PosSettings::current(),
         ]);
     }
 
@@ -102,30 +105,30 @@ class ItemController extends Controller
             $branch = \App\Models\Branch::find(auth()->user()->branch_id);
         }
         $data = $request->validate([
-            'item_name'              => 'required|string|max:255',
-            'barcode_number'         => 'nullable|string|max:100',
-            'category_id'            => 'required|exists:categories,id',
-            'group_address_id'       => 'nullable|exists:group_addresses,id',
-            'buy_price'              => 'required|numeric|min:0',
-            'price'                  => 'required|numeric|min:0',
-            'wholesale_price'        => 'nullable|numeric|min:0',
-            'price_locked'           => 'boolean',
-            'is_imei_tracked'        => 'nullable|boolean',
+            'item_name' => 'required|string|max:255',
+            'barcode_number' => 'nullable|string|max:100',
+            'category_id' => 'required|exists:categories,id',
+            'group_address_id' => 'nullable|exists:group_addresses,id',
+            'buy_price' => 'required|numeric|min:0',
+            'price' => 'required|numeric|min:0',
+            'wholesale_price' => 'nullable|numeric|min:0',
+            'price_locked' => 'boolean',
+            'is_imei_tracked' => 'nullable|boolean',
             'batch_tracking_enabled' => 'nullable|boolean',
-            'initial_imeis'          => 'nullable|string',
-            'back_store_qty'         => 'nullable|integer|min:0',
-            'front_store_qty'        => 'nullable|integer|min:0',
-            'unit_label'             => 'nullable|string|max:50',
-            'expiry_date'            => 'nullable|date',
-            'item_description'       => 'nullable|string|max:500',
-            'image'                  => 'nullable|image|max:2048',
-            'units'                          => 'nullable|array',
-            'units.*.unit_name'              => 'required_with:units|string|max:100',
+            'initial_imeis' => 'nullable|string',
+            'back_store_qty' => 'nullable|integer|min:0',
+            'front_store_qty' => 'nullable|integer|min:0',
+            'unit_label' => 'nullable|string|max:50',
+            'expiry_date' => 'nullable|date',
+            'item_description' => 'nullable|string|max:500',
+            'image' => 'nullable|image|max:2048',
+            'units' => 'nullable|array',
+            'units.*.unit_name' => 'required_with:units|string|max:100',
             'units.*.quantity_in_base_units' => 'required_with:units|integer|min:1',
-            'units.*.selling_price'          => 'required_with:units|numeric|min:0',
-            'units.*.wholesale_price'        => 'nullable|numeric|min:0',
-            'units.*.sort_order'             => 'nullable|integer',
-            'units.*.status'                 => 'nullable|string|in:active,inactive',
+            'units.*.selling_price' => 'required_with:units|numeric|min:0',
+            'units.*.wholesale_price' => 'nullable|numeric|min:0',
+            'units.*.sort_order' => 'nullable|integer',
+            'units.*.status' => 'nullable|string|in:active,inactive',
         ]);
 
         // Barcode handling: leave null if blank or 'NO_BARCODE' (do not auto-generate)
@@ -168,16 +171,17 @@ class ItemController extends Controller
         // Save custom item units / variants
         if (!empty($units)) {
             foreach ($units as $idx => $u) {
-                if (empty($u['unit_name'])) continue;
+                if (empty($u['unit_name']))
+                    continue;
                 ItemUnit::create([
-                    'item_id'                => $newItem->id,
-                    'branch_id'              => $branch->id,
-                    'unit_name'              => trim($u['unit_name']),
+                    'item_id' => $newItem->id,
+                    'branch_id' => $branch->id,
+                    'unit_name' => trim($u['unit_name']),
                     'quantity_in_base_units' => max(1, (int) ($u['quantity_in_base_units'] ?? 1)),
-                    'selling_price'          => (float) ($u['selling_price'] ?? 0),
-                    'wholesale_price'        => (float) ($u['wholesale_price'] ?? 0),
-                    'sort_order'             => (int) ($u['sort_order'] ?? $idx),
-                    'status'                 => $u['status'] ?? 'active',
+                    'selling_price' => (float) ($u['selling_price'] ?? 0),
+                    'wholesale_price' => (float) ($u['wholesale_price'] ?? 0),
+                    'sort_order' => (int) ($u['sort_order'] ?? $idx),
+                    'status' => $u['status'] ?? 'active',
                 ]);
             }
         }
@@ -216,10 +220,10 @@ class ItemController extends Controller
         $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
         $this->authorizeBranch($item, $branch);
 
-        $totalBatchesCount  = $item->batches()->count();
+        $totalBatchesCount = $item->batches()->count();
         $activeBatchesTotal = (int) $item->batches()->where('status', 'active')->sum('quantity');
-        $actualStock        = ((int) ($item->front_store_qty ?? 0)) + ((int) ($item->back_store_qty ?? 0));
-        $batchVariance      = $actualStock - $activeBatchesTotal;
+        $actualStock = ((int) ($item->front_store_qty ?? 0)) + ((int) ($item->back_store_qty ?? 0));
+        $batchVariance = $actualStock - $activeBatchesTotal;
 
         $item->load([
             'category',
@@ -230,8 +234,8 @@ class ItemController extends Controller
         return Inertia::render('Items/Edit', [
             'item' => array_merge($item->toArray(), [
                 'active_batches_total' => $activeBatchesTotal,
-                'batch_variance'       => $batchVariance,
-                'total_batches_count'  => $totalBatchesCount,
+                'batch_variance' => $batchVariance,
+                'total_batches_count' => $totalBatchesCount,
             ]),
             'categories' => \App\Models\Category::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),
@@ -247,30 +251,30 @@ class ItemController extends Controller
         $this->authorizeBranch($item, $branch);
 
         $data = $request->validate([
-            'item_name'              => 'required|string|max:255',
-            'barcode_number'         => 'nullable|string|max:100',
-            'category_id'            => 'required|exists:categories,id',
-            'group_address_id'       => 'nullable|exists:group_addresses,id',
-            'buy_price'              => 'required|numeric|min:0',
-            'price'                  => 'required|numeric|min:0',
-            'wholesale_price'        => 'nullable|numeric|min:0',
-            'price_locked'           => 'nullable|boolean',
-            'is_imei_tracked'        => 'nullable|boolean',
+            'item_name' => 'required|string|max:255',
+            'barcode_number' => 'nullable|string|max:100',
+            'category_id' => 'required|exists:categories,id',
+            'group_address_id' => 'nullable|exists:group_addresses,id',
+            'buy_price' => 'required|numeric|min:0',
+            'price' => 'required|numeric|min:0',
+            'wholesale_price' => 'nullable|numeric|min:0',
+            'price_locked' => 'nullable|boolean',
+            'is_imei_tracked' => 'nullable|boolean',
             'batch_tracking_enabled' => 'nullable|boolean',
-            'unit_label'             => 'nullable|string|max:50',
-            'front_store_qty'        => 'nullable|integer|min:0',
-            'back_store_qty'         => 'nullable|integer|min:0',
-            'expiry_date'            => 'nullable|date',
-            'item_description'       => 'nullable|string|max:500',
-            'image'                  => 'nullable|image|max:2048',
-            'units'                          => 'nullable|array',
-            'units.*.id'                     => 'nullable|integer',
-            'units.*.unit_name'              => 'required_with:units|string|max:100',
+            'unit_label' => 'nullable|string|max:50',
+            'front_store_qty' => 'nullable|integer|min:0',
+            'back_store_qty' => 'nullable|integer|min:0',
+            'expiry_date' => 'nullable|date',
+            'item_description' => 'nullable|string|max:500',
+            'image' => 'nullable|image|max:2048',
+            'units' => 'nullable|array',
+            'units.*.id' => 'nullable|integer',
+            'units.*.unit_name' => 'required_with:units|string|max:100',
             'units.*.quantity_in_base_units' => 'required_with:units|integer|min:1',
-            'units.*.selling_price'          => 'required_with:units|numeric|min:0',
-            'units.*.wholesale_price'        => 'nullable|numeric|min:0',
-            'units.*.sort_order'             => 'nullable|integer',
-            'units.*.status'                 => 'nullable|string|in:active,inactive',
+            'units.*.selling_price' => 'required_with:units|numeric|min:0',
+            'units.*.wholesale_price' => 'nullable|numeric|min:0',
+            'units.*.sort_order' => 'nullable|integer',
+            'units.*.status' => 'nullable|string|in:active,inactive',
         ]);
 
         $barcode = trim($data['barcode_number'] ?? '');
@@ -310,17 +314,18 @@ class ItemController extends Controller
         if (is_array($units)) {
             $retainedUnitIds = [];
             foreach ($units as $idx => $u) {
-                if (empty($u['unit_name'])) continue;
-                $unitId   = !empty($u['id']) ? (int) $u['id'] : null;
+                if (empty($u['unit_name']))
+                    continue;
+                $unitId = !empty($u['id']) ? (int) $u['id'] : null;
                 $unitData = [
-                    'item_id'                => $item->id,
-                    'branch_id'              => $branch->id,
-                    'unit_name'              => trim($u['unit_name']),
+                    'item_id' => $item->id,
+                    'branch_id' => $branch->id,
+                    'unit_name' => trim($u['unit_name']),
                     'quantity_in_base_units' => max(1, (int) ($u['quantity_in_base_units'] ?? 1)),
-                    'selling_price'          => (float) ($u['selling_price'] ?? 0),
-                    'wholesale_price'        => (float) ($u['wholesale_price'] ?? 0),
-                    'sort_order'             => (int) ($u['sort_order'] ?? $idx),
-                    'status'                 => $u['status'] ?? 'active',
+                    'selling_price' => (float) ($u['selling_price'] ?? 0),
+                    'wholesale_price' => (float) ($u['wholesale_price'] ?? 0),
+                    'sort_order' => (int) ($u['sort_order'] ?? $idx),
+                    'status' => $u['status'] ?? 'active',
                 ];
 
                 if ($unitId) {
@@ -364,7 +369,7 @@ class ItemController extends Controller
     public function duplicate(Request $request, $branchParam = null, $itemParam = null)
     {
         $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
-        
+
         $item = $itemParam instanceof Item ? $itemParam : Item::with('units')->findOrFail($itemParam ?: $request->route('item'));
         $this->authorizeBranch($item, $branch);
 
@@ -411,12 +416,12 @@ class ItemController extends Controller
         $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
 
         $data = $request->validate([
-            'action'             => 'required|string|in:delete,update_category,update_group,adjust_prices',
-            'item_ids'           => 'required|array|min:1',
-            'item_ids.*'         => 'integer|exists:items,id',
-            'category_id'        => 'nullable|required_if:action,update_category|exists:categories,id',
-            'group_address_id'   => 'nullable|required_if:action,update_group|exists:group_addresses,id',
-            'price_change_type'  => 'nullable|in:increase_percent,decrease_percent,set_fixed',
+            'action' => 'required|string|in:delete,update_category,update_group,adjust_prices',
+            'item_ids' => 'required|array|min:1',
+            'item_ids.*' => 'integer|exists:items,id',
+            'category_id' => 'nullable|required_if:action,update_category|exists:categories,id',
+            'group_address_id' => 'nullable|required_if:action,update_group|exists:group_addresses,id',
+            'price_change_type' => 'nullable|in:increase_percent,decrease_percent,set_fixed',
             'price_change_value' => 'nullable|numeric|min:0',
         ]);
 
@@ -527,12 +532,12 @@ class ItemController extends Controller
                 'total_qty' => $item->total_qty,
                 'display_price' => $item->getPriceForUnitLevel('unit', $purchaseType),
                 'units' => $item->activeUnits->map(fn($u) => [
-                    'id'                     => $u->id,
-                    'unit_name'              => $u->unit_name,
+                    'id' => $u->id,
+                    'unit_name' => $u->unit_name,
                     'quantity_in_base_units' => (int) $u->quantity_in_base_units,
-                    'selling_price'          => (float) $u->selling_price,
-                    'wholesale_price'        => (float) $u->wholesale_price,
-                    'display_price'          => $item->getPriceForUnitLevel($u->unit_name, $purchaseType, $u->id),
+                    'selling_price' => (float) $u->selling_price,
+                    'wholesale_price' => (float) $u->wholesale_price,
+                    'display_price' => $item->getPriceForUnitLevel($u->unit_name, $purchaseType, $u->id),
                 ])->values()->all(),
                 'image_url' => $item->image_url,
                 'available_imeis' => $item->is_imei_tracked
@@ -787,11 +792,13 @@ class ItemController extends Controller
             foreach ($items as $item) {
                 $itemRef = 'REF-' . str_pad($item->id, 5, '0', STR_PAD_LEFT);
 
+                $barcodeCsv = !empty($item->barcode_number) ? '="' . $item->barcode_number . '"' : '';
+
                 // Base Unit Row
                 fputcsv($file, [
                     $itemRef,
                     $item->item_name,
-                    $item->barcode_number ?? '',
+                    $barcodeCsv,
                     $item->category?->name ?? '',
                     $item->groupAddress?->name ?? '',
                     $item->buy_price,
@@ -812,7 +819,7 @@ class ItemController extends Controller
                         fputcsv($file, [
                             $itemRef,
                             $item->item_name,
-                            $item->barcode_number ?? '',
+                            $barcodeCsv,
                             $item->category?->name ?? '',
                             '',
                             '',
@@ -868,30 +875,30 @@ class ItemController extends Controller
             return null;
         };
 
-        $refIdx       = $getColIndex(['item_ref', 'item ref', 'ref', 'item_code', 'group_ref', 'reference', 'item_id']);
-        $nameIdx      = $getColIndex(['item_name', 'name', 'title', 'product_name', 'product']);
-        $barcodeIdx   = $getColIndex(['barcode_number', 'barcode', 'code', 'sku', 'upc']);
-        $catIdx       = $getColIndex(['category_name', 'category', 'dept']);
-        $groupIdx     = $getColIndex(['group_address_name', 'storage_location', 'group_address', 'shelf', 'location']);
-        $buyPriceIdx  = $getColIndex(['buy_price', 'cost_price', 'buying_price', 'cost']);
-        $priceIdx     = $getColIndex(['selling_price', 'price', 'retail_price', 'base_unit_price', 'unit_price']);
+        $refIdx = $getColIndex(['item_ref', 'item ref', 'ref', 'item_code', 'group_ref', 'reference', 'item_id']);
+        $nameIdx = $getColIndex(['item_name', 'name', 'title', 'product_name', 'product']);
+        $barcodeIdx = $getColIndex(['barcode_number', 'barcode', 'code', 'sku', 'upc']);
+        $catIdx = $getColIndex(['category_name', 'category', 'dept']);
+        $groupIdx = $getColIndex(['group_address_name', 'storage_location', 'group_address', 'shelf', 'location']);
+        $buyPriceIdx = $getColIndex(['buy_price', 'cost_price', 'buying_price', 'cost']);
+        $priceIdx = $getColIndex(['selling_price', 'price', 'retail_price', 'base_unit_price', 'unit_price']);
         $wholesaleIdx = $getColIndex(['wholesale_price', 'wholesale', 'ws_price', 'base_wholesale_price', 'unit_wholesale_price']);
         $unitLabelIdx = $getColIndex(['unit_name', 'unit_label', 'base_unit_name', 'unit', 'variant_name']);
         $qtyInBaseIdx = $getColIndex(['quantity_in_base_units', 'quantity in base units', 'base_quantity', 'qty_in_base', 'multiplier', 'units_per_pack', 'pack_quantity', 'carton_quantity', 'conversion_qty']);
-        $isBaseIdx    = $getColIndex(['is_base_unit', 'is base unit', 'base_unit', 'is_base', 'base', 'is base', 'is_based_unit']);
-        $frontQtyIdx  = $getColIndex(['front_store_qty', 'qty', 'front_qty', 'initial_stock_quantity', 'stock_qty', 'quantity']);
-        $backQtyIdx   = $getColIndex(['back_store_qty', 'back_qty', 'back_store_quantity']);
-        $expiryIdx    = $getColIndex(['expiry_date', 'expiry', 'expiration_date']);
-        $descIdx      = $getColIndex(['item_description', 'description', 'notes']);
+        $isBaseIdx = $getColIndex(['is_base_unit', 'is base unit', 'base_unit', 'is_base', 'base', 'is base', 'is_based_unit']);
+        $frontQtyIdx = $getColIndex(['front_store_qty', 'qty', 'front_qty', 'initial_stock_quantity', 'stock_qty', 'quantity']);
+        $backQtyIdx = $getColIndex(['back_store_qty', 'back_qty', 'back_store_quantity']);
+        $expiryIdx = $getColIndex(['expiry_date', 'expiry', 'expiration_date']);
+        $descIdx = $getColIndex(['item_description', 'description', 'notes']);
 
         // Legacy pack/carton aliases for backwards compatibility with old CSV files
-        $packNameIdx      = $getColIndex(['pack_unit_name', 'pack_name', 'pack_label']);
-        $packQtyIdx       = $getColIndex(['pack_quantity', 'units_per_pack', 'pack_qty', 'pack_size']);
-        $packPriceIdx     = $getColIndex(['pack_price', 'pack_selling_price']);
+        $packNameIdx = $getColIndex(['pack_unit_name', 'pack_name', 'pack_label']);
+        $packQtyIdx = $getColIndex(['pack_quantity', 'units_per_pack', 'pack_qty', 'pack_size']);
+        $packPriceIdx = $getColIndex(['pack_price', 'pack_selling_price']);
         $packWholesaleIdx = $getColIndex(['pack_wholesale_price', 'pack_ws_price']);
-        $cartonNameIdx      = $getColIndex(['carton_unit_name', 'carton_name', 'carton_label']);
-        $cartonQtyIdx       = $getColIndex(['carton_quantity', 'packs_per_carton', 'carton_qty', 'carton_size']);
-        $cartonPriceIdx     = $getColIndex(['carton_price', 'carton_selling_price']);
+        $cartonNameIdx = $getColIndex(['carton_unit_name', 'carton_name', 'carton_label']);
+        $cartonQtyIdx = $getColIndex(['carton_quantity', 'packs_per_carton', 'carton_qty', 'carton_size']);
+        $cartonPriceIdx = $getColIndex(['carton_price', 'carton_selling_price']);
         $cartonWholesaleIdx = $getColIndex(['carton_wholesale_price', 'carton_ws_price']);
 
         $rowNumber = 1;
@@ -967,62 +974,62 @@ class ItemController extends Controller
             // Legacy pack/carton support for single-row files
             $legacyPack = null;
             if ($packQtyIdx !== null || $packPriceIdx !== null) {
-                $pQty = $packQtyIdx !== null ? max(1, (int) preg_replace('/[^\d]/', '', (string)($r[$packQtyIdx] ?? '1'))) : 1;
-                $pPrice = $packPriceIdx !== null && trim((string)($r[$packPriceIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$packPriceIdx]) : null;
-                $pWholesale = $packWholesaleIdx !== null && trim((string)($r[$packWholesaleIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$packWholesaleIdx]) : null;
-                $pName = $packNameIdx !== null && trim((string)($r[$packNameIdx] ?? '')) !== '' ? trim($r[$packNameIdx]) : 'Pack';
+                $pQty = $packQtyIdx !== null ? max(1, (int) preg_replace('/[^\d]/', '', (string) ($r[$packQtyIdx] ?? '1'))) : 1;
+                $pPrice = $packPriceIdx !== null && trim((string) ($r[$packPriceIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$packPriceIdx]) : null;
+                $pWholesale = $packWholesaleIdx !== null && trim((string) ($r[$packWholesaleIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$packWholesaleIdx]) : null;
+                $pName = $packNameIdx !== null && trim((string) ($r[$packNameIdx] ?? '')) !== '' ? trim($r[$packNameIdx]) : 'Pack';
                 if (($pPrice !== null && $pPrice > 0) || $pQty > 1) {
                     $legacyPack = [
-                        'unit_name'              => $pName,
+                        'unit_name' => $pName,
                         'quantity_in_base_units' => $pQty,
-                        'selling_price'          => $pPrice ?? ($price * $pQty),
-                        'wholesale_price'        => $pWholesale ?? ($wholesale * $pQty),
+                        'selling_price' => $pPrice ?? ($price * $pQty),
+                        'wholesale_price' => $pWholesale ?? ($wholesale * $pQty),
                     ];
                 }
             }
 
             $legacyCarton = null;
             if ($cartonQtyIdx !== null || $cartonPriceIdx !== null) {
-                $cQty = $cartonQtyIdx !== null ? max(1, (int) preg_replace('/[^\d]/', '', (string)($r[$cartonQtyIdx] ?? '1'))) : 1;
-                $cPrice = $cartonPriceIdx !== null && trim((string)($r[$cartonPriceIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$cartonPriceIdx]) : null;
-                $cWholesale = $cartonWholesaleIdx !== null && trim((string)($r[$cartonWholesaleIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$cartonWholesaleIdx]) : null;
-                $cName = $cartonNameIdx !== null && trim((string)($r[$cartonNameIdx] ?? '')) !== '' ? trim($r[$cartonNameIdx]) : 'Carton';
+                $cQty = $cartonQtyIdx !== null ? max(1, (int) preg_replace('/[^\d]/', '', (string) ($r[$cartonQtyIdx] ?? '1'))) : 1;
+                $cPrice = $cartonPriceIdx !== null && trim((string) ($r[$cartonPriceIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$cartonPriceIdx]) : null;
+                $cWholesale = $cartonWholesaleIdx !== null && trim((string) ($r[$cartonWholesaleIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$cartonWholesaleIdx]) : null;
+                $cName = $cartonNameIdx !== null && trim((string) ($r[$cartonNameIdx] ?? '')) !== '' ? trim($r[$cartonNameIdx]) : 'Carton';
                 if (($cPrice !== null && $cPrice > 0) || $cQty > 1) {
                     $pMultiplier = $legacyPack ? $legacyPack['quantity_in_base_units'] : 1;
                     $cBaseQty = $pMultiplier * $cQty;
                     $legacyCarton = [
-                        'unit_name'              => $cName,
+                        'unit_name' => $cName,
                         'quantity_in_base_units' => $cBaseQty,
-                        'selling_price'          => $cPrice ?? ($price * $cBaseQty),
-                        'wholesale_price'        => $cWholesale ?? ($wholesale * $cBaseQty),
+                        'selling_price' => $cPrice ?? ($price * $cBaseQty),
+                        'wholesale_price' => $cWholesale ?? ($wholesale * $cBaseQty),
                     ];
                 }
             }
 
             $rowObj = [
-                'line'                   => $line,
-                'item_name'              => $itemName,
-                'barcode'                => $barcode,
-                'category_name'          => $categoryName,
-                'group_address_name'     => $groupName,
-                'buy_price'              => $buyPrice,
-                'price'                  => $price,
-                'wholesale_price'        => $wholesale,
-                'unit_name'              => $unitName,
+                'line' => $line,
+                'item_name' => $itemName,
+                'barcode' => $barcode,
+                'category_name' => $categoryName,
+                'group_address_name' => $groupName,
+                'buy_price' => $buyPrice,
+                'price' => $price,
+                'wholesale_price' => $wholesale,
+                'unit_name' => $unitName,
                 'quantity_in_base_units' => $qtyInBase,
-                'is_base_unit'           => $isBase,
-                'front_store_qty'        => $frontQty,
-                'back_store_qty'         => $backQty,
-                'expiry_date'            => $expiryDate,
-                'item_description'       => $desc,
-                'legacy_pack'            => $legacyPack,
-                'legacy_carton'          => $legacyCarton,
+                'is_base_unit' => $isBase,
+                'front_store_qty' => $frontQty,
+                'back_store_qty' => $backQty,
+                'expiry_date' => $expiryDate,
+                'item_description' => $desc,
+                'legacy_pack' => $legacyPack,
+                'legacy_carton' => $legacyCarton,
             ];
 
             if (!isset($itemGroups[$refKey])) {
                 $itemGroups[$refKey] = [
-                    'ref'          => $refKey,
-                    'base_row'     => null,
+                    'ref' => $refKey,
+                    'base_row' => null,
                     'variant_rows' => [],
                 ];
             }
@@ -1049,9 +1056,9 @@ class ItemController extends Controller
 
                 if (!$baseRow || empty($baseRow['item_name'])) {
                     $failedItems[] = [
-                        'line'      => $baseRow['line'] ?? 0,
+                        'line' => $baseRow['line'] ?? 0,
                         'item_name' => 'Ref: ' . $refKey,
-                        'reason'    => 'Item name is missing or empty',
+                        'reason' => 'Item name is missing or empty',
                     ];
                     continue;
                 }
@@ -1070,9 +1077,9 @@ class ItemController extends Controller
 
                 if ($duplicateQuery->exists()) {
                     $failedItems[] = [
-                        'line'      => $baseRow['line'],
+                        'line' => $baseRow['line'],
                         'item_name' => $itemName,
-                        'reason'    => 'Duplicate item (barcode or name already exists in this branch)',
+                        'reason' => 'Duplicate item (barcode or name already exists in this branch)',
                     ];
                     continue; // Skip duplicate items
                 }
@@ -1137,14 +1144,14 @@ class ItemController extends Controller
                         $vWholesale = (float) ($vRow['wholesale_price'] > 0 ? $vRow['wholesale_price'] : ($item->wholesale_price * $vQtyInBase));
 
                         ItemUnit::create([
-                            'item_id'                => $item->id,
-                            'branch_id'              => $branch->id,
-                            'unit_name'              => $vUnitName,
+                            'item_id' => $item->id,
+                            'branch_id' => $branch->id,
+                            'unit_name' => $vUnitName,
                             'quantity_in_base_units' => $vQtyInBase,
-                            'selling_price'          => $vPrice,
-                            'wholesale_price'        => $vWholesale,
-                            'sort_order'             => $variantIndex,
-                            'status'                 => 'active',
+                            'selling_price' => $vPrice,
+                            'wholesale_price' => $vWholesale,
+                            'sort_order' => $variantIndex,
+                            'status' => 'active',
                         ]);
                         $variantIndex++;
                     }
@@ -1153,27 +1160,27 @@ class ItemController extends Controller
                 // If legacy pack / carton columns were present on base row, create them as ItemUnits
                 if (!empty($baseRow['legacy_pack'])) {
                     ItemUnit::create([
-                        'item_id'                => $item->id,
-                        'branch_id'              => $branch->id,
-                        'unit_name'              => $baseRow['legacy_pack']['unit_name'],
+                        'item_id' => $item->id,
+                        'branch_id' => $branch->id,
+                        'unit_name' => $baseRow['legacy_pack']['unit_name'],
                         'quantity_in_base_units' => $baseRow['legacy_pack']['quantity_in_base_units'],
-                        'selling_price'          => $baseRow['legacy_pack']['selling_price'],
-                        'wholesale_price'        => $baseRow['legacy_pack']['wholesale_price'],
-                        'sort_order'             => $variantIndex++,
-                        'status'                 => 'active',
+                        'selling_price' => $baseRow['legacy_pack']['selling_price'],
+                        'wholesale_price' => $baseRow['legacy_pack']['wholesale_price'],
+                        'sort_order' => $variantIndex++,
+                        'status' => 'active',
                     ]);
                 }
 
                 if (!empty($baseRow['legacy_carton'])) {
                     ItemUnit::create([
-                        'item_id'                => $item->id,
-                        'branch_id'              => $branch->id,
-                        'unit_name'              => $baseRow['legacy_carton']['unit_name'],
+                        'item_id' => $item->id,
+                        'branch_id' => $branch->id,
+                        'unit_name' => $baseRow['legacy_carton']['unit_name'],
                         'quantity_in_base_units' => $baseRow['legacy_carton']['quantity_in_base_units'],
-                        'selling_price'          => $baseRow['legacy_carton']['selling_price'],
-                        'wholesale_price'        => $baseRow['legacy_carton']['wholesale_price'],
-                        'sort_order'             => $variantIndex++,
-                        'status'                 => 'active',
+                        'selling_price' => $baseRow['legacy_carton']['selling_price'],
+                        'wholesale_price' => $baseRow['legacy_carton']['wholesale_price'],
+                        'sort_order' => $variantIndex++,
+                        'status' => 'active',
                     ]);
                 }
 

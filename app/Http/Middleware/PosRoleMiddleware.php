@@ -29,13 +29,20 @@ class PosRoleMiddleware
             return $next($request);
         }
 
+        // Organization Admin bypasses permission checks for branches in their organization
+        $branch = current_branch();
+        if ($user->isOrganizationAdmin() && $user->organization_id && $branch && (int) $branch->organization_id === (int) $user->organization_id) {
+            return $next($request);
+        }
+
+        // Branch Admin has full access to all branch abilities
+        if ($user->isBranchAdmin()) {
+            return $next($request);
+        }
+
         // Check Spatie permission (branch-scoped via team_id)
         try {
-            if ($user->permissions->isNotEmpty()) {
-                if ($user->hasDirectPermission($ability)) {
-                    return $next($request);
-                }
-            } elseif ($user->isBranchAdmin() || $user->hasPermissionTo($ability)) {
+            if ($user->hasPermissionTo($ability) || $user->hasDirectPermission($ability)) {
                 return $next($request);
             }
         } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {

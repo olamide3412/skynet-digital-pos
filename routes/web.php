@@ -152,6 +152,28 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.export-sales');
         Route::get('/branches/{branch}/export-logs',  [BranchController::class, 'exportLogs'])
             ->name('branches.export-logs');
+        Route::post('/branches/{branch}/move-organization', [BranchController::class, 'moveOrganization'])
+            ->name('branches.move-organization');
+
+        // Organizations Management (Platform Super Admin)
+        Route::prefix('organizations')->name('organizations.')->group(function () {
+            Route::get('/',                [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'index'])->name('index');
+            Route::post('/',               [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'store'])->name('store');
+            Route::get('/{organization}',  [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'show'])->name('show');
+            Route::put('/{organization}',  [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'update'])->name('update');
+            Route::delete('/{organization}', [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'destroy'])->name('destroy');
+
+            // Organization Admin Users
+            Route::post('/{organization}/users',                [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'storeAdminUser'])->name('users.store');
+            Route::post('/{organization}/users/{user}/toggle',   [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'toggleAdminUser'])->name('users.toggle');
+            Route::post('/{organization}/users/{user}/password', [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'resetAdminPassword'])->name('users.password');
+
+            // Organization Subscription Management
+            Route::post('/{organization}/subscription',          [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'updateSubscription'])->name('subscription.update');
+
+            // Organization Branch Creation Toggle
+            Route::post('/{organization}/toggle-branch-creation', [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'toggleBranchCreation'])->name('toggle-branch-creation');
+        });
 
         Route::prefix('branches/{branch}/users')->name('branches.users.')->group(function () {
             Route::get('/',                [BranchUserController::class, 'index'])->name('index');
@@ -252,6 +274,49 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════
+ *  ORGANIZATION ADMIN PORTAL — /org/...
+ *  Prefix 'org' is in config('organizations.reserved_slugs')
+ *  Access gated by ORGANIZATIONS_ENABLED and 'org.admin' middleware
+ * ══════════════════════════════════════════════════════════════════════════════ */
+Route::prefix('org')->name('org.')->group(function () {
+    Route::get('/', function () {
+        if (!config('organizations.enabled')) {
+            abort(404, 'Organization portal is disabled.');
+        }
+
+        if (\Illuminate\Support\Facades\Auth::guard('web')->check()) {
+            $user = \Illuminate\Support\Facades\Auth::guard('web')->user();
+            if ($user->isOrganizationAdmin() || $user->isSuperAdmin()) {
+                return redirect()->route('org.dashboard');
+            }
+        }
+
+        return redirect()->route('org.login');
+    })->name('index');
+
+    Route::get('/login',   [\App\Http\Controllers\Org\OrgAuthController::class, 'showLogin'])->name('login');
+    Route::post('/login',  [\App\Http\Controllers\Org\OrgAuthController::class, 'login'])->name('login.submit');
+    Route::post('/logout', [\App\Http\Controllers\Org\OrgAuthController::class, 'destroy'])->name('logout')
+        ->middleware('auth:web');
+
+    Route::middleware(['auth:web', 'org.admin'])->group(function () {
+        Route::get('/dashboard', [\App\Http\Controllers\Org\OrgDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/branches',  [\App\Http\Controllers\Org\OrgDashboardController::class, 'branches'])->name('branches');
+        Route::post('/branches', [\App\Http\Controllers\Org\OrgDashboardController::class, 'storeBranch'])->name('branches.store');
+        Route::get('/reports',             [\App\Http\Controllers\Org\OrgReportController::class, 'index'])->name('reports');
+        Route::get('/reports/end-of-day',   [\App\Http\Controllers\Org\OrgReportController::class, 'endOfDay'])->name('reports.end-of-day');
+        Route::get('/reports/export',       [\App\Http\Controllers\Org\OrgReportController::class, 'exportSales'])->name('reports.export');
+        Route::get('/ai/chat',   [\App\Http\Controllers\Org\OrgAiController::class, 'chat'])->name('ai.chat');
+        Route::post('/ai/chat/ask', [\App\Http\Controllers\Org\OrgAiController::class, 'ask'])->name('ai.chat.ask');
+        Route::delete('/ai/chat/clear', [\App\Http\Controllers\Org\OrgAiController::class, 'clear'])->name('ai.chat.clear');
+
+        // Organization Activity & Audit Logs
+        Route::get('/activity-logs',        [\App\Http\Controllers\Org\OrgActivityLogController::class, 'index'])->name('activity-logs');
+        Route::get('/activity-logs/export', [\App\Http\Controllers\Org\OrgActivityLogController::class, 'export'])->name('activity-logs.export');
+    });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════
  *  BRANCH POS PANEL — /{branch}/...
  *  branch = slug (route model binding via getRouteKeyName = 'slug')
  *  ResolveBranchMiddleware runs first: resolves Branch, checks is_active.
@@ -309,27 +374,27 @@ Route::prefix('{branch}')
             ->middleware('pos.role:canApplyDiscount');
         Route::put('/item-discounts/{itemDiscount}', [ItemDiscountController::class, 'update'])
             ->name('item-discounts.update')
-            ->middleware('pos.role:canApplyDiscount');
+            ->middleware(['pos.role:canApplyDiscount', 'plan.feature:discounts']);
         Route::patch('/item-discounts/{itemDiscount}/toggle', [ItemDiscountController::class, 'toggleActive'])
             ->name('item-discounts.toggle')
-            ->middleware('pos.role:canApplyDiscount');
+            ->middleware(['pos.role:canApplyDiscount', 'plan.feature:discounts']);
         Route::delete('/item-discounts/{itemDiscount}', [ItemDiscountController::class, 'destroy'])
             ->name('item-discounts.destroy')
-            ->middleware('pos.role:canApplyDiscount');
+            ->middleware(['pos.role:canApplyDiscount', 'plan.feature:discounts']);
 
         // Discount Groups
         Route::post('/discount-groups', [DiscountGroupController::class, 'store'])
             ->name('discount-groups.store')
-            ->middleware('pos.role:canApplyDiscount');
+            ->middleware(['pos.role:canApplyDiscount', 'plan.feature:discounts']);
         Route::put('/discount-groups/{discountGroup}', [DiscountGroupController::class, 'update'])
             ->name('discount-groups.update')
-            ->middleware('pos.role:canApplyDiscount');
+            ->middleware(['pos.role:canApplyDiscount', 'plan.feature:discounts']);
         Route::patch('/discount-groups/{discountGroup}/toggle', [DiscountGroupController::class, 'toggleActive'])
             ->name('discount-groups.toggle')
-            ->middleware('pos.role:canApplyDiscount');
+            ->middleware(['pos.role:canApplyDiscount', 'plan.feature:discounts']);
         Route::delete('/discount-groups/{discountGroup}', [DiscountGroupController::class, 'destroy'])
             ->name('discount-groups.destroy')
-            ->middleware('pos.role:canApplyDiscount');
+            ->middleware(['pos.role:canApplyDiscount', 'plan.feature:discounts']);
 
 
         // Vendors & Purchases
@@ -504,19 +569,19 @@ Route::prefix('{branch}')
         // Items
         Route::get('items/export-template', [PosItemController::class, 'exportTemplate'])->name('items.export-template')->middleware('pos.role:canManageItems');
         Route::get('items/export',          [PosItemController::class, 'exportCsv'])->name('items.export')->middleware('pos.role:canManageItems');
-        Route::post('items/import',          [PosItemController::class, 'importNativeCsv'])->name('items.import')->middleware('pos.role:canManageItems');
-        Route::post('items/import-medfusion',[PosItemController::class, 'importMedfusionCsv'])->name('items.import-medfusion')->middleware('pos.role:canManageItems');
+        Route::post('items/import',          [PosItemController::class, 'importNativeCsv'])->name('items.import')->middleware(['pos.role:canManageItems', 'plan.feature:inventory_import']);
+        Route::post('items/import-medfusion',[PosItemController::class, 'importMedfusionCsv'])->name('items.import-medfusion')->middleware(['pos.role:canManageItems', 'plan.feature:inventory_import']);
         Route::post('items/bulk-action',     [PosItemController::class, 'bulkAction'])->name('items.bulk-action')->middleware('pos.role:canManageItems');
         Route::post('items/{item}/duplicate',[PosItemController::class, 'duplicate'])->name('items.duplicate')->middleware('pos.role:canManageItems');
         // Barcode Management & Studio
-        Route::get('items/barcodes',                      [BarcodeController::class, 'index'])->name('items.barcodes')->middleware('pos.role:canManageBarcodes');
-        Route::get('items/barcodes/search-items',         [BarcodeController::class, 'searchItems'])->name('items.barcodes.search-items')->middleware('pos.role:canManageBarcodes');
-        Route::post('items/{item}/barcodes/generate',     [BarcodeController::class, 'generate'])->name('items.barcodes.generate')->middleware('pos.role:canManageBarcodes');
-        Route::post('items/barcodes/generate-bulk',       [BarcodeController::class, 'generateBulk'])->name('items.barcodes.generate-bulk')->middleware('pos.role:canManageBarcodes');
-        Route::post('items/barcodes/log-print',           [BarcodeController::class, 'logPrint'])->name('items.barcodes.log-print')->middleware('pos.role:canManageBarcodes');
+        Route::get('items/barcodes',                      [BarcodeController::class, 'index'])->name('items.barcodes')->middleware(['pos.role:canManageBarcodes', 'plan.feature:barcode_label_printing']);
+        Route::get('items/barcodes/search-items',         [BarcodeController::class, 'searchItems'])->name('items.barcodes.search-items')->middleware(['pos.role:canManageBarcodes', 'plan.feature:barcode_label_printing']);
+        Route::post('items/{item}/barcodes/generate',     [BarcodeController::class, 'generate'])->name('items.barcodes.generate')->middleware(['pos.role:canManageBarcodes', 'plan.feature:barcode_label_printing']);
+        Route::post('items/barcodes/generate-bulk',       [BarcodeController::class, 'generateBulk'])->name('items.barcodes.generate-bulk')->middleware(['pos.role:canManageBarcodes', 'plan.feature:barcode_label_printing']);
+        Route::post('items/barcodes/log-print',           [BarcodeController::class, 'logPrint'])->name('items.barcodes.log-print')->middleware(['pos.role:canManageBarcodes', 'plan.feature:barcode_label_printing']);
 
         // IMEI & Device Unit Tracking
-        Route::get('items/imei-tracking',                 [\App\Http\Controllers\Pos\ImeiTrackingController::class, 'index'])->name('items.imeis')->middleware('pos.role:canManageItems');
+        Route::get('items/imei-tracking',                 [\App\Http\Controllers\Pos\ImeiTrackingController::class, 'index'])->name('items.imeis')->middleware(['pos.role:canManageItems', 'plan.feature:imei_tracking']);
         Route::get('items/{item}/available-imeis',        [PosItemController::class, 'availableImeis'])->name('items.available-imeis');
 
         Route::resource('items', PosItemController::class)
@@ -531,11 +596,11 @@ Route::prefix('{branch}')
             ->middleware('pos.role:canManageItems');
 
         // Item Batches & Expiry Tracking
-        Route::get('items/{item}/batches',           [\App\Http\Controllers\Pos\ItemBatchController::class, 'index'])->name('items.batches')->middleware('pos.role:canManageItems');
-        Route::post('batches',                       [\App\Http\Controllers\Pos\ItemBatchController::class, 'store'])->name('batches.store')->middleware('pos.role:canManageItems');
-        Route::put('batches/{batch}',                [\App\Http\Controllers\Pos\ItemBatchController::class, 'update'])->name('batches.update')->middleware('pos.role:canManageItems');
-        Route::delete('batches/{batch}',             [\App\Http\Controllers\Pos\ItemBatchController::class, 'destroy'])->name('batches.destroy')->middleware('pos.role:canManageItems');
-        Route::post('batches/issues/{issue}/resolve', [\App\Http\Controllers\Pos\ItemBatchController::class, 'resolveIssue'])->name('batches.resolve-issue')->middleware('pos.role:canManageItems');
+        Route::get('items/{item}/batches',           [\App\Http\Controllers\Pos\ItemBatchController::class, 'index'])->name('items.batches')->middleware(['pos.role:canManageItems', 'plan.feature:batch_expiry_tracking']);
+        Route::post('batches',                       [\App\Http\Controllers\Pos\ItemBatchController::class, 'store'])->name('batches.store')->middleware(['pos.role:canManageItems', 'plan.feature:batch_expiry_tracking']);
+        Route::put('batches/{batch}',                [\App\Http\Controllers\Pos\ItemBatchController::class, 'update'])->name('batches.update')->middleware(['pos.role:canManageItems', 'plan.feature:batch_expiry_tracking']);
+        Route::delete('batches/{batch}',             [\App\Http\Controllers\Pos\ItemBatchController::class, 'destroy'])->name('batches.destroy')->middleware(['pos.role:canManageItems', 'plan.feature:batch_expiry_tracking']);
+        Route::post('batches/issues/{issue}/resolve', [\App\Http\Controllers\Pos\ItemBatchController::class, 'resolveIssue'])->name('batches.resolve-issue')->middleware(['pos.role:canManageItems', 'plan.feature:batch_expiry_tracking']);
 
         // Item Grids
         Route::resource('item-grids', ItemGridController::class)
@@ -571,11 +636,11 @@ Route::prefix('{branch}')
         Route::post('/customers/{customer}/debt',
                 [PosCustomerController::class, 'recordDebt'])
             ->name('customers.debt')
-            ->middleware('pos.role:canGiveDebt');
+            ->middleware(['pos.role:canGiveDebt', 'plan.feature:debt_customer_accounts']);
         Route::get('/customers/{customer}/debt-ledger',
                 [PosCustomerController::class, 'debtLedger'])
             ->name('customers.debt-ledger')
-            ->middleware('pos.role:canManageDebt');
+            ->middleware(['pos.role:canManageDebt', 'plan.feature:debt_customer_accounts']);
 
         // Vendors
         Route::resource('vendors', \App\Http\Controllers\Pos\VendorController::class)
