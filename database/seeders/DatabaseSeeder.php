@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
             BranchSeeder::class,          // Creates sample branches
             SuperAdminSeeder::class,      // Creates the platform Super Admin
             GlobalItemSeeder::class,      // Seeds 50 items into Global Master Item Pool
+            PricingPlanSeeder::class,     // Seeds Pricing Plans & Capabilities
         ]);
     }
 }
