@@ -16,6 +16,7 @@ class OrganizationsBackfillCommand extends Command
      */
     protected $signature = 'organizations:backfill
                             {--map= : Path to CSV file mapping branch_slug to organization_name (columns: branch_slug,organization_name[,contact_name,contact_email,contact_phone,address])}
+                            {--auto : Automatically create/assign each unassigned branch to an organization with the same name}
                             {--dry-run : Simulate execution without persisting any database changes}
                             {--rollback : Roll back organization assignments recorded in organization_activity_log}';
 
@@ -24,7 +25,7 @@ class OrganizationsBackfillCommand extends Command
      *
      * @var string
      */
-    protected $description = 'Idempotently backfill existing branches into organizations using a mapping file, with dry-run and rollback support.';
+    protected $description = 'Idempotently backfill existing branches into organizations using a mapping file or auto-matching, with dry-run and rollback support.';
 
     /**
      * Execute the console command.
@@ -43,9 +44,15 @@ class OrganizationsBackfillCommand extends Command
             return $this->handleRollback($isDryRun);
         }
 
+        if ($this->option('auto')) {
+            return $this->handleAutoBackfill($isDryRun);
+        }
+
         if (empty($mapPath)) {
-            $this->error('Error: The --map option is required. There is no default organization fallback.');
-            $this->line('Usage: php artisan organizations:backfill --map=path/to/mapping.csv [--dry-run]');
+            $this->error('Error: Either the --map option or --auto flag is required.');
+            $this->line('Usage:');
+            $this->line('  php artisan organizations:backfill --map=path/to/mapping.csv [--dry-run]');
+            $this->line('  php artisan organizations:backfill --auto [--dry-run]');
             return Command::FAILURE;
         }
 
@@ -53,7 +60,36 @@ class OrganizationsBackfillCommand extends Command
     }
 
     /**
-     * Handle backfilling branches into organizations.
+     * Handle auto-backfilling branches into organizations using branch details.
+     */
+    protected function handleAutoBackfill(bool $isDryRun): int
+    {
+        $unassignedBranches = Branch::whereNull('organization_id')->get();
+
+        if ($unassignedBranches->isEmpty()) {
+            $this->info('All branches already belong to an organization. Nothing to backfill.');
+            return Command::SUCCESS;
+        }
+
+        $this->info("Found " . $unassignedBranches->count() . " unassigned branch(es). Auto-generating organization mappings from branch profiles...");
+
+        $mappings = [];
+        foreach ($unassignedBranches as $branch) {
+            $mappings[$branch->slug] = [
+                'branch_slug'       => $branch->slug,
+                'organization_name' => $branch->name,
+                'contact_name'      => $branch->name,
+                'contact_email'     => $branch->email,
+                'contact_phone'     => $branch->phone,
+                'address'           => $branch->address,
+            ];
+        }
+
+        return $this->executeBackfill($mappings, $unassignedBranches, $isDryRun);
+    }
+
+    /**
+     * Handle backfilling branches into organizations using a mapping file.
      */
     protected function handleBackfill(string $mapPath, bool $isDryRun): int
     {
@@ -92,10 +128,18 @@ class OrganizationsBackfillCommand extends Command
                 $this->line("  - {$unmapped}");
             }
             $this->warn('Per specification, the command will NOT guess or assign a default organization.');
-            $this->line('Please add these branches to the mapping file and run again.');
+            $this->line('Please add these branches to the mapping file, or run with --auto.');
             return Command::FAILURE;
         }
 
+        return $this->executeBackfill($mappings, $unassignedBranches, $isDryRun);
+    }
+
+    /**
+     * Execute the backfill transaction with mapped assignments.
+     */
+    protected function executeBackfill(array $mappings, $unassignedBranches, bool $isDryRun): int
+    {
         if ($isDryRun) {
             $this->warn('[DRY-RUN MODE] No database changes will be written.');
         }

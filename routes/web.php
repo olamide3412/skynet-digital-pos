@@ -220,6 +220,7 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
 
         // System Activity & Error Logs
         Route::get('/logs/export', [\App\Http\Controllers\SuperAdmin\ActivityLogController::class, 'export'])->name('logs.export');
+        Route::delete('/logs/prune', [\App\Http\Controllers\SuperAdmin\ActivityLogController::class, 'prune'])->name('logs.prune');
         Route::get('/logs',        [\App\Http\Controllers\SuperAdmin\ActivityLogController::class, 'index'])->name('logs.index');
 
         // Cross-branch Expense Reporting

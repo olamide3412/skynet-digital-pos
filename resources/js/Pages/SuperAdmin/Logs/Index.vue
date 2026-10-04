@@ -6,11 +6,67 @@ import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
 defineOptions({ layout: SuperAdminLayout })
 
 const props = defineProps({
-    logs:     Object,
-    branches: Array,
-    users:    Array,
-    filters:  Object,
+    logs:            Object,
+    branches:        Array,
+    users:           Array,
+    filters:         Object,
+    old_logs_counts: Object,
 })
+
+// ── Prune Logs Modal ─────────────────────────────────────────────────────────
+const pruneModalOpen = ref(false)
+const pruneDays = ref(30)
+const isPruning = ref(false)
+
+const openPruneModal = () => {
+    pruneDays.value = 30
+    pruneModalOpen.value = true
+}
+
+const closePruneModal = () => {
+    if (isPruning.value) return
+    pruneModalOpen.value = false
+}
+
+const getCutoffDateLabel = (days) => {
+    const d = new Date()
+    d.setDate(d.getDate() - Number(days))
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
+const retentionOptions = [
+    {
+        days: 30,
+        title: 'Older than 30 Days',
+        desc: 'Retain the last 30 days of logs; permanently purge all older records.',
+    },
+    {
+        days: 60,
+        title: 'Older than 60 Days',
+        desc: 'Retain the last 60 days (approx. 2 months); permanently purge older records.',
+    },
+    {
+        days: 90,
+        title: 'Older than 90 Days',
+        desc: 'Retain the last 90 days (1 quarter); purge all previous historical records.',
+    },
+]
+
+const confirmPrune = () => {
+    if (isPruning.value) return
+    isPruning.value = true
+
+    router.delete(route('superadmin.logs.prune'), {
+        data: { days: pruneDays.value },
+        preserveScroll: true,
+        onSuccess: () => {
+            pruneModalOpen.value = false
+        },
+        onFinish: () => {
+            isPruning.value = false
+        },
+    })
+}
 
 const searchFilter     = ref(props.filters?.search || '')
 const selectedBranch   = ref(props.filters?.branch_id || '')
@@ -133,7 +189,20 @@ function getBadgeClass(type) {
                 <h1 class="text-xl font-black text-slate-900 dark:text-white tracking-tight">System Activity & Error Logs</h1>
                 <p class="text-xs text-slate-500 dark:text-slate-400">Master audit trail of all transactions, inventory movements, logins, setting changes, and system errors.</p>
             </div>
-            <div class="flex items-center gap-2.5">
+            <div class="flex flex-wrap items-center gap-2.5">
+                <!-- Clear Old Logs Button -->
+                <button
+                    type="button"
+                    @click="openPruneModal"
+                    class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs transition shadow-md shadow-rose-600/20 flex items-center space-x-1.5 cursor-pointer"
+                    title="Clear logs older than 30, 60, or 90 days"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    <span>Clear Old Logs</span>
+                </button>
+
                 <!-- Export Dropdown -->
                 <div class="relative" ref="exportDropdownRef">
                     <button
@@ -461,6 +530,126 @@ function getBadgeClass(type) {
                 <div class="pt-2 text-right">
                     <button @click="selectedLogModal = null" class="px-5 py-2 bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl hover:bg-slate-300">
                         Close
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Clear / Delete Old Logs Confirmation Modal -->
+        <div
+            v-if="pruneModalOpen"
+            class="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4"
+            @click.self="closePruneModal"
+        >
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+                <!-- Modal Header -->
+                <div class="flex items-start justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-black text-slate-900 dark:text-white tracking-tight">Clear Old Activity Logs</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">Permanently delete historical system logs to optimize storage.</p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        :disabled="isPruning"
+                        @click="closePruneModal"
+                        class="text-slate-400 hover:text-slate-600 dark:hover:text-white font-bold text-lg disabled:opacity-40 cursor-pointer"
+                    >
+                        ×
+                    </button>
+                </div>
+
+                <!-- Retention Window Selection -->
+                <div class="space-y-2.5">
+                    <label class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                        Select Retention Window
+                    </label>
+
+                    <div class="space-y-2">
+                        <div
+                            v-for="opt in retentionOptions"
+                            :key="opt.days"
+                            @click="pruneDays = opt.days"
+                            :class="[
+                                'p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3',
+                                pruneDays === opt.days
+                                    ? 'border-rose-500 bg-rose-50/60 dark:bg-rose-950/30 text-rose-950 dark:text-rose-100 ring-2 ring-rose-500/20'
+                                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100/60 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                            ]"
+                        >
+                            <div class="flex items-center gap-3">
+                                <div
+                                    :class="[
+                                        'w-4 h-4 rounded-full border flex items-center justify-center transition shrink-0',
+                                        pruneDays === opt.days ? 'border-rose-600 bg-rose-600' : 'border-slate-400'
+                                    ]"
+                                >
+                                    <span v-if="pruneDays === opt.days" class="w-1.5 h-1.5 rounded-full bg-white"></span>
+                                </div>
+                                <div>
+                                    <div class="text-xs font-bold">{{ opt.title }}</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400">{{ opt.desc }}</div>
+                                </div>
+                            </div>
+
+                            <span
+                                :class="[
+                                    'px-2.5 py-1 rounded-lg text-[10px] font-bold shrink-0',
+                                    (props.old_logs_counts?.[opt.days] || 0) > 0
+                                        ? 'bg-rose-100 dark:bg-rose-900/60 text-rose-700 dark:text-rose-300'
+                                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                                ]"
+                            >
+                                {{ (props.old_logs_counts?.[opt.days] || 0).toLocaleString() }} logs
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Warning Notice -->
+                <div class="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 dark:text-amber-200">
+                    <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <div>
+                        <span class="font-bold">Permanent Deletion:</span>
+                        This will delete approximately
+                        <strong class="font-bold">{{ (props.old_logs_counts?.[pruneDays] || 0).toLocaleString() }}</strong>
+                        logs logged prior to <span class="font-semibold underline">{{ getCutoffDateLabel(pruneDays) }}</span>.
+                        A system audit entry will record this cleanup.
+                    </div>
+                </div>
+
+                <!-- Footer Actions -->
+                <div class="flex items-center justify-end gap-2.5 pt-2">
+                    <button
+                        type="button"
+                        :disabled="isPruning"
+                        @click="closePruneModal"
+                        class="px-4 py-2 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 text-xs font-bold rounded-xl transition cursor-pointer disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="button"
+                        :disabled="isPruning || (props.old_logs_counts?.[pruneDays] || 0) === 0"
+                        @click="confirmPrune"
+                        class="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:bg-rose-400 dark:disabled:bg-rose-900/40 text-white font-bold text-xs rounded-xl transition shadow-md shadow-rose-600/20 flex items-center gap-1.5 cursor-pointer disabled:cursor-not-allowed"
+                    >
+                        <svg v-if="isPruning" class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        <span>{{ isPruning ? 'Deleting Logs...' : 'Delete Old Logs (' + (props.old_logs_counts?.[pruneDays] || 0).toLocaleString() + ')' }}</span>
                     </button>
                 </div>
             </div>

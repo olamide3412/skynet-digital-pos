@@ -101,12 +101,47 @@ class ActivityLogController extends Controller
         $branches = Branch::select('id', 'name', 'slug')->orderBy('name')->get();
         $users    = User::select('id', 'name', 'email')->orderBy('name')->get();
 
+        $oldLogsCounts = [
+            30 => PosLog::where('created_at', '<', now()->subDays(30))->count(),
+            60 => PosLog::where('created_at', '<', now()->subDays(60))->count(),
+            90 => PosLog::where('created_at', '<', now()->subDays(90))->count(),
+        ];
+
         return Inertia::render('SuperAdmin/Logs/Index', [
-            'logs'     => $logs,
-            'branches' => $branches,
-            'users'    => $users,
-            'filters'  => $request->only(['branch_id', 'action_type', 'user_id', 'search', 'start_date', 'end_date']),
+            'logs'            => $logs,
+            'branches'        => $branches,
+            'users'           => $users,
+            'filters'         => $request->only(['branch_id', 'action_type', 'user_id', 'search', 'start_date', 'end_date']),
+            'old_logs_counts' => $oldLogsCounts,
         ]);
+    }
+
+    /**
+     * Purge activity logs older than a specified number of days (e.g. 30, 60, 90).
+     */
+    public function prune(Request $request)
+    {
+        $validated = $request->validate([
+            'days' => ['required', 'integer', 'in:30,60,90,180'],
+        ]);
+
+        $days = (int) $validated['days'];
+        $cutoff = now()->subDays($days);
+
+        $deletedCount = PosLog::where('created_at', '<', $cutoff)->delete();
+
+        ActivityLogger::log(
+            'system',
+            "Super Admin cleared {$deletedCount} system activity log(s) older than {$days} days.",
+            null,
+            [
+                'retention_days' => $days,
+                'deleted_count'  => $deletedCount,
+                'cutoff_date'    => $cutoff->toIso8601String(),
+            ]
+        );
+
+        return back()->with('success', "Successfully deleted {$deletedCount} log record(s) older than {$days} days.");
     }
 
     /**

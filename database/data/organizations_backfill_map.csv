@@ -1,3 +1,7 @@
 branch_slug,organization_name,contact_name,contact_email,contact_phone,address
 felix-enterprise,Felix Enterprise,Felix,felix@skynetpos.com,+2348012345678,"12 Commercial Road, Asaba, Delta State"
 skynet-didtal-hub,Skynet Digital Hub,Sky Net,skynet@pos.com,08011223344,"Branch B Location"
+hub-enterprise,HUB Enterprise,HUB Enterprise,hub@skynetpos.com,+2348000000001,"HUB Enterprise Location"
+monty-enterprise,Monty Enterprise,Monty Enterprise,monty@skynetpos.com,+2348000000002,"Monty Enterprise Location"
+blessed-hand,Blessed Hand,Blessed Hand,,08105427801,"Old Sapele Argbor Road, Obiarku"
+skynet-digital-enterprise,Skynet Digital Enterprise,Skynet Digital Enterprise,digital@skynetpos.com,+2348012345678,"12 Commercial Road, Asaba, Delta State"
