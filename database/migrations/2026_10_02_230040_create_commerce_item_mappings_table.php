@@ -11,13 +11,15 @@ return new class extends Migration
      */
     public function up(): void
     {
+        Schema::dropIfExists('commerce_item_mappings');
+
         Schema::create('commerce_item_mappings', function (Blueprint $table) {
             $table->id();
             $table->foreignId('commerce_integration_id')->constrained('commerce_integrations')->cascadeOnDelete();
             $table->foreignId('item_id')->constrained('items')->cascadeOnDelete();
-            $table->string('external_product_id');
-            $table->string('external_variant_id')->nullable();
-            $table->string('external_sku')->nullable();
+            $table->string('external_product_id', 100);
+            $table->string('external_variant_id', 100)->nullable();
+            $table->string('external_sku', 100)->nullable();
             $table->enum('sync_status', ['synced', 'pending', 'error'])->default('synced');
             $table->timestamp('last_synced_at')->nullable();
             $table->json('metadata')->nullable();
