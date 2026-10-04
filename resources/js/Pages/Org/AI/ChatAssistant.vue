@@ -58,6 +58,8 @@ const selectedBranchId = ref(props.selectedBranch?.id || '')
 const messagesContainer = ref(null)
 
 const suggestedPrompts = [
+    "Why am I on loss and which item caused that?",
+    "Check if high buy costs or discounts made me lose profit",
     "What were total sales today across our branches?",
     "What's our total inventory worth right now?",
     "Which customers owe the most right now?",

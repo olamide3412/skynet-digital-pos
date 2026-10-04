@@ -368,6 +368,76 @@ export async function markSaleFailed(offlineSaleId, errorMsg) {
 }
 
 /**
+ * Prune synced offline sales older than a given number of days.
+ * 
+ * CRITICAL SAFETY ENFORCEMENT:
+ * ONLY sales with sync_status === 'synced' can EVER be deleted.
+ * 'pending' and 'failed' sales MUST NEVER be touched or removed under any circumstance,
+ * even if they are older than the retention cutoff.
+ */
+export async function pruneOldSyncedSales(retentionDays = 7) {
+    try {
+        const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString()
+
+        // 1. Query exclusively by indexed sync_status = 'synced'
+        const syncedRecords = await db.queued_sales
+            .where('sync_status')
+            .equals('synced')
+            .toArray()
+
+        // 2. Strict double-check filter: MUST have sync_status === 'synced' AND older than cutoff
+        const oldSyncedIds = syncedRecords
+            .filter(sale => {
+                if (sale.sync_status !== 'synced') return false // Absolute defense guard
+                const timestamp = sale.synced_at || sale.created_at
+                return timestamp && timestamp < cutoffDate
+            })
+            .map(sale => sale.offline_sale_id)
+
+        if (oldSyncedIds.length > 0) {
+            await db.queued_sales.bulkDelete(oldSyncedIds)
+            console.info(`[OfflineDB] Pruned ${oldSyncedIds.length} synced offline sales older than ${retentionDays} days.`)
+        }
+
+        return oldSyncedIds.length
+    } catch (e) {
+        console.warn('[OfflineDB] pruneOldSyncedSales notice:', e)
+        return 0
+    }
+}
+
+/**
+ * Manually clear synced sales history from local IndexedDB cache.
+ * 
+ * CRITICAL SAFETY ENFORCEMENT:
+ * STRICTLY deletes records where sync_status === 'synced'.
+ * Never touches 'pending' or 'failed' sales.
+ */
+export async function clearAllSyncedSales() {
+    try {
+        const syncedRecords = await db.queued_sales
+            .where('sync_status')
+            .equals('synced')
+            .toArray()
+
+        // Strict fail-safe filter: only proceed if status is confirmed 'synced'
+        const syncedIds = syncedRecords
+            .filter(sale => sale.sync_status === 'synced')
+            .map(sale => sale.offline_sale_id)
+
+        if (syncedIds.length > 0) {
+            await db.queued_sales.bulkDelete(syncedIds)
+            console.info(`[OfflineDB] Cleared ${syncedIds.length} synced sales from local terminal cache.`)
+        }
+
+        return syncedIds.length
+    } catch (e) {
+        console.warn('[OfflineDB] clearAllSyncedSales notice:', e)
+        return 0
+    }
+}
+
+/**
  * Get all queued sales for inspection drawer.
  * By default fetches all records (pass limit > 0 if capping is desired).
  */

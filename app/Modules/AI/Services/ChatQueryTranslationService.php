@@ -141,6 +141,14 @@ Core Analytical & Presentation Guidelines:
 10. When presenting multiple comparative metrics, rankings, inventory lists, or activity logs, ALWAYS format them in clean Markdown Tables using the '|' pipe syntax.
 11. Highlight key takeaways, product quantities, timestamps, or risk flags using **bold text**.
 12. NEVER speculate or fabricate figures not present in the verified database payload.
+13. If asked WHY AM I ON LOSS / PROFIT LOSS INVESTIGATION / UNPROFITABLE ITEMS / HIGH BUY COST vs SELLING PRICE / DISCOUNTS:
+   - Directly state whether the business is experiencing losses and quantify total loss amount in ₦.
+   - Provide a structured root-cause diagnosis clearly separating:
+     a) Inverted Catalog Pricing (Buy Cost > Selling Price): Explicitly name the items, buy price vs selling price, deficit per unit, and potential stock loss.
+     b) Sales Sold at a Loss: Detail loss receipts, attributing whether loss was caused by item cost inversion or excessive discount wiping out margin, cashier who processed it, and net negative profit.
+     c) Culprit Items: Rank the items responsible for the highest margin deficit.
+     d) Operating Expenses vs Gross Profit: Note if operational overhead (rent, fuel, salaries) exceeds gross margin.
+     e) Concrete Action Steps: Give clear immediate recommendations to correct prices in inventory and regulate cashier discounts.
 SYS;
 
                     $payloadJson = json_encode($payload, JSON_PRETTY_PRINT);
@@ -276,6 +284,29 @@ USER_PROMPT;
             return self::resolveInventoryValuation($q, $branch, $user, $scopeName);
         }
 
+        // ── 1.5 Loss Investigation & Root-Cause Profitability Diagnosis ─────
+        $isLossQuery = 
+            str_contains($q, 'why am on lost') || str_contains($q, 'why am i on loss') ||
+            str_contains($q, 'why on lost') || str_contains($q, 'am i on loss') || str_contains($q, 'am on lost') ||
+            str_contains($q, 'on lost') || str_contains($q, 'on loss') ||
+            str_contains($q, 'making loss') || str_contains($q, 'making a loss') ||
+            str_contains($q, 'losing money') || str_contains($q, 'lose money') || str_contains($q, 'lost money') ||
+            str_contains($q, 'negative profit') || str_contains($q, 'profit negative') || (str_contains($q, 'profit') && str_contains($q, 'negative')) ||
+            str_contains($q, 'negative margin') || str_contains($q, 'margin negative') || (str_contains($q, 'margin') && str_contains($q, 'negative')) ||
+            str_contains($q, 'loss on profit') || str_contains($q, 'profit loss') || str_contains($q, 'lost profit') ||
+            str_contains($q, 'loss on sale') || str_contains($q, 'loss on sales') ||
+            str_contains($q, 'sold at a loss') || str_contains($q, 'selling at a loss') || str_contains($q, 'sold at loss') ||
+            str_contains($q, 'unprofitable') ||
+            str_contains($q, 'buy cost more') || str_contains($q, 'buy cost higher') || str_contains($q, 'cost more than') || str_contains($q, 'cost higher than') ||
+            (str_contains($q, 'buy price') && (str_contains($q, 'selling price') || str_contains($q, 'selling') || str_contains($q, 'price') || str_contains($q, 'higher') || str_contains($q, 'more'))) ||
+            (str_contains($q, 'discount') && (str_contains($q, 'loss') || str_contains($q, 'lost') || str_contains($q, 'lose') || str_contains($q, 'profit') || str_contains($q, 'cause') || str_contains($q, 'make me'))) ||
+            ((str_contains($q, 'loss') || str_contains($q, 'lost') || str_contains($q, 'losing')) &&
+             (str_contains($q, 'item') || str_contains($q, 'product') || str_contains($q, 'sale') || str_contains($q, 'cause') || str_contains($q, 'why') || str_contains($q, 'which') || str_contains($q, 'reason') || str_contains($q, 'issue')));
+
+        if ($isLossQuery) {
+            return self::resolveLossAnalysis($q, $branch, $user, $scopeName);
+        }
+
         // ── 4. Specific Item / Product Search ────────────────────────────────
         // If query asks about a particular item, stock count, price, last sold, or mentions an item name
         $itemSearchResults = self::searchSpecificItemData($q, $branch, $user);
@@ -317,7 +348,7 @@ USER_PROMPT;
         if (
             str_contains($q, 'suspicious') || str_contains($q, 'fraud') || str_contains($q, 'theft') ||
             str_contains($q, 'anomaly') || str_contains($q, 'risk') || str_contains($q, 'audit') ||
-            str_contains($q, 'discrepancy') || str_contains($q, 'unusual') || str_contains($q, 'loss')
+            str_contains($q, 'discrepancy') || str_contains($q, 'unusual') || str_contains($q, 'shrinkage')
         ) {
             // A. High discount cashiers
             $discountAudit = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
@@ -1139,6 +1170,308 @@ USER_PROMPT;
     }
 
     /**
+     * Diagnose business losses, identifying inverted buy prices (buy_cost > price),
+     * sales made at a loss, excessive discount erosion, damaged inventory write-offs,
+     * operating expense drag, and relevant audit logs.
+     */
+    protected static function resolveLossAnalysis(string $q, ?Branch $branch, User $user, string $scopeName): array
+    {
+        // 1. Catalog Pricing Inversions (Buy Price > Selling Price / Wholesale Price)
+        $invertedItems = Item::when($branch, fn($query) => $query->where('branch_id', $branch->id))
+            ->where(function($sub) {
+                $sub->where(function($q) {
+                    $q->whereColumn('buy_price', '>', 'price')
+                      ->where('price', '>', 0);
+                })->orWhere(function($q) {
+                    $q->whereColumn('buy_price', '>', 'wholesale_price')
+                      ->where('wholesale_price', '>', 0);
+                });
+            })
+            ->with('category:id,name')
+            ->get();
+
+        $catalogInversions = $invertedItems->map(function(Item $item) {
+            $buyPrice = (float) $item->buy_price;
+            $sellingPrice = (float) $item->price;
+            $wholesalePrice = (float) $item->wholesale_price;
+            $totalStock = (int)$item->front_store_qty + (int)$item->back_store_qty;
+            $retailDeficit = $sellingPrice > 0 ? max(0, $buyPrice - $sellingPrice) : 0;
+            $wholesaleDeficit = $wholesalePrice > 0 ? max(0, $buyPrice - $wholesalePrice) : 0;
+            $potentialRetailLoss = round($retailDeficit * $totalStock, 2);
+
+            return [
+                'id'                   => $item->id,
+                'item_name'            => $item->item_name,
+                'barcode'              => $item->barcode_number ?: 'N/A',
+                'category'             => $item->category?->name ?? 'General',
+                'buy_price'            => $buyPrice,
+                'selling_price'        => $sellingPrice,
+                'wholesale_price'      => $wholesalePrice,
+                'retail_deficit'       => round($retailDeficit, 2),
+                'wholesale_deficit'    => round($wholesaleDeficit, 2),
+                'front_stock'          => (int)$item->front_store_qty,
+                'back_stock'           => (int)$item->back_store_qty,
+                'total_stock'          => $totalStock,
+                'potential_stock_loss' => $potentialRetailLoss,
+                'is_retail_inverted'   => $sellingPrice > 0 && $buyPrice > $sellingPrice,
+                'is_wholesale_inverted'=> $wholesalePrice > 0 && $buyPrice > $wholesalePrice,
+            ];
+        })->values()->all();
+
+        $totalPotentialCatalogLoss = array_sum(array_column($catalogInversions, 'potential_stock_loss'));
+
+        // 2. Sales with Negative Profit (Historical Loss Sales)
+        $lossSalesQuery = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
+            ->where('profit_made', '<', 0);
+
+        $totalLossSalesCount = (clone $lossSalesQuery)->count();
+        $totalLossAmount = abs((float)(clone $lossSalesQuery)->sum('profit_made'));
+        $totalLossSalesRevenue = (float)(clone $lossSalesQuery)->sum('final_total');
+        $totalLossSalesDiscounts = (float)(clone $lossSalesQuery)->sum('discount_amount');
+
+        // Worst 10 loss sales with order details, cashiers, customers
+        $worstLossSales = (clone $lossSalesQuery)
+            ->with([
+                'user:id,name,username',
+                'customer:id,name,phone',
+                'saleOrders.item:id,item_name,buy_price,price',
+            ])
+            ->orderBy('profit_made') // lowest negative profit first
+            ->limit(10)
+            ->get();
+
+        $lossSalesBreakdown = $worstLossSales->map(function(Sale $s) {
+            $subtotal = (float)$s->amount_cost + (float)$s->consultation_fee;
+            $discount = (float)$s->discount_amount;
+            $lossAmount = abs((float)$s->profit_made);
+            // Reconstruct cost of goods: profit_made = (amountCost + consultFee - discount) - totalCost
+            // => totalCost = (amountCost + consultFee - discount) - profit_made
+            $costOfGoods = max(0, ($subtotal - $discount) - (float)$s->profit_made);
+            $preDiscountMargin = $subtotal - $costOfGoods;
+
+            // Classify primary cause
+            $lineItems = [];
+            foreach ($s->saleOrders as $order) {
+                $itemBuyPrice = (float)($order->item?->buy_price ?? 0);
+                $itemSellPrice = (float)$order->selling_price;
+                $lineQty = (int)$order->qty;
+                $lineCost = $itemBuyPrice * $lineQty;
+                $lineRevenue = (float)$order->total_selling_price;
+                $lineProfit = $lineRevenue - $lineCost;
+                $lineItems[] = [
+                    'item_name'    => $order->item_name,
+                    'qty'          => $lineQty,
+                    'sell_price'   => $itemSellPrice,
+                    'buy_price'    => $itemBuyPrice,
+                    'line_total'   => $lineRevenue,
+                    'line_cost'    => round($lineCost, 2),
+                    'line_profit'  => round($lineProfit, 2),
+                    'is_loss_line' => $lineProfit < 0,
+                ];
+            }
+
+            if ($preDiscountMargin < 0 && $discount > 0) {
+                $causeType = 'compound';
+                $causeLabel = 'Compound: High buy cost (items already below cost) + ₦' . number_format($discount, 2) . ' additional discount';
+            } elseif ($preDiscountMargin < 0) {
+                $causeType = 'high_buy_cost';
+                $causeLabel = 'High Buy Cost: Item selling prices were set below purchase cost';
+            } elseif ($discount > 0 && $discount > $preDiscountMargin) {
+                $causeType = 'excessive_discount';
+                $causeLabel = 'Excessive Discount: Sale had positive margin of ₦' . number_format($preDiscountMargin, 2) . ', but ₦' . number_format($discount, 2) . ' discount turned it into a -₦' . number_format($lossAmount, 2) . ' net loss';
+            } else {
+                $causeType = 'underpriced';
+                $causeLabel = 'Underpriced goods or consultation fee deduction';
+            }
+
+            return [
+                'receipt_id'          => $s->receipt_id,
+                'date'                => $s->created_at ? $s->created_at->format('Y-m-d H:i') : 'N/A',
+                'cashier'             => $s->user?->name ?? 'Unknown Staff',
+                'customer'            => $s->customer?->name ?? 'Walk-in Customer',
+                'subtotal'            => round($subtotal, 2),
+                'cost_of_goods'       => round($costOfGoods, 2),
+                'discount'            => round($discount, 2),
+                'final_total'         => (float)$s->final_total,
+                'net_loss'            => round($lossAmount, 2),
+                'cause_type'          => $causeType,
+                'cause_explanation'   => $causeLabel,
+                'items'               => $lineItems,
+            ];
+        })->values()->all();
+
+        // 3. Top Culprit Items Sold at a Loss
+        $culpritItems = SaleOrder::join('sales', 'sales.id', '=', 'sale_orders.sale_id')
+            ->join('items', 'items.id', '=', 'sale_orders.item_id')
+            ->when($branch, fn($q) => $q->where('sales.branch_id', $branch->id))
+            ->where(function($q) {
+                $q->where('sales.profit_made', '<', 0)
+                  ->orWhereColumn('sale_orders.selling_price', '<', 'items.buy_price');
+            })
+            ->select(
+                'sale_orders.item_id',
+                'sale_orders.item_name',
+                DB::raw('COUNT(DISTINCT sales.id) as loss_sales_count'),
+                DB::raw('SUM(sale_orders.qty) as total_qty_sold'),
+                DB::raw('AVG(sale_orders.selling_price) as avg_selling_price'),
+                DB::raw('AVG(items.buy_price) as avg_buy_price'),
+                DB::raw('SUM((sale_orders.selling_price - items.buy_price) * sale_orders.qty) as raw_margin_deficit')
+            )
+            ->groupBy('sale_orders.item_id', 'sale_orders.item_name')
+            ->orderBy('raw_margin_deficit')
+            ->limit(8)
+            ->get()
+            ->map(fn($c) => [
+                'item_name'            => $c->item_name,
+                'loss_transactions'    => (int)$c->loss_sales_count,
+                'units_sold'           => (int)$c->total_qty_sold,
+                'avg_selling_price'    => round((float)$c->avg_selling_price, 2),
+                'avg_buy_price'        => round((float)$c->avg_buy_price, 2),
+                'unit_deficit'         => round(max(0, (float)$c->avg_buy_price - (float)$c->avg_selling_price), 2),
+                'total_margin_loss'    => round(abs((float)$c->raw_margin_deficit), 2),
+            ])->values()->all();
+
+        // 4. Cashiers / Users with Most Discounts on Loss Sales
+        $cashierLossDiscounts = Sale::when($branch, fn($q) => $q->where('branch_id', $branch->id))
+            ->where('profit_made', '<', 0)
+            ->where('discount_amount', '>', 0)
+            ->with('user:id,name')
+            ->select(
+                'user_id',
+                DB::raw('COUNT(*) as loss_sales_with_discount'),
+                DB::raw('SUM(discount_amount) as total_discount_on_loss_sales'),
+                DB::raw('SUM(profit_made) as total_loss_incurred')
+            )
+            ->groupBy('user_id')
+            ->orderByDesc('total_discount_on_loss_sales')
+            ->limit(5)
+            ->get()
+            ->map(fn($d) => [
+                'cashier'              => $d->user?->name ?? 'Unknown Cashier',
+                'loss_sales_count'     => (int)$d->loss_sales_with_discount,
+                'discount_given'       => round((float)$d->total_discount_on_loss_sales, 2),
+                'net_loss_caused'      => round(abs((float)$d->total_loss_incurred), 2),
+            ])->values()->all();
+
+        // 5. Damaged, Expired & Manual Stock Adjustment Write-Offs
+        $shrinkageTransactions = InventoryTransaction::when($branch, fn($q) => $q->where('branch_id', $branch->id))
+            ->whereIn('transaction_type', ['subtract', 'adjustment', 'damage', 'expired', 'loss'])
+            ->with(['item:id,item_name,buy_price', 'user:id,name'])
+            ->orderByDesc('created_at')
+            ->limit(10)
+            ->get();
+
+        $shrinkageLossTotal = 0;
+        $shrinkageLogs = [];
+        foreach ($shrinkageTransactions as $st) {
+            $unitCost = (float)($st->item?->buy_price ?? 0);
+            $qty = abs((int)$st->qty);
+            $lossVal = round($unitCost * $qty, 2);
+            $shrinkageLossTotal += $lossVal;
+            $shrinkageLogs[] = [
+                'item_name'   => $st->item?->item_name ?? 'Unknown Item',
+                'type'        => $st->transaction_type,
+                'qty'         => $qty,
+                'unit_cost'   => $unitCost,
+                'total_loss'  => $lossVal,
+                'reason'      => $st->notes ?: 'Manual Adjustment',
+                'logged_by'   => $st->user?->name ?? 'System',
+                'date'        => $st->created_at ? $st->created_at->format('Y-m-d H:i') : 'Recent',
+            ];
+        }
+
+        // 6. Net Profit vs Operating Expenses Context (This Month)
+        $monthSales = Sale::when($branch, fn($q) => $q->where('branch_id', $branch->id))
+            ->whereMonth('created_at', now()->month)
+            ->whereYear('created_at', now()->year)
+            ->selectRaw('COALESCE(SUM(final_total), 0) as revenue, COALESCE(SUM(profit_made), 0) as gross_profit')
+            ->first();
+
+        $monthExpenses = (float) Expense::when($branch, fn($q) => $q->where('branch_id', $branch->id))
+            ->whereMonth('expense_date', now()->month)
+            ->whereYear('expense_date', now()->year)
+            ->sum('amount');
+
+        $monthGrossProfit = (float)($monthSales->gross_profit ?? 0);
+        $monthRevenue = (float)($monthSales->revenue ?? 0);
+        $monthNetProfit = $monthGrossProfit - $monthExpenses;
+
+        // 7. Audit Trail / PosLog Findings
+        $relevantLogs = PosLog::when($branch, fn($q) => $q->where('branch_id', $branch->id))
+            ->where(function($q) {
+                $q->where('action_type', 'like', '%discount%')
+                  ->orWhere('action_type', 'like', '%price%')
+                  ->orWhere('action_type', 'like', '%stock%')
+                  ->orWhere('log', 'like', '%discount%')
+                  ->orWhere('log', 'like', '%price%')
+                  ->orWhere('log', 'like', '%loss%');
+            })
+            ->with('user:id,name')
+            ->orderByDesc('created_at')
+            ->limit(6)
+            ->get()
+            ->map(fn($l) => [
+                'user'    => $l->user?->name ?? 'System',
+                'action'  => $l->action_type,
+                'log'     => $l->log,
+                'time'    => $l->created_at ? $l->created_at->format('M j, h:i A') : 'Recent',
+            ])->all();
+
+        // 8. Overall Primary Diagnosis
+        $primaryCauses = [];
+        if (count($catalogInversions) > 0) {
+            $primaryCauses[] = "Found " . count($catalogInversions) . " catalog items where Buy Cost is higher than Selling Price (potential stock loss of ₦" . number_format($totalPotentialCatalogLoss, 2) . ").";
+        }
+        if ($totalLossSalesCount > 0) {
+            $primaryCauses[] = "Recorded {$totalLossSalesCount} transactions sold at an actual loss (total net loss of ₦" . number_format($totalLossAmount, 2) . "), driven by inverted item pricing and/or excessive discounts.";
+        }
+        if ($monthNetProfit < 0) {
+            $primaryCauses[] = "Operating expenses this month (₦" . number_format($monthExpenses, 2) . ") exceed sales gross profit (₦" . number_format($monthGrossProfit, 2) . "), causing a net operational loss of -₦" . number_format(abs($monthNetProfit), 2) . ".";
+        }
+        if ($shrinkageLossTotal > 0) {
+            $primaryCauses[] = "Manual inventory subtractions / damages account for approximately ₦" . number_format($shrinkageLossTotal, 2) . " in written-off stock value.";
+        }
+        if (empty($primaryCauses)) {
+            $primaryCauses[] = "No negative margins or inverted pricing found! Your sales and catalog pricing are currently operating with healthy positive gross profit margins.";
+        }
+
+        return [
+            'intent'    => 'loss_analysis_diagnosis',
+            'grounding' => 'Investigated item buy-to-sell margins, loss-making sale receipts, cashier discount thresholds, inventory shrinkage write-offs, and operating expense burn.',
+            'data'      => [
+                'scope'                        => $scopeName,
+                'has_loss_issues'              => count($catalogInversions) > 0 || $totalLossSalesCount > 0 || $monthNetProfit < 0,
+                'primary_diagnosis'            => $primaryCauses,
+                'catalog_inversions'           => [
+                    'count'                    => count($catalogInversions),
+                    'total_potential_loss'     => $totalPotentialCatalogLoss,
+                    'items'                    => $catalogInversions,
+                ],
+                'historical_loss_sales'        => [
+                    'total_loss_sales'         => $totalLossSalesCount,
+                    'total_loss_amount'        => $totalLossAmount,
+                    'total_loss_discounts'     => $totalLossSalesDiscounts,
+                    'worst_loss_sales'         => $lossSalesBreakdown,
+                ],
+                'culprit_items'                => $culpritItems,
+                'cashier_loss_discounts'       => $cashierLossDiscounts,
+                'inventory_shrinkage'          => [
+                    'total_shrinkage_loss'     => round($shrinkageLossTotal, 2),
+                    'recent_write_offs'        => $shrinkageLogs,
+                ],
+                'monthly_net_profitability'    => [
+                    'revenue'                  => $monthRevenue,
+                    'gross_profit'             => $monthGrossProfit,
+                    'expenses'                 => $monthExpenses,
+                    'net_profit'               => round($monthNetProfit, 2),
+                    'is_net_negative'          => $monthNetProfit < 0,
+                ],
+                'audit_trail'                  => $relevantLogs,
+            ],
+        ];
+    }
+
+    /**
      * RBAC helper to verify specific permission capability on a user instance.
      */
     protected static function userCan(User $user, string $permission): bool
@@ -1909,6 +2242,7 @@ USER_PROMPT;
     protected static function generateRuleBasedSummary(string $intent, array $payload, string $question): string
     {
         return match ($intent) {
+            'loss_analysis_diagnosis'      => self::formatLossAnalysisSummary($payload),
             'permission_denied'            => self::formatPermissionDeniedSummary($payload),
             'receipt_lookup'               => self::formatReceiptLookupSummary($payload),
             'held_sales_overview'          => self::formatHeldSalesSummary($payload),
@@ -2472,6 +2806,100 @@ USER_PROMPT;
             foreach ($p['top_debtors'] as $d) {
                 $out .= "| **{$d['customer_name']}** | {$d['phone']} | **₦" . number_format($d['balance_owing'], 2) . "** | {$d['last_payment_date']} |\n";
             }
+        }
+
+        return $out;
+    }
+
+    private static function formatLossAnalysisSummary(array $p): string
+    {
+        $out = "### 🔍 Profit & Loss Root-Cause Investigation Report\n\n";
+        $out .= "**Scope**: {$p['scope']}\n\n";
+
+        // Executive Verdict
+        $out .= "#### 📋 Executive Diagnosis\n";
+        foreach ($p['primary_diagnosis'] as $diag) {
+            $out .= "- **" . $diag . "**\n";
+        }
+        $out .= "\n";
+
+        // 1. Catalog Pricing Inversions (Buy Cost > Selling Price)
+        $out .= "#### 🏷️ 1. Catalog Pricing Inversions (Buy Cost > Selling Price)\n";
+        if (!empty($p['catalog_inversions']['items'])) {
+            $out .= "> ⚠️ **Warning**: Found **{$p['catalog_inversions']['count']} item(s)** where the purchase cost is higher than the selling price. Selling these items guarantees an immediate loss on every unit sold!\n\n";
+            $out .= "| Item Name | Category | Buy Cost (₦) | Selling Price (₦) | Unit Loss (₦) | Stock in Store | Potential Stock Loss (₦) |\n";
+            $out .= "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n";
+            foreach ($p['catalog_inversions']['items'] as $item) {
+                $deficit = $item['retail_deficit'] > 0 ? $item['retail_deficit'] : $item['wholesale_deficit'];
+                $out .= "| **{$item['item_name']}** | {$item['category']} | ₦" . number_format($item['buy_price'], 2) . " | ₦" . number_format($item['selling_price'], 2) . " | **-₦" . number_format($deficit, 2) . "** | {$item['total_stock']} pcs | **-₦" . number_format($item['potential_stock_loss'], 2) . "** |\n";
+            }
+            $out .= "\n- **Total Projected Inventory Loss if sold as-is**: **-₦" . number_format($p['catalog_inversions']['total_potential_loss'], 2) . "**\n\n";
+        } else {
+            $out .= "✅ **All catalog items are properly priced**: No items have Buy Cost exceeding Retail Selling Price in the inventory database.\n\n";
+        }
+
+        // 2. Historical Sales Sold at a Loss
+        $out .= "#### 🧾 2. Transactions Incurring Losses\n";
+        if ($p['historical_loss_sales']['total_loss_sales'] > 0) {
+            $out .= "- **Total Loss-Making Sales**: **{$p['historical_loss_sales']['total_loss_sales']} sale(s)**\n";
+            $out .= "- **Cumulative Loss Sunk**: **-₦" . number_format($p['historical_loss_sales']['total_loss_amount'], 2) . "**\n";
+            $out .= "- **Discounts Issued on Loss Sales**: **₦" . number_format($p['historical_loss_sales']['total_loss_discounts'], 2) . "**\n\n";
+
+            $out .= "| Receipt ID | Date | Cashier | Subtotal (₦) | Est. Cost (₦) | Discount (₦) | Net Loss (₦) | Primary Cause |\n";
+            $out .= "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n";
+            foreach ($p['historical_loss_sales']['worst_loss_sales'] as $sale) {
+                $out .= "| `{$sale['receipt_id']}` | {$sale['date']} | {$sale['cashier']} | ₦" . number_format($sale['subtotal'], 2) . " | ₦" . number_format($sale['cost_of_goods'], 2) . " | ₦" . number_format($sale['discount'], 2) . " | **-₦" . number_format($sale['net_loss'], 2) . "** | {$sale['cause_explanation']} |\n";
+            }
+            $out .= "\n";
+        } else {
+            $out .= "✅ **No completed sales have recorded negative net profit**: All processed sales have positive margins.\n\n";
+        }
+
+        // 3. Top Culprit Items Sold at a Loss
+        if (!empty($p['culprit_items'])) {
+            $out .= "#### 📦 3. Top Culprit Items Causing Sales Losses\n";
+            $out .= "| Item Name | Loss Sales | Units Sold | Avg Selling Price (₦) | Avg Buy Cost (₦) | Unit Deficit (₦) | Total Margin Loss (₦) |\n";
+            $out .= "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n";
+            foreach ($p['culprit_items'] as $culprit) {
+                $out .= "| **{$culprit['item_name']}** | {$culprit['loss_transactions']} | {$culprit['units_sold']} pcs | ₦" . number_format($culprit['avg_selling_price'], 2) . " | ₦" . number_format($culprit['avg_buy_price'], 2) . " | -₦" . number_format($culprit['unit_deficit'], 2) . " | **-₦" . number_format($culprit['total_margin_loss'], 2) . "** |\n";
+            }
+            $out .= "\n";
+        }
+
+        // 4. Cashier Discounts Impact
+        if (!empty($p['cashier_loss_discounts'])) {
+            $out .= "#### 🎟️ 4. Cashiers Granting Discounts on Loss-Making Sales\n";
+            $out .= "| Staff / Cashier | Sales with Loss | Total Discount Given (₦) | Resulting Net Loss (₦) |\n";
+            $out .= "| :--- | :--- | :--- | :--- |\n";
+            foreach ($p['cashier_loss_discounts'] as $cashier) {
+                $out .= "| **{$cashier['cashier']}** | {$cashier['loss_sales_count']} sales | ₦" . number_format($cashier['discount_given'], 2) . " | **-₦" . number_format($cashier['net_loss_caused'], 2) . "** |\n";
+            }
+            $out .= "\n";
+        }
+
+        // 5. Operating Expenses & Net Margin Context
+        $net = $p['monthly_net_profitability'];
+        $out .= "#### 📊 5. Monthly Net Operational Profitability\n";
+        $out .= "| Metric | Current Month Value (₦) |\n";
+        $out .= "| :--- | :--- |\n";
+        $out .= "| **Gross Revenue** | ₦" . number_format($net['revenue'], 2) . " |\n";
+        $out .= "| **Gross Profit from Sales** | ₦" . number_format($net['gross_profit'], 2) . " |\n";
+        $out .= "| **Operating Expenses** | ₦" . number_format($net['expenses'], 2) . " |\n";
+        $out .= "| **Net Profit (Gross Profit - Expenses)** | **" . ($net['net_profit'] >= 0 ? '₦' : '-₦') . number_format(abs($net['net_profit']), 2) . "** " . ($net['is_net_negative'] ? '⚠️ *(Operating Loss)*' : '✅ *(Profitable)*') . " |\n\n";
+
+        // 6. Actionable Recovery Recommendations
+        $out .= "#### 🛠️ Immediate Action Steps to Eliminate Losses\n";
+        if (!empty($p['catalog_inversions']['items'])) {
+            $out .= "1. **Adjust Inverted Selling Prices**: Update items in the inventory catalog where buy cost exceeds price to restore a healthy gross margin (e.g. 15-30% markup).\n";
+        }
+        if (!empty($p['cashier_loss_discounts'])) {
+            $out .= "2. **Enforce Discount Approval Limits**: Configure maximum allowable discounts in Settings so cashiers cannot grant discounts larger than the item's gross profit margin.\n";
+        }
+        if ($net['is_net_negative']) {
+            $out .= "3. **Audit Monthly Overheads**: Review operating expenses (utilities, logistics, maintenance) that exceed sales gross profit.\n";
+        }
+        if (empty($p['catalog_inversions']['items']) && empty($p['cashier_loss_discounts']) && !$net['is_net_negative']) {
+            $out .= "- Maintain current healthy pricing margins and continue monitoring cashier discounts.\n";
         }
 
         return $out;

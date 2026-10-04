@@ -18,6 +18,8 @@ const props = defineProps({
     ecommerceReservations: Array,
     ecommerceMovements: Array,
     ecommerceMappings: Array,
+    aiCreditSummary: Object,
+    aiCreditTopups: Array,
 })
 
 const activeTab = ref('branches')
@@ -231,6 +233,51 @@ const submitResetPassword = () => {
         },
     })
 }
+
+// AI Credit Top-up Modal & Form
+const showAddCreditsModal = ref(false)
+const creditForm = useForm({
+    credits: 1000,
+    branch_id: '',
+    type: 'manual_grant',
+    expires_option: 'never',
+    expires_at: '',
+    notes: '',
+})
+
+const openAddCreditsModal = (branchId = '') => {
+    creditForm.reset()
+    creditForm.credits = 1000
+    creditForm.branch_id = branchId || ''
+    creditForm.type = 'manual_grant'
+    creditForm.expires_option = 'never'
+    creditForm.expires_at = ''
+    creditForm.notes = ''
+    showAddCreditsModal.value = true
+}
+
+const submitAddCredits = () => {
+    let expiryVal = null
+    if (creditForm.expires_option === 'month_end') {
+        const now = new Date()
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+        expiryVal = endOfMonth.toISOString().split('T')[0]
+    } else if (creditForm.expires_option === 'custom') {
+        expiryVal = creditForm.expires_at
+    }
+
+    creditForm.transform((data) => ({
+        ...data,
+        branch_id: data.branch_id || null,
+        expires_at: expiryVal,
+    })).post(route('superadmin.organizations.ai-credits.topup', props.organization.id), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showAddCreditsModal.value = false
+            creditForm.reset()
+        },
+    })
+}
 </script>
 
 <template>
@@ -392,6 +439,17 @@ const submitResetPassword = () => {
                 <span>🛍️ Ecommerce Activity</span>
                 <span class="px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold">
                     {{ ecommerceStats?.connected_branches_count || 0 }} linked
+                </span>
+            </button>
+
+            <button
+                @click="activeTab = 'ai_credits'"
+                :class="activeTab === 'ai_credits' ? 'border-theme text-theme font-bold' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+                class="px-4 py-2.5 text-xs border-b-2 transition cursor-pointer flex items-center gap-1.5"
+            >
+                <span>⚡ AI Credits & Quota</span>
+                <span class="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-bold">
+                    {{ (aiCreditSummary?.remaining ?? 0).toLocaleString() }} available
                 </span>
             </button>
         </div>
@@ -597,7 +655,12 @@ const submitResetPassword = () => {
                                 {{ log.actor?.name || 'System / Artisan' }}
                             </td>
                             <td class="px-4 py-2.5 text-slate-500 font-sans text-xs">
-                                <span v-if="log.details?.branch_name">
+                                <span v-if="log.action === 'ai_credit_topup_granted'">
+                                    ⚡ <strong>+{{ log.details?.credits?.toLocaleString() }} AI credits</strong> granted to <strong>{{ log.details?.branch_name || 'Organization' }}</strong>
+                                    <span v-if="log.details?.expires_at" class="text-slate-400"> (Expires: {{ log.details.expires_at }})</span>
+                                    <span v-if="log.details?.notes" class="text-slate-400 block italic">"{{ log.details.notes }}"</span>
+                                </span>
+                                <span v-else-if="log.details?.branch_name">
                                     Branch: <strong>{{ log.details.branch_name }}</strong>
                                     <span v-if="log.details.from_organization_name"> (moved from {{ log.details.from_organization_name }})</span>
                                 </span>
@@ -1272,6 +1335,262 @@ const submitResetPassword = () => {
             </div>
         </div>
 
+        <!-- ── TAB 6: AI Credits & Quota ───────────────────────────────────── -->
+        <div v-if="activeTab === 'ai_credits'" class="space-y-6">
+            <!-- Header bar with Grant button -->
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-2xl shadow-xs">
+                <div>
+                    <h3 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>⚡</span>
+                        <span>AI Quota & Purchased Top-ups</span>
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Manage monthly plan quotas, purchased credit top-ups, and review automated rollover consumption.
+                    </p>
+                </div>
+                <button
+                    @click="openAddCreditsModal()"
+                    type="button"
+                    class="px-4 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-purple-600/20 flex items-center gap-2 cursor-pointer"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <span>Add AI Credit Top-up</span>
+                </button>
+            </div>
+
+            <!-- Important Policy & Rollover Callout Card -->
+            <div class="p-4 sm:p-5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800/60 flex flex-col md:flex-row items-start gap-3.5">
+                <div class="w-9 h-9 rounded-xl bg-indigo-600/10 dark:bg-indigo-400/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center flex-shrink-0 text-lg font-bold">
+                    ℹ️
+                </div>
+                <div class="space-y-2 text-xs flex-1">
+                    <div class="font-bold text-indigo-950 dark:text-indigo-200 text-sm">
+                        Credit Policy & Consumption Hierarchy
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-slate-600 dark:text-slate-300">
+                        <div class="bg-white/80 dark:bg-slate-900/80 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                            <span class="font-bold text-slate-800 dark:text-slate-200 block mb-1">1. Monthly Plan Quota</span>
+                            <p class="text-[11px] leading-relaxed">
+                                Refreshes on the 1st of every month. <strong>Expires strictly at the end of each month</strong> and does not carry over.
+                            </p>
+                        </div>
+                        <div class="bg-white/80 dark:bg-slate-900/80 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                            <span class="font-bold text-slate-800 dark:text-slate-200 block mb-1">2. Top-up Packs (Rollover)</span>
+                            <p class="text-[11px] leading-relaxed">
+                                Purchased packs or manual admin grants <strong>roll over month-to-month</strong> without conflict until fully depleted.
+                            </p>
+                        </div>
+                        <div class="bg-white/80 dark:bg-slate-900/80 p-3 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+                            <span class="font-bold text-slate-800 dark:text-slate-200 block mb-1">3. Quota-First Deduction</span>
+                            <p class="text-[11px] leading-relaxed">
+                                Usage draws from the expiring <strong>Plan Quota first</strong>. Top-ups are only touched when monthly quota is exhausted.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Overview 4 Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Total Available -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs relative overflow-hidden">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Available</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/50 dark:text-purple-300">Live</span>
+                    </div>
+                    <div class="text-3xl font-black text-slate-900 dark:text-white mt-2">
+                        {{ (aiCreditSummary?.remaining ?? 0).toLocaleString() }}
+                    </div>
+                    <div class="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                        <span class="text-emerald-600 font-bold">{{ (aiCreditSummary?.plan_remaining ?? 0).toLocaleString() }} plan</span>
+                        <span>+</span>
+                        <span class="text-indigo-600 font-bold">{{ (aiCreditSummary?.topup_remaining ?? 0).toLocaleString() }} top-up</span>
+                    </div>
+                </div>
+
+                <!-- Monthly Plan Quota -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Monthly Plan Quota</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">Expires Monthly</span>
+                    </div>
+                    <div class="text-3xl font-black text-slate-900 dark:text-white mt-2">
+                        {{ (aiCreditSummary?.plan_remaining ?? 0).toLocaleString() }}
+                        <span class="text-sm font-normal text-slate-400">/ {{ (aiCreditSummary?.monthly_quota ?? 0).toLocaleString() }}</span>
+                    </div>
+                    <div class="text-[11px] text-slate-400 mt-1">
+                        {{ (aiCreditSummary?.used ?? 0).toLocaleString() }} used this month &bull; Resets {{ aiCreditSummary?.resets_at ? new Date(aiCreditSummary.resets_at).toLocaleDateString() : 'end of month' }}
+                    </div>
+                </div>
+
+                <!-- Top-up Balance -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Top-up Balance</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">Rollover Active</span>
+                    </div>
+                    <div class="text-3xl font-black text-indigo-600 dark:text-indigo-400 mt-2">
+                        {{ (aiCreditSummary?.topup_remaining ?? 0).toLocaleString() }}
+                    </div>
+                    <div class="text-[11px] text-slate-400 mt-1">
+                        Carries over month-to-month until consumed
+                    </div>
+                </div>
+
+                <!-- Plan Tier & Allocation -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Plan & Scope</span>
+                        <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 capitalize">{{ aiCreditSummary?.pool_type || 'organization' }}</span>
+                    </div>
+                    <div class="text-lg font-black text-slate-900 dark:text-white mt-2 truncate">
+                        {{ aiCreditSummary?.plan_name || 'Standard Plan' }}
+                    </div>
+                    <div class="text-[11px] text-slate-400 mt-1">
+                        {{ aiCreditSummary?.pool_type === 'branch' ? 'Allocated per individual branch' : 'Shared pool across all branches' }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Branch Breakdown Grid / Table -->
+            <div v-if="aiCreditSummary?.branch_breakdown && aiCreditSummary.branch_breakdown.length > 0" class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs space-y-3 p-5">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div>
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                            <span>🏪</span>
+                            <span>Branch-by-Branch Usage & Dedicated Top-ups</span>
+                        </h4>
+                        <p class="text-xs text-slate-500">Breakdown of AI consumption this month and branch-dedicated top-up balances.</p>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800">
+                            <tr>
+                                <th class="px-4 py-2.5">Branch</th>
+                                <th class="px-4 py-2.5">Used This Month</th>
+                                <th class="px-4 py-2.5">Dedicated Top-up Balance</th>
+                                <th class="px-4 py-2.5 text-right">Quick Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            <tr v-for="b in aiCreditSummary.branch_breakdown" :key="b.branch_id" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                                <td class="px-4 py-3">
+                                    <div class="font-bold text-slate-900 dark:text-white">{{ b.name }}</div>
+                                    <div class="text-[11px] text-slate-400 font-mono">/{{ b.slug }}</div>
+                                </td>
+                                <td class="px-4 py-3 font-semibold text-slate-700 dark:text-slate-300">
+                                    {{ b.used_this_month.toLocaleString() }} credits
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span v-if="b.topup_remaining > 0" class="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                                        {{ b.topup_remaining.toLocaleString() }} credits
+                                    </span>
+                                    <span v-else class="text-slate-400 text-xs italic">
+                                        Uses shared pool
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <button
+                                        @click="openAddCreditsModal(b.branch_id)"
+                                        type="button"
+                                        class="px-2.5 py-1 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-lg transition cursor-pointer"
+                                    >
+                                        + Top Up Branch
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Top-Up History Ledger -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div>
+                        <h4 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <span>📜</span>
+                            <span>Top-up Credit Grants Ledger</span>
+                        </h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            Immutable record of all purchased and granted top-up credit packs.
+                        </p>
+                    </div>
+                    <span class="text-xs font-mono font-bold text-slate-400">
+                        {{ (aiCreditTopups || []).length }} grant(s)
+                    </span>
+                </div>
+
+                <div v-if="aiCreditTopups && aiCreditTopups.length > 0" class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-400 font-semibold border-b border-slate-200 dark:border-slate-800">
+                            <tr>
+                                <th class="px-4 py-2.5">Date</th>
+                                <th class="px-4 py-2.5">Target</th>
+                                <th class="px-4 py-2.5">Credits Granted</th>
+                                <th class="px-4 py-2.5">Remaining</th>
+                                <th class="px-4 py-2.5">Expiration / Rollover</th>
+                                <th class="px-4 py-2.5">Granted By</th>
+                                <th class="px-4 py-2.5">Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            <tr v-for="topup in aiCreditTopups" :key="topup.id" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                                <td class="px-4 py-2.5 text-slate-400 font-mono text-[11px] whitespace-nowrap">
+                                    {{ topup.created_at }}
+                                </td>
+                                <td class="px-4 py-2.5 font-bold text-slate-800 dark:text-slate-200">
+                                    {{ topup.branch_name }}
+                                </td>
+                                <td class="px-4 py-2.5 font-bold text-indigo-600 dark:text-indigo-400">
+                                    +{{ topup.credits.toLocaleString() }}
+                                </td>
+                                <td class="px-4 py-2.5">
+                                    <span
+                                        :class="topup.credits_remaining > 0 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400 line-through'"
+                                    >
+                                        {{ topup.credits_remaining.toLocaleString() }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-2.5 whitespace-nowrap">
+                                    <span v-if="topup.expires_at" class="text-xs">
+                                        <span v-if="topup.is_expired" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400">
+                                            Expired ({{ topup.expires_at }})
+                                        </span>
+                                        <span v-else class="text-slate-600 dark:text-slate-300">
+                                            Expires {{ topup.expires_at }}
+                                        </span>
+                                    </span>
+                                    <span v-else class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                                        Rollover (No Expiry)
+                                    </span>
+                                </td>
+                                <td class="px-4 py-2.5 text-slate-600 dark:text-slate-300">
+                                    {{ topup.granted_by }}
+                                </td>
+                                <td class="px-4 py-2.5 text-slate-500 italic">
+                                    {{ topup.notes || '—' }}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div v-else class="p-8 text-center text-xs text-slate-500 italic space-y-2">
+                    <p>No credit top-up packs have been granted yet to this organization.</p>
+                    <button
+                        @click="openAddCreditsModal()"
+                        type="button"
+                        class="text-xs text-indigo-600 dark:text-indigo-400 font-bold hover:underline cursor-pointer"
+                    >
+                        + Grant First Top-up
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- ── MODALS ──────────────────────────────────────────────────────── -->
 
         <!-- Move Branch Modal -->
@@ -1627,6 +1946,145 @@ const submitResetPassword = () => {
                         <button type="button" @click="showCreateBranchModal = false" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer">Cancel</button>
                         <button type="submit" :disabled="branchForm.processing" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-indigo-600/20 cursor-pointer disabled:opacity-50">
                             Create Branch in {{ organization.name }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Add AI Credits Modal -->
+        <div v-if="showAddCreditsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                    <div>
+                        <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Grant AI Credit Top-up</h2>
+                        <p class="text-xs text-slate-500">Allocate top-up credits to organization shared pool or a specific branch</p>
+                    </div>
+                    <button @click="showAddCreditsModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold cursor-pointer">&times;</button>
+                </div>
+
+                <form @submit.prevent="submitAddCredits" class="space-y-4">
+                    <!-- Target Selection -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Target Recipient *</label>
+                        <select
+                            v-model="creditForm.branch_id"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 transition cursor-pointer"
+                        >
+                            <option value="">🏢 Entire Organization Pool (Shared across all branches)</option>
+                            <option v-for="branch in branches" :key="branch.id" :value="branch.id">
+                                🏪 {{ branch.name }} (Dedicated to this branch)
+                            </option>
+                        </select>
+                        <p class="text-[11px] text-slate-500 mt-1">
+                            Organization pool credits can be consumed by any branch in this client account.
+                        </p>
+                    </div>
+
+                    <!-- Credit Amount -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Credits to Grant *</label>
+                            <div class="flex items-center gap-1.5">
+                                <button
+                                    type="button"
+                                    v-for="amt in [500, 1000, 2500, 5000, 10000]"
+                                    :key="amt"
+                                    @click="creditForm.credits = amt"
+                                    class="px-2 py-0.5 rounded text-[10px] font-bold border transition cursor-pointer"
+                                    :class="creditForm.credits === amt
+                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200'"
+                                >
+                                    +{{ amt.toLocaleString() }}
+                                </button>
+                            </div>
+                        </div>
+                        <input
+                            v-model.number="creditForm.credits"
+                            type="number"
+                            min="1"
+                            required
+                            placeholder="e.g. 1000"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 transition"
+                        />
+                        <div v-if="creditForm.errors.credits" class="text-rose-500 text-xs mt-1">{{ creditForm.errors.credits }}</div>
+                    </div>
+
+                    <!-- Expiration Policy -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Expiration & Rollover Policy *</label>
+                        <div class="space-y-2">
+                            <label class="flex items-start gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer" :class="{ 'border-indigo-500 bg-indigo-50/20 dark:bg-indigo-950/20': creditForm.expires_option === 'never' }">
+                                <input
+                                    v-model="creditForm.expires_option"
+                                    type="radio"
+                                    value="never"
+                                    class="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-800 dark:text-slate-200">🟢 Rollover Indefinitely (Recommended)</div>
+                                    <div class="text-[11px] text-slate-500">Credits never expire; they carry over month-to-month until consumed.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer" :class="{ 'border-indigo-500 bg-indigo-50/20 dark:bg-indigo-950/20': creditForm.expires_option === 'month_end' }">
+                                <input
+                                    v-model="creditForm.expires_option"
+                                    type="radio"
+                                    value="month_end"
+                                    class="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-800 dark:text-slate-200">⏳ Expire at End of Current Month</div>
+                                    <div class="text-[11px] text-slate-500">Expires along with monthly plan reset (no carryover).</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-2.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer" :class="{ 'border-indigo-500 bg-indigo-50/20 dark:bg-indigo-950/20': creditForm.expires_option === 'custom' }">
+                                <input
+                                    v-model="creditForm.expires_option"
+                                    type="radio"
+                                    value="custom"
+                                    class="mt-0.5 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <div class="w-full">
+                                    <div class="text-xs font-bold text-slate-800 dark:text-slate-200">📅 Custom Expiration Date</div>
+                                    <div class="text-[11px] text-slate-500">Specify an exact expiration date for this pack.</div>
+                                    <div v-if="creditForm.expires_option === 'custom'" class="mt-2">
+                                        <input
+                                            v-model="creditForm.expires_at"
+                                            type="date"
+                                            required
+                                            class="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100"
+                                        />
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Reason / Notes (Optional)</label>
+                        <input
+                            v-model="creditForm.notes"
+                            type="text"
+                            placeholder="e.g. Paid top-up package 5K, promo bonus, or customer service compensation"
+                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-indigo-500 transition"
+                        />
+                        <div v-if="creditForm.errors.notes" class="text-rose-500 text-xs mt-1">{{ creditForm.errors.notes }}</div>
+                    </div>
+
+                    <div class="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5">
+                        <button type="button" @click="showAddCreditsModal = false" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer">Cancel</button>
+                        <button
+                            type="submit"
+                            :disabled="creditForm.processing"
+                            class="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-purple-600/20 disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                        >
+                            <span v-if="creditForm.processing">Granting Credits...</span>
+                            <span v-else>Confirm & Grant Credits</span>
                         </button>
                     </div>
                 </form>

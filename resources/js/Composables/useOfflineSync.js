@@ -12,6 +12,8 @@ import {
     getPendingHeldSales,
     markHeldSaleSynced,
     mergeServerHeldSales,
+    pruneOldSyncedSales,
+    clearAllSyncedSales,
 } from '@/Services/offlineDb'
 
 // Shared singleton state across all components
@@ -165,6 +167,9 @@ export function useOfflineSync() {
 
             // Re-fetch catalog to update live stock counts and IMEI pools on device
             await refreshCatalog()
+
+            // Auto-prune synced sales older than 7 days (strictly preserves pending/failed)
+            await pruneOldSyncedSales(7)
             await updatePendingCount()
         } catch (err) {
             console.error('Error during offline sales sync:', err)
@@ -258,6 +263,8 @@ export function useOfflineSync() {
         updatePendingCount()
         updateHeldSales()
         refreshCatalog()
+        // Rolling prune: discard synced sales older than 7 days on startup
+        pruneOldSyncedSales(7).then(() => updatePendingCount()).catch(() => {})
 
         // Periodic heartbeat & auto-sync every 25 seconds
         if (!intervalId) {
@@ -281,6 +288,12 @@ export function useOfflineSync() {
         }
     }
 
+    async function manualClearSyncedSales() {
+        const count = await clearAllSyncedSales()
+        await updatePendingCount()
+        return count
+    }
+
     return {
         isOnline,
         isSyncing,
@@ -301,6 +314,9 @@ export function useOfflineSync() {
         startSyncMonitor,
         stopSyncMonitor,
         checkServerHealth,
+        manualClearSyncedSales,
+        pruneOldSyncedSales,
+        clearAllSyncedSales,
     }
 }
 

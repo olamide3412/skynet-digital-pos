@@ -44,6 +44,14 @@ class Branch extends Model
         return $this->organization?->subscription;
     }
 
+    /**
+     * AI credit top-ups allocated specifically to this branch.
+     */
+    public function aiCreditTopups(): HasMany
+    {
+        return $this->hasMany(AiCreditTopup::class)->latest('id');
+    }
+
     public function getAiCreditSummary(): array
     {
         if (!$this->organization) {

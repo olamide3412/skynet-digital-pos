@@ -173,6 +173,9 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
 
             // Organization Branch Creation Toggle
             Route::post('/{organization}/toggle-branch-creation', [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'toggleBranchCreation'])->name('toggle-branch-creation');
+
+            // Organization AI Credit Top-up Management
+            Route::post('/{organization}/ai-credits/topup', [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'addAiCredits'])->name('ai-credits.topup');
         });
 
         Route::prefix('branches/{branch}/users')->name('branches.users.')->group(function () {

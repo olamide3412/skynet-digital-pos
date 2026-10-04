@@ -15,6 +15,9 @@ use App\Modules\CommerceIntegration\Models\CommerceInventoryMovement;
 use App\Modules\CommerceIntegration\Models\CommerceItemMapping;
 use App\Modules\CommerceIntegration\Models\CommerceReservation;
 use App\Services\ActivityLogger;
+use App\Models\AiCreditTopup;
+use App\Modules\AI\Services\AiCreditService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -258,6 +261,25 @@ class OrganizationController extends Controller
                 'unregistered_at'     => $map->unregistered_at?->toIso8601String(),
             ]);
 
+        $aiCreditSummary = AiCreditService::getSummary($organization);
+
+        $aiCreditTopups = $organization->aiCreditTopups()
+            ->with(['branch:id,name,slug', 'grantedBy:id,name'])
+            ->get()
+            ->map(fn($t) => [
+                'id'                => $t->id,
+                'branch_id'         => $t->branch_id,
+                'branch_name'       => $t->branch?->name ?? 'Organization Pool (All Branches)',
+                'credits'           => $t->credits,
+                'credits_remaining' => $t->credits_remaining,
+                'type'              => $t->type,
+                'notes'             => $t->notes,
+                'granted_by'        => $t->grantedBy?->name ?? 'SuperAdmin',
+                'expires_at'        => $t->expires_at?->format('d M Y'),
+                'is_expired'        => $t->isExpired(),
+                'created_at'        => $t->created_at?->format('d M Y, H:i'),
+            ]);
+
         return Inertia::render('SuperAdmin/Organizations/Show', [
             'organization'          => $organization,
             'branches'              => $branches,
@@ -267,6 +289,8 @@ class OrganizationController extends Controller
             'subscription'          => $subscriptionData,
             'subscriptionHistories' => $subscriptionHistories,
             'pricingPlans'          => $pricingPlans,
+            'aiCreditSummary'       => $aiCreditSummary,
+            'aiCreditTopups'        => $aiCreditTopups,
             'ecommerceStats'        => $ecommerceStats,
             'ecommerceReservations' => $ecommerceReservations,
             'ecommerceMovements'    => $ecommerceMovements,
@@ -547,5 +571,59 @@ class OrganizationController extends Controller
         });
 
         return back()->with('success', "Subscription plan updated successfully for {$organization->name}.");
+    }
+
+    /**
+     * Grant additional AI top-up credits to the organization or a specific branch.
+     * Note: Plan quota expires at the end of each month and does not carry over.
+     * Top-up credits carry over across months unless an explicit expiry date is specified.
+     */
+    public function addAiCredits(Request $request, Organization $organization)
+    {
+        $validated = $request->validate([
+            'credits'     => 'required|integer|min:1|max:100000',
+            'branch_id'   => 'nullable|exists:branches,id',
+            'expires_at'  => 'nullable|date',
+            'notes'       => 'nullable|string|max:255',
+            'type'        => 'nullable|string|in:manual_grant,addon_purchase,support_bonus',
+        ]);
+
+        $branch = null;
+        if (!empty($validated['branch_id'])) {
+            $branch = $organization->branches()->where('id', $validated['branch_id'])->firstOrFail();
+        }
+
+        $expiresAt = null;
+        if (!empty($validated['expires_at'])) {
+            $expiresAt = Carbon::parse($validated['expires_at'])->endOfDay();
+        }
+
+        $topup = AiCreditService::grantTopup(
+            organization: $organization,
+            credits: $validated['credits'],
+            branch: $branch,
+            grantedBy: $request->user(),
+            expiresAt: $expiresAt,
+            type: $validated['type'] ?? 'manual_grant',
+            notes: $validated['notes'] ?? null,
+        );
+
+        OrganizationActivityLog::create([
+            'organization_id' => $organization->id,
+            'actor_user_id'   => Auth::id(),
+            'action'          => 'ai_credit_topup_granted',
+            'details'         => [
+                'topup_id'    => $topup->id,
+                'credits'     => $topup->credits,
+                'branch_id'   => $branch?->id,
+                'branch_name' => $branch?->name ?? 'Organization Pool (All Branches)',
+                'expires_at'  => $expiresAt?->toDateString() ?? 'Non-expiring (Rollover)',
+                'notes'       => $topup->notes,
+            ],
+            'created_at'      => now(),
+        ]);
+
+        $targetName = $branch ? "branch '{$branch->name}'" : "organization '{$organization->name}'";
+        return back()->with('success', "Successfully granted {$validated['credits']} AI credits to {$targetName}.");
     }
 }

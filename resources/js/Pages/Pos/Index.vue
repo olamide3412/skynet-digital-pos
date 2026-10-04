@@ -114,6 +114,7 @@ const {
     updateHeldSales,
     startSyncMonitor,
     stopSyncMonitor,
+    manualClearSyncedSales,
 } = useOfflineSync()
 
 onMounted(async () => {
@@ -170,6 +171,32 @@ const filteredQueuedSales = computed(() => {
     }
     return list
 })
+
+const isClearingSynced = ref(false)
+
+async function handleClearSyncedSales() {
+    if (syncedSalesCount.value === 0 || isClearingSynced.value) return
+    const confirmed = confirm(
+        `Clear ${syncedSalesCount.value} synced transaction(s) from this terminal's local cache?\n\nNote: All synced sales are safely stored on the cloud server. This only clears the local browser cache.`
+    )
+    if (!confirmed) return
+
+    isClearingSynced.value = true
+    try {
+        const cleared = await manualClearSyncedSales()
+        if (typeof window !== 'undefined' && window.Swal) {
+            window.Swal.fire({
+                icon: 'success',
+                title: 'Synced Cache Cleared',
+                text: `${cleared} synced transaction(s) cleared from this terminal. Cloud sales are untouched.`,
+                timer: 2000,
+                showConfirmButton: false,
+            })
+        }
+    } finally {
+        isClearingSynced.value = false
+    }
+}
 
 async function openOfflineModal() {
     await updatePendingCount()
@@ -1183,6 +1210,26 @@ const productSearchMobile = ref(null)
                         placeholder="Search offline sales by receipt ID, cashier or payment method..."
                         class="w-full text-xs px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 text-slate-800 dark:text-slate-200 placeholder-slate-400 focus:outline-hidden focus:ring-1 focus:ring-green-500"
                     />
+                </div>
+
+                <!-- Clear Synced Cache Bar (Only visible when synced records exist) -->
+                <div v-if="syncedSalesCount > 0 && (offlineTabFilter === 'synced' || offlineTabFilter === 'all')" class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-xs">
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                        <span>ℹ️</span>
+                        <span>{{ syncedSalesCount }} synced sale(s) cached locally (auto-pruned after 7 days)</span>
+                    </span>
+                    <button
+                        type="button"
+                        @click="handleClearSyncedSales"
+                        :disabled="isClearingSynced"
+                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium text-rose-600 dark:text-rose-400 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                        title="Remove synced offline records from this browser cache. Cloud sales remain completely safe."
+                    >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        <span>{{ isClearingSynced ? 'Clearing...' : 'Clear Synced' }}</span>
+                    </button>
                 </div>
 
                 <!-- Sales Queue Listing -->

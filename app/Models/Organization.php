@@ -88,6 +88,14 @@ class Organization extends Model
         return $this->hasMany(SubscriptionHistory::class)->latest('id');
     }
 
+    /**
+     * AI credit top-up allocations for this organization.
+     */
+    public function aiCreditTopups(): HasMany
+    {
+        return $this->hasMany(AiCreditTopup::class)->latest('id');
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     public function isActive(): bool

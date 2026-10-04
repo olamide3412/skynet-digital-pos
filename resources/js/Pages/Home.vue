@@ -1,4 +1,4 @@
-<script setup>
+﻿<script setup>
 import { Head, Link, usePage } from '@inertiajs/vue3'
 import { computed, ref, onMounted, reactive } from 'vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
@@ -197,7 +197,7 @@ const coreFeatures = [
         icon: 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
         gradient: 'from-emerald-500 to-teal-600',
         badge: 'Zero Downtime',
-        title: 'True Offline-First (Dexie)',
+        title: 'True Offline-First',
         desc: 'Internet cuts off? Cashiers keep ringing up sales and printing receipts uninterrupted. Everything auto-syncs with smart conflict resolution once reconnected.',
     },
     {
