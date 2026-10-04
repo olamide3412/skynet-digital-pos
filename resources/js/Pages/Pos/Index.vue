@@ -19,23 +19,28 @@ import CustomerSelector from '@/Components/POS/CustomerSelector.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 import NotificationBell from '@/Components/Notifications/NotificationBell.vue'
 import PosSplashScreen from '@/Components/POS/PosSplashScreen.vue'
+import OpenTillModal from '@/Components/POS/OpenTillModal.vue'
+import TillManagementModal from '@/Components/POS/TillManagementModal.vue'
+import TillSlipModal from '@/Components/POS/TillSlipModal.vue'
 import { useBarcodeScanner } from '@/Composables/useBarcodeScanner'
 import { useOfflineSync } from '@/Composables/useOfflineSync'
-import { getLocalQuickAccessData } from '@/Services/offlineDb'
+import { getLocalQuickAccessData, getLocalActiveTillSession } from '@/Services/offlineDb'
 
 defineOptions({ layout: PosLayout })
 
 const props = defineProps({
-    settings:         Object,
-    quickAccess:      Object,
-    itemGrids:        Array,
-    heldSales:        Array,
-    activeDiscount:   Object,
-    itemDiscounts:    Array,
-    discountGroups:   Array,
-    canEditPrice:     Boolean,
-    canApplyDiscount: Boolean,
-    now:              String,
+    settings:                   Object,
+    quickAccess:                Object,
+    itemGrids:                  Array,
+    heldSales:                  Array,
+    activeDiscount:             Object,
+    itemDiscounts:              Array,
+    discountGroups:             Array,
+    activeTillSession:          Object,
+    canManageTillCashMovements: Boolean,
+    canEditPrice:               Boolean,
+    canApplyDiscount:           Boolean,
+    now:                        String,
 })
 
 const page = usePage()
@@ -130,6 +135,14 @@ onMounted(async () => {
         if (props.settings?.is_offline_enabled && isOnline.value) {
             await refreshCatalog()
         }
+
+        // Check local till session if none from server
+        if (!activeTill.value) {
+            const localTill = await getLocalActiveTillSession(page.props.auth?.user?.id)
+            if (localTill) {
+                activeTill.value = localTill
+            }
+        }
     } catch (err) {
         console.warn('POS initial cache sync notice:', err)
     } finally {
@@ -138,6 +151,9 @@ onMounted(async () => {
         setTimeout(() => {
             isPosReady.value = true
             tryAutoFullscreen()
+            if (props.settings?.require_till_opening && !activeTill.value) {
+                showOpenTillModal.value = true
+            }
         }, 200)
     }
 })
@@ -222,15 +238,89 @@ onUnmounted(() => {
 })
 
 // Modal visibility
-const showPayment    = ref(false)
-const showReceipt    = ref(false)
-const showHold       = ref(false)
-const showHeld       = ref(false)
-const showReturn     = ref(false)
-const showDiscount   = ref(false)
-const completedSale  = ref(null)
+const showPayment             = ref(false)
+const showReceipt             = ref(false)
+const showHold                = ref(false)
+const showHeld                = ref(false)
+const showReturn              = ref(false)
+const showDiscount            = ref(false)
+const showOpenTillModal       = ref(false)
+const showTillManagementModal = ref(false)
+const showTillSlipModal       = ref(false)
+const completedSale           = ref(null)
+const slipSession             = ref(null)
 
-const isAnyModalOpen = computed(() => showPayment.value || showReceipt.value || showHold.value || showHeld.value || showReturn.value || showDiscount.value || showOfflineModal.value)
+const activeTill = ref(props.activeTillSession || null)
+
+watch(() => props.activeTillSession, (val) => {
+    if (val) {
+        activeTill.value = val
+    }
+}, { immediate: true })
+
+const isTillMandatory = computed(() => {
+    return Boolean(props.settings?.require_till_opening && !activeTill.value)
+})
+
+function onTillOpened(session) {
+    activeTill.value = session
+    showOpenTillModal.value = false
+    if (typeof window !== 'undefined' && window.Swal) {
+        window.Swal.fire({
+            icon: 'success',
+            title: 'Till Opened',
+            text: `Cash drawer unlocked with starting float of ${format(session.opening_amount || 0)}.`,
+            timer: 2000,
+            showConfirmButton: false,
+        })
+    }
+}
+
+function onTillUpdated(updatedSession) {
+    activeTill.value = updatedSession
+}
+
+function onTillClosed(closedSession) {
+    slipSession.value = closedSession
+    activeTill.value = null
+    showTillManagementModal.value = false
+
+    if (props.settings?.print_till_slip) {
+        showTillSlipModal.value = true
+    } else {
+        if (typeof window !== 'undefined' && window.Swal) {
+            window.Swal.fire({
+                icon: 'success',
+                title: 'Till Closed',
+                text: 'Till session closed and reconciled successfully.',
+                timer: 2500,
+                showConfirmButton: false,
+            })
+        }
+    }
+}
+
+function initiatePayment() {
+    if (!cart.items.length) return
+    if (props.settings?.require_till_opening && !activeTill.value) {
+        showOpenTillModal.value = true
+        return
+    }
+    showPayment.value = true
+}
+
+const isAnyModalOpen = computed(() =>
+    showPayment.value ||
+    showReceipt.value ||
+    showHold.value ||
+    showHeld.value ||
+    showReturn.value ||
+    showDiscount.value ||
+    showOfflineModal.value ||
+    showOpenTillModal.value ||
+    showTillManagementModal.value ||
+    showTillSlipModal.value
+)
 
 useBarcodeScanner({
     onScan: (item) => {
@@ -320,7 +410,7 @@ function handleKeydown(e) {
     }
     switch (e.key) {
         case 'F2':  e.preventDefault(); productSearch.value?.focus(); break
-        case 'F10': e.preventDefault(); if (cart.items.length) showPayment.value = true; break
+        case 'F10': e.preventDefault(); initiatePayment(); break
         case 'F9':  e.preventDefault(); if (cart.items.length) showHold.value = true; break
         case 'F11': e.preventDefault(); toggleFullscreen(); break
         case 'Escape':
@@ -330,6 +420,11 @@ function handleKeydown(e) {
             showHeld.value       = false
             showReturn.value     = false
             showOfflineModal.value = false
+            if (!isTillMandatory.value) {
+                showOpenTillModal.value = false
+            }
+            showTillManagementModal.value = false
+            showTillSlipModal.value = false
             break
     }
 }
@@ -447,6 +542,31 @@ const productSearchMobile = ref(null)
                             <span v-if="pendingCount > 0" class="px-1.5 py-0.2 bg-rose-600 text-white rounded-full text-[10px] font-bold">
                                 {{ pendingCount }}
                             </span>
+                        </button>
+                    </div>
+
+                    <!-- Till Session Status Badge & Drawer Access -->
+                    <div class="flex items-center">
+                        <button
+                            v-if="activeTill"
+                            @click="showTillManagementModal = true"
+                            type="button"
+                            class="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+                            title="Click to view till shift details, add/remove cash, or close till"
+                        >
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-xs"></span>
+                            <span>💼 Till: {{ format(activeTill.summary?.expected_cash ?? activeTill.opening_amount) }}</span>
+                        </button>
+
+                        <button
+                            v-else-if="props.settings?.require_till_opening"
+                            @click="showOpenTillModal = true"
+                            type="button"
+                            class="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 hover:bg-rose-500/25 flex items-center gap-1.5 transition cursor-pointer shadow-xs animate-pulse"
+                            title="Click to declare starting float and open till"
+                        >
+                            <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                            <span>💼 Open Till</span>
                         </button>
                     </div>
 
@@ -645,7 +765,7 @@ const productSearchMobile = ref(null)
                         >Clear</button>
                         <button
                             id="pay-now-btn"
-                            @click="showPayment = true"
+                            @click="initiatePayment"
                             :disabled="!cart.items.length"
                             class="py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                         >Pay Now <span class="text-xs opacity-70">(F10)</span></button>
@@ -956,7 +1076,7 @@ const productSearchMobile = ref(null)
                             Clear
                         </button>
                         <button
-                            @click="showPayment = true"
+                            @click="initiatePayment"
                             :disabled="!cart.items.length"
                             type="button"
                             class="col-span-2 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-sm font-black shadow-lg shadow-emerald-950/20 dark:shadow-emerald-950/50 transition disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2"
@@ -1050,6 +1170,37 @@ const productSearchMobile = ref(null)
                             </div>
                             <ThemeToggle />
                         </div>
+
+                        <!-- Till Drawer Access Option -->
+                        <button
+                            v-if="activeTill"
+                            @click="showTillManagementModal = true; showMobileMenu = false"
+                            class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 border border-emerald-200 dark:border-emerald-800 text-left space-y-1 transition cursor-pointer"
+                        >
+                            <div class="text-lg">💼</div>
+                            <div class="font-bold text-emerald-800 dark:text-emerald-300 flex items-center justify-between">
+                                <span>Till Drawer</span>
+                                <span class="px-1.5 py-0.2 bg-emerald-600 text-white rounded-full text-[10px]">Open</span>
+                            </div>
+                            <div class="text-[10px] text-emerald-700/70 dark:text-emerald-400/70">
+                                Float & cash movements
+                            </div>
+                        </button>
+
+                        <button
+                            v-else-if="props.settings?.require_till_opening"
+                            @click="showOpenTillModal = true; showMobileMenu = false"
+                            class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/40 border border-rose-200 dark:border-rose-800 text-left space-y-1 transition cursor-pointer"
+                        >
+                            <div class="text-lg">💼</div>
+                            <div class="font-bold text-rose-700 dark:text-rose-300 flex items-center justify-between">
+                                <span>Open Till</span>
+                                <span class="px-1.5 py-0.2 bg-rose-600 text-white rounded-full text-[10px]">Closed</span>
+                            </div>
+                            <div class="text-[10px] text-rose-600/70 dark:text-rose-400/70">
+                                Declare starting cash float
+                            </div>
+                        </button>
                     </div>
 
                     <button
@@ -1068,6 +1219,7 @@ const productSearchMobile = ref(null)
             v-if="showPayment"
             :settings="settings"
             :can-apply-discount="canApplyDiscount"
+            :active-till-session="activeTill"
             @close="showPayment = false"
             @completed="onSaleCompleted"
         />
@@ -1103,6 +1255,37 @@ const productSearchMobile = ref(null)
             v-if="showDiscount"
             :active-discount="activeDiscount"
             @close="showDiscount = false"
+        />
+
+        <!-- Till Opening Modal -->
+        <OpenTillModal
+            v-if="showOpenTillModal"
+            :show="showOpenTillModal"
+            :mandatory="isTillMandatory"
+            :settings="settings"
+            @close="showOpenTillModal = false"
+            @opened="onTillOpened"
+        />
+
+        <!-- Till Management Modal (Dashboard, Cash Movements, Close Till) -->
+        <TillManagementModal
+            v-if="showTillManagementModal && activeTill"
+            :show="showTillManagementModal"
+            :session="activeTill"
+            :settings="settings"
+            :can-manage-cash-movements="canManageTillCashMovements"
+            @close="showTillManagementModal = false"
+            @updated="onTillUpdated"
+            @closed="onTillClosed"
+        />
+
+        <!-- Till Slip Printable Modal -->
+        <TillSlipModal
+            v-if="showTillSlipModal && slipSession"
+            :session="slipSession"
+            :summary="slipSession.summary"
+            :settings="settings"
+            @close="showTillSlipModal = false; slipSession = null"
         />
 
         <!-- Offline Sales Queue Inspection Modal -->

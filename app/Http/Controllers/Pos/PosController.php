@@ -124,17 +124,30 @@ class PosController extends Controller
             $settingsData['business_email']          = $branch->email;
         }
 
+        $activeTillSession = null;
+        if ($user && $branch) {
+            $session = \App\Services\TillSessionService::getActiveSession($user->id, $branch->id);
+            if ($session) {
+                $session->load('cashMovements.performer:id,name');
+                $activeTillSession = array_merge($session->toArray(), [
+                    'summary' => $session->calculateSummary(),
+                ]);
+            }
+        }
+
         return Inertia::render('Pos/Index', [
-            'settings'         => $settingsData,
-            'quickAccess'      => $quickAccess,
-            'itemGrids'        => $itemGrids,
-            'heldSales'        => $heldSales,
-            'activeDiscount'   => $activeDiscount,
-            'itemDiscounts'    => $itemDiscounts,
-            'discountGroups'   => $discountGroups,
-            'canEditPrice'     => \App\Services\RoleService::canEditPrice(),
-            'canApplyDiscount' => \App\Services\RoleService::canApplyDiscount(),
-            'now'              => now()->toISOString(),
+            'settings'                   => $settingsData,
+            'quickAccess'                => $quickAccess,
+            'itemGrids'                  => $itemGrids,
+            'heldSales'                  => $heldSales,
+            'activeDiscount'             => $activeDiscount,
+            'itemDiscounts'              => $itemDiscounts,
+            'discountGroups'             => $discountGroups,
+            'activeTillSession'          => $activeTillSession,
+            'canManageTillCashMovements' => \App\Services\RoleService::canManageTillCashMovements() || ($user?->isBranchAdmin() ?? false) || ($user?->isSuperAdmin() ?? false),
+            'canEditPrice'               => \App\Services\RoleService::canEditPrice(),
+            'canApplyDiscount'           => \App\Services\RoleService::canApplyDiscount(),
+            'now'                        => now()->toISOString(),
         ]);
     }
 }

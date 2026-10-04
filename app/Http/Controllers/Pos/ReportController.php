@@ -989,11 +989,25 @@ class ReportController extends Controller
                 ->get(['id', 'name', 'full_name', 'username'])
             : [];
 
+        // ── Today's Till Sessions & Cash Drawer Reconciliation (§7) ───────────
+        $tillSessions = \App\Models\TillSession::with(['cashier:id,name,username', 'closedBy:id,name', 'cashMovements.performer:id,name'])
+            ->where('branch_id', $branch->id)
+            ->whereBetween('opened_at', [$startDate, $endDate])
+            ->when($selectedUserId, fn ($q) => $q->where('cashier_id', $selectedUserId))
+            ->orderBy('opened_at', 'desc')
+            ->get()
+            ->map(function ($s) {
+                return array_merge($s->toArray(), [
+                    'summary' => $s->calculateSummary(),
+                ]);
+            });
+
         return Inertia::render('Reports/EndOfDay', [
             'sales'         => $sales,
             'debtPayments'  => $debtPayments,
             'summary'       => $summary,
             'itemBreakdown' => $itemBreakdown,
+            'tillSessions'  => $tillSessions,
             'users'         => $users,
             'canSeeAll'     => $canSeeAll,
             'filters'       => [

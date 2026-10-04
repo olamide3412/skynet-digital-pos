@@ -12,3 +12,5 @@ Schedule::command('commerce:expire-reservations')
     ->everyFiveMinutes()
     ->withoutOverlapping();
 
+Schedule::command('app:database-back-up')
+    ->dailyAt('02:00');

@@ -33,13 +33,26 @@ db.version(3).stores({
     discount_groups: 'id, is_active',
 })
 
+db.version(4).stores({
+    items:           'id, barcode_number, item_name, category_id, is_imei_tracked, [category_id+is_imei_tracked]',
+    available_imeis: 'id, item_id, imei_or_device_id, status, [item_id+status]',
+    settings:        'key',
+    customers:       'id, name, phone',
+    categories:      'id, name',
+    queued_sales:    'offline_sale_id, created_at, sync_status',
+    held_sales:      'held_sale_id, created_at, status, sync_status',
+    item_discounts:  'id, item_id, is_active',
+    discount_groups: 'id, is_active',
+    till_sessions:   'offline_session_id, id, cashier_id, status, sync_status',
+})
+
 /**
  * Ingest fresh bootstrap dataset from server into IndexedDB.
  */
 export async function saveBootstrapData(payload) {
     if (!payload) return
 
-    await db.transaction('rw', db.items, db.available_imeis, db.settings, db.customers, db.categories, db.item_discounts, db.discount_groups, async () => {
+    await db.transaction('rw', db.items, db.available_imeis, db.settings, db.customers, db.categories, db.item_discounts, db.discount_groups, db.till_sessions, async () => {
         if (payload.items && Array.isArray(payload.items)) {
             await db.items.clear()
             await db.items.bulkPut(payload.items)
@@ -84,6 +97,21 @@ export async function saveBootstrapData(payload) {
 
         if (payload.quick_access) {
             await db.settings.put({ key: 'quick_access', value: payload.quick_access })
+        }
+
+        if (payload.active_till_session) {
+            await db.till_sessions.put({
+                offline_session_id: payload.active_till_session.offline_session_id || ('server_' + payload.active_till_session.id),
+                id: payload.active_till_session.id,
+                cashier_id: payload.active_till_session.cashier_id,
+                cashier_name: payload.active_till_session.cashier?.name || '',
+                opening_amount: parseFloat(payload.active_till_session.opening_amount || 0),
+                opened_at: payload.active_till_session.opened_at,
+                status: payload.active_till_session.status || 'open',
+                sync_status: 'synced',
+                summary: payload.active_till_session.summary || null,
+                updated_at: new Date().toISOString(),
+            })
         }
 
         await db.settings.put({ key: 'last_sync_time', value: new Date().toISOString() })
@@ -685,5 +713,178 @@ export async function getLocalDiscountGroups() {
         return []
     }
 }
+
+/**
+ * Save or update a Till Session in IndexedDB.
+ */
+export async function saveLocalTillSession(session) {
+    if (!session) return
+    const offlineId = session.offline_session_id || (session.id ? ('server_' + session.id) : ('offline_till_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7)))
+    await db.till_sessions.put({
+        offline_session_id: offlineId,
+        id: session.id || null,
+        cashier_id: session.cashier_id,
+        cashier_name: session.cashier_name || '',
+        opening_amount: parseFloat(session.opening_amount || 0),
+        opened_at: session.opened_at || new Date().toISOString(),
+        status: session.status || 'open',
+        closing_amount: session.closing_amount !== null && session.closing_amount !== undefined ? parseFloat(session.closing_amount) : null,
+        expected_amount: session.expected_amount !== null && session.expected_amount !== undefined ? parseFloat(session.expected_amount) : null,
+        variance: session.variance !== null && session.variance !== undefined ? parseFloat(session.variance) : null,
+        opening_note: session.opening_note || null,
+        closing_note: session.closing_note || null,
+        sync_status: session.sync_status || (session.id ? 'synced' : 'pending'),
+        summary: session.summary || null,
+        updated_at: new Date().toISOString(),
+    })
+    return offlineId
+}
+
+/**
+ * Get the currently active local open till session for this cashier or workstation.
+ */
+export async function getLocalActiveTillSession(cashierId = null) {
+    try {
+        const sessions = await db.till_sessions.where('status').equals('open').toArray()
+        if (cashierId) {
+            const match = sessions.find(s => Number(s.cashier_id) === Number(cashierId))
+            if (match) return match
+        }
+        return sessions[0] || null
+    } catch (e) {
+        console.error('Error fetching local active till session:', e)
+        return null
+    }
+}
+
+/**
+ * Close a local till session.
+ */
+export async function closeLocalTillSession(key, closingData = {}) {
+    try {
+        const existing = await db.till_sessions.get(key)
+            || (await db.till_sessions.where('id').equals(Number(key)).first())
+        if (existing) {
+            await db.till_sessions.update(existing.offline_session_id, {
+                status: 'closed',
+                closing_amount: parseFloat(closingData.closing_amount || 0),
+                closed_at: new Date().toISOString(),
+                closing_note: closingData.closing_note || null,
+                expected_amount: closingData.expected_amount !== undefined ? parseFloat(closingData.expected_amount) : existing.expected_amount,
+                variance: closingData.variance !== undefined ? parseFloat(closingData.variance) : existing.variance,
+                sync_status: existing.id ? 'pending_close' : 'pending',
+                updated_at: new Date().toISOString(),
+            })
+        }
+    } catch (e) {
+        console.error('Error closing local till session:', e)
+    }
+}
+
+/**
+ * Get all queued/pending offline till sessions awaiting sync.
+ */
+export async function getPendingOfflineTillSessions() {
+    try {
+        const allSessions = await db.till_sessions.toArray()
+        return allSessions.filter(s => s.sync_status === 'pending' || s.sync_status === 'pending_close')
+    } catch (e) {
+        console.error('Error fetching pending offline till sessions:', e)
+        return []
+    }
+}
+
+/**
+ * Mark a local till session as synced.
+ */
+export async function markTillSessionSynced(offlineSessionId, serverResult = {}) {
+    try {
+        const existing = await db.till_sessions.get(offlineSessionId)
+            || (serverResult.id ? await db.till_sessions.where('id').equals(Number(serverResult.id)).first() : null)
+        if (existing) {
+            await db.till_sessions.update(existing.offline_session_id, {
+                id: serverResult.id || existing.id,
+                sync_status: 'synced',
+                synced_at: new Date().toISOString(),
+                status: serverResult.status || existing.status,
+                updated_at: new Date().toISOString(),
+            })
+        }
+    } catch (e) {
+        console.error('Error marking till session synced:', e)
+    }
+}
+
+/**
+ * Prune synced and closed offline till sessions older than a given number of days.
+ * 
+ * CRITICAL SAFETY ENFORCEMENT:
+ * - ONLY till sessions with sync_status === 'synced' AND status === 'closed' can EVER be deleted.
+ * - Active open till sessions (status === 'open') MUST NEVER be deleted under any circumstance.
+ * - Un-synced or pending till sessions ('pending', 'pending_close') MUST NEVER be touched.
+ */
+export async function pruneOldSyncedTillSessions(retentionDays = 7) {
+    try {
+        const cutoffDate = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000).toISOString()
+
+        // 1. Query exclusively by indexed sync_status = 'synced'
+        const syncedSessions = await db.till_sessions
+            .where('sync_status')
+            .equals('synced')
+            .toArray()
+
+        // 2. Strict double-check filter:
+        // MUST have sync_status === 'synced' AND status === 'closed' AND older than cutoff
+        const oldSyncedSessionIds = syncedSessions
+            .filter(session => {
+                if (session.sync_status !== 'synced') return false // Absolute defense guard
+                if (session.status !== 'closed') return false // NEVER delete open sessions
+                const timestamp = session.synced_at || session.closed_at || session.updated_at || session.opened_at
+                return timestamp && timestamp < cutoffDate
+            })
+            .map(session => session.offline_session_id)
+
+        if (oldSyncedSessionIds.length > 0) {
+            await db.till_sessions.bulkDelete(oldSyncedSessionIds)
+            console.info(`[OfflineDB] Pruned ${oldSyncedSessionIds.length} synced & closed till sessions older than ${retentionDays} days.`)
+        }
+
+        return oldSyncedSessionIds.length
+    } catch (e) {
+        console.warn('[OfflineDB] pruneOldSyncedTillSessions notice:', e)
+        return 0
+    }
+}
+
+/**
+ * Manually clear closed & synced till sessions history from local IndexedDB cache.
+ * 
+ * CRITICAL SAFETY ENFORCEMENT:
+ * STRICTLY deletes records where sync_status === 'synced' AND status === 'closed'.
+ * Never touches open till sessions or pending un-synced sessions.
+ */
+export async function clearAllSyncedTillSessions() {
+    try {
+        const syncedSessions = await db.till_sessions
+            .where('sync_status')
+            .equals('synced')
+            .toArray()
+
+        const eligibleIds = syncedSessions
+            .filter(session => session.sync_status === 'synced' && session.status === 'closed')
+            .map(session => session.offline_session_id)
+
+        if (eligibleIds.length > 0) {
+            await db.till_sessions.bulkDelete(eligibleIds)
+            console.info(`[OfflineDB] Cleared ${eligibleIds.length} synced & closed till sessions from local cache.`)
+        }
+
+        return eligibleIds.length
+    } catch (e) {
+        console.warn('[OfflineDB] clearAllSyncedTillSessions notice:', e)
+        return 0
+    }
+}
+
 
 

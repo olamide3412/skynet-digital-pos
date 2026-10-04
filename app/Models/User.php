@@ -116,4 +116,18 @@ class User extends Authenticatable
         $branchId = $branch instanceof Branch ? $branch->id : $branch;
         return $this->branch_id === $branchId;
     }
+
+    public function tillSessions(): HasMany
+    {
+        return $this->hasMany(TillSession::class, 'cashier_id');
+    }
+
+    public function activeTillSession(?int $branchId = null): ?TillSession
+    {
+        return $this->tillSessions()
+            ->where('status', 'open')
+            ->when($branchId, fn($q) => $q->where('branch_id', $branchId))
+            ->latest('id')
+            ->first();
+    }
 }

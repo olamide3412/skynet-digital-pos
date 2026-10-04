@@ -13,7 +13,7 @@ class Sale extends Model
         'items_order_count', 'consultation_fee',
         'payment_method', 'bank_transfer', 'cash', 'amount_cost', 'amount_paid',
         'change_bal', 'purchase_type', 'profit_made', 'sale_discount_id',
-        'discount_amount', 'tax_amount', 'tax_percentage', 'final_total', 'is_debt', 'user_id',
+        'discount_amount', 'tax_amount', 'tax_percentage', 'final_total', 'is_debt', 'user_id', 'till_session_id',
     ];
 
     protected function casts(): array
@@ -45,6 +45,11 @@ class Sale extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function tillSession(): BelongsTo
+    {
+        return $this->belongsTo(TillSession::class, 'till_session_id');
     }
 
     public function customer(): BelongsTo

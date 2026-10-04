@@ -16,7 +16,7 @@ class PosSettings extends Model
     protected $fillable = [
         'branch_id',
         'is_price_editable', 'is_qty_deduction', 'is_offline_qty_deduction', 'out_of_stock',
-        'is_check_expiration', 'batch_tracking_enabled', 'expiry_alert_days', 'is_imei_enabled', 'is_offline_enabled', 'held_sales_visibility', 'is_turnstile_enabled', 'offline_receipt_prefix',
+        'is_check_expiration', 'batch_tracking_enabled', 'expiry_alert_days', 'is_imei_enabled', 'is_offline_enabled', 'require_till_opening', 'print_till_slip', 'held_sales_visibility', 'is_turnstile_enabled', 'offline_receipt_prefix',
         'is_show_buy_price', 'is_use_profit_percentage',
         'is_tax_enabled', 'tax_percentage',
         'item_icon_preview', 'is_grid_separate_rows', 'is_cart_auto_scroll_highlight', 'is_auto_fullscreen_enabled', 'wholesale_profit_percent', 'consumer_profit_percent',
@@ -37,6 +37,8 @@ class PosSettings extends Model
             'expiry_alert_days'             => 'integer',
             'is_imei_enabled'               => 'boolean',
             'is_offline_enabled'            => 'boolean',
+            'require_till_opening'          => 'boolean',
+            'print_till_slip'               => 'boolean',
             'is_turnstile_enabled'          => 'boolean',
             'is_auto_fullscreen_enabled'    => 'boolean',
             'is_show_buy_price'             => 'boolean',

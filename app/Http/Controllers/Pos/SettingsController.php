@@ -90,6 +90,8 @@ class SettingsController extends Controller
             'printer_ip_address'       => 'nullable|string|max:100',
             'auto_print_receipt'       => 'nullable|boolean',
             'show_receipt_preview'     => 'nullable|boolean',
+            'require_till_opening'     => 'nullable|boolean',
+            'print_till_slip'          => 'nullable|boolean',
         ]);
 
         // ── 1. Update branch business details & logo ───────────────────────────

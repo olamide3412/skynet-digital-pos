@@ -49,6 +49,8 @@ const form = useForm({
     printer_ip_address:            props.settings.printer_ip_address ?? '',
     auto_print_receipt:            !!props.settings.auto_print_receipt,
     show_receipt_preview:          props.settings.show_receipt_preview !== false && props.settings.show_receipt_preview !== 0,
+    require_till_opening:          props.settings.require_till_opening !== false && props.settings.require_till_opening !== 0,
+    print_till_slip:               !!props.settings.print_till_slip,
 })
 
 // Pinned Items Search State
@@ -577,6 +579,49 @@ function submit() {
                             <div>
                                 <span class="text-sm font-semibold text-slate-900 dark:text-white">Auto-Scroll & 1-Second Highlight on Added Cart Items</span>
                                 <p class="text-xs text-slate-500 dark:text-slate-400">Automatically scroll down to focus on added/updated cart items and flash a 1-second pulse animation (from search bar, barcode, or grid)</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Dedicated Till Sessions & Cash Drawer Card -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/60 p-6 space-y-4 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">💼</span>
+                            <div>
+                                <h2 class="text-base font-bold text-slate-900 dark:text-white">Till Shift & Cash Drawer Accountability</h2>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Control mandatory opening float declaration, cash management, and shift reconciliation.</p>
+                            </div>
+                        </div>
+                        <span
+                            :class="form.require_till_opening
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800'"
+                            class="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider"
+                        >
+                            {{ form.require_till_opening ? 'Active (Till Opening Required)' : 'Disabled (Direct Checkout)' }}
+                        </span>
+                    </div>
+
+                    <div class="space-y-4 pt-1">
+                        <label class="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700/80 cursor-pointer transition hover:border-slate-300 dark:hover:border-slate-600">
+                            <input type="checkbox" v-model="form.require_till_opening" class="w-4 h-4 mt-0.5 accent-emerald-500 rounded cursor-pointer shrink-0" />
+                            <div>
+                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Require Opening Cash Float Before Checkout</span>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                    When enabled, cashiers must declare their opening drawer cash float before checking out customers. Sales are linked to their till session for complete cash drawer auditing. If disabled, cashiers can sell directly without opening float prompts.
+                                </p>
+                            </div>
+                        </label>
+
+                        <label class="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700/80 cursor-pointer transition hover:border-slate-300 dark:hover:border-slate-600">
+                            <input type="checkbox" v-model="form.print_till_slip" class="w-4 h-4 mt-0.5 accent-emerald-500 rounded cursor-pointer shrink-0" />
+                            <div>
+                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Print Till Reconciliation Slip on Shift Close</span>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                    Automatically generates and displays the thermal till summary slip modal whenever a till session is closed, ready for instant printing or physical drawer filing.
+                                </p>
                             </div>
                         </label>
                     </div>

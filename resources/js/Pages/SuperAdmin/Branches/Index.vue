@@ -148,6 +148,12 @@ const toggleAi = (branchSlug) => {
     })
 }
 
+const toggleTillOpening = (branchSlug) => {
+    router.post(route('superadmin.branches.toggle-till-opening', { branch: branchSlug }), {}, {
+        preserveScroll: true,
+    })
+}
+
 const copiedBranchSlug = ref(null)
 const copyBranchUrl = (slug) => {
     const fullUrl = typeof window !== 'undefined' && window.location?.origin
@@ -441,6 +447,33 @@ const triggerExport = () => {
                             :title="(branch.is_ai_enabled ?? true) ? 'Click to disable AI for this branch' : 'Click to enable AI for this branch'"
                         >
                             <span v-if="(branch.is_ai_enabled ?? true)">● Enabled</span>
+                            <span v-else>○ Disabled</span>
+                        </button>
+                    </div>
+
+                    <!-- Till Opening Requirement Toggle Control -->
+                    <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">💼</span>
+                            <div>
+                                <div class="text-xs font-bold text-slate-800 dark:text-slate-200">Opening Till Float</div>
+                                <div class="text-[10px] text-slate-500 dark:text-slate-400">
+                                    {{ (branch.settings?.require_till_opening ?? true) ? 'Required before checkout' : 'Disabled (Direct checkout)' }}
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            @click="toggleTillOpening(branch.slug)"
+                            type="button"
+                            :class="[
+                                'px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer',
+                                (branch.settings?.require_till_opening ?? true)
+                                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs'
+                                    : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300'
+                            ]"
+                            :title="(branch.settings?.require_till_opening ?? true) ? 'Click to disable till opening requirement' : 'Click to require opening float before checkout'"
+                        >
+                            <span v-if="(branch.settings?.require_till_opening ?? true)">● Required</span>
                             <span v-else>○ Disabled</span>
                         </button>
                     </div>

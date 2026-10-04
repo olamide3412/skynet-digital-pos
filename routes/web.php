@@ -14,6 +14,7 @@ use App\Http\Controllers\Pos\SaleDiscountController;
 use App\Http\Controllers\Pos\ItemDiscountController;
 use App\Http\Controllers\Pos\DiscountGroupController;
 use App\Http\Controllers\Pos\StockTransferController;
+use App\Http\Controllers\Pos\TillSessionController;
 use App\Http\Controllers\SuperAdmin\SuperAdminAuthController;
 use App\Http\Controllers\SuperAdmin\DashboardController as SuperAdminDashboard;
 use App\Http\Controllers\SuperAdmin\BranchController;
@@ -142,6 +143,8 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.toggle-ai');
         Route::post('/branches/{branch}/toggle-auto-fullscreen', [BranchController::class, 'toggleAutoFullscreen'])
             ->name('branches.toggle-auto-fullscreen');
+        Route::post('/branches/{branch}/toggle-till-opening', [BranchController::class, 'toggleTillOpening'])
+            ->name('branches.toggle-till-opening');
         Route::put('/branches/{branch}/settings', [BranchController::class, 'updateSettings'])
             ->name('branches.settings.update');
         Route::post('/branches/{branch}/logo', [BranchController::class, 'updateLogo'])
@@ -693,6 +696,20 @@ Route::prefix('{branch}')
         Route::match(['put', 'post'], '/settings', [PosSettingsController::class, 'update'])
             ->name('settings.update')
             ->middleware('pos.role:canEditSettings');
+
+        // Till Sessions & Cash Movements (§3, §5, §7)
+        Route::prefix('till')->name('till.')->group(function () {
+            Route::get('/active',                         [TillSessionController::class, 'active'])->name('active');
+            Route::post('/open',                          [TillSessionController::class, 'open'])->name('open');
+            Route::post('/close',                         [TillSessionController::class, 'close'])->name('close');
+            Route::post('/movements',                     [TillSessionController::class, 'storeMovement'])->name('movements.store')
+                ->middleware('pos.role:canManageTillCashMovements');
+            Route::get('/sessions',                       [TillSessionController::class, 'index'])->name('sessions.index')
+                ->middleware('pos.role:canViewEndOfDay');
+            Route::post('/sessions/{session}/force-close', [TillSessionController::class, 'forceClose'])->name('sessions.force-close')
+                ->middleware('pos.role:canViewEndOfDay');
+            Route::get('/sessions/{session}/slip',        [TillSessionController::class, 'slip'])->name('sessions.slip');
+        });
 
         // Workstation & Terminal Printer Setup (Accessible to all staff)
         Route::get('/printer-setup', [\App\Http\Controllers\Pos\PrinterSetupController::class, 'index'])

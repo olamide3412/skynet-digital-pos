@@ -9,17 +9,37 @@ use Inertia\Inertia;
 
 class CategoryController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $branch = current_branch();
+        $search = $request->input('search');
 
         $categories = Category::when($branch, function ($query) use ($branch) {
             $query->where('branch_id', $branch->id)
                   ->orWhereNull('branch_id');
-        })->orderBy('name')->paginate(20);
+        })
+        ->when($search, function ($query, $search) {
+            $query->where('name', 'like', "%{$search}%");
+        })
+        ->withCount(['items' => function ($query) use ($branch) {
+            if ($branch) {
+                $query->where('branch_id', $branch->id);
+            }
+        }])
+        ->withSum(['items as total_stock_qty' => function ($query) use ($branch) {
+            if ($branch) {
+                $query->where('branch_id', $branch->id);
+            }
+        }], 'front_store_qty')
+        ->orderBy('name')
+        ->paginate(25)
+        ->withQueryString();
 
         return Inertia::render('Categories/Index', [
-            'categories' => $categories
+            'categories' => $categories,
+            'filters'    => [
+                'search' => $search,
+            ],
         ]);
     }
 

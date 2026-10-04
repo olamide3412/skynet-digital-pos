@@ -158,6 +158,11 @@ class Branch extends Model
         return $this->hasMany(PurchaseOrder::class);
     }
 
+    public function tillSessions(): HasMany
+    {
+        return $this->hasMany(TillSession::class);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
     /**
      * Get or create the POS settings for this branch.

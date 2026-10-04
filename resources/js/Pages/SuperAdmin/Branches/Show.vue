@@ -348,6 +348,8 @@ const settingsForm = useForm({
     consumer_profit_percent: Number(props.settings?.consumer_profit_percent ?? 0),
     sell_interface: props.settings?.sell_interface || 'classic',
     business_sector: props.settings?.business_sector || 'commerce',
+    require_till_opening: Boolean(props.settings?.require_till_opening ?? true),
+    print_till_slip: Boolean(props.settings?.print_till_slip ?? false),
 })
 
 const submitSettings = () => {
@@ -714,6 +716,7 @@ const toggleBranchStatus = () => router.post(route('superadmin.branches.toggle',
 const toggleBranchOffline = () => router.post(route('superadmin.branches.toggle-offline', { branch: props.branch.slug }))
 const toggleBranchOfflineQty = () => router.post(route('superadmin.branches.toggle-offline-qty-deduction', { branch: props.branch.slug }))
 const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', { branch: props.branch.slug }))
+const toggleTillOpening = () => router.post(route('superadmin.branches.toggle-till-opening', { branch: props.branch.slug }), {}, { preserveScroll: true })
 </script>
 
 <template>
@@ -785,6 +788,13 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                             >
                                 <span class="w-1.5 h-1.5 rounded-full" :class="settings.is_offline_qty_deduction ? 'bg-emerald-500' : 'bg-amber-500'"></span>
                                 {{ settings.is_offline_qty_deduction ? 'Offline Stock Deduction Active' : 'Offline Stock Deduction Skipped' }}
+                            </span>
+                            <span
+                                :class="settings.require_till_opening ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'"
+                                class="px-2.5 py-0.5 rounded-full text-xs font-semibold border flex items-center gap-1"
+                            >
+                                <span class="w-1.5 h-1.5 rounded-full" :class="settings.require_till_opening ? 'bg-emerald-500' : 'bg-slate-400'"></span>
+                                {{ settings.require_till_opening ? 'Till Float Required' : 'Direct Checkout (No Till)' }}
                             </span>
                             <Link
                                 v-if="$page.props.organizations_enabled && branch.organization"
@@ -873,6 +883,15 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                         class="px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer"
                     >
                         {{ branch.is_ai_enabled ? 'Disable AI' : 'Enable AI' }}
+                    </button>
+                    <button
+                        type="button"
+                        @click="toggleTillOpening"
+                        :class="settings.require_till_opening ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900 hover:bg-amber-100' : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900 hover:bg-emerald-100'"
+                        class="px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer"
+                        :title="settings.require_till_opening ? 'Click to allow direct checkout without opening till' : 'Click to require cashiers to declare opening float'"
+                    >
+                        {{ settings.require_till_opening ? 'Disable Till Requirement' : 'Require Till Float' }}
                     </button>
                 </div>
             </div>
@@ -1492,6 +1511,59 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                                 </div>
                                 <input
                                     v-model="settingsForm.is_auto_fullscreen_enabled"
+                                    type="checkbox"
+                                    class="w-5 h-5 rounded text-indigo-600 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer flex-shrink-0"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Till Sessions & Cash Drawer Card -->
+                    <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-4 lg:col-span-2">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <div>
+                                <h3 class="font-bold text-slate-900 dark:text-white text-base">Till Sessions & Cash Drawer Accountability</h3>
+                                <p class="text-xs text-slate-500">Require opening float declaration before checkout, shift reconciliations, and cash drawer management.</p>
+                            </div>
+                            <span class="text-xl">💼</span>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                                <div class="pr-4">
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                        <span>Require Opening Cash Float Before Checkout</span>
+                                        <span
+                                            class="text-[10px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider"
+                                            :class="settingsForm.require_till_opening
+                                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                                                : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800'"
+                                        >
+                                            {{ settingsForm.require_till_opening ? 'Active (Till Opening Required)' : 'Disabled (Direct Checkout Allowed)' }}
+                                        </span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                        {{ settingsForm.require_till_opening
+                                            ? 'Cashiers cannot checkout until they declare their opening float. Every sale is linked to their till session for complete cash drawer auditing.'
+                                            : 'Cashiers can checkout directly without opening a till session. Till drawer prompts are hidden on the POS screen.' }}
+                                    </div>
+                                </div>
+                                <input
+                                    v-model="settingsForm.require_till_opening"
+                                    type="checkbox"
+                                    class="w-5 h-5 rounded text-indigo-600 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer flex-shrink-0"
+                                />
+                            </div>
+
+                            <div class="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                                <div class="pr-4">
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Print Till Reconciliation Slip on Shift Close</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                        Automatically generates and previews thermal till summary slip when a cashier or manager closes a till session.
+                                    </div>
+                                </div>
+                                <input
+                                    v-model="settingsForm.print_till_slip"
                                     type="checkbox"
                                     class="w-5 h-5 rounded text-indigo-600 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer flex-shrink-0"
                                 />

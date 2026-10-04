@@ -10,6 +10,7 @@ use App\Models\PosSettings;
 use App\Models\Sale;
 use App\Models\SaleOrder;
 use App\Models\StockConflict;
+use App\Models\TillSession;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -17,6 +18,68 @@ use Illuminate\Support\Facades\Log;
 
 class OfflineSyncService
 {
+    /**
+     * Process and synchronize an offline till session record.
+     */
+    public static function syncSingleTillSession(array $data, Branch $branch): array
+    {
+        $offlineSessionId = $data['offline_session_id'] ?? null;
+        $id = $data['id'] ?? null;
+
+        $session = null;
+        if ($id) {
+            $session = TillSession::where('branch_id', $branch->id)->where('id', $id)->first();
+        }
+        if (!$session && $offlineSessionId) {
+            $session = TillSession::where('branch_id', $branch->id)->where('offline_session_id', $offlineSessionId)->first();
+        }
+
+        $cashierId = $data['cashier_id'] ?? Auth::id();
+        $openingAmount = max(0, (float) ($data['opening_amount'] ?? 0));
+        $status = $data['status'] ?? 'open';
+        $openedAt = !empty($data['opened_at']) ? date('Y-m-d H:i:s', strtotime($data['opened_at'])) : now();
+
+        if (!$session) {
+            $session = TillSession::create([
+                'branch_id'          => $branch->id,
+                'cashier_id'         => $cashierId,
+                'opening_amount'     => $openingAmount,
+                'opened_at'          => $openedAt,
+                'status'             => $status,
+                'opening_note'       => $data['opening_note'] ?? null,
+                'offline_session_id' => $offlineSessionId,
+                'sync_status'        => 'synced',
+            ]);
+        }
+
+        // If session was closed offline, sync the closing values
+        if ($status === 'closed') {
+            $summary = $session->calculateSummary();
+            $closingAmount = isset($data['closing_amount']) ? (float) $data['closing_amount'] : (float) ($session->closing_amount ?? $summary['expected_cash']);
+            $expectedAmount = isset($data['expected_amount']) ? (float) $data['expected_amount'] : $summary['expected_cash'];
+            $variance = round($closingAmount - $expectedAmount, 2);
+            $closedAt = !empty($data['closed_at']) ? date('Y-m-d H:i:s', strtotime($data['closed_at'])) : now();
+
+            $session->update([
+                'status'          => 'closed',
+                'closing_amount'  => $closingAmount,
+                'expected_amount' => $expectedAmount,
+                'variance'        => $variance,
+                'closing_note'    => $data['closing_note'] ?? $session->closing_note,
+                'closed_at'       => $closedAt,
+                'closed_by'       => $data['closed_by'] ?? $cashierId,
+                'sync_status'     => 'synced',
+            ]);
+        }
+
+        return [
+            'offline_session_id' => $offlineSessionId,
+            'id'                 => $session->id,
+            'status'             => $session->status,
+            'sync_status'        => 'synced',
+        ];
+    }
+
     /**
      * Process an array of queued offline sales in FIFO order.
      *
@@ -181,11 +244,23 @@ class OfflineSyncService
                 }
             }
 
+            // Resolve Till Session if provided or find active session for user
+            $tillSessionId = null;
+            if (!empty($data['till_session_id'])) {
+                $tillSessionId = \App\Models\TillSession::where('branch_id', $branch->id)->where('id', $data['till_session_id'])->value('id');
+            } elseif (!empty($data['offline_session_id'])) {
+                $tillSessionId = \App\Models\TillSession::where('branch_id', $branch->id)->where('offline_session_id', $data['offline_session_id'])->value('id');
+            }
+            if (!$tillSessionId && $user) {
+                $tillSessionId = \App\Services\TillSessionService::getActiveSession($user->id, $branch->id)?->id;
+            }
+
             // Create Sale record
             $sale = Sale::create([
                 'branch_id'         => $branch->id,
                 'customer_id'       => $customerId,
                 'receipt_id'        => $receiptId,
+                'till_session_id'   => $tillSessionId,
                 'offline_sale_id'   => $offlineSaleId,
                 'held_sale_id'      => $heldSaleId,
                 'is_offline_sale'   => true,

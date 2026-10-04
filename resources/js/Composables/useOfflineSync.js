@@ -14,6 +14,10 @@ import {
     mergeServerHeldSales,
     pruneOldSyncedSales,
     clearAllSyncedSales,
+    pruneOldSyncedTillSessions,
+    clearAllSyncedTillSessions,
+    getPendingOfflineTillSessions,
+    markTillSessionSynced,
 } from '@/Services/offlineDb'
 
 // Shared singleton state across all components
@@ -107,13 +111,14 @@ export function useOfflineSync() {
     }
 
     /**
-     * Flush all queued offline sales to server in FIFO order (loops in batches until 100% complete).
+     * Flush all queued offline sales and till sessions to server in FIFO order (loops in batches until 100% complete).
      */
     async function syncQueuedSales() {
         if (isSyncing.value) return
         await updatePendingCount()
 
-        if (pendingCount.value === 0) return
+        const pendingTillSessions = await getPendingOfflineTillSessions()
+        if (pendingCount.value === 0 && pendingTillSessions.length === 0) return
 
         const online = await checkServerHealth()
         if (!online) {
@@ -124,6 +129,22 @@ export function useOfflineSync() {
         isSyncing.value = true
 
         try {
+            // First sync any pending till sessions so subsequent sales link cleanly
+            if (pendingTillSessions.length > 0) {
+                const branch = getBranchSlug()
+                const tillRes = await axios.post(route('pos.api.offline.sync', branch ? { branch } : undefined), {
+                    till_sessions: pendingTillSessions,
+                }, { timeout: 45000 })
+
+                if (tillRes.data && Array.isArray(tillRes.data.till_results)) {
+                    for (const result of tillRes.data.till_results) {
+                        if (result.sync_status === 'synced' && result.offline_session_id) {
+                            await markTillSessionSynced(result.offline_session_id, result)
+                        }
+                    }
+                }
+            }
+
             let hasMore = true
             while (hasMore) {
                 const pendingSales = await getPendingOfflineSales(100)
@@ -170,6 +191,10 @@ export function useOfflineSync() {
 
             // Auto-prune synced sales older than 7 days (strictly preserves pending/failed)
             await pruneOldSyncedSales(7)
+
+            // Auto-prune synced and closed till sessions older than 7 days (strictly preserves open/pending)
+            await pruneOldSyncedTillSessions(7)
+
             await updatePendingCount()
         } catch (err) {
             console.error('Error during offline sales sync:', err)
@@ -263,8 +288,9 @@ export function useOfflineSync() {
         updatePendingCount()
         updateHeldSales()
         refreshCatalog()
-        // Rolling prune: discard synced sales older than 7 days on startup
+        // Rolling prune: discard synced sales & closed till sessions older than 7 days on startup
         pruneOldSyncedSales(7).then(() => updatePendingCount()).catch(() => {})
+        pruneOldSyncedTillSessions(7).catch(() => {})
 
         // Periodic heartbeat & auto-sync every 25 seconds
         if (!intervalId) {
@@ -294,6 +320,11 @@ export function useOfflineSync() {
         return count
     }
 
+    async function manualClearSyncedTillSessions() {
+        const count = await clearAllSyncedTillSessions()
+        return count
+    }
+
     return {
         isOnline,
         isSyncing,
@@ -315,8 +346,11 @@ export function useOfflineSync() {
         stopSyncMonitor,
         checkServerHealth,
         manualClearSyncedSales,
+        manualClearSyncedTillSessions,
         pruneOldSyncedSales,
         clearAllSyncedSales,
+        pruneOldSyncedTillSessions,
+        clearAllSyncedTillSessions,
     }
 }
 

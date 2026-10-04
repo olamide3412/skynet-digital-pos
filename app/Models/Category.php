@@ -40,6 +40,11 @@ class Category extends Model
         return $this->hasMany(Product::class);
     }
 
+    public function items(): HasMany
+    {
+        return $this->hasMany(Item::class);
+    }
+
     /** Filterable attributes selected for this category */
     public function attributes(): BelongsToMany
     {

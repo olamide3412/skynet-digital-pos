@@ -234,9 +234,15 @@ class RoleService
             'canViewBatchExpiryReport' => static::canViewBatchExpiryReport(),
             'view_ecommerce_activity'  => static::canViewEcommerceActivity(),
             'canViewEcommerceActivity' => static::canViewEcommerceActivity(),
+            'canManageTillCashMovements' => static::canManageTillCashMovements(),
             'isBranchAdmin'            => $user?->isBranchAdmin() ?? false,
             'isSuperAdmin'             => $user?->isSuperAdmin() ?? false,
         ];
+    }
+
+    public static function canManageTillCashMovements(): bool
+    {
+        return static::can('canManageTillCashMovements');
     }
 
     public static function canViewEcommerceActivity(): bool

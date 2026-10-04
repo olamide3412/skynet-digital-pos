@@ -5,8 +5,9 @@ import { useCurrency } from '@/Composables/useCurrency'
 import axios from 'axios'
 
 const props = defineProps({
-    settings:         { type: Object, required: true },
-    canApplyDiscount: { type: Boolean, default: false },
+    settings:          { type: Object, required: true },
+    canApplyDiscount:  { type: Boolean, default: false },
+    activeTillSession: { type: Object, default: null },
 })
 const emit = defineEmits(['close', 'completed'])
 
@@ -174,10 +175,12 @@ async function processOfflineSale(payload) {
 
     const offlineSale = {
         ...payload,
-        offline_sale_id: offlineSaleId,
-        receipt_id:      tempReceiptId,
-        is_offline_sale: true,
-        created_at:      new Date().toISOString(),
+        offline_sale_id:    offlineSaleId,
+        receipt_id:         tempReceiptId,
+        till_session_id:    props.activeTillSession?.id || null,
+        offline_session_id: props.activeTillSession?.offline_session_id || null,
+        is_offline_sale:    true,
+        created_at:         new Date().toISOString(),
         cashier_id:      page.props.auth?.user?.id,
         cashier_name:    page.props.auth?.user?.name || page.props.auth?.user?.full_name || 'Cashier',
         final_total:     cart.grandTotal,
@@ -247,11 +250,12 @@ async function submitSale() {
 
     const payload = {
         ...cart.toPayload(),
-        payment_method: tab.value,
-        amount_paid:    amountPaid.value,
-        cash:           tab.value === 'Cash' || tab.value === 'Split' ? Number(cashInput.value || 0) : 0,
-        bank_transfer:  tab.value === 'Bank Transfer' || tab.value === 'Split' ? Number(bankInput.value || 0) : 0,
-        is_debt:        tab.value === 'Debt',
+        till_session_id: props.activeTillSession?.id || null,
+        payment_method:  tab.value,
+        amount_paid:     amountPaid.value,
+        cash:            tab.value === 'Cash' || tab.value === 'Split' ? Number(cashInput.value || 0) : 0,
+        bank_transfer:   tab.value === 'Bank Transfer' || tab.value === 'Split' ? Number(bankInput.value || 0) : 0,
+        is_debt:         tab.value === 'Debt',
     }
 
     // If terminal is offline and offline mode is enabled, immediately record locally with zero network delay

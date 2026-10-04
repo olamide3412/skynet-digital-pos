@@ -612,6 +612,8 @@ class BranchController extends Controller
             'consumer_profit_percent'  => 'nullable|numeric|min:0',
             'sell_interface'           => 'required|string|in:classic,gallery',
             'business_sector'          => 'required|string|in:commerce,health',
+            'require_till_opening'     => 'nullable|boolean',
+            'print_till_slip'          => 'nullable|boolean',
         ]);
 
         $settings = $branch->getSettings();
@@ -757,6 +759,25 @@ class BranchController extends Controller
         );
 
         return back()->with('success', "Auto-fullscreen on POS login {$status} for {$branch->name}.");
+    }
+
+    /**
+     * Toggle branch till opening requirement before selling.
+     */
+    public function toggleTillOpening(Branch $branch)
+    {
+        $settings = $branch->getSettings();
+        $newState = !($settings->require_till_opening ?? true);
+        $settings->update(['require_till_opening' => $newState]);
+        $status = $newState ? 'enabled (cashiers must declare float before selling)' : 'disabled (direct checkout allowed)';
+
+        ActivityLogger::log(
+            'setting',
+            "Super Admin set till opening requirement to {$status} for branch '{$branch->name}'",
+            $branch->id
+        );
+
+        return back()->with('success', "Till opening requirement {$status} for {$branch->name}.");
     }
 
     private function streamExcelOrCsv(Spreadsheet $spreadsheet, string $filenamePrefix, string $format = 'xlsx')

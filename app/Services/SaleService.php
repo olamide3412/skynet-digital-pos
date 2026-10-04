@@ -45,8 +45,9 @@ class SaleService
      */
     public static function process(array $data, User $user): Sale
     {
-        $settings = PosSettings::current();
-        $branch = current_branch();
+        $branch = current_branch() ?? $user->branch;
+        $resolvedBranchId = $branch?->id ?? $user->branch_id;
+        $settings = $resolvedBranchId ? PosSettings::forBranch($resolvedBranchId) : PosSettings::current();
 
         $cartItems = $data['items'];
         $purchaseType = $data['purchase_type'] ?? 'Consumer';
@@ -142,7 +143,14 @@ class SaleService
 
         $finalTotal = round($amountCost + $consultFee - $discountAmount + $taxAmount, 2);
 
-        return DB::transaction(function () use ($data, $user, $branch, $settings, $cartItems, $itemsMap, $purchaseType, $customerId, $amountCost, $finalTotal, $profitMade, $discountAmount, $consultFee, $taxAmount, $taxPercentage) {
+        $resolvedBranchId = $branch?->id ?? $itemsMap->first()?->branch_id;
+        $activeTillSession = \App\Services\TillSessionService::getActiveSession($user->id, $resolvedBranchId);
+        if ($settings->require_till_opening && !$activeTillSession && empty($data['till_session_id'])) {
+            throw new \InvalidArgumentException('An active till session is required to complete sales. Please open your till first.');
+        }
+        $tillSessionId = $data['till_session_id'] ?? $activeTillSession?->id;
+
+        return DB::transaction(function () use ($data, $user, $branch, $settings, $cartItems, $itemsMap, $purchaseType, $customerId, $amountCost, $finalTotal, $profitMade, $discountAmount, $consultFee, $taxAmount, $taxPercentage, $resolvedBranchId, $tillSessionId) {
             $receiptId = static::generateReceiptId();
             $paymentMethod = $data['payment_method'] ?? 'Cash';
             $isDebt = (bool) ($data['is_debt'] ?? false);
@@ -150,11 +158,11 @@ class SaleService
             $changeBal = max(0, round($amountPaid - $finalTotal, 2));
 
             // Create Sale
-            $resolvedBranchId = $branch?->id ?? $itemsMap->first()?->branch_id;
             $sale = Sale::create([
                 'branch_id' => $resolvedBranchId,
                 'customer_id' => $customerId,
                 'receipt_id' => $receiptId,
+                'till_session_id' => $tillSessionId,
                 'items_order_count' => count($cartItems),
                 'consultation_fee' => $consultFee,
                 'payment_method' => $paymentMethod,

@@ -6,6 +6,8 @@ import PaginationLinks from '@/Components/PaginationLinks.vue'
 import { useCurrency } from '@/Composables/useCurrency'
 import dayjs from 'dayjs'
 
+import TillSlipModal from '@/Components/POS/TillSlipModal.vue'
+
 defineOptions({ layout: PosLayout })
 
 const props = defineProps({
@@ -13,6 +15,7 @@ const props = defineProps({
     debtPayments:  Object,  // paginated
     summary:       Object,
     itemBreakdown: Array,
+    tillSessions:  { type: Array, default: () => [] },
     users:         Array,
     canSeeAll:     Boolean,
     filters:       Object,
@@ -20,6 +23,7 @@ const props = defineProps({
 
 const { format } = useCurrency()
 const selectedUser = ref(props.filters.user_id || '')
+const activeSlipSession = ref(null)
 
 function doFilter() {
     router.get(route('pos.reports.end-of-day'), {
@@ -155,6 +159,85 @@ function fmtTime(val) {
                         <p class="text-xl sm:text-2xl font-bold text-rose-600 dark:text-rose-400 font-mono truncate" :title="format(summary.total_return_worth || 0)">
                             {{ format(summary.total_return_worth || 0) }}
                         </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Till Sessions & Cash Drawer Reconciliation (§7) ─────────────── -->
+            <div v-if="tillSessions && tillSessions.length">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-sm font-bold text-slate-800 dark:text-slate-300 flex items-center gap-2">
+                        <span>💼 Till Sessions & Cash Drawer Reconciliation</span>
+                        <span class="text-xs font-normal text-slate-500 dark:text-slate-400">({{ tillSessions.length }} Shifts Today)</span>
+                    </h2>
+
+                    <Link
+                        :href="route('pos.till.sessions.index')"
+                        class="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                    >
+                        <span>View All Till History →</span>
+                    </Link>
+                </div>
+
+                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden shadow-xs">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs min-w-[750px]">
+                            <thead class="bg-slate-100 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
+                                <tr>
+                                    <th class="text-left px-4 py-2.5 font-bold">Shift ID</th>
+                                    <th class="text-left px-4 py-2.5 font-bold">Cashier</th>
+                                    <th class="text-left px-4 py-2.5 font-bold">Opened</th>
+                                    <th class="text-left px-4 py-2.5 font-bold">Status</th>
+                                    <th class="text-right px-4 py-2.5 font-bold">Opening Float</th>
+                                    <th class="text-right px-4 py-2.5 font-bold">Cash Sales</th>
+                                    <th class="text-right px-4 py-2.5 font-bold">Expected Cash</th>
+                                    <th class="text-right px-4 py-2.5 font-bold">Counted Cash</th>
+                                    <th class="text-right px-4 py-2.5 font-bold">Variance</th>
+                                    <th class="text-center px-4 py-2.5 font-bold">Slip</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 dark:divide-slate-700/60">
+                                <tr v-for="ts in tillSessions" :key="ts.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition">
+                                    <td class="px-4 py-2.5 font-mono font-bold text-slate-900 dark:text-white">#{{ ts.id }}</td>
+                                    <td class="px-4 py-2.5 font-semibold text-slate-800 dark:text-slate-200">{{ ts.cashier?.name || 'Staff' }}</td>
+                                    <td class="px-4 py-2.5 font-mono text-slate-500">{{ dayjs(ts.opened_at).format('HH:mm') }}</td>
+                                    <td class="px-4 py-2.5">
+                                        <span :class="[
+                                            'px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
+                                            ts.status === 'open'
+                                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300'
+                                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                                        ]">
+                                            {{ ts.status }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-2.5 text-right font-mono font-semibold">{{ format(ts.opening_amount) }}</td>
+                                    <td class="px-4 py-2.5 text-right font-mono text-emerald-600 dark:text-emerald-400 font-semibold">+{{ format(ts.summary?.cash_sales || 0) }}</td>
+                                    <td class="px-4 py-2.5 text-right font-mono font-bold text-slate-900 dark:text-white">{{ format(ts.expected_amount ?? ts.summary?.expected_cash ?? 0) }}</td>
+                                    <td class="px-4 py-2.5 text-right font-mono font-bold">{{ ts.closing_amount !== null && ts.closing_amount !== undefined ? format(ts.closing_amount) : '—' }}</td>
+                                    <td class="px-4 py-2.5 text-right font-mono font-bold">
+                                        <span v-if="ts.status === 'closed'" :class="[
+                                            'px-1.5 py-0.5 rounded text-[11px]',
+                                            ts.variance == 0 ? 'text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50' :
+                                            ts.variance < 0 ? 'text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/50' : 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/50'
+                                        ]">
+                                            {{ ts.variance > 0 ? '+' : '' }}{{ format(ts.variance) }}
+                                        </span>
+                                        <span v-else class="text-slate-400 text-[10px]">Open Shift</span>
+                                    </td>
+                                    <td class="px-4 py-2.5 text-center">
+                                        <button
+                                            type="button"
+                                            @click="activeSlipSession = ts"
+                                            class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-[11px] font-bold cursor-pointer transition"
+                                            title="Preview Till Slip"
+                                        >
+                                            🧾 Slip
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -298,5 +381,13 @@ function fmtTime(val) {
             </div>
 
         </div>
+
+        <!-- Slip Modal Preview -->
+        <TillSlipModal
+            v-if="activeSlipSession"
+            :session="activeSlipSession"
+            :summary="activeSlipSession.summary"
+            @close="activeSlipSession = null"
+        />
     </div>
 </template>

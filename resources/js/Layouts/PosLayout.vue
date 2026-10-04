@@ -108,6 +108,7 @@ const allNavLinks = [
         perm: 'canViewReports',
         children: [
             { label: 'Dashboard',      route: 'pos.reports.index',        match: 'Reports/Index' },
+            { label: 'Till Sessions',  route: 'pos.till.sessions.index',  match: 'Reports/TillSessions', perm: 'canViewEndOfDay' },
             { label: 'Sales Report',   route: 'pos.reports.daily-sales',  match: 'Reports/DailySales' },
             { label: 'Expenses',       route: 'pos.reports.expenses',     match: 'Reports/Expenses', perm: 'canViewExpenseReports' },
             { label: 'Returned Items', route: 'pos.reports.returns',      match: 'Reports/Returns' },

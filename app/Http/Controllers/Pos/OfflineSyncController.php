@@ -124,6 +124,8 @@ class OfflineSyncController extends Controller
                 'tax_percentage'          => (float) $settings->tax_percentage,
                 'is_imei_enabled'         => (bool) $settings->is_imei_enabled,
                 'is_price_editable'       => (bool) $settings->is_price_editable,
+                'require_till_opening'    => (bool) ($settings->require_till_opening ?? true),
+                'print_till_slip'         => (bool) ($settings->print_till_slip ?? false),
                 'receipt_paper_size'      => $settings->receipt_paper_size ?: '80mm',
                 'receipt_copies'          => (int) ($settings->receipt_copies ?: 1),
                 'business_name'           => $branch->name,
@@ -131,15 +133,24 @@ class OfflineSyncController extends Controller
                 'business_contact_number' => $branch->phone,
                 'business_email'          => $branch->email,
             ],
-            'items'           => $items,
-            'available_imeis' => $availableImeis,
-            'customers'       => $customers,
-            'categories'      => $categories,
-            'activeDiscount'  => $activeDiscount,
-            'item_discounts'  => $itemDiscounts,
-            'discount_groups' => $discountGroups,
-            'quick_access'    => \App\Services\QuickAccessService::getQuickAccessData($branch),
-            'server_time'     => now()->toIso8601String(),
+            'items'               => $items,
+            'available_imeis'     => $availableImeis,
+            'customers'           => $customers,
+            'categories'          => $categories,
+            'activeDiscount'      => $activeDiscount,
+            'item_discounts'      => $itemDiscounts,
+            'discount_groups'     => $discountGroups,
+            'quick_access'        => \App\Services\QuickAccessService::getQuickAccessData($branch),
+            'active_till_session' => Auth::id() && ($till = \App\Services\TillSessionService::getActiveSession(Auth::id(), $branch->id)) ? [
+                'id'             => $till->id,
+                'branch_id'      => $till->branch_id,
+                'cashier_id'     => $till->cashier_id,
+                'opening_amount' => (float) $till->opening_amount,
+                'opened_at'      => $till->opened_at?->toIso8601String(),
+                'status'         => $till->status,
+                'summary'        => $till->calculateSummary(),
+            ] : null,
+            'server_time'         => now()->toIso8601String(),
         ]);
     }
 
@@ -155,25 +166,49 @@ class OfflineSyncController extends Controller
         }
 
         $data = $request->validate([
-            'sales'   => 'nullable|array',
-            'sale'    => 'nullable|array',
+            'sales'         => 'nullable|array',
+            'sale'          => 'nullable|array',
+            'till_sessions' => 'nullable|array',
+            'till_session'  => 'nullable|array',
         ]);
 
-        $queuedSales = $data['sales'] ?? ($data['sale'] ? [$data['sale']] : []);
+        $queuedSales = $data['sales'] ?? (isset($data['sale']) ? [$data['sale']] : []);
+        $queuedTillSessions = $data['till_sessions'] ?? (isset($data['till_session']) ? [$data['till_session']] : []);
 
-        if (empty($queuedSales)) {
+        if (empty($queuedSales) && empty($queuedTillSessions)) {
             return response()->json([
-                'message' => 'No offline sales provided for sync.',
-                'results' => [],
+                'message'      => 'No offline records provided for sync.',
+                'results'      => [],
+                'till_results' => [],
             ]);
         }
 
-        $results = OfflineSyncService::syncBatch($queuedSales, $branch);
+        // 1. First sync any pending till sessions so subsequent sales link to them
+        $tillResults = [];
+        foreach ($queuedTillSessions as $sessionData) {
+            try {
+                $tillResults[] = OfflineSyncService::syncSingleTillSession($sessionData, $branch);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error("Failed to sync offline till session: " . $e->getMessage());
+                $tillResults[] = [
+                    'offline_session_id' => $sessionData['offline_session_id'] ?? null,
+                    'status'             => 'failed',
+                    'error'              => $e->getMessage(),
+                ];
+            }
+        }
+
+        // 2. Then sync queued sales
+        $results = [];
+        if (!empty($queuedSales)) {
+            $results = OfflineSyncService::syncBatch($queuedSales, $branch);
+        }
 
         return response()->json([
-            'message' => 'Offline sales synchronized successfully.',
-            'count'   => count($results),
-            'results' => $results,
+            'message'      => 'Offline records synchronized successfully.',
+            'count'        => count($results),
+            'results'      => $results,
+            'till_results' => $tillResults,
         ]);
     }
 }
