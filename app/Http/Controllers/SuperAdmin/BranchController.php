@@ -365,6 +365,24 @@ class BranchController extends Controller
                 'created_at'  => $log->created_at?->format('d M Y, h:i A'),
             ]);
 
+        // ── 6. Commerce Integration (E-commerce Link) ─────────────────────────
+        $commerceIntegration = \App\Modules\CommerceIntegration\Models\CommerceIntegration::where('branch_id', $branch->id)
+            ->with(['tokens' => fn ($q) => $q->latest()->limit(1)])
+            ->first();
+
+        $ecommerceCapabilityEnabled = $branch->organization ? (bool) $branch->organization->hasFeature('feature_ecommerce_integration') : false;
+
+        $commerceStats = null;
+        if ($commerceIntegration) {
+            $commerceStats = [
+                'total_reservations' => $commerceIntegration->reservations()->count(),
+                'active_reservations' => $commerceIntegration->reservations()->active()->count(),
+                'confirmed_reservations' => $commerceIntegration->reservations()->where('status', 'confirmed')->count(),
+                'mappings_count' => $commerceIntegration->mappings()->count(),
+                'movements_count' => $commerceIntegration->movements()->count(),
+            ];
+        }
+
         return Inertia::render('SuperAdmin/Branches/Show', [
             'branch' => [
                 'id'         => $branch->id,
@@ -400,6 +418,24 @@ class BranchController extends Controller
             'categories'           => $categories,
             'recent_sales'         => $recentSales,
             'activity_logs'        => $activityLogs,
+            'commerce_integration' => $commerceIntegration ? [
+                'id' => $commerceIntegration->id,
+                'client_id' => $commerceIntegration->client_id,
+                'api_base_url' => url('/api/commerce/v1'),
+                'name' => $commerceIntegration->name,
+                'platform' => $commerceIntegration->platform,
+                'status' => $commerceIntegration->status,
+                'webhook_url' => $commerceIntegration->webhook_url,
+                'settings' => $commerceIntegration->settings,
+                'last_synced_at' => $commerceIntegration->last_synced_at?->format('d M Y, h:i A'),
+                'created_at' => $commerceIntegration->created_at?->format('d M Y, h:i A'),
+                'has_token' => $commerceIntegration->tokens()->exists(),
+                'last_token_used_at' => $commerceIntegration->tokens()->latest()->first()?->last_used_at?->format('d M Y, h:i A'),
+                'stats' => $commerceStats,
+            ] : null,
+            'commerce_api_base_url' => url('/api/commerce/v1'),
+            'ecommerce_capability_enabled' => $ecommerceCapabilityEnabled,
+            'new_commerce_token' => session('new_commerce_token'),
             'filters'              => [
                 'item_search'      => $search,
                 'sales_search'     => $salesSearch,

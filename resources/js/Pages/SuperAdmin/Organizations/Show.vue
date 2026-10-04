@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Head, Link, useForm, router } from '@inertiajs/vue3'
 import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
 
@@ -14,9 +14,65 @@ const props = defineProps({
     subscription: Object,
     subscriptionHistories: Array,
     pricingPlans: Array,
+    ecommerceStats: Object,
+    ecommerceReservations: Array,
+    ecommerceMovements: Array,
+    ecommerceMappings: Array,
 })
 
 const activeTab = ref('branches')
+const ecommerceSubTab = ref('reservations')
+const ecommerceBranchFilter = ref('all')
+
+const filteredEcommerceReservations = computed(() => {
+    if (ecommerceBranchFilter.value === 'all') return props.ecommerceReservations || []
+    return (props.ecommerceReservations || []).filter(r => r.branch_id == ecommerceBranchFilter.value)
+})
+
+const filteredEcommerceMovements = computed(() => {
+    if (ecommerceBranchFilter.value === 'all') return props.ecommerceMovements || []
+    return (props.ecommerceMovements || []).filter(m => m.branch_id == ecommerceBranchFilter.value)
+})
+
+const filteredEcommerceMappings = computed(() => {
+    if (ecommerceBranchFilter.value === 'all') return props.ecommerceMappings || []
+    return (props.ecommerceMappings || []).filter(map => map.branch_id == ecommerceBranchFilter.value)
+})
+
+// Ecommerce Subtabs Pagination (15 items per page)
+const resPerPage = 15
+const resPage = ref(1)
+const movPerPage = 15
+const movPage = ref(1)
+const mapPerPage = 15
+const mapPage = ref(1)
+
+watch([ecommerceBranchFilter, ecommerceSubTab], () => {
+    resPage.value = 1
+    movPage.value = 1
+    mapPage.value = 1
+})
+
+const paginatedEcommerceReservations = computed(() => {
+    const list = filteredEcommerceReservations.value
+    const start = (resPage.value - 1) * resPerPage
+    return list.slice(start, start + resPerPage)
+})
+const totalResPages = computed(() => Math.ceil(filteredEcommerceReservations.value.length / resPerPage) || 1)
+
+const paginatedEcommerceMovements = computed(() => {
+    const list = filteredEcommerceMovements.value
+    const start = (movPage.value - 1) * movPerPage
+    return list.slice(start, start + movPerPage)
+})
+const totalMovPages = computed(() => Math.ceil(filteredEcommerceMovements.value.length / movPerPage) || 1)
+
+const paginatedEcommerceMappings = computed(() => {
+    const list = filteredEcommerceMappings.value
+    const start = (mapPage.value - 1) * mapPerPage
+    return list.slice(start, start + mapPerPage)
+})
+const totalMapPages = computed(() => Math.ceil(filteredEcommerceMappings.value.length / mapPerPage) || 1)
 
 // Subscription Management Form
 const defaultPlanId = props.subscription?.pricing_plan_id || (props.pricingPlans?.[2]?.id || props.pricingPlans?.[0]?.id || '')
@@ -325,6 +381,17 @@ const submitResetPassword = () => {
                 <span>📋 Audit & Activity History</span>
                 <span class="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold">
                     {{ activityLogs.length }}
+                </span>
+            </button>
+
+            <button
+                @click="activeTab = 'ecommerce'"
+                :class="activeTab === 'ecommerce' ? 'border-theme text-theme font-bold' : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+                class="px-4 py-2.5 text-xs border-b-2 transition cursor-pointer flex items-center gap-1.5"
+            >
+                <span>🛍️ Ecommerce Activity</span>
+                <span class="px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold">
+                    {{ ecommerceStats?.connected_branches_count || 0 }} linked
                 </span>
             </button>
         </div>
@@ -829,6 +896,378 @@ const submitResetPassword = () => {
 
                 <div v-else class="p-6 text-center text-xs text-slate-500 italic">
                     No historical changes recorded yet for this organization.
+                </div>
+            </div>
+        </div>
+
+        <!-- ── TAB 5: Ecommerce Activity Aggregation (§3.1) ────────────────── -->
+        <div v-if="activeTab === 'ecommerce'" class="space-y-6">
+            <!-- Stats Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div class="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+                    <span class="text-xs text-slate-500 font-medium">Connected Branches</span>
+                    <div class="text-xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
+                        {{ ecommerceStats?.connected_branches_count || 0 }} / {{ branches.length }}
+                    </div>
+                    <span class="text-[10px] text-slate-400">Store-linked branches</span>
+                </div>
+                <div class="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+                    <span class="text-xs text-slate-500 font-medium">Active Stock Holds</span>
+                    <div class="text-xl font-black text-amber-600 dark:text-amber-400 mt-1">
+                        {{ ecommerceStats?.active_reservations_count || 0 }}
+                    </div>
+                    <span class="text-[10px] text-amber-500">Pending checkout holds</span>
+                </div>
+                <div class="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+                    <span class="text-xs text-slate-500 font-medium">Confirmed Orders</span>
+                    <div class="text-xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                        {{ ecommerceStats?.confirmed_orders_count || 0 }}
+                    </div>
+                    <span class="text-[10px] text-emerald-500">Fulfilled sales</span>
+                </div>
+                <div class="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs">
+                    <span class="text-xs text-slate-500 font-medium">Mapped Products</span>
+                    <div class="text-xl font-black text-slate-900 dark:text-white mt-1">
+                        {{ ecommerceStats?.active_mappings_count || 0 }}
+                    </div>
+                    <span class="text-[10px] text-slate-400">Live online sync</span>
+                </div>
+                <div class="p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs col-span-2 sm:col-span-1">
+                    <span class="text-xs text-slate-500 font-medium">Inventory Logs</span>
+                    <div class="text-xl font-black text-purple-600 dark:text-purple-400 mt-1">
+                        {{ ecommerceStats?.total_movements_count || 0 }}
+                    </div>
+                    <span class="text-[10px] text-slate-400">All stock events</span>
+                </div>
+            </div>
+
+            <!-- Subtab Navigation & Branch Filter -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xs overflow-hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800 gap-3">
+                    <div class="flex items-center gap-2">
+                        <button
+                            @click="ecommerceSubTab = 'reservations'"
+                            :class="ecommerceSubTab === 'reservations' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+                            class="px-3 py-1.5 rounded-xl text-xs transition cursor-pointer"
+                        >
+                            🕒 Reservations ({{ filteredEcommerceReservations.length }})
+                        </button>
+                        <button
+                            @click="ecommerceSubTab = 'movements'"
+                            :class="ecommerceSubTab === 'movements' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+                            class="px-3 py-1.5 rounded-xl text-xs transition cursor-pointer"
+                        >
+                            📦 Movements ({{ filteredEcommerceMovements.length }})
+                        </button>
+                        <button
+                            @click="ecommerceSubTab = 'mappings'"
+                            :class="ecommerceSubTab === 'mappings' ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'"
+                            class="px-3 py-1.5 rounded-xl text-xs transition cursor-pointer"
+                        >
+                            🔗 Mappings ({{ filteredEcommerceMappings.length }})
+                        </button>
+                    </div>
+
+                    <!-- Branch Selector -->
+                    <div class="flex items-center gap-2 text-xs">
+                        <span class="text-slate-400 font-medium">Filter Branch:</span>
+                        <select
+                            v-model="ecommerceBranchFilter"
+                            class="px-3 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 text-xs focus:ring-2 focus:ring-indigo-500"
+                        >
+                            <option value="all">All Branches (Aggregated)</option>
+                            <option v-for="b in branches" :key="b.id" :value="b.id">
+                                {{ b.name }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Sub-tab 1: Reservations -->
+                <div v-if="ecommerceSubTab === 'reservations'" class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                        <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
+                            <tr>
+                                <th class="px-4 py-3">Branch</th>
+                                <th class="px-4 py-3">Order Ref</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Items</th>
+                                <th class="px-4 py-3">Total Qty</th>
+                                <th class="px-4 py-3">Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            <tr v-for="res in paginatedEcommerceReservations" :key="res.id" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                                <td class="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">
+                                    {{ res.branch_name }}
+                                </td>
+                                <td class="px-4 py-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                                    {{ res.external_order_reference }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span
+                                        :class="{
+                                            'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400': res.status === 'confirmed',
+                                            'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400': res.status === 'pending',
+                                            'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400': res.status === 'released'
+                                        }"
+                                        class="px-2 py-0.5 rounded-full text-[10px] font-bold capitalize"
+                                    >
+                                        {{ res.status }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <div class="space-y-0.5 max-w-xs">
+                                        <div v-for="item in res.items" :key="item.name" class="truncate text-[11px]">
+                                            {{ item.quantity }}x {{ item.name }}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-3 font-mono font-bold">{{ res.total_qty }}</td>
+                                <td class="px-4 py-3 text-slate-400 whitespace-nowrap text-[11px]">
+                                    {{ res.created_at ? new Date(res.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' }}
+                                </td>
+                            </tr>
+                            <tr v-if="!filteredEcommerceReservations.length">
+                                <td colspan="6" class="px-4 py-8 text-center text-slate-400 italic">
+                                    No reservations found for this selection.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Reservations Pagination Footer -->
+                    <div v-if="filteredEcommerceReservations.length > 0" class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 bg-slate-50/50 dark:bg-slate-800/40">
+                        <div>
+                            Showing <span class="font-bold text-slate-800 dark:text-slate-200">{{ ((resPage - 1) * resPerPage) + 1 }}</span> to <span class="font-bold text-slate-800 dark:text-slate-200">{{ Math.min(resPage * resPerPage, filteredEcommerceReservations.length) }}</span> of <span class="font-bold text-slate-800 dark:text-slate-200">{{ filteredEcommerceReservations.length }}</span> reservations
+                        </div>
+                        <div v-if="totalResPages > 1" class="flex items-center gap-1">
+                            <button
+                                type="button"
+                                @click="resPage = Math.max(1, resPage - 1)"
+                                :disabled="resPage <= 1"
+                                class="px-2.5 py-1 rounded-md text-xs font-semibold transition border cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+                            >
+                                &laquo; Previous
+                            </button>
+                            <template v-for="p in totalResPages" :key="p">
+                                <button
+                                    v-if="p === 1 || p === totalResPages || Math.abs(p - resPage) <= 1"
+                                    type="button"
+                                    @click="resPage = p"
+                                    class="px-2.5 py-1 rounded-md text-xs font-semibold transition border cursor-pointer"
+                                    :class="p === resPage
+                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'"
+                                >
+                                    {{ p }}
+                                </button>
+                                <span
+                                    v-else-if="(p === 2 && resPage > 3) || (p === totalResPages - 1 && resPage < totalResPages - 2)"
+                                    class="px-1 text-slate-400 select-none"
+                                >
+                                    ...
+                                </span>
+                            </template>
+                            <button
+                                type="button"
+                                @click="resPage = Math.min(totalResPages, resPage + 1)"
+                                :disabled="resPage >= totalResPages"
+                                class="px-2.5 py-1 rounded-md text-xs font-semibold transition border cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+                            >
+                                Next &raquo;
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-tab 2: Movements -->
+                <div v-if="ecommerceSubTab === 'movements'" class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                        <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
+                            <tr>
+                                <th class="px-4 py-3">Branch</th>
+                                <th class="px-4 py-3">Type</th>
+                                <th class="px-4 py-3">Item Details</th>
+                                <th class="px-4 py-3">Qty Change</th>
+                                <th class="px-4 py-3">Stock Impact</th>
+                                <th class="px-4 py-3">Order Ref</th>
+                                <th class="px-4 py-3">Timestamp</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            <tr v-for="m in paginatedEcommerceMovements" :key="m.id" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                                <td class="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">
+                                    {{ m.branch_name }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                        {{ m.type }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 font-medium text-slate-900 dark:text-white">
+                                    {{ m.item_name }}
+                                </td>
+                                <td class="px-4 py-3 font-mono font-bold" :class="m.quantity < 0 ? 'text-rose-600' : 'text-emerald-600'">
+                                    {{ m.quantity }}
+                                </td>
+                                <td class="px-4 py-3 font-mono text-[11px] text-slate-400">
+                                    <span v-if="m.previous_stock !== null && m.current_stock !== null">
+                                        {{ m.previous_stock }} &rarr; {{ m.current_stock }}
+                                    </span>
+                                    <span v-else>—</span>
+                                </td>
+                                <td class="px-4 py-3 font-mono text-slate-600 dark:text-slate-300 font-bold">
+                                    {{ m.external_reference || '—' }}
+                                </td>
+                                <td class="px-4 py-3 text-slate-400 whitespace-nowrap text-[11px]">
+                                    {{ m.created_at ? new Date(m.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—' }}
+                                </td>
+                            </tr>
+                            <tr v-if="!filteredEcommerceMovements.length">
+                                <td colspan="7" class="px-4 py-8 text-center text-slate-400 italic">
+                                    No inventory movements found for this selection.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Movements Pagination Footer -->
+                    <div v-if="filteredEcommerceMovements.length > 0" class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 bg-slate-50/50 dark:bg-slate-800/40">
+                        <div>
+                            Showing <span class="font-bold text-slate-800 dark:text-slate-200">{{ ((movPage - 1) * movPerPage) + 1 }}</span> to <span class="font-bold text-slate-800 dark:text-slate-200">{{ Math.min(movPage * movPerPage, filteredEcommerceMovements.length) }}</span> of <span class="font-bold text-slate-800 dark:text-slate-200">{{ filteredEcommerceMovements.length }}</span> movements
+                        </div>
+                        <div v-if="totalMovPages > 1" class="flex items-center gap-1">
+                            <button
+                                type="button"
+                                @click="movPage = Math.max(1, movPage - 1)"
+                                :disabled="movPage <= 1"
+                                class="px-2.5 py-1 rounded-md text-xs font-semibold transition border cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+                            >
+                                &laquo; Previous
+                            </button>
+                            <template v-for="p in totalMovPages" :key="p">
+                                <button
+                                    v-if="p === 1 || p === totalMovPages || Math.abs(p - movPage) <= 1"
+                                    type="button"
+                                    @click="movPage = p"
+                                    class="px-2.5 py-1 rounded-md text-xs font-semibold transition border cursor-pointer"
+                                    :class="p === movPage
+                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'"
+                                >
+                                    {{ p }}
+                                </button>
+                                <span
+                                    v-else-if="(p === 2 && movPage > 3) || (p === totalMovPages - 1 && movPage < totalMovPages - 2)"
+                                    class="px-1 text-slate-400 select-none"
+                                >
+                                    ...
+                                </span>
+                            </template>
+                            <button
+                                type="button"
+                                @click="movPage = Math.min(totalMovPages, movPage + 1)"
+                                :disabled="movPage >= totalMovPages"
+                                class="px-2.5 py-1 rounded-md text-xs font-semibold transition border cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+                            >
+                                Next &raquo;
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sub-tab 3: Mappings -->
+                <div v-if="ecommerceSubTab === 'mappings'" class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                        <thead class="bg-slate-50 dark:bg-slate-800/80 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
+                            <tr>
+                                <th class="px-4 py-3">Branch</th>
+                                <th class="px-4 py-3">Item Name</th>
+                                <th class="px-4 py-3">Price</th>
+                                <th class="px-4 py-3">Online Product ID</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Registered / Last Seen</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            <tr v-for="map in paginatedEcommerceMappings" :key="map.id" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                                <td class="px-4 py-3 font-semibold text-slate-800 dark:text-slate-200">
+                                    {{ map.branch_name }}
+                                </td>
+                                <td class="px-4 py-3 font-medium text-slate-900 dark:text-white">
+                                    {{ map.item_name }}
+                                </td>
+                                <td class="px-4 py-3 font-mono font-bold">
+                                    ₦{{ (parseFloat(map.price) || 0).toLocaleString('en-NG', { minimumFractionDigits: 2 }) }}
+                                </td>
+                                <td class="px-4 py-3 font-mono text-indigo-600 dark:text-indigo-400 font-bold">
+                                    {{ map.external_product_id }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    <span
+                                        :class="map.is_active ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'"
+                                        class="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                                    >
+                                        {{ map.is_active ? 'Active Online' : 'Inactive' }}
+                                    </span>
+                                </td>
+                                <td class="px-4 py-3 text-slate-400 text-[11px] whitespace-nowrap">
+                                    <div>Reg: {{ map.registered_at ? new Date(map.registered_at).toLocaleDateString() : '—' }}</div>
+                                    <div>Seen: {{ map.last_seen_at ? new Date(map.last_seen_at).toLocaleDateString() : '—' }}</div>
+                                </td>
+                            </tr>
+                            <tr v-if="!filteredEcommerceMappings.length">
+                                <td colspan="6" class="px-4 py-8 text-center text-slate-400 italic">
+                                    No item mappings found for this selection.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+
+                    <!-- Mappings Pagination Footer -->
+                    <div v-if="filteredEcommerceMappings.length > 0" class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 bg-slate-50/50 dark:bg-slate-800/40">
+                        <div>
+                            Showing <span class="font-bold text-slate-800 dark:text-slate-200">{{ ((mapPage - 1) * mapPerPage) + 1 }}</span> to <span class="font-bold text-slate-800 dark:text-slate-200">{{ Math.min(mapPage * mapPerPage, filteredEcommerceMappings.length) }}</span> of <span class="font-bold text-slate-800 dark:text-slate-200">{{ filteredEcommerceMappings.length }}</span> mappings
+                        </div>
+                        <div v-if="totalMapPages > 1" class="flex items-center gap-1">
+                            <button
+                                type="button"
+                                @click="mapPage = Math.max(1, mapPage - 1)"
+                                :disabled="mapPage <= 1"
+                                class="px-2.5 py-1 rounded-md text-xs font-semibold transition border cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+                            >
+                                &laquo; Previous
+                            </button>
+                            <template v-for="p in totalMapPages" :key="p">
+                                <button
+                                    v-if="p === 1 || p === totalMapPages || Math.abs(p - mapPage) <= 1"
+                                    type="button"
+                                    @click="mapPage = p"
+                                    class="px-2.5 py-1 rounded-md text-xs font-semibold transition border cursor-pointer"
+                                    :class="p === mapPage
+                                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'"
+                                >
+                                    {{ p }}
+                                </button>
+                                <span
+                                    v-else-if="(p === 2 && mapPage > 3) || (p === totalMapPages - 1 && mapPage < totalMapPages - 2)"
+                                    class="px-1 text-slate-400 select-none"
+                                >
+                                    ...
+                                </span>
+                            </template>
+                            <button
+                                type="button"
+                                @click="mapPage = Math.min(totalMapPages, mapPage + 1)"
+                                :disabled="mapPage >= totalMapPages"
+                                class="px-2.5 py-1 rounded-md text-xs font-semibold transition border cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+                            >
+                                Next &raquo;
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

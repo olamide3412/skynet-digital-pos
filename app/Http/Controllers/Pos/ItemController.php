@@ -359,7 +359,11 @@ class ItemController extends Controller
             Storage::disk('public')->delete($item->image_path);
         }
         $itemName = $item->item_name;
-        $item->delete();
+        try {
+            $item->delete();
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
+        }
         \App\Services\ActivityLogger::item("Deleted item '{$itemName}'", $branch->id);
         return redirect()->route('pos.items.index', ['branch' => $branch->slug])
             ->with('success', 'Item deleted.');

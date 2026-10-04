@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { Head, Link, useForm, router } from '@inertiajs/vue3'
 import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
+import EcommerceTab from './Partials/EcommerceTab.vue'
 
 defineOptions({ layout: SuperAdminLayout })
 
@@ -23,6 +24,10 @@ const props = defineProps({
     categories: Array,
     recent_sales: Object,
     activity_logs: Object,
+    commerce_integration: Object,
+    commerce_api_base_url: String,
+    ecommerce_capability_enabled: Boolean,
+    new_commerce_token: String,
     filters: Object,
 })
 
@@ -957,6 +962,16 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                     class="py-3 px-3.5 border-b-2 font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
                 >
                     <span>📜 Audit Log</span>
+                </button>
+                <button
+                    @click="setActiveTab('ecommerce')"
+                    :class="activeTab === 'ecommerce'
+                        ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
+                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300'"
+                    class="py-3 px-3.5 border-b-2 font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+                >
+                    <span>🛒 E-Commerce</span>
+                    <span v-if="commerce_integration" class="w-2 h-2 rounded-full" :class="commerce_integration.status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'"></span>
                 </button>
             </nav>
         </div>
@@ -2260,6 +2275,19 @@ const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', 
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════════════════ -->
+        <!-- TAB 7: E-COMMERCE INTEGRATION                                          -->
+        <!-- ══════════════════════════════════════════════════════════════════════ -->
+        <div v-show="activeTab === 'ecommerce'" class="space-y-6">
+            <EcommerceTab
+                :branch="branch"
+                :commerce-integration="commerce_integration"
+                :ecommerce-capability-enabled="ecommerce_capability_enabled"
+                :commerce-api-base-url="commerce_api_base_url"
+                :new-commerce-token="new_commerce_token"
+            />
         </div>
 
         <!-- ── MODAL: SLUG CHANGE WARNING ────────────────────────────────────── -->

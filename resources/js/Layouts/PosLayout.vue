@@ -154,6 +154,14 @@ const allNavLinks = [
         always: true,
     },
     {
+        label: 'Ecommerce Activity',
+        route: 'pos.ecommerce-activity.index',
+        match: 'EcommerceActivity/Index',
+        icon:  'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z',
+        perm:  'view_ecommerce_activity',
+        feature: 'feature_ecommerce_integration',
+    },
+    {
         label: 'Settings',
         route: 'pos.settings.index',
         match: 'Settings/Index',

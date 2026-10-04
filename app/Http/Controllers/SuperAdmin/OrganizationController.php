@@ -10,6 +10,10 @@ use App\Models\PricingPlan;
 use App\Models\Subscription;
 use App\Models\SubscriptionHistory;
 use App\Models\User;
+use App\Modules\CommerceIntegration\Models\CommerceIntegration;
+use App\Modules\CommerceIntegration\Models\CommerceInventoryMovement;
+use App\Modules\CommerceIntegration\Models\CommerceItemMapping;
+use App\Modules\CommerceIntegration\Models\CommerceReservation;
 use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -179,6 +183,81 @@ class OrganizationController extends Controller
             ->orderBy('sort_order')
             ->get(['id', 'name', 'tagline', 'first_year_price', 'renewal_price', 'branches_limit', 'users_limit', 'ai_credits']);
 
+        // Aggregate Ecommerce Activity across all branches belonging to this organization (§3.1)
+        $branchIds = $organization->branches()->pluck('id')->toArray();
+        $now = now();
+
+        $ecommerceStats = [
+            'connected_branches_count'  => CommerceIntegration::whereIn('branch_id', $branchIds)->count(),
+            'active_reservations_count' => CommerceReservation::whereIn('branch_id', $branchIds)->where('status', 'pending')->where('expires_at', '>', $now)->count(),
+            'confirmed_orders_count'    => CommerceReservation::whereIn('branch_id', $branchIds)->where('status', 'confirmed')->count(),
+            'active_mappings_count'     => CommerceItemMapping::whereIn('branch_id', $branchIds)->where('is_active', true)->count(),
+            'total_movements_count'     => CommerceInventoryMovement::whereIn('branch_id', $branchIds)->count(),
+        ];
+
+        $ecommerceReservations = CommerceReservation::whereIn('branch_id', $branchIds)
+            ->with(['items.item', 'branch:id,name,slug', 'integration:id,platform,name'])
+            ->latest()
+            ->limit(200)
+            ->get()
+            ->map(fn($r) => [
+                'id'                       => $r->id,
+                'branch_id'                => $r->branch_id,
+                'branch_name'              => $r->branch?->name,
+                'external_order_reference' => $r->external_order_reference,
+                'status'                   => $r->status,
+                'expires_at'               => $r->expires_at?->toIso8601String(),
+                'confirmed_at'             => $r->confirmed_at?->toIso8601String(),
+                'released_at'              => $r->released_at?->toIso8601String(),
+                'created_at'               => $r->created_at?->toIso8601String(),
+                'total_qty'                => $r->items->sum('quantity'),
+                'items'                    => $r->items->map(fn($i) => [
+                    'name'     => $i->item?->item_name ?? ('Item #' . $i->item_id),
+                    'quantity' => $i->quantity,
+                ]),
+            ]);
+
+        $ecommerceMovements = CommerceInventoryMovement::whereIn('branch_id', $branchIds)
+            ->with(['item:id,item_name,barcode_number', 'branch:id,name,slug'])
+            ->latest()
+            ->limit(200)
+            ->get()
+            ->map(fn($m) => [
+                'id'                 => $m->id,
+                'branch_id'          => $m->branch_id,
+                'branch_name'        => $m->branch?->name,
+                'type'               => $m->type,
+                'item_name'          => $m->item?->item_name ?? ('Item #' . $m->item_id),
+                'barcode'            => $m->item?->barcode_number,
+                'quantity'           => $m->quantity,
+                'previous_stock'     => $m->previous_stock,
+                'current_stock'      => $m->current_stock,
+                'external_reference' => $m->external_reference,
+                'notes'              => $m->notes,
+                'created_at'         => $m->created_at?->toIso8601String(),
+            ]);
+
+        $ecommerceMappings = CommerceItemMapping::whereIn('branch_id', $branchIds)
+            ->with(['item:id,item_name,barcode_number,price', 'branch:id,name,slug', 'integration:id,platform,name'])
+            ->latest('updated_at')
+            ->limit(200)
+            ->get()
+            ->map(fn($map) => [
+                'id'                  => $map->id,
+                'branch_id'           => $map->branch_id,
+                'branch_name'         => $map->branch?->name,
+                'item_name'           => $map->item?->item_name ?? ('Item #' . $map->item_id),
+                'barcode'             => $map->item?->barcode_number,
+                'price'               => $map->item?->price,
+                'external_product_id' => $map->external_product_id,
+                'external_variant_id' => $map->external_variant_id,
+                'external_sku'        => $map->external_sku,
+                'is_active'           => (bool) $map->is_active,
+                'registered_at'       => $map->registered_at?->toIso8601String(),
+                'last_seen_at'        => $map->last_seen_at?->toIso8601String(),
+                'unregistered_at'     => $map->unregistered_at?->toIso8601String(),
+            ]);
+
         return Inertia::render('SuperAdmin/Organizations/Show', [
             'organization'          => $organization,
             'branches'              => $branches,
@@ -188,6 +267,10 @@ class OrganizationController extends Controller
             'subscription'          => $subscriptionData,
             'subscriptionHistories' => $subscriptionHistories,
             'pricingPlans'          => $pricingPlans,
+            'ecommerceStats'        => $ecommerceStats,
+            'ecommerceReservations' => $ecommerceReservations,
+            'ecommerceMovements'    => $ecommerceMovements,
+            'ecommerceMappings'     => $ecommerceMappings,
         ]);
     }
 

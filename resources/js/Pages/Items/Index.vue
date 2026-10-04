@@ -572,7 +572,7 @@ function expiryClass(date) {
                             <tr
                                 v-for="item in items.data"
                                 :key="item.id"
-                                class="hover:bg-slate-50/80 dark:hover:bg-slate-700/30 transition group"
+                                class="hover:bg-slate-100/70 dark:hover:bg-slate-700/60 transition group"
                                 :class="selectedIds.includes(item.id) ? 'bg-indigo-50/50 dark:bg-indigo-900/20' : ''"
                             >
                                 <!-- Checkbox -->
@@ -655,7 +655,7 @@ function expiryClass(date) {
 
                                 <!-- Actions (Edit, Quick Duplicate, Clone & Edit, Delete) - Sticky Right Column -->
                                 <td
-                                    class="px-4 py-3 text-right whitespace-nowrap sticky right-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-slate-50 dark:group-hover:bg-slate-700/80 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.08)] dark:shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.3)]"
+                                    class="px-4 py-3 text-right whitespace-nowrap sticky right-0 z-10 bg-white dark:bg-slate-800 group-hover:bg-slate-100/70 dark:group-hover:bg-slate-700/60 shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.08)] dark:shadow-[-6px_0_12px_-4px_rgba(0,0,0,0.3)]"
                                     :class="selectedIds.includes(item.id) ? 'bg-indigo-50 dark:bg-indigo-950/80' : ''"
                                 >
                                     <div class="flex items-center justify-end gap-1">

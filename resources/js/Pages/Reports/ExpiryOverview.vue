@@ -369,7 +369,7 @@ function exportExcel() {
                             <tr
                                 v-for="item in all_tracked_items"
                                 :key="item.id"
-                                class="hover:bg-slate-50/80 dark:hover:bg-slate-750 transition"
+                                class="hover:bg-slate-100/70 dark:hover:bg-slate-700/60 transition"
                             >
                                 <td class="px-4 py-3 font-semibold text-slate-900 dark:text-white">
                                     <Link :href="route('pos.items.edit', { branch: branchSlug, item: item.id })" class="hover:underline text-emerald-600 dark:text-emerald-400 font-bold">
@@ -456,7 +456,7 @@ function exportExcel() {
                             <tr
                                 v-for="issue in sync_issues?.data"
                                 :key="issue.id"
-                                class="hover:bg-slate-50/80 dark:hover:bg-slate-750 transition"
+                                class="hover:bg-slate-100/70 dark:hover:bg-slate-700/60 transition"
                             >
                                 <td class="px-4 py-3 font-mono text-slate-500 dark:text-slate-400">
                                     {{ dayjs(issue.created_at).format('DD MMM YYYY, HH:mm') }}
@@ -531,7 +531,7 @@ function exportExcel() {
                         <tr
                             v-for="batch in batches?.data"
                             :key="batch.id"
-                            class="hover:bg-slate-50/80 dark:hover:bg-slate-750 transition"
+                            class="hover:bg-slate-100/70 dark:hover:bg-slate-700/60 transition"
                         >
                             <td class="px-4 py-3 font-semibold text-slate-900 dark:text-white">
                                 {{ batch.batch_label || '—' }}

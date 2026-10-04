@@ -395,7 +395,7 @@ function onBatchCreated() {
                             <tr
                                 v-for="batch in batches.data"
                                 :key="batch.id"
-                                class="hover:bg-slate-50/80 dark:hover:bg-slate-750 transition"
+                                class="hover:bg-slate-100/70 dark:hover:bg-slate-700/60 transition"
                             >
                                 <td class="px-5 py-3.5">
                                     <span class="font-bold text-slate-900 dark:text-white">

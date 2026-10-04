@@ -385,7 +385,7 @@ function formatDaysBadge(days) {
                             <tr
                                 v-for="item in items.data"
                                 :key="item.id"
-                                class="hover:bg-slate-50 dark:hover:bg-slate-750 transition"
+                                class="hover:bg-slate-100/70 dark:hover:bg-slate-700/60 transition"
                             >
                                 <td class="px-4 py-3.5">
                                     <div class="font-bold text-slate-900 dark:text-white">

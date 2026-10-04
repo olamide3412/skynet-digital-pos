@@ -39,6 +39,7 @@ class BranchRoleController extends Controller
         'canViewExpenseReports'=> 'View Expenses Report',
         'canViewExpiryReport'  => 'View Item Expiry Report',
         'canViewBatchExpiryReport' => 'View Batch Expiry Report',
+        'view_ecommerce_activity'  => 'View Ecommerce Activity',
     ];
 
     public function index(Branch $branch)

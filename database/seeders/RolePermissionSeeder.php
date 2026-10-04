@@ -36,6 +36,7 @@ class RolePermissionSeeder extends Seeder
         'canEditSettings',
         'canResetPassword',
         'canViewReorderPoints',
+        'view_ecommerce_activity',
     ];
 
     public function run(): void

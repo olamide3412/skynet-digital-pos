@@ -191,7 +191,13 @@ class BranchItemController extends Controller
             abort(403, 'Item does not belong to this branch.');
         }
 
-        $item->delete();
+        try {
+            $item->delete();
+        } catch (\Throwable $e) {
+            return redirect()
+                ->route('superadmin.branches.items.index', $branch->slug)
+                ->with('error', $e->getMessage());
+        }
 
         return redirect()
             ->route('superadmin.branches.items.index', $branch->slug)

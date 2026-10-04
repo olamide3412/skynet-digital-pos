@@ -232,9 +232,16 @@ class RoleService
             'canViewExpenseReports'=> static::canViewExpenseReports(),
             'canViewExpiryReport'      => static::canViewExpiryReport(),
             'canViewBatchExpiryReport' => static::canViewBatchExpiryReport(),
+            'view_ecommerce_activity'  => static::canViewEcommerceActivity(),
+            'canViewEcommerceActivity' => static::canViewEcommerceActivity(),
             'isBranchAdmin'            => $user?->isBranchAdmin() ?? false,
             'isSuperAdmin'             => $user?->isSuperAdmin() ?? false,
         ];
+    }
+
+    public static function canViewEcommerceActivity(): bool
+    {
+        return static::can('view_ecommerce_activity') || static::can('canViewEcommerceActivity');
     }
 
     public static function canViewReorderPoints(): bool

@@ -141,7 +141,9 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn() => $request->session()->get('success'),
                 'error' => fn() => $request->session()->get('error'),
                 'message' => fn() => $request->session()->get('message'),
+                'new_commerce_token' => fn() => $request->session()->get('new_commerce_token'),
             ],
+            'new_commerce_token' => fn() => $request->session()->get('new_commerce_token'),
 
             // ── Dynamic Global System Configuration ───────────────────────────
             'system_config' => fn() => [

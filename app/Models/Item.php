@@ -49,12 +49,50 @@ class Item extends Model
 
         static::creating($recalculate);
         static::updating($recalculate);
+
+        static::deleting(function (Item $item) {
+            // Guard 1: Active reservations
+            $hasActiveReservation = \Illuminate\Support\Facades\DB::table('commerce_reservation_items')
+                ->join('commerce_reservations', 'commerce_reservation_items.commerce_reservation_id', '=', 'commerce_reservations.id')
+                ->where('commerce_reservation_items.item_id', $item->id)
+                ->where('commerce_reservations.status', 'pending')
+                ->where('commerce_reservations.expires_at', '>', now())
+                ->exists();
+
+            if ($hasActiveReservation) {
+                throw new \RuntimeException("Cannot delete item '{$item->name}' because it has active e-commerce reservations.");
+            }
+
+            // Guard 2: Active catalog mappings
+            $hasMapping = \Illuminate\Support\Facades\DB::table('commerce_item_mappings')
+                ->where('item_id', $item->id)
+                ->exists();
+
+            if ($hasMapping) {
+                throw new \RuntimeException("Cannot delete item '{$item->name}' because it is mapped to an external e-commerce catalog. Please remove the e-commerce mapping first.");
+            }
+        });
     }
 
     // ── Accessors ─────────────────────────────────────────────────────────────
     public function getImageUrlAttribute(): ?string
     {
         return $this->image_path ? asset('storage/' . $this->image_path) : null;
+    }
+
+    public function getNameAttribute(): string
+    {
+        return (string) ($this->attributes['item_name'] ?? '');
+    }
+
+    public function getBarcodeAttribute(): ?string
+    {
+        return $this->attributes['barcode_number'] ?? null;
+    }
+
+    public function getDescriptionAttribute(): ?string
+    {
+        return $this->attributes['item_description'] ?? null;
     }
 
     /** Alias for price to support code referencing unit_price. */

@@ -48,6 +48,12 @@ const navLinks = [
         icon: 'M13 10V3L4 14h7v7l9-11h-7z',
     },
     {
+        label: 'Ecommerce Activity',
+        route: 'org.ecommerce-activity.index',
+        match: 'Org/EcommerceActivity',
+        icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z',
+    },
+    {
         label: 'Activity Logs',
         route: 'org.activity-logs',
         match: 'Org/ActivityLogs',

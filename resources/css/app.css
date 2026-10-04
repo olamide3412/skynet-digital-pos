@@ -12,6 +12,9 @@
 @source '../**/*.vue';
 
 @theme {
+    --color-slate-750: #243042;
+    --color-slate-850: #172033;
+    --color-gray-750: #29303d;
     --color-primary: var(--color-theme, #7B00FF);
     --color-primary-dark: var(--color-theme-hover, #6200cc);
 

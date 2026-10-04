@@ -716,7 +716,7 @@ function dispatchNotifications() {
                             <tr
                                 v-for="item in paginatedPredictions"
                                 :key="`${item.branch_id}_${item.item_id}`"
-                                class="hover:bg-slate-50/80 dark:hover:bg-slate-750 transition"
+                                class="hover:bg-slate-100/70 dark:hover:bg-slate-700/60 transition"
                             >
                                 <!-- Branch Name for Super Admin -->
                                 <td v-if="isSuperAdmin && !branch" class="px-4 py-3">

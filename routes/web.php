@@ -198,6 +198,16 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             Route::delete('/{item}',     [\App\Http\Controllers\SuperAdmin\BranchItemController::class, 'destroy'])->name('destroy');
         });
 
+        // Branch Ecommerce Integration Management
+        Route::prefix('branches/{branch}/ecommerce')->name('branches.ecommerce.')->group(function () {
+            Route::get('/',                      [\App\Http\Controllers\SuperAdmin\CommerceIntegrationController::class, 'show'])->name('show');
+            Route::post('/',                     [\App\Http\Controllers\SuperAdmin\CommerceIntegrationController::class, 'store'])->name('store');
+            Route::put('/settings',              [\App\Http\Controllers\SuperAdmin\CommerceIntegrationController::class, 'updateSettings'])->name('settings.update');
+            Route::post('/regenerate-token',     [\App\Http\Controllers\SuperAdmin\CommerceIntegrationController::class, 'regenerateToken'])->name('regenerate-token');
+            Route::post('/toggle-status',        [\App\Http\Controllers\SuperAdmin\CommerceIntegrationController::class, 'toggleStatus'])->name('toggle-status');
+            Route::delete('/',                   [\App\Http\Controllers\SuperAdmin\CommerceIntegrationController::class, 'destroy'])->name('destroy');
+        });
+
         // System Settings & Dynamic Theme Configuration
         Route::get('/settings',  [\App\Http\Controllers\SuperAdmin\SystemSettingController::class, 'index'])->name('settings.index');
         Route::post('/settings', [\App\Http\Controllers\SuperAdmin\SystemSettingController::class, 'update'])->name('settings.update');
@@ -313,6 +323,13 @@ Route::prefix('org')->name('org.')->group(function () {
         // Organization Activity & Audit Logs
         Route::get('/activity-logs',        [\App\Http\Controllers\Org\OrgActivityLogController::class, 'index'])->name('activity-logs');
         Route::get('/activity-logs/export', [\App\Http\Controllers\Org\OrgActivityLogController::class, 'export'])->name('activity-logs.export');
+
+        // Organization Ecommerce Activity (Multi-Branch Aggregated Visibility & Corrective Actions)
+        Route::prefix('ecommerce-activity')->name('ecommerce-activity.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Org\OrgEcommerceActivityController::class, 'index'])->name('index');
+            Route::post('/reservations/{reservation}/release', [\App\Http\Controllers\Org\OrgEcommerceActivityController::class, 'releaseReservation'])->name('reservations.release');
+            Route::post('/mappings/{mapping}/deactivate', [\App\Http\Controllers\Org\OrgEcommerceActivityController::class, 'deactivateMapping'])->name('mappings.deactivate');
+        });
     });
 });
 
@@ -684,6 +701,16 @@ Route::prefix('{branch}')
         // Branch Audit & Error Logs
         Route::get('/reports/logs', [\App\Http\Controllers\Pos\BranchLogController::class, 'index'])
             ->name('reports.logs');
+
+        // Branch Ecommerce Activity (Operational Visibility & Narrow Actions)
+        Route::prefix('ecommerce-activity')->name('ecommerce-activity.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Pos\EcommerceActivityController::class, 'index'])
+                ->name('index');
+            Route::post('/reservations/{reservation}/release', [\App\Http\Controllers\Pos\EcommerceActivityController::class, 'releaseReservation'])
+                ->name('reservations.release');
+            Route::post('/mappings/{mapping}/deactivate', [\App\Http\Controllers\Pos\EcommerceActivityController::class, 'deactivateMapping'])
+                ->name('mappings.deactivate');
+        });
 
         // JSON API
         Route::prefix('api')->name('api.')->group(function () {
