@@ -97,6 +97,12 @@ const navLinks = computed(() => {
         icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
     },
     {
+        label: 'Plan Capabilities',
+        route: 'superadmin.plan-capabilities.index',
+        match: 'SuperAdmin/PlanCapabilities',
+        icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4',
+    },
+    {
         label: 'System Activity & Logs',
         route: 'superadmin.logs.index',
         match: 'SuperAdmin/Logs',

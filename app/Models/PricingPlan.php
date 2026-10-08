@@ -38,4 +38,9 @@ class PricingPlan extends Model
     {
         return $this->hasOne(PlanCapability::class, 'pricing_plan_id');
     }
+
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class, 'pricing_plan_id');
+    }
 }

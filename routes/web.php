@@ -287,6 +287,12 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             Route::put('/included-items',             [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'updateIncludedItems'])->name('included-items.update');
             Route::put('/value-props',                [\App\Http\Controllers\SuperAdmin\PricingPlanController::class, 'updateValueProps'])->name('value-props.update');
         });
+
+        // Plan Capabilities & System Limits (Operational Engine)
+        Route::prefix('plan-capabilities')->name('plan-capabilities.')->group(function () {
+            Route::get('/',              [\App\Http\Controllers\SuperAdmin\PlanCapabilityController::class, 'index'])->name('index');
+            Route::put('/{plan}',        [\App\Http\Controllers\SuperAdmin\PlanCapabilityController::class, 'update'])->name('update');
+        });
     });
 });
 
