@@ -33,6 +33,7 @@ const form = useForm({
     batch_tracking_enabled:        !!props.settings.batch_tracking_enabled,
     expiry_alert_days:             props.settings.expiry_alert_days ?? 30,
     is_imei_enabled:               !!props.settings.is_imei_enabled,
+    is_camera_scanner_enabled:     props.settings.is_camera_scanner_enabled !== false && props.settings.is_camera_scanner_enabled !== 0,
     is_grid_separate_rows:         !!props.settings.is_grid_separate_rows,
     is_cart_auto_scroll_highlight: props.settings.is_cart_auto_scroll_highlight !== false && props.settings.is_cart_auto_scroll_highlight !== 0,
     is_show_buy_price:             !!props.settings.is_show_buy_price,
@@ -538,6 +539,14 @@ function submit() {
                             <div>
                                 <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable IMEI / Device ID Tracking</span>
                                 <p class="text-xs text-slate-500 dark:text-slate-400">Allows unit-level serial & IMEI tracking for gadgets, phones, laptops, and electronics</p>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" v-model="form.is_camera_scanner_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                            <div>
+                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Camera Barcode Scanner</span>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Shows a camera scan button on the POS selling page for cashiers using phones, tablets, or webcams</p>
                             </div>
                         </label>
 

@@ -74,6 +74,7 @@ class SettingsController extends Controller
             'batch_tracking_enabled'   => 'nullable|boolean',
             'expiry_alert_days'        => 'nullable|integer|min:1',
             'is_imei_enabled'               => 'nullable|boolean',
+            'is_camera_scanner_enabled'     => 'nullable|boolean',
             'is_grid_separate_rows'         => 'nullable|boolean',
             'is_cart_auto_scroll_highlight' => 'nullable|boolean',
             'is_show_buy_price'             => 'nullable|boolean',

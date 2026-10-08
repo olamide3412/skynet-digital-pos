@@ -606,6 +606,7 @@ class BranchController extends Controller
             'batch_tracking_enabled'   => 'nullable|boolean',
             'expiry_alert_days'        => 'nullable|integer|min:1',
             'is_imei_enabled'          => 'required|boolean',
+            'is_camera_scanner_enabled' => 'nullable|boolean',
             'is_show_buy_price'        => 'required|boolean',
             'is_use_profit_percentage' => 'required|boolean',
             'wholesale_profit_percent' => 'nullable|numeric|min:0',

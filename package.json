@@ -24,6 +24,7 @@
         "@fortawesome/vue-fontawesome": "^3.1.1",
         "@inertiajs/vue3": "^2.1.2",
         "@vueup/vue-quill": "^1.2.0",
+        "@zxing/library": "^0.21.3",
         "aos": "^3.0.0-beta.6",
         "chart.js": "^4.5.1",
         "dayjs": "^1.11.13",

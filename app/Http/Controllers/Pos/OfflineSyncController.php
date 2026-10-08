@@ -123,6 +123,7 @@ class OfflineSyncController extends Controller
                 'is_tax_enabled'          => (bool) $settings->is_tax_enabled,
                 'tax_percentage'          => (float) $settings->tax_percentage,
                 'is_imei_enabled'         => (bool) $settings->is_imei_enabled,
+                'is_camera_scanner_enabled' => (bool) ($settings->is_camera_scanner_enabled ?? true),
                 'is_price_editable'       => (bool) $settings->is_price_editable,
                 'require_till_opening'    => (bool) ($settings->require_till_opening ?? true),
                 'print_till_slip'         => (bool) ($settings->print_till_slip ?? false),

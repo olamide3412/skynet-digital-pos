@@ -37,8 +37,8 @@ export function useBarcodeScanner({ onScan, getPurchaseType, isEnabled }) {
     }
 
     async function processBarcode(code) {
-        const cleanCode = code.trim()
-        if (!cleanCode || cleanCode.length < 2) return
+        const cleanCode = String(code || '').trim()
+        if (!cleanCode || cleanCode.length < 2) return { success: false, code: cleanCode, reason: 'too_short' }
 
         const purchaseType = getPurchaseType ? getPurchaseType() : 'Consumer'
 
@@ -48,7 +48,7 @@ export function useBarcodeScanner({ onScan, getPurchaseType, isEnabled }) {
             if (matchedItem) {
                 playBeepSound()
                 if (onScan) onScan(matchedItem)
-                return
+                return { success: true, item: matchedItem, source: 'local' }
             }
         } catch (e) {
             console.warn('Local barcode lookup error:', e)
@@ -67,12 +67,15 @@ export function useBarcodeScanner({ onScan, getPurchaseType, isEnabled }) {
                     if (matchedItem) {
                         playBeepSound()
                         if (onScan) onScan(matchedItem)
+                        return { success: true, item: matchedItem, source: 'server' }
                     }
                 }
             } catch (err) {
                 console.warn('Online barcode lookup failed:', err)
             }
         }
+
+        return { success: false, code: cleanCode, reason: 'not_found' }
     }
 
     function handleKeydown(e) {

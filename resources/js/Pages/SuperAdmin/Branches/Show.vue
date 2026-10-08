@@ -342,6 +342,7 @@ const settingsForm = useForm({
     batch_tracking_enabled: Boolean(props.settings?.batch_tracking_enabled),
     expiry_alert_days: Number(props.settings?.expiry_alert_days ?? 30),
     is_imei_enabled: Boolean(props.settings?.is_imei_enabled),
+    is_camera_scanner_enabled: Boolean(props.settings?.is_camera_scanner_enabled ?? true),
     is_show_buy_price: Boolean(props.settings?.is_show_buy_price),
     is_use_profit_percentage: Boolean(props.settings?.is_use_profit_percentage),
     wholesale_profit_percent: Number(props.settings?.wholesale_profit_percent ?? 0),
@@ -1706,6 +1707,13 @@ const toggleTillOpening = () => router.post(route('superadmin.branches.toggle-ti
                         <label class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
                             <input v-model="settingsForm.is_imei_enabled" type="checkbox" class="w-4 h-4 rounded text-indigo-600" />
                             <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Enable Serial / IMEI Tracking</span>
+                        </label>
+                        <label class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
+                            <input v-model="settingsForm.is_camera_scanner_enabled" type="checkbox" class="w-4 h-4 rounded text-indigo-600" />
+                            <div>
+                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">Camera Barcode Scanner</span>
+                                <p class="text-[10px] text-slate-400">Shows camera scan button on POS selling page for cashiers.</p>
+                            </div>
                         </label>
                         <label class="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 cursor-pointer">
                             <input v-model="settingsForm.is_check_expiration" type="checkbox" class="w-4 h-4 rounded text-indigo-600" />

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onUnmounted, inject } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, inject, defineAsyncComponent } from 'vue'
 import { usePage, router } from '@inertiajs/vue3'
 import { useCartStore } from '@/Stores/cart'
 import { usePosSettingsStore } from '@/Stores/posSettings'
@@ -25,6 +25,8 @@ import TillSlipModal from '@/Components/POS/TillSlipModal.vue'
 import { useBarcodeScanner } from '@/Composables/useBarcodeScanner'
 import { useOfflineSync } from '@/Composables/useOfflineSync'
 import { getLocalQuickAccessData, getLocalActiveTillSession } from '@/Services/offlineDb'
+
+const CameraBarcodeScanner = defineAsyncComponent(() => import('@/Components/POS/CameraBarcodeScanner.vue'))
 
 defineOptions({ layout: PosLayout })
 
@@ -319,10 +321,13 @@ const isAnyModalOpen = computed(() =>
     showOfflineModal.value ||
     showOpenTillModal.value ||
     showTillManagementModal.value ||
-    showTillSlipModal.value
+    showTillSlipModal.value ||
+    showCameraScanner.value
 )
 
-useBarcodeScanner({
+const showCameraScanner = ref(false)
+
+const { processBarcode } = useBarcodeScanner({
     onScan: (item) => {
         cart.addItem(item)
         nextTick(() => productSearch.value?.focus())
@@ -425,6 +430,7 @@ function handleKeydown(e) {
             }
             showTillManagementModal.value = false
             showTillSlipModal.value = false
+            showCameraScanner.value = false
             break
     }
 }
@@ -434,6 +440,19 @@ onMounted(() => {
     document.addEventListener('webkitfullscreenchange', checkFullscreen)
     document.addEventListener('mozfullscreenchange', checkFullscreen)
     document.addEventListener('MSFullscreenChange', checkFullscreen)
+
+    // Pre-warm camera scanner bundle in idle time for offline readiness
+    if (typeof window !== 'undefined') {
+        if ('requestIdleCallback' in window) {
+            window.requestIdleCallback(() => {
+                import('@/Components/POS/CameraBarcodeScanner.vue')
+            })
+        } else {
+            setTimeout(() => {
+                import('@/Components/POS/CameraBarcodeScanner.vue')
+            }, 3000)
+        }
+    }
 })
 onUnmounted(() => {
     window.removeEventListener('keydown', handleKeydown)
@@ -653,6 +672,7 @@ const productSearchMobile = ref(null)
                             :purchase-type="cart.purchaseType"
                             :settings="settings"
                             @select="(item) => { cart.addItem(item); productSearch?.focus?.() }"
+                            @open-camera-scanner="showCameraScanner = true"
                         />
                     </div>
                     <div class="flex-1 overflow-y-auto p-3">
@@ -913,6 +933,7 @@ const productSearchMobile = ref(null)
                         :purchase-type="cart.purchaseType"
                         :settings="settings"
                         @select="(item) => cart.addItem(item)"
+                        @open-camera-scanner="showCameraScanner = true"
                     />
                 </div>
 
@@ -1286,6 +1307,13 @@ const productSearchMobile = ref(null)
             :summary="slipSession.summary"
             :settings="settings"
             @close="showTillSlipModal = false; slipSession = null"
+        />
+
+        <!-- Camera Barcode Scanner Overlay -->
+        <CameraBarcodeScanner
+            :is-open="showCameraScanner"
+            :process-barcode-fn="processBarcode"
+            @close="showCameraScanner = false; nextTick(() => productSearch?.value?.focus?.())"
         />
 
         <!-- Offline Sales Queue Inspection Modal -->
