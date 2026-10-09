@@ -37,12 +37,20 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except:[
             'flw-webhook',
             'webhook/paystack',
-            'webhook/flutterwave'
+            'webhook/flutterwave',
+            'webhooks/payments/*',
+            'webhooks/payments*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, \Throwable $e, \Illuminate\Http\Request $request) {
             $status = $response->getStatusCode();
+
+            if ($status === 419) {
+                return back()->with([
+                    'error' => 'Your page session expired. A new session has been started, please submit again.',
+                ]);
+            }
 
             // Only intercept standard HTTP error codes for Inertia/web requests
             if (in_array($status, [403, 404, 500, 503]) && !$request->expectsJson()) {

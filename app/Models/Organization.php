@@ -96,6 +96,14 @@ class Organization extends Model
         return $this->hasMany(AiCreditTopup::class)->latest('id');
     }
 
+    /**
+     * Online subscription payments (renewals and upgrades) for this organization.
+     */
+    public function subscriptionPayments(): HasMany
+    {
+        return $this->hasMany(SubscriptionPayment::class)->latest('id');
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     public function isActive(): bool

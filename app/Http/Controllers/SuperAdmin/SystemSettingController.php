@@ -103,6 +103,7 @@ class SystemSettingController extends Controller
             'companyLogoUrl'       => $logoPath ? asset('storage/' . $logoPath) : null,
             'themePalettes'        => self::THEME_PALETTES,
             'mailSettings'         => \App\Services\MailConfigService::getSettings(),
+            'paymentSettings'      => \App\Services\Payment\PaymentConfigService::getSettings(),
         ]);
     }
 
@@ -170,6 +171,46 @@ class SystemSettingController extends Controller
         ]);
 
         $result = \App\Services\MailConfigService::sendTestEmail($data['test_email']);
+
+        if (!$result['success']) {
+            return back()->with('error', $result['message']);
+        }
+
+        return back()->with('success', $result['message']);
+    }
+
+    public function updatePayment(Request $request)
+    {
+        $data = $request->validate([
+            'is_sandbox'             => 'required|boolean',
+            'flutterwave_enabled'    => 'required|boolean',
+            'flutterwave_public_key' => 'nullable|string|max:255',
+            'flutterwave_secret_key' => 'nullable|string|max:500',
+            'flutterwave_secret_hash'=> 'nullable|string|max:255',
+            'paystack_enabled'       => 'required|boolean',
+            'paystack_public_key'    => 'nullable|string|max:255',
+            'paystack_secret_key'    => 'nullable|string|max:500',
+        ]);
+
+        \App\Services\Payment\PaymentConfigService::saveSettings($data);
+
+        \App\Services\ActivityLogger::setting('Updated payment gateway credentials and toggles (Flutterwave / Paystack)');
+
+        return back()->with('success', 'Payment gateway configuration saved successfully.');
+    }
+
+    public function testPaymentGateway(Request $request)
+    {
+        $data = $request->validate([
+            'gateway' => 'required|string|in:flutterwave,paystack',
+        ]);
+
+        $gateway = \App\Services\Payment\PaymentConfigService::getGateway($data['gateway']);
+        if (!$gateway) {
+            return back()->with('error', 'Unrecognized payment gateway.');
+        }
+
+        $result = $gateway->testConnection();
 
         if (!$result['success']) {
             return back()->with('error', $result['message']);

@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { useForm } from '@inertiajs/vue3'
+import { useForm, router } from '@inertiajs/vue3'
 import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
 
 defineOptions({ layout: SuperAdminLayout })
@@ -20,6 +20,7 @@ const props = defineProps({
     companyLogoUrl:       String,
     themePalettes:        Array,
     mailSettings:         Object,
+    paymentSettings:      Object,
 })
 
 const activeTab        = ref('branding')
@@ -84,6 +85,49 @@ function sendTestEmail() {
             testEmailForm.reset()
         }
     })
+}
+
+const paymentForm = useForm({
+    is_sandbox:              props.paymentSettings?.is_sandbox ?? false,
+    flutterwave_enabled:     props.paymentSettings?.flutterwave_enabled ?? false,
+    flutterwave_public_key:  props.paymentSettings?.flutterwave_public_key || '',
+    flutterwave_secret_key:  '',
+    flutterwave_secret_hash: props.paymentSettings?.flutterwave_secret_hash || '',
+    paystack_enabled:        props.paymentSettings?.paystack_enabled ?? false,
+    paystack_public_key:     props.paymentSettings?.paystack_public_key || '',
+    paystack_secret_key:     '',
+})
+
+const isTestingFlw = ref(false)
+const isTestingPs  = ref(false)
+const copiedWebhook = ref(null)
+
+function savePaymentSettings() {
+    paymentForm.post(route('superadmin.settings.payment'), {
+        preserveScroll: true,
+    })
+}
+
+function testGateway(gateway) {
+    const isFlw = gateway === 'flutterwave'
+    if (isFlw) isTestingFlw.value = true
+    else isTestingPs.value = true
+
+    router.post(route('superadmin.settings.payment.test'), { gateway }, {
+        preserveScroll: true,
+        onFinish: () => {
+            if (isFlw) isTestingFlw.value = false
+            else isTestingPs.value = false
+        }
+    })
+}
+
+function copyToClipboard(text, key) {
+    if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(text)
+        copiedWebhook.value = key
+        setTimeout(() => { copiedWebhook.value = null }, 2000)
+    }
 }
 
 const currentLuminousHex = computed(() => {
@@ -280,6 +324,19 @@ function submit() {
             >
                 <span>✉️</span>
                 <span>Email & SMTP Server</span>
+            </button>
+
+            <button
+                @click="activeTab = 'payment'"
+                :class="[
+                    'px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 whitespace-nowrap cursor-pointer',
+                    activeTab === 'payment'
+                        ? 'bg-theme text-white shadow-md'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+                ]"
+            >
+                <span>💳</span>
+                <span>Payment Gateways</span>
             </button>
         </div>
 
@@ -771,6 +828,227 @@ function submit() {
                         <span>{{ testEmailForm.processing ? 'Sending...' : 'Send Test' }}</span>
                     </button>
                 </form>
+            </div>
+        </div>
+
+        <!-- ── TAB 5: PAYMENT GATEWAYS CONFIGURATION ─────────────────────────── -->
+        <div v-show="activeTab === 'payment'" class="space-y-6">
+            <!-- Global Payment Config Header & Test Mode Toggle -->
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
+                        <span>Payment Gateways Architecture</span>
+                    </h2>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
+                        Configure payment providers for AI credit purchases and future subscription plan renewals. You can enable Flutterwave, Paystack, or both simultaneously. Clients will choose their preferred gateway at checkout.
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-3 bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" v-model="paymentForm.is_sandbox" class="sr-only peer" />
+                        <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                    </label>
+                    <div>
+                        <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Sandbox / Test Mode</span>
+                        <span class="text-[10px] text-slate-500 dark:text-slate-400 block">{{ paymentForm.is_sandbox ? 'Transactions are in test mode' : 'Live production mode' }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gateways Grid: Flutterwave & Paystack -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- ── FLUTTERWAVE CARD ──────────────────────────────────────── -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
+                    <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center font-black text-amber-600 text-sm">
+                                FLW
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <span>Flutterwave</span>
+                                    <span v-if="paymentSettings?.flutterwave_is_from_env" class="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                                        Active from .env
+                                    </span>
+                                </h3>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">Cards, bank transfers, mobile money, USSD</p>
+                            </div>
+                        </div>
+
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" v-model="paymentForm.flutterwave_enabled" class="sr-only peer" />
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Flutterwave Public Key</label>
+                            <input
+                                type="text"
+                                v-model="paymentForm.flutterwave_public_key"
+                                placeholder="FLWPUBK-xxxxxxxxxxxxxxxxxxxx"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                                <span>Flutterwave Secret Key</span>
+                                <span v-if="paymentSettings?.has_flutterwave_secret" class="text-emerald-600 dark:text-emerald-400 font-normal ml-1">
+                                    (Encrypted in storage. Leave blank to keep)
+                                </span>
+                            </label>
+                            <input
+                                type="password"
+                                v-model="paymentForm.flutterwave_secret_key"
+                                :placeholder="paymentSettings?.has_flutterwave_secret ? '••••••••••••••••••••••••••••••••' : 'FLWSECK-xxxxxxxxxxxxxxxxxxxx'"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Webhook Secret Hash (verif-hash)</label>
+                            <input
+                                type="text"
+                                v-model="paymentForm.flutterwave_secret_hash"
+                                placeholder="Custom secret hash set in your Flutterwave dashboard"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
+                            />
+                        </div>
+
+                        <!-- Webhook URL Display -->
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                            <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">Webhook Endpoint URL:</span>
+                            <div class="flex items-center justify-between gap-2">
+                                <code class="text-[11px] text-slate-800 dark:text-slate-200 font-mono break-all select-all">
+                                    {{ typeof window !== 'undefined' ? window.location.origin : '' }}/webhooks/payments/flutterwave
+                                </code>
+                                <button
+                                    type="button"
+                                    @click="copyToClipboard((typeof window !== 'undefined' ? window.location.origin : '') + '/webhooks/payments/flutterwave', 'flw')"
+                                    class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition flex items-center gap-1 cursor-pointer flex-shrink-0"
+                                >
+                                    <span>{{ copiedWebhook === 'flw' ? '✓ Copied' : 'Copy' }}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 flex items-center justify-between">
+                            <button
+                                type="button"
+                                @click="testGateway('flutterwave')"
+                                :disabled="isTestingFlw || !paymentSettings?.has_flutterwave_secret"
+                                class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                            >
+                                <svg v-if="isTestingFlw" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                                <span>{{ isTestingFlw ? 'Testing...' : 'Test FLW API' }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── PAYSTACK CARD ─────────────────────────────────────────── -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
+                    <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center font-black text-blue-600 text-sm">
+                                PST
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                    <span>Paystack</span>
+                                    <span v-if="paymentSettings?.paystack_is_from_env" class="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800">
+                                        Active from .env
+                                    </span>
+                                </h3>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">Cards, bank transfers, USSD, Apple Pay</p>
+                            </div>
+                        </div>
+
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" v-model="paymentForm.paystack_enabled" class="sr-only peer" />
+                            <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                        </label>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">Paystack Public Key</label>
+                            <input
+                                type="text"
+                                v-model="paymentForm.paystack_public_key"
+                                placeholder="pk_live_xxxxxxxxxxxxxxxxxxxx"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono"
+                            />
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-bold text-slate-700 dark:text-slate-300 block mb-1">
+                                <span>Paystack Secret Key</span>
+                                <span v-if="paymentSettings?.has_paystack_secret" class="text-emerald-600 dark:text-emerald-400 font-normal ml-1">
+                                    (Encrypted in storage. Leave blank to keep)
+                                </span>
+                            </label>
+                            <input
+                                type="password"
+                                v-model="paymentForm.paystack_secret_key"
+                                :placeholder="paymentSettings?.has_paystack_secret ? '••••••••••••••••••••••••••••••••' : 'sk_live_xxxxxxxxxxxxxxxxxxxx'"
+                                class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-mono"
+                            />
+                        </div>
+
+                        <div class="pt-2">
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                Paystack signs webhooks with HMAC-SHA512 using your Secret Key automatically.
+                            </p>
+                        </div>
+
+                        <!-- Webhook URL Display -->
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                            <span class="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1">Webhook Endpoint URL:</span>
+                            <div class="flex items-center justify-between gap-2">
+                                <code class="text-[11px] text-slate-800 dark:text-slate-200 font-mono break-all select-all">
+                                    {{ typeof window !== 'undefined' ? window.location.origin : '' }}/webhooks/payments/paystack
+                                </code>
+                                <button
+                                    type="button"
+                                    @click="copyToClipboard((typeof window !== 'undefined' ? window.location.origin : '') + '/webhooks/payments/paystack', 'ps')"
+                                    class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition flex items-center gap-1 cursor-pointer flex-shrink-0"
+                                >
+                                    <span>{{ copiedWebhook === 'ps' ? '✓ Copied' : 'Copy' }}</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="pt-2 flex items-center justify-between">
+                            <button
+                                type="button"
+                                @click="testGateway('paystack')"
+                                :disabled="isTestingPs || !paymentSettings?.has_paystack_secret"
+                                class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold transition flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                            >
+                                <svg v-if="isTestingPs" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                                <span>{{ isTestingPs ? 'Testing...' : 'Test Paystack API' }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Save Payment Configuration Button -->
+            <div class="flex justify-end pt-2">
+                <button
+                    type="button"
+                    @click="savePaymentSettings"
+                    :disabled="paymentForm.processing"
+                    class="px-8 py-3 rounded-xl bg-theme hover:bg-theme-dark text-white text-xs font-bold shadow-lg transition cursor-pointer disabled:opacity-50 flex items-center gap-2"
+                >
+                    <svg v-if="paymentForm.processing" class="animate-spin w-4 h-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/></svg>
+                    <span>{{ paymentForm.processing ? 'Saving Gateways...' : 'Save Payment Gateways Configuration' }}</span>
+                </button>
             </div>
         </div>
 

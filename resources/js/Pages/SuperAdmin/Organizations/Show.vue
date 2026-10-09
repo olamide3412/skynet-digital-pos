@@ -1,9 +1,11 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { Head, Link, useForm, router } from '@inertiajs/vue3'
+import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3'
 import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
 
 defineOptions({ layout: SuperAdminLayout })
+
+const page = usePage()
 
 const props = defineProps({
     organization: Object,
@@ -152,12 +154,20 @@ const userForm = useForm({
 })
 
 const submitCreateUser = () => {
-    userForm.post(route('superadmin.organizations.users.store', props.organization.id), {
-        onSuccess: () => {
-            showCreateUserModal.value = false
-            userForm.reset()
-        },
-    })
+    const token = page.props.csrf_token || (typeof document !== 'undefined' ? document.head.querySelector('meta[name="csrf-token"]')?.content : '') || ''
+    userForm
+        .transform((data) => ({
+            ...data,
+            _token: token,
+        }))
+        .post(route('superadmin.organizations.users.store', { organization: props.organization.id }), {
+            preserveScroll: true,
+            headers: token ? { 'X-CSRF-TOKEN': token } : {},
+            onSuccess: () => {
+                showCreateUserModal.value = false
+                userForm.reset()
+            },
+        })
 }
 
 // Toggle Admin User Status

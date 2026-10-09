@@ -102,6 +102,10 @@ Route::get('/login', function () {
 Route::post('/logout',     [AuthController::class, 'destroy'])->name('logout');
 Route::post('/pos/logout', [AuthController::class, 'destroy'])->name('pos.logout');
 
+// ── Payment Gateway Webhooks (CSRF Exempt) ────────────────────────────────────
+Route::post('/webhooks/payments/flutterwave', [\App\Http\Controllers\Payment\PaymentWebhookController::class, 'handleFlutterwave'])->name('webhooks.payments.flutterwave');
+Route::post('/webhooks/payments/paystack',    [\App\Http\Controllers\Payment\PaymentWebhookController::class, 'handlePaystack'])->name('webhooks.payments.paystack');
+
 /* ══════════════════════════════════════════════════════════════════════════════
  *  SUPER ADMIN PANEL — /superadmin/...
  * ══════════════════════════════════════════════════════════════════════════════ */
@@ -293,6 +297,22 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             Route::get('/',              [\App\Http\Controllers\SuperAdmin\PlanCapabilityController::class, 'index'])->name('index');
             Route::put('/{plan}',        [\App\Http\Controllers\SuperAdmin\PlanCapabilityController::class, 'update'])->name('update');
         });
+
+        // Payment Gateway Configuration
+        Route::post('settings/payment',      [\App\Http\Controllers\SuperAdmin\SystemSettingController::class, 'updatePayment'])->name('settings.payment');
+        Route::post('settings/payment/test', [\App\Http\Controllers\SuperAdmin\SystemSettingController::class, 'testPaymentGateway'])->name('settings.payment.test');
+
+        // AI Credit Packs Catalog Management
+        Route::resource('credit-packs', \App\Http\Controllers\SuperAdmin\AiCreditPackController::class)
+            ->except(['create', 'show', 'edit'])
+            ->names([
+                'index'   => 'credit-packs.index',
+                'store'   => 'credit-packs.store',
+                'update'  => 'credit-packs.update',
+                'destroy' => 'credit-packs.destroy',
+            ]);
+        Route::post('credit-packs/{creditPack}/toggle', [\App\Http\Controllers\SuperAdmin\AiCreditPackController::class, 'toggle'])
+            ->name('credit-packs.toggle');
     });
 });
 
@@ -342,6 +362,20 @@ Route::prefix('org')->name('org.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Org\OrgEcommerceActivityController::class, 'index'])->name('index');
             Route::post('/reservations/{reservation}/release', [\App\Http\Controllers\Org\OrgEcommerceActivityController::class, 'releaseReservation'])->name('reservations.release');
             Route::post('/mappings/{mapping}/deactivate', [\App\Http\Controllers\Org\OrgEcommerceActivityController::class, 'deactivateMapping'])->name('mappings.deactivate');
+        });
+
+        // Organization AI Credits & Payment
+        Route::prefix('credits')->name('credits.')->group(function () {
+            Route::get('/',          [\App\Http\Controllers\Org\OrgCreditController::class, 'index'])->name('index');
+            Route::post('/purchase', [\App\Http\Controllers\Org\OrgCreditController::class, 'purchase'])->name('purchase');
+            Route::get('/callback',  [\App\Http\Controllers\Org\OrgCreditController::class, 'callback'])->name('callback');
+        });
+
+        // Organization Subscription & Plans (Renewals & Upgrades)
+        Route::prefix('subscription')->name('subscription.')->group(function () {
+            Route::get('/',          [\App\Http\Controllers\Org\OrgSubscriptionController::class, 'index'])->name('index');
+            Route::post('/checkout', [\App\Http\Controllers\Org\OrgSubscriptionController::class, 'checkout'])->name('checkout');
+            Route::get('/callback',  [\App\Http\Controllers\Org\OrgSubscriptionController::class, 'callback'])->name('callback');
         });
     });
 });

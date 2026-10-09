@@ -294,6 +294,14 @@ createInertiaApp({
             .component('FlashMessages', FlashMessages)
             .component('font-awesome-icon', FontAwesomeIcon);
 
+        // Auto-recover from expired CSRF tokens / 419 responses seamlessly
+        router.on('invalid', (event) => {
+            if (event.detail.response?.status === 419) {
+                event.preventDefault();
+                window.location.reload();
+            }
+        });
+
         app.mount(el);
 
         // ── Dismiss Pre-Login Splash Screen smoothly on app mount ──

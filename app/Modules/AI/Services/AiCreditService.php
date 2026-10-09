@@ -2,6 +2,7 @@
 
 namespace App\Modules\AI\Services;
 
+use App\Models\AiCreditPack;
 use App\Models\AiCreditTopup;
 use App\Models\AiCreditUsage;
 use App\Models\Branch;
@@ -215,6 +216,106 @@ class AiCreditService
             'notes'             => $notes,
             'granted_by'        => $grantedBy?->id,
             'expires_at'        => $expiresAt,
+            'status'            => 'successful',
         ]);
+    }
+
+    /**
+     * Create a pending purchase topup record.
+     */
+    public static function createPendingPurchase(
+        Organization $organization,
+        AiCreditPack $pack,
+        string $gateway,
+        string $gatewayReference,
+        ?Branch $branch = null,
+        ?User $user = null
+    ): AiCreditTopup {
+        $subscription = $organization->subscription()->with('pricingPlan.capabilities')->first();
+        $poolType = $subscription?->pricingPlan?->capabilities?->ai_credit_pool_type ?? 'per_branch';
+
+        // For Starter / account-wide plans, force branch_id to null (shared org pool)
+        $targetBranchId = ($poolType === 'account_wide' || empty($branch)) ? null : $branch->id;
+
+        return AiCreditTopup::create([
+            'organization_id'   => $organization->id,
+            'branch_id'         => $targetBranchId,
+            'credit_pack_id'    => $pack->id,
+            'credits'           => $pack->credits,
+            'credits_remaining' => $pack->credits,
+            'amount_paid'       => $pack->price,
+            'currency'          => $pack->currency,
+            'gateway'           => $gateway,
+            'gateway_reference' => $gatewayReference,
+            'status'            => 'pending',
+            'type'              => 'addon_purchase',
+            'notes'             => "Purchased {$pack->name} via " . ucfirst($gateway),
+            'granted_by'        => $user?->id,
+            'expires_at'        => null, // Purchased credits never expire at month-end
+        ]);
+    }
+
+    /**
+     * Confirm a topup purchase idempotently.
+     */
+    public static function confirmPurchase(
+        string $gatewayReference,
+        ?string $transactionId = null,
+        ?array $metadata = null
+    ): ?AiCreditTopup {
+        return DB::transaction(function () use ($gatewayReference, $transactionId, $metadata) {
+            $topup = AiCreditTopup::where('gateway_reference', $gatewayReference)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$topup) {
+                return null;
+            }
+
+            // Mandatory Idempotency: if already successful, do not double-credit
+            if ($topup->status === 'successful') {
+                return $topup;
+            }
+
+            $topup->update([
+                'status' => 'successful',
+                'notes'  => $topup->notes . ($transactionId ? " (TxID: {$transactionId})" : ''),
+            ]);
+
+            \App\Services\ActivityLogger::credit(
+                "Confirmed AI credit pack purchase of {$topup->credits} credits via {$topup->gateway} (Ref: {$gatewayReference})",
+                $topup->branch_id,
+                ['organization_id' => $topup->organization_id, 'topup_id' => $topup->id]
+            );
+
+            return $topup;
+        });
+    }
+
+    /**
+     * Mark a topup purchase as failed.
+     */
+    public static function failPurchase(string $gatewayReference, ?string $reason = null): ?AiCreditTopup
+    {
+        return DB::transaction(function () use ($gatewayReference, $reason) {
+            $topup = AiCreditTopup::where('gateway_reference', $gatewayReference)
+                ->lockForUpdate()
+                ->first();
+
+            if (!$topup) {
+                return null;
+            }
+
+            if ($topup->status === 'successful') {
+                return $topup; // Cannot fail an already completed transaction
+            }
+
+            $topup->update([
+                'status' => 'failed',
+                'notes'  => $topup->notes . ($reason ? " [Failed: {$reason}]" : ' [Failed]'),
+            ]);
+
+            return $topup;
+        });
     }
 }

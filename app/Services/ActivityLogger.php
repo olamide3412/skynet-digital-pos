@@ -72,4 +72,9 @@ class ActivityLogger
     {
         return self::log('setting', $message, null, $details);
     }
+
+    public static function credit(string $message, ?int $branchId = null, ?array $details = null): ?PosLog
+    {
+        return self::log('credit', $message, $branchId, $details);
+    }
 }

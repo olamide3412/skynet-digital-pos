@@ -445,4 +445,37 @@ class PlanFeatureEnforcementTest extends TestCase
         $responseAllowed->assertRedirect(route('org.branches'));
         $this->assertEquals(3, $org->fresh()->branches()->count());
     }
+
+    public function test_superadmin_can_create_organization_admin_user(): void
+    {
+        $superAdmin = User::factory()->create([
+            'is_super_admin' => true,
+            'is_active'      => true,
+        ]);
+
+        $org = Organization::create([
+            'name'                => 'Org For Admin ' . uniqid(),
+            'status'              => 'active',
+            'can_create_branches' => true,
+        ]);
+
+        $username = 'org_adm_' . substr(uniqid(), 0, 8);
+        $email = 'adm_' . uniqid() . '@example.com';
+
+        $response = $this->actingAs($superAdmin)
+            ->post(route('superadmin.organizations.users.store', $org->id), [
+                'name'     => 'Jane Org Admin',
+                'username' => $username,
+                'email'    => $email,
+                'password' => 'secretPassword123!',
+            ]);
+
+        $response->assertSessionHasNoErrors();
+        $response->assertRedirect();
+
+        $createdUser = User::where('username', $username)->first();
+        $this->assertNotNull($createdUser);
+        $this->assertEquals($org->id, $createdUser->organization_id);
+        $this->assertTrue($createdUser->isOrganizationAdmin());
+    }
 }
