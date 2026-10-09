@@ -8,12 +8,12 @@ export const DUPLICATE_COOLDOWN_MS = 1500
  * Handles camera stream acquisition, hardware capabilities (torch, switch cameras),
  * native BarcodeDetector with @zxing/library fallback, and duplicate cooldown.
  */
-export function useCameraScanner({ onBarcodeDetected } = {}) {
+export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef } = {}) {
     const isSupported = typeof window !== 'undefined' &&
         Boolean(window.isSecureContext) &&
         Boolean(navigator?.mediaDevices?.getUserMedia)
 
-    const videoRef         = ref(null)
+    const videoRef         = externalVideoRef || ref(null)
     const isScanning       = ref(false)
     const isLoadingCamera  = ref(false)
     const errorState       = ref(null) // 'denied' | 'not_found' | 'busy' | 'unsupported' | 'stream_error'
@@ -180,6 +180,11 @@ export function useCameraScanner({ onBarcodeDetected } = {}) {
                 } else {
                     throw firstErr
                 }
+            }
+
+            if (!videoRef.value) {
+                // Brief pause if modal transition/teleport is still rendering into DOM
+                await new Promise(resolve => setTimeout(resolve, 100))
             }
 
             if (!videoRef.value) {

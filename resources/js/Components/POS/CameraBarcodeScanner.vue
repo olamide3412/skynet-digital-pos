@@ -23,7 +23,11 @@ const scanMode = ref('continuous')
 const lastResult = ref(null) // { success: boolean, name: string, code: string, timestamp: number }
 const flashActive = ref(false)
 
+// Video preview element ref
+const videoEl = ref(null)
+
 const scanner = useCameraScanner({
+    videoRef: videoEl,
     onBarcodeDetected: handleBarcodeDetected,
 })
 
@@ -206,7 +210,7 @@ onUnmounted(() => {
                 <div class="relative flex-1 flex items-center justify-center overflow-hidden">
                     <!-- Live HTML5 Video Element -->
                     <video
-                        ref="scanner.videoRef"
+                        ref="videoEl"
                         class="absolute inset-0 w-full h-full object-cover"
                         playsinline
                         muted
