@@ -20,6 +20,11 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
     const errorMessage     = ref('')
     const isTorchOn        = ref(false)
     const hasTorch         = ref(false)
+    const isZoomSupported  = ref(false)
+    const zoomLevel        = ref(1.0)
+    const minZoomLevel     = ref(1.0)
+    const maxZoomLevel     = ref(1.0)
+    const isDigitalZoom    = ref(false)
     const availableCameras = ref([])
     const currentCameraId  = ref(null)
 
@@ -102,6 +107,11 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
             'upc_a',
             'upc_e',
             'code_39',
+            'code_93',
+            'itf',
+            'codabar',
+            'qr_code',
+            'data_matrix',
         ]
 
         if (typeof window !== 'undefined' && 'BarcodeDetector' in window) {
@@ -128,11 +138,35 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
                 BarcodeFormat.UPC_A,
                 BarcodeFormat.UPC_E,
                 BarcodeFormat.CODE_39,
+                BarcodeFormat.CODE_93,
+                BarcodeFormat.ITF,
+                BarcodeFormat.CODABAR,
+                BarcodeFormat.QR_CODE,
+                BarcodeFormat.DATA_MATRIX,
             ]
             hints.set(DecodeHintType.POSSIBLE_FORMATS, formats)
             hints.set(DecodeHintType.TRY_HARDER, true)
 
-            zxingReader = new BrowserMultiFormatReader(hints, 250)
+            zxingReader = new BrowserMultiFormatReader(hints, 200)
+
+            // Override drawFrameOnCanvas to crop central ROI matching the visual guide frame
+            // This discards surrounding product packaging text and accelerates decoding
+            zxingReader.drawFrameOnCanvas = function (srcElement) {
+                const vw = srcElement.videoWidth
+                const vh = srcElement.videoHeight
+                const isZoomed = isDigitalZoom.value || zoomLevel.value > 1.2
+                const cropW = Math.min(vw, Math.max(280, Math.round(vw * (isZoomed ? 0.55 : 0.75))))
+                const cropH = Math.min(vh, Math.max(140, Math.round(vh * (isZoomed ? 0.28 : 0.38))))
+                const cropX = Math.max(0, Math.round((vw - cropW) / 2))
+                const cropY = Math.max(0, Math.round((vh - cropH) / 2))
+
+                const canvas = this.getCaptureCanvas(srcElement)
+                const ctx = this.getCaptureCanvasContext(srcElement)
+                canvas.width = cropW
+                canvas.height = cropH
+                ctx.drawImage(srcElement, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
+            }
+
             return 'zxing'
         } catch (err) {
             console.error('Failed to load ZXing decoder:', err)
@@ -208,6 +242,18 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
                 hasTorch.value = Boolean(capabilities.torch)
                 isTorchOn.value = false
 
+                // Zoom check
+                if (capabilities.zoom) {
+                    isZoomSupported.value = true
+                    minZoomLevel.value = capabilities.zoom.min || 1.0
+                    maxZoomLevel.value = capabilities.zoom.max || 1.0
+                    zoomLevel.value = 1.0
+                } else {
+                    isZoomSupported.value = false
+                    zoomLevel.value = 1.0
+                }
+                isDigitalZoom.value = false
+
                 // Try applying continuous autofocus if supported
                 if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
                     try {
@@ -249,32 +295,78 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
         }
     }
 
-    // Decode loop throttled at ~15-20 fps to conserve battery & keep mobile responsive
+    let offscreenCanvas = null
+    let offscreenCtx = null
+
+    function getCropCanvas(w, h) {
+        if (!offscreenCanvas) {
+            offscreenCanvas = document.createElement('canvas')
+            offscreenCtx = offscreenCanvas.getContext('2d', { willReadFrequently: true })
+        }
+        if (offscreenCanvas.width !== w || offscreenCanvas.height !== h) {
+            offscreenCanvas.width = w
+            offscreenCanvas.height = h
+        }
+        return { canvas: offscreenCanvas, ctx: offscreenCtx }
+    }
+
+    // Decode loop throttled at ~12-15 fps to conserve battery & keep mobile responsive
     function startDecodingLoop() {
         let isDecoding = false
+        let scanTick = 0
 
         decodeIntervalId = setInterval(async () => {
             if (!isScanning.value || isDecoding || !videoRef.value || videoRef.value.readyState < 2) {
                 return
             }
 
+            const video = videoRef.value
+            const vw = video.videoWidth
+            const vh = video.videoHeight
+            if (!vw || !vh) return
+
             isDecoding = true
+            scanTick++
+
             try {
                 let rawCode = null
 
                 if (nativeDetector) {
-                    const barcodes = await nativeDetector.detect(videoRef.value)
-                    if (barcodes && barcodes.length > 0) {
-                        rawCode = barcodes[0].rawValue
+                    // 1. Crop to Region of Interest (matching guide frame) to eliminate surrounding packaging text
+                    const isZoomed = isDigitalZoom.value || zoomLevel.value > 1.2
+                    const cropW = Math.min(vw, Math.max(280, Math.round(vw * (isZoomed ? 0.55 : 0.75))))
+                    const cropH = Math.min(vh, Math.max(140, Math.round(vh * (isZoomed ? 0.28 : 0.38))))
+                    const cropX = Math.max(0, Math.round((vw - cropW) / 2))
+                    const cropY = Math.max(0, Math.round((vh - cropH) / 2))
+
+                    const { canvas, ctx } = getCropCanvas(cropW, cropH)
+                    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
+
+                    try {
+                        const barcodes = await nativeDetector.detect(canvas)
+                        if (barcodes && barcodes.length > 0) {
+                            rawCode = barcodes[0].rawValue
+                        }
+                    } catch (cropErr) {}
+
+                    // 2. Fallback: every 4th tick or if crop didn't match, test full video
+                    if (!rawCode && scanTick % 4 === 0) {
+                        try {
+                            const fullBarcodes = await nativeDetector.detect(video)
+                            if (fullBarcodes && fullBarcodes.length > 0) {
+                                rawCode = fullBarcodes[0].rawValue
+                            }
+                        } catch (fullErr) {}
                     }
                 } else if (zxingReader) {
+                    // Synchronous decode using overridden drawFrameOnCanvas (cropped to ROI)
                     try {
-                        const result = await zxingReader.decodeOnce(videoRef.value)
+                        const result = zxingReader.decode(video)
                         if (result) {
                             rawCode = result.getText()
                         }
                     } catch (zxErr) {
-                        // ZXing throws NotFoundException when frame has no barcode, which is expected
+                        // Expected NotFoundException when frame has no barcode
                     }
                 }
 
@@ -286,7 +378,7 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
             } finally {
                 isDecoding = false
             }
-        }, 80)
+        }, 90)
     }
 
     function handleDecodedValue(code) {
@@ -322,6 +414,30 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
         } catch (e) {
             console.warn('Torch toggle failed:', e)
         }
+    }
+
+    // Toggle 1x / 2x Zoom (hardware lens zoom or smooth digital zoom fallback)
+    async function toggleZoom() {
+        if (isZoomSupported.value && currentStream) {
+            const videoTrack = currentStream.getVideoTracks()[0]
+            if (videoTrack) {
+                try {
+                    const nextZoom = zoomLevel.value >= 1.8 ? minZoomLevel.value : Math.min(2.0, maxZoomLevel.value)
+                    await videoTrack.applyConstraints({
+                        advanced: [{ zoom: nextZoom }],
+                    })
+                    zoomLevel.value = nextZoom
+                    isDigitalZoom.value = false
+                    return
+                } catch (e) {
+                    console.warn('Hardware zoom failed, falling back to digital zoom:', e)
+                }
+            }
+        }
+
+        // Digital zoom fallback (magnify preview and crop tighter)
+        isDigitalZoom.value = !isDigitalZoom.value
+        zoomLevel.value = isDigitalZoom.value ? 1.6 : 1.0
     }
 
     // Switch between front/back or multiple cameras
@@ -386,6 +502,8 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
 
         isTorchOn.value = false
         hasTorch.value = false
+        isDigitalZoom.value = false
+        zoomLevel.value = 1.0
         releaseWakeLock()
     }
 
@@ -416,6 +534,10 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
         errorMessage,
         isTorchOn,
         hasTorch,
+        isZoomSupported,
+        zoomLevel,
+        isDigitalZoom,
+        toggleZoom,
         availableCameras,
         currentCameraId,
         startStream,

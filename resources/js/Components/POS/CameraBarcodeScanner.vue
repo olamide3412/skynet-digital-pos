@@ -171,8 +171,26 @@ onUnmounted(() => {
                         </button>
                     </div>
 
-                    <!-- Right Actions: Torch & Camera Switch -->
+                    <!-- Right Actions: Zoom, Torch & Camera Switch -->
                     <div class="flex items-center gap-2">
+                        <!-- 1x / 2x Zoom Toggle Button -->
+                        <button
+                            type="button"
+                            @click="scanner.toggleZoom"
+                            :class="[
+                                'px-2.5 py-1.5 rounded-full backdrop-blur-md transition flex items-center gap-1 text-xs font-bold shadow-lg active:scale-95 cursor-pointer',
+                                (scanner.zoomLevel.value > 1.2 || scanner.isDigitalZoom.value)
+                                    ? 'bg-purple-600 text-white shadow-purple-600/30'
+                                    : 'bg-white/20 hover:bg-white/30 text-white'
+                            ]"
+                            title="Toggle 1x / 2x Zoom"
+                        >
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v6m3-3H7" />
+                            </svg>
+                            <span>{{ (scanner.zoomLevel.value > 1.2 || scanner.isDigitalZoom.value) ? '2x' : '1x' }}</span>
+                        </button>
+
                         <!-- Torch Button (Shown only when torch is supported by camera) -->
                         <button
                             v-if="scanner.hasTorch.value"
@@ -211,7 +229,10 @@ onUnmounted(() => {
                     <!-- Live HTML5 Video Element -->
                     <video
                         ref="videoEl"
-                        class="absolute inset-0 w-full h-full object-cover"
+                        :class="[
+                            'absolute inset-0 w-full h-full object-cover transition-transform duration-300 origin-center',
+                            scanner.isDigitalZoom.value ? 'scale-135' : 'scale-100'
+                        ]"
                         playsinline
                         muted
                         autoplay
@@ -223,14 +244,15 @@ onUnmounted(() => {
                         class="absolute inset-0 bg-white/30 backdrop-blur-xs transition-opacity duration-150 pointer-events-none z-10"
                     ></div>
 
-                    <!-- Scan Guide Overlay -->
-                    <div class="relative z-10 flex flex-col items-center">
+                    <!-- Scan Guide Overlay with darkened background mask -->
+                    <div class="relative z-10 flex flex-col items-center pointer-events-none px-4">
                         <div
                             :class="[
-                                'w-72 sm:w-80 h-44 sm:h-52 rounded-2xl border-2 transition-all relative shadow-2xl',
+                                'w-[84vw] max-w-sm h-36 sm:h-40 rounded-2xl border-2 transition-all relative',
+                                'shadow-[0_0_0_9999px_rgba(0,0,0,0.6)]',
                                 lastResult?.success === false
-                                    ? 'border-red-500 ring-4 ring-red-500/20'
-                                    : (lastResult?.success === true ? 'border-emerald-400 ring-4 ring-emerald-400/20' : 'border-white/80')
+                                    ? 'border-red-500 ring-4 ring-red-500/30'
+                                    : (lastResult?.success === true ? 'border-emerald-400 ring-4 ring-emerald-400/30' : 'border-white/80')
                             ]"
                         >
                             <!-- Corner Accents -->
@@ -243,9 +265,20 @@ onUnmounted(() => {
                             <div class="absolute inset-x-2 top-0 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_8px_#ef4444] animate-bounce"></div>
                         </div>
 
-                        <p class="text-xs text-white/80 font-medium mt-4 px-3 py-1 rounded-full bg-black/40 backdrop-blur-md">
-                            Align barcode inside the guide frame
-                        </p>
+                        <!-- Helpful Instructions -->
+                        <div class="mt-4 flex flex-col items-center gap-1.5 pointer-events-auto">
+                            <p class="text-xs text-white/90 font-medium px-3.5 py-1.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-lg text-center">
+                                Align barcode inside frame • Hold 15–20 cm away
+                            </p>
+                            <button
+                                v-if="!scanner.isDigitalZoom.value && scanner.zoomLevel.value <= 1.2"
+                                type="button"
+                                @click="scanner.toggleZoom"
+                                class="text-[11px] text-purple-300 hover:text-purple-200 underline font-semibold cursor-pointer"
+                            >
+                                Barcode blurry? Tap for 2x Zoom
+                            </button>
+                        </div>
                     </div>
 
                     <!-- Loading / Initialization Indicator -->
