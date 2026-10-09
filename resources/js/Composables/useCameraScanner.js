@@ -31,6 +31,7 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
     let currentStream      = null
     let nativeDetector     = null
     let zxingReader        = null
+    let zxingClasses       = null
     let decodeAnimationFrame = null
     let decodeIntervalId   = null
     let wakeLockSentinel   = null
@@ -129,7 +130,15 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
 
         // Fallback: Lazy load ZXing library
         try {
-            const { BrowserMultiFormatReader, BarcodeFormat, DecodeHintType } = await import('@zxing/library')
+            const {
+                BrowserMultiFormatReader,
+                BarcodeFormat,
+                DecodeHintType,
+                HTMLCanvasElementLuminanceSource,
+                HybridBinarizer,
+                BinaryBitmap,
+            } = await import('@zxing/library')
+
             const hints = new Map()
             const formats = [
                 BarcodeFormat.CODE_128,
@@ -148,23 +157,10 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
             hints.set(DecodeHintType.TRY_HARDER, true)
 
             zxingReader = new BrowserMultiFormatReader(hints, 200)
-
-            // Override drawFrameOnCanvas to crop central ROI matching the visual guide frame
-            // This discards surrounding product packaging text and accelerates decoding
-            zxingReader.drawFrameOnCanvas = function (srcElement) {
-                const vw = srcElement.videoWidth
-                const vh = srcElement.videoHeight
-                const isZoomed = isDigitalZoom.value || zoomLevel.value > 1.2
-                const cropW = Math.min(vw, Math.max(280, Math.round(vw * (isZoomed ? 0.55 : 0.75))))
-                const cropH = Math.min(vh, Math.max(140, Math.round(vh * (isZoomed ? 0.28 : 0.38))))
-                const cropX = Math.max(0, Math.round((vw - cropW) / 2))
-                const cropY = Math.max(0, Math.round((vh - cropH) / 2))
-
-                const canvas = this.getCaptureCanvas(srcElement)
-                const ctx = this.getCaptureCanvasContext(srcElement)
-                canvas.width = cropW
-                canvas.height = cropH
-                ctx.drawImage(srcElement, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
+            zxingClasses = {
+                HTMLCanvasElementLuminanceSource,
+                HybridBinarizer,
+                BinaryBitmap,
             }
 
             return 'zxing'
@@ -297,6 +293,10 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
 
     let offscreenCanvas = null
     let offscreenCtx = null
+    let rotatedCanvas   = null
+    let rotatedCtx      = null
+    let fullCanvas      = null
+    let fullCtx         = null
 
     function getCropCanvas(w, h) {
         if (!offscreenCanvas) {
@@ -308,6 +308,43 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
             offscreenCanvas.height = h
         }
         return { canvas: offscreenCanvas, ctx: offscreenCtx }
+    }
+
+    function getRotatedCanvas(w, h) {
+        if (!rotatedCanvas) {
+            rotatedCanvas = document.createElement('canvas')
+            rotatedCtx = rotatedCanvas.getContext('2d', { willReadFrequently: true })
+        }
+        if (rotatedCanvas.width !== w || rotatedCanvas.height !== h) {
+            rotatedCanvas.width = w
+            rotatedCanvas.height = h
+        }
+        return { canvas: rotatedCanvas, ctx: rotatedCtx }
+    }
+
+    function getFullCanvas(w, h) {
+        if (!fullCanvas) {
+            fullCanvas = document.createElement('canvas')
+            fullCtx = fullCanvas.getContext('2d', { willReadFrequently: true })
+        }
+        if (fullCanvas.width !== w || fullCanvas.height !== h) {
+            fullCanvas.width = w
+            fullCanvas.height = h
+        }
+        return { canvas: fullCanvas, ctx: fullCtx }
+    }
+
+    function decodeCanvasWithZxing(targetCanvas, doInvert = false) {
+        if (!zxingReader || !zxingClasses) return null
+        try {
+            const luminanceSource = new zxingClasses.HTMLCanvasElementLuminanceSource(targetCanvas, doInvert)
+            const hybridBinarizer = new zxingClasses.HybridBinarizer(luminanceSource)
+            const binaryBitmap = new zxingClasses.BinaryBitmap(hybridBinarizer)
+            const result = zxingReader.decodeBitmap(binaryBitmap)
+            return result ? result.getText() : null
+        } catch (e) {
+            return null
+        }
     }
 
     // Decode loop throttled at ~12-15 fps to conserve battery & keep mobile responsive
@@ -331,17 +368,28 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
             try {
                 let rawCode = null
 
+                // Compute Region of Interest (ROI) matching guide overlay
+                const isZoomed = isDigitalZoom.value || zoomLevel.value > 1.2
+                let cropW, cropH
+                if (vw >= vh) {
+                    // Landscape camera feed (common on mobile back cameras)
+                    cropW = Math.round(vh * (isZoomed ? 0.65 : 0.85))
+                    cropH = Math.round(vh * (isZoomed ? 0.35 : 0.48))
+                } else {
+                    // Portrait camera feed
+                    cropW = Math.round(vw * (isZoomed ? 0.70 : 0.85))
+                    cropH = Math.round(vh * (isZoomed ? 0.25 : 0.38))
+                }
+                cropW = Math.min(vw, Math.max(280, cropW))
+                cropH = Math.min(vh, Math.max(160, cropH))
+                const cropX = Math.max(0, Math.round((vw - cropW) / 2))
+                const cropY = Math.max(0, Math.round((vh - cropH) / 2))
+
+                const { canvas, ctx } = getCropCanvas(cropW, cropH)
+                ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
+
                 if (nativeDetector) {
-                    // 1. Crop to Region of Interest (matching guide frame) to eliminate surrounding packaging text
-                    const isZoomed = isDigitalZoom.value || zoomLevel.value > 1.2
-                    const cropW = Math.min(vw, Math.max(280, Math.round(vw * (isZoomed ? 0.55 : 0.75))))
-                    const cropH = Math.min(vh, Math.max(140, Math.round(vh * (isZoomed ? 0.28 : 0.38))))
-                    const cropX = Math.max(0, Math.round((vw - cropW) / 2))
-                    const cropY = Math.max(0, Math.round((vh - cropH) / 2))
-
-                    const { canvas, ctx } = getCropCanvas(cropW, cropH)
-                    ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH)
-
+                    // Hardware accelerated BarcodeDetector (Android Chrome)
                     try {
                         const barcodes = await nativeDetector.detect(canvas)
                         if (barcodes && barcodes.length > 0) {
@@ -349,7 +397,7 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
                         }
                     } catch (cropErr) {}
 
-                    // 2. Fallback: every 4th tick or if crop didn't match, test full video
+                    // Fallback to full frame every 4th tick
                     if (!rawCode && scanTick % 4 === 0) {
                         try {
                             const fullBarcodes = await nativeDetector.detect(video)
@@ -359,14 +407,34 @@ export function useCameraScanner({ onBarcodeDetected, videoRef: externalVideoRef
                         } catch (fullErr) {}
                     }
                 } else if (zxingReader) {
-                    // Synchronous decode using overridden drawFrameOnCanvas (cropped to ROI)
-                    try {
-                        const result = zxingReader.decode(video)
-                        if (result) {
-                            rawCode = result.getText()
-                        }
-                    } catch (zxErr) {
-                        // Expected NotFoundException when frame has no barcode
+                    // Optimized ZXing Engine for WebKit / iOS Safari & Chrome
+                    // 1. Primary pass: Horizontal scan (standard black-on-white retail barcodes)
+                    rawCode = decodeCanvasWithZxing(canvas, false)
+
+                    // 2. Multi-orientation pass: Rotate 90° on alternating ticks (decodes vertical barcodes)
+                    if (!rawCode && (scanTick % 2 === 0)) {
+                        const { canvas: rCanvas, ctx: rCtx } = getRotatedCanvas(cropH, cropW)
+                        rCtx.save()
+                        rCtx.translate(cropH / 2, cropW / 2)
+                        rCtx.rotate(Math.PI / 2)
+                        rCtx.drawImage(canvas, -cropW / 2, -cropH / 2)
+                        rCtx.restore()
+                        rawCode = decodeCanvasWithZxing(rCanvas, false)
+                    }
+
+                    // 3. Wide fallback: Scaled full frame every 4th tick (if held near frame edges)
+                    if (!rawCode && (scanTick % 4 === 0)) {
+                        const scale = Math.min(1, 640 / Math.max(vw, vh))
+                        const fw = Math.round(vw * scale)
+                        const fh = Math.round(vh * scale)
+                        const { canvas: fCanvas, ctx: fCtx } = getFullCanvas(fw, fh)
+                        fCtx.drawImage(video, 0, 0, fw, fh)
+                        rawCode = decodeCanvasWithZxing(fCanvas, false)
+                    }
+
+                    // 4. Inverted barcode fallback: Check white-on-black every 8th tick
+                    if (!rawCode && (scanTick % 8 === 0)) {
+                        rawCode = decodeCanvasWithZxing(canvas, true)
                     }
                 }
 
