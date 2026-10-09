@@ -739,6 +739,86 @@ Route::prefix('{branch}')
                 ->name('mappings.deactivate');
         });
 
+        // Double-Entry Accounting Module (§8, §9)
+        Route::prefix('accounting')->name('accounting.')->middleware(['plan.feature:feature_accounting', 'pos.role:canViewAccounting'])->group(function () {
+            // Chart of Accounts
+            Route::get('/accounts/export', [\App\Modules\Accounting\Controllers\AccountController::class, 'export'])
+                ->name('accounts.export')
+                ->middleware('pos.role:canManageChartOfAccounts');
+            Route::get('/accounts', [\App\Modules\Accounting\Controllers\AccountController::class, 'index'])
+                ->name('accounts.index')
+                ->middleware('pos.role:canManageChartOfAccounts');
+            Route::post('/accounts', [\App\Modules\Accounting\Controllers\AccountController::class, 'store'])
+                ->name('accounts.store')
+                ->middleware('pos.role:canManageChartOfAccounts');
+            Route::put('/accounts/{account}', [\App\Modules\Accounting\Controllers\AccountController::class, 'update'])
+                ->name('accounts.update')
+                ->middleware('pos.role:canManageChartOfAccounts');
+
+            // General Ledger
+            Route::get('/ledger/export', [\App\Modules\Accounting\Controllers\LedgerController::class, 'export'])
+                ->name('ledger.export');
+            Route::get('/ledger', [\App\Modules\Accounting\Controllers\LedgerController::class, 'index'])
+                ->name('ledger.index');
+
+            // Journal Entries
+            Route::get('/journals/export', [\App\Modules\Accounting\Controllers\JournalController::class, 'export'])
+                ->name('journals.export');
+            Route::get('/journals', [\App\Modules\Accounting\Controllers\JournalController::class, 'index'])
+                ->name('journals.index');
+            Route::post('/journals', [\App\Modules\Accounting\Controllers\JournalController::class, 'store'])
+                ->name('journals.store')
+                ->middleware('pos.role:canManageJournalEntries');
+            Route::get('/journals/{journal}', [\App\Modules\Accounting\Controllers\JournalController::class, 'show'])
+                ->name('journals.show');
+            Route::post('/journals/{journal}/reverse', [\App\Modules\Accounting\Controllers\JournalController::class, 'reverse'])
+                ->name('journals.reverse')
+                ->middleware('pos.role:canManageJournalEntries');
+
+            // Financial Periods
+            Route::get('/periods', [\App\Modules\Accounting\Controllers\PeriodController::class, 'index'])
+                ->name('periods.index');
+            Route::post('/periods/{period}/close', [\App\Modules\Accounting\Controllers\PeriodController::class, 'close'])
+                ->name('periods.close')
+                ->middleware('pos.role:canCloseFinancialPeriods');
+            Route::post('/periods/{period}/reopen', [\App\Modules\Accounting\Controllers\PeriodController::class, 'reopen'])
+                ->name('periods.reopen')
+                ->middleware('pos.role:canCloseFinancialPeriods');
+
+            // Opening Balances
+            Route::get('/opening-balances', [\App\Modules\Accounting\Controllers\OpeningBalanceController::class, 'index'])
+                ->name('opening-balances.index')
+                ->middleware('pos.role:canManageChartOfAccounts');
+            Route::post('/opening-balances', [\App\Modules\Accounting\Controllers\OpeningBalanceController::class, 'store'])
+                ->name('opening-balances.store')
+                ->middleware('pos.role:canManageChartOfAccounts');
+
+            // Unposted Transactions Screen
+            Route::get('/unposted', [\App\Modules\Accounting\Controllers\UnpostedTransactionsController::class, 'index'])
+                ->name('unposted.index');
+            Route::post('/unposted/retry', [\App\Modules\Accounting\Controllers\UnpostedTransactionsController::class, 'retry'])
+                ->name('unposted.retry')
+                ->middleware('pos.role:canManageJournalEntries');
+
+            // Financial Reports
+            Route::prefix('reports')->name('reports.')->group(function () {
+                Route::get('/trial-balance', [\App\Modules\Accounting\Controllers\AccountingReportController::class, 'trialBalance'])
+                    ->name('trial-balance');
+                Route::get('/profit-loss', [\App\Modules\Accounting\Controllers\AccountingReportController::class, 'profitLoss'])
+                    ->name('profit-loss');
+                Route::get('/balance-sheet', [\App\Modules\Accounting\Controllers\AccountingReportController::class, 'balanceSheet'])
+                    ->name('balance-sheet');
+                Route::get('/cash-flow', [\App\Modules\Accounting\Controllers\AccountingReportController::class, 'cashFlow'])
+                    ->name('cash-flow');
+                Route::get('/ar-aging', [\App\Modules\Accounting\Controllers\AccountingReportController::class, 'arAging'])
+                    ->name('ar-aging');
+                Route::get('/vat', [\App\Modules\Accounting\Controllers\AccountingReportController::class, 'vat'])
+                    ->name('vat');
+                Route::get('/export/{type}', [\App\Modules\Accounting\Controllers\AccountingReportController::class, 'export'])
+                    ->name('export');
+            });
+        });
+
         // JSON API
         Route::prefix('api')->name('api.')->group(function () {
             Route::get('/items/search',          [PosItemController::class, 'search'])->name('items.search');

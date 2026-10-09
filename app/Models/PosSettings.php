@@ -23,6 +23,7 @@ class PosSettings extends Model
         'is_check_expiration', 'batch_tracking_enabled', 'expiry_alert_days', 'is_imei_enabled', 'is_camera_scanner_enabled', 'is_offline_enabled', 'require_till_opening', 'print_till_slip', 'held_sales_visibility', 'is_turnstile_enabled', 'offline_receipt_prefix',
         'is_show_buy_price', 'is_use_profit_percentage',
         'is_tax_enabled', 'tax_percentage',
+        'is_accounting_vat_enabled', 'accounting_started_at',
         'item_icon_preview', 'is_grid_separate_rows', 'is_cart_auto_scroll_highlight', 'is_auto_fullscreen_enabled', 'wholesale_profit_percent', 'consumer_profit_percent',
         'sell_interface', 'quick_access_mode', 'pinned_quick_access_items', 'quick_access_category_ids', 'business_sector',
         'receipt_paper_size', 'receipt_printer_name', 'printer_type', 'printer_connection', 'printer_ip_address',
@@ -50,6 +51,8 @@ class PosSettings extends Model
             'is_use_profit_percentage'      => 'boolean',
             'is_tax_enabled'                => 'boolean',
             'tax_percentage'                => 'decimal:2',
+            'is_accounting_vat_enabled'     => 'boolean',
+            'accounting_started_at'         => 'datetime',
             'item_icon_preview'             => 'boolean',
             'is_grid_separate_rows'         => 'boolean',
             'is_cart_auto_scroll_highlight' => 'boolean',
@@ -110,6 +113,8 @@ class PosSettings extends Model
                 'receipt_copies'             => 1,
                 'auto_print_receipt'         => false,
                 'show_receipt_preview'       => true,
+                'is_accounting_vat_enabled'  => false,
+                'accounting_started_at'      => null,
             ]
         );
     }
@@ -145,6 +150,8 @@ class PosSettings extends Model
                 'printer_ip_address'         => null,
                 'auto_print_receipt'         => false,
                 'show_receipt_preview'       => true,
+                'is_accounting_vat_enabled'  => false,
+                'accounting_started_at'      => null,
             ]);
         }
         return static::forBranch($branch->id);

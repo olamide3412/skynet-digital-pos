@@ -45,6 +45,7 @@ class SettingsController extends Controller
             'settings'    => $settingsData,
             'branchItems' => $branchItems,
             'categories'  => $categories,
+            'is_accounting_enabled' => $branch?->organization?->hasFeature('accounting') ?? false,
         ]);
     }
 
@@ -81,6 +82,7 @@ class SettingsController extends Controller
             'is_use_profit_percentage' => 'nullable|boolean',
             'is_tax_enabled'           => 'nullable|boolean',
             'tax_percentage'           => 'nullable|numeric|min:0|max:100',
+            'is_accounting_vat_enabled'=> 'nullable|boolean',
             'wholesale_profit_percent' => 'required|numeric|min:0',
             'consumer_profit_percent'  => 'required|numeric|min:0',
             'business_sector'          => 'required|in:health,commerce',

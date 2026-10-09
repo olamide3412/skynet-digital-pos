@@ -201,7 +201,7 @@ class CustomerController extends Controller
                 ? $balanceBefore - $data['amount']
                 : $balanceBefore + $data['amount'];
 
-            DebtPayment::create([
+            $debtPayment = DebtPayment::create([
                 'branch_id'      => $branch?->id,
                 'customer_id'    => $customer->id,
                 'user_id'        => Auth::id(),
@@ -213,6 +213,9 @@ class CustomerController extends Controller
             ]);
 
             $customer->update(['debt_bal' => $balanceAfter]);
+
+            // Double-entry accounting post (Rule 5: AR cleared to Cash/Bank)
+            \App\Modules\Accounting\Services\SalePostingService::postDebtPayment($debtPayment);
         });
 
         return redirect()

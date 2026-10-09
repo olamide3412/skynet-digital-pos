@@ -10,6 +10,7 @@ const props = defineProps({
     settings:    Object,
     branchItems: { type: Array, default: () => [] },
     categories:  { type: Array, default: () => [] },
+    is_accounting_enabled: { type: Boolean, default: false },
 })
 
 const { format } = useCurrency()
@@ -40,6 +41,7 @@ const form = useForm({
     is_use_profit_percentage:      !!props.settings.is_use_profit_percentage,
     is_tax_enabled:                !!props.settings.is_tax_enabled,
     tax_percentage:                props.settings.tax_percentage ?? 7.5,
+    is_accounting_vat_enabled:     !!props.settings.is_accounting_vat_enabled,
     wholesale_profit_percent:      props.settings.wholesale_profit_percent ?? 10,
     consumer_profit_percent:       props.settings.consumer_profit_percent ?? 15,
     business_sector:               props.settings.business_sector ?? 'commerce',
@@ -633,6 +635,65 @@ function submit() {
                                 </p>
                             </div>
                         </label>
+                    </div>
+                </div>
+
+                <!-- Dedicated Accounting & VAT Card (§9) -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/60 p-6 space-y-4 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">📊</span>
+                            <div>
+                                <h2 class="text-base font-bold text-slate-900 dark:text-white">Double-Entry Accounting & VAT</h2>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Automated financial books, journal entries, and VAT ledger reporting.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span
+                                v-if="is_accounting_enabled"
+                                class="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider"
+                            >
+                                Active on Plan
+                            </span>
+                            <span
+                                v-else
+                                class="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider"
+                            >
+                                Silver+ Plan Feature
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 pt-1">
+                        <!-- VAT Toggle (§9) -->
+                        <label
+                            :class="[!is_accounting_enabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer']"
+                            class="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700/80 transition hover:border-slate-300 dark:hover:border-slate-600"
+                        >
+                            <input
+                                type="checkbox"
+                                v-model="form.is_accounting_vat_enabled"
+                                :disabled="!is_accounting_enabled"
+                                class="w-4 h-4 mt-0.5 accent-emerald-500 rounded cursor-pointer shrink-0"
+                            />
+                            <div>
+                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Track VAT / Tax in General Ledger</span>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                    When enabled, tax collected from sales and returns is posted to the dedicated VAT/Tax Payable liability account (2100) and unlocks the period VAT report. If disabled, full sale values flow directly into Sales Revenue.
+                                </p>
+                            </div>
+                        </label>
+
+                        <!-- Books Start Date (§9) -->
+                        <div v-if="settings.accounting_started_at" class="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between text-xs">
+                            <span class="text-slate-600 dark:text-slate-400">Branch Books Start Date:</span>
+                            <span class="font-mono font-semibold text-slate-900 dark:text-white">
+                                {{ new Date(settings.accounting_started_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}
+                            </span>
+                        </div>
+                        <div v-else-if="!is_accounting_enabled" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                            <span>ℹ️</span> Accounting is available for organizations on the Silver plan and above. Upgrade your subscription to enable automatic double-entry books.
+                        </div>
                     </div>
                 </div>
 

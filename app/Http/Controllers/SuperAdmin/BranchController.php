@@ -585,6 +585,7 @@ class BranchController extends Controller
         $validated = $request->validate([
             'is_tax_enabled'           => 'required|boolean',
             'tax_percentage'           => 'required|numeric|min:0|max:100',
+            'is_accounting_vat_enabled'=> 'nullable|boolean',
             'receipt_paper_size'       => 'required|string|in:80mm,58mm',
             'receipt_printer_name'     => 'nullable|string|max:255',
             'printer_type'             => 'nullable|string|max:50',

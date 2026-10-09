@@ -235,9 +235,33 @@ class RoleService
             'view_ecommerce_activity'  => static::canViewEcommerceActivity(),
             'canViewEcommerceActivity' => static::canViewEcommerceActivity(),
             'canManageTillCashMovements' => static::canManageTillCashMovements(),
+            'canViewAccounting'        => static::canViewAccounting(),
+            'canManageChartOfAccounts' => static::canManageChartOfAccounts(),
+            'canManageJournalEntries'  => static::canManageJournalEntries(),
+            'canCloseFinancialPeriods' => static::canCloseFinancialPeriods(),
             'isBranchAdmin'            => $user?->isBranchAdmin() ?? false,
             'isSuperAdmin'             => $user?->isSuperAdmin() ?? false,
         ];
+    }
+
+    public static function canViewAccounting(): bool
+    {
+        return static::can('view_accounting') || static::can('canViewAccounting');
+    }
+
+    public static function canManageChartOfAccounts(): bool
+    {
+        return static::can('manage_chart_of_accounts') || static::can('canManageChartOfAccounts');
+    }
+
+    public static function canManageJournalEntries(): bool
+    {
+        return static::can('manage_journal_entries') || static::can('canManageJournalEntries');
+    }
+
+    public static function canCloseFinancialPeriods(): bool
+    {
+        return static::can('close_financial_periods') || static::can('canCloseFinancialPeriods');
     }
 
     public static function canManageTillCashMovements(): bool

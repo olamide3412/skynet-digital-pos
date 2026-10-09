@@ -192,18 +192,22 @@ class SaleService
                 $baseQty = $item->toBaseUnits($qty, $unitUsed);
                 $imei = $cartItem['imei_or_device_id'] ?? null;
 
+                $buyPrice = (float) ($item->buy_price ?? 0);
+                $unitCostSnapshot = $qty > 0 ? round(($buyPrice * $baseQty) / $qty, 2) : $buyPrice;
+
                 $saleOrder = SaleOrder::create([
-                    'sale_id' => $sale->id,
-                    'item_id' => $item->id,
-                    'item_name' => $item->item_name,
-                    'imei_or_device_id' => $imei,
-                    'selling_price' => $price,
-                    'total_selling_price' => $price * $qty,
-                    'qty' => $qty,
-                    'unit_used' => $unitUsed,
-                    'purchase_type' => $purchaseType,
-                    'user_id' => $user->id,
-                    'sort_date' => now(),
+                    'sale_id'            => $sale->id,
+                    'item_id'            => $item->id,
+                    'item_name'          => $item->item_name,
+                    'imei_or_device_id'  => $imei,
+                    'selling_price'      => $price,
+                    'total_selling_price'=> $price * $qty,
+                    'qty'                => $qty,
+                    'unit_used'          => $unitUsed,
+                    'purchase_type'      => $purchaseType,
+                    'unit_cost_snapshot' => $unitCostSnapshot,
+                    'user_id'            => $user->id,
+                    'sort_date'          => now(),
                 ]);
 
                 // Mark IMEI device unit as sold
@@ -281,6 +285,9 @@ class SaleService
             if ($branch) {
                 QuickAccessService::clearBranchCache($branch->id);
             }
+
+            // Double-entry accounting post (passive, non-blocking §2, §6)
+            \App\Modules\Accounting\Services\SalePostingService::postSale($sale);
 
             return $sale->load('saleOrders');
         });

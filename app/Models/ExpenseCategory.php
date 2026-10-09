@@ -17,6 +17,7 @@ class ExpenseCategory extends Model
     protected $fillable = [
         'branch_id',
         'name',
+        'account_id',
     ];
 
     // ── Relationships ─────────────────────────────────────────────────────────
@@ -24,6 +25,11 @@ class ExpenseCategory extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function account(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Accounting\Models\Account::class, 'account_id');
     }
 
     public function expenses(): HasMany

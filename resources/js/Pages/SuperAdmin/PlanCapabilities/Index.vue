@@ -48,6 +48,7 @@ function createFormData(plan) {
         feature_ai_chat_assistant: Boolean(caps.feature_ai_chat_assistant),
         feature_ai_reorder_prediction: Boolean(caps.feature_ai_reorder_prediction),
         feature_broadcast_notifications: Boolean(caps.feature_broadcast_notifications),
+        feature_accounting: Boolean(caps.feature_accounting),
     }
 }
 
@@ -170,6 +171,13 @@ const featureList = [
         desc: 'Receive urgent platform notifications and broadcast updates from Super Admin.',
         icon: 'M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z',
         color: 'text-amber-500 dark:text-amber-400',
+    },
+    {
+        key: 'feature_accounting',
+        title: 'Double-Entry Accounting & Ledger',
+        desc: 'Automatic Chart of Accounts, General Ledger, Trial Balance, P&L, Balance Sheet, and VAT tracking.',
+        icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z',
+        color: 'text-emerald-500 dark:text-emerald-400',
     },
 ]
 </script>

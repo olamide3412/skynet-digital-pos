@@ -132,8 +132,9 @@ class PurchaseOrderController extends Controller
         $branch = current_branch();
 
         $batchPrompts = [];
+        $totalReceivedCost = 0;
 
-        DB::transaction(function () use ($data, $purchase, $branch, &$batchPrompts) {
+        DB::transaction(function () use ($data, $purchase, $branch, &$batchPrompts, &$totalReceivedCost) {
             $allReceived = true;
             $itemsReceived = 0;
 
@@ -192,6 +193,8 @@ class PurchaseOrderController extends Controller
                         'cost'                   => $poItem->cost,
                     ]);
 
+                    $totalReceivedCost += ($qtyToReceive * (float) $poItem->cost);
+
                     $poItem->increment('received_qty', $qtyToReceive);
 
                     // Insert individual device unit records
@@ -244,6 +247,19 @@ class PurchaseOrderController extends Controller
                 $purchase->update(['status' => $allReceived ? 'Received' : 'Partial']);
             }
         });
+
+        if ($totalReceivedCost > 0) {
+            try {
+                \App\Modules\Accounting\Services\InventoryPostingService::postPurchaseOrderReceipt(
+                    $purchase->fresh(['vendor']),
+                    $totalReceivedCost,
+                    Auth::id(),
+                    (string) time()
+                );
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Accounting PO receipt posting error: ' . $e->getMessage());
+            }
+        }
 
         $redirect = redirect()->route('pos.purchases.show', $purchase)->with('success', 'Order reception processed.');
         if (!empty($batchPrompts)) {

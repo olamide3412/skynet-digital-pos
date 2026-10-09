@@ -25,6 +25,7 @@ class PlanCapability extends Model
         'feature_ai_reorder_prediction',
         'feature_broadcast_notifications',
         'feature_ecommerce_integration',
+        'feature_accounting',
         'ai_credit_pool_type',
         'ai_credits_monthly',
     ];
@@ -44,6 +45,7 @@ class PlanCapability extends Model
         'feature_ai_reorder_prediction'      => 'boolean',
         'feature_broadcast_notifications'    => 'boolean',
         'feature_ecommerce_integration'      => 'boolean',
+        'feature_accounting'                 => 'boolean',
         'ai_credits_monthly'                 => 'integer',
     ];
 

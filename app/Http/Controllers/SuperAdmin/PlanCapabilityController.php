@@ -69,6 +69,7 @@ class PlanCapabilityController extends Controller
             'feature_ai_chat_assistant'          => 'boolean',
             'feature_ai_reorder_prediction'      => 'boolean',
             'feature_broadcast_notifications'    => 'boolean',
+            'feature_accounting'                 => 'boolean',
         ]);
 
         $data = [
@@ -88,6 +89,7 @@ class PlanCapabilityController extends Controller
             'feature_ai_chat_assistant'          => (bool) ($validated['feature_ai_chat_assistant'] ?? false),
             'feature_ai_reorder_prediction'      => (bool) ($validated['feature_ai_reorder_prediction'] ?? false),
             'feature_broadcast_notifications'    => (bool) ($validated['feature_broadcast_notifications'] ?? false),
+            'feature_accounting'                 => (bool) ($validated['feature_accounting'] ?? false),
         ];
 
         $plan->capabilities()->updateOrCreate(

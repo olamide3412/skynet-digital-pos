@@ -227,6 +227,20 @@ class InventoryController extends Controller
             );
         }
 
+        // 3. Passive double-entry accounting posting (Rules 11 & 12)
+        try {
+            \App\Modules\Accounting\Services\InventoryPostingService::postStockAdjustment(
+                $item,
+                $adjType,
+                (int) $data['qty'],
+                (float) ($item->buy_price ?? 0),
+                $data['reason'],
+                Auth::id()
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Accounting stock adjustment posting error: ' . $e->getMessage());
+        }
+
         // For additions on batch-tracked items, provide prompt payload for the Create Batch modal (§5.2)
         if ($data['type'] === 'Addition' && \App\Services\BatchTrackingService::isBatchTrackingActive($branch->id, $item)) {
             return redirect()->route('pos.inventory.index', ['branch' => $branch->slug])->with([

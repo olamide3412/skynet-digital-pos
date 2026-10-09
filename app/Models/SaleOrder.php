@@ -12,6 +12,7 @@ class SaleOrder extends Model
     protected $fillable = [
         'sale_id', 'item_id', 'item_name', 'imei_or_device_id', 'selling_price',
         'total_selling_price', 'qty', 'unit_used', 'purchase_type', 'user_id', 'sort_date',
+        'unit_cost_snapshot',
     ];
 
     protected function casts(): array
@@ -19,6 +20,7 @@ class SaleOrder extends Model
         return [
             'selling_price'       => 'decimal:2',
             'total_selling_price' => 'decimal:2',
+            'unit_cost_snapshot'  => 'decimal:2',
             'qty'                 => 'integer',
             'sort_date'           => 'datetime',
         ];

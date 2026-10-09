@@ -122,6 +122,8 @@ class HandleInertiaRequests extends Middleware
                         'ai_chat_assistant'          => true,
                         'ai_reorder_prediction'      => true,
                         'broadcast_notifications'    => true,
+                        'feature_accounting'         => true,
+                        'accounting'                 => true,
                     ];
                 }
 

@@ -59,6 +59,13 @@ class ExpenseService
                 ['expense_id' => $expense->id, 'amount' => $expense->amount, 'user_id' => $user->id]
             );
 
+            // Passive double-entry accounting posting (Rule 10)
+            try {
+                \App\Modules\Accounting\Services\InventoryPostingService::postExpense($expense, $user->id);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Accounting expense posting error: ' . $e->getMessage());
+            }
+
             return $expense;
         });
     }
@@ -134,6 +141,14 @@ class ExpenseService
                 ['expense_id' => $expense->id, 'reason' => $reason]
             );
 
+            // Reversing entry + new corrected entry (§6)
+            try {
+                \App\Modules\Accounting\Services\InventoryPostingService::reverseExpense($expense, $reason, $user);
+                \App\Modules\Accounting\Services\InventoryPostingService::postExpense($expense->fresh(['category']), $user->id);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Accounting expense update reversal/posting error: ' . $e->getMessage());
+            }
+
             return $expense;
         });
     }
@@ -162,6 +177,13 @@ class ExpenseService
 
             if ($expense->receipt_path) {
                 Storage::disk('public')->delete($expense->receipt_path);
+            }
+
+            // Post reversing entry before deletion (§6)
+            try {
+                \App\Modules\Accounting\Services\InventoryPostingService::reverseExpense($expense, $reason ?: 'Deleted expense record', $user);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('Accounting expense deletion reversal error: ' . $e->getMessage());
             }
 
             $deleted = $expense->delete();

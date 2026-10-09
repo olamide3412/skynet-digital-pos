@@ -243,6 +243,8 @@ class Organization extends Model
             'ai_chat_assistant'          => (bool) ($cap?->feature_ai_chat_assistant ?? true),
             'ai_reorder_prediction'      => (bool) ($cap?->feature_ai_reorder_prediction ?? true),
             'broadcast_notifications'    => (bool) ($cap?->feature_broadcast_notifications ?? true),
+            'feature_accounting'         => (bool) ($cap?->feature_accounting ?? false),
+            'accounting'                 => (bool) ($cap?->feature_accounting ?? false),
         ];
     }
 

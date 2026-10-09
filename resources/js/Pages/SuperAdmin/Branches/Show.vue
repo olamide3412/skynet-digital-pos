@@ -321,6 +321,7 @@ const togglePermInForm = (targetForm, permName) => {
 const settingsForm = useForm({
     is_tax_enabled: Boolean(props.settings?.is_tax_enabled),
     tax_percentage: Number(props.settings?.tax_percentage ?? 0),
+    is_accounting_vat_enabled: Boolean(props.settings?.is_accounting_vat_enabled),
     receipt_paper_size: props.settings?.receipt_paper_size || '80mm',
     receipt_printer_name: props.settings?.receipt_printer_name || 'Default POS Printer',
     printer_type: props.settings?.printer_type || 'thermal_80mm',
@@ -1340,6 +1341,23 @@ const toggleTillOpening = () => router.post(route('superadmin.branches.toggle-ti
                                     />
                                     <span class="absolute right-3 top-2.5 text-xs text-slate-400 font-bold">%</span>
                                 </div>
+                            </div>
+
+                            <div class="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Track VAT in General Ledger (Double-Entry)</div>
+                                    <div class="text-[11px] text-slate-500">Post collected VAT to Account 2100 (VAT Payable) for periodic VAT ledger reporting</div>
+                                </div>
+                                <input
+                                    v-model="settingsForm.is_accounting_vat_enabled"
+                                    type="checkbox"
+                                    class="w-5 h-5 rounded text-indigo-600 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer"
+                                />
+                            </div>
+
+                            <div v-if="settings?.accounting_started_at" class="p-3 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                                <span class="text-slate-500">Books Start Date:</span>
+                                <span class="font-mono font-semibold text-slate-900 dark:text-white">{{ new Date(settings.accounting_started_at).toLocaleDateString() }}</span>
                             </div>
                         </div>
                     </div>

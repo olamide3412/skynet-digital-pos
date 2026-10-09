@@ -308,6 +308,9 @@ class OfflineSyncService
                 $baseQty  = $item->toBaseUnits($qty, $unitUsed);
                 $imei     = !empty($cartItem['imei_or_device_id']) ? trim($cartItem['imei_or_device_id']) : null;
 
+                $buyPrice = (float) ($item->buy_price ?? 0);
+                $unitCostSnapshot = $qty > 0 ? round(($buyPrice * $baseQty) / $qty, 2) : $buyPrice;
+
                 $saleOrder = SaleOrder::create([
                     'sale_id'             => $sale->id,
                     'item_id'             => $item->id,
@@ -318,6 +321,7 @@ class OfflineSyncService
                     'qty'                 => $qty,
                     'unit_used'           => $unitUsed,
                     'purchase_type'       => $purchaseType,
+                    'unit_cost_snapshot'  => $unitCostSnapshot,
                     'user_id'             => $user->id,
                     'sort_date'           => $clientCreated,
                 ]);
@@ -408,6 +412,9 @@ class OfflineSyncService
                 $branch->id,
                 ['user_id' => $user->id, 'receipt_id' => $sale->receipt_id]
             );
+
+            // Double-entry accounting post (server-side upon sync §2, §6, §7)
+            \App\Modules\Accounting\Services\SalePostingService::postSale($sale);
 
             return [
                 'offline_sale_id' => $offlineSaleId,

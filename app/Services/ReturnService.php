@@ -82,7 +82,7 @@ class ReturnService
 
                 // Record the return
                 $imei = $returnItem['imei_or_device_id'] ?? null;
-                SaleReturnItem::create([
+                $returnRecord = SaleReturnItem::create([
                     'sale_id'            => $sale?->id,
                     'item_id'            => $itemId,
                     'item_name'          => $item->item_name,
@@ -96,6 +96,9 @@ class ReturnService
                     'refund_amount'      => $refundAmount,
                     'user_id'            => $user->id,
                 ]);
+
+                // Double-entry accounting post (Rules 6 & 7: reverse revenue & restock cost)
+                \App\Modules\Accounting\Services\SalePostingService::postSaleReturn($returnRecord);
 
                 // Restore device unit status to in_stock
                 if ($item->is_imei_tracked && $imei) {

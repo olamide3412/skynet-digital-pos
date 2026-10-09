@@ -186,7 +186,12 @@ class TillSessionService
                 $closer?->id
             );
 
-            return $session->fresh();
+            $closedSession = $session->fresh();
+
+            // Double-entry accounting post (Rules 15 & 16: Till variance)
+            \App\Modules\Accounting\Services\SalePostingService::postTillClose($closedSession);
+
+            return $closedSession;
         });
     }
 }
