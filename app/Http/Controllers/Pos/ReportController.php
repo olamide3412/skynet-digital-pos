@@ -25,8 +25,15 @@ class ReportController extends Controller
 {
     private function parseDateRange(Request $request, $defaultRange = 'today'): array
     {
-        $fromInput = $request->input('from') ?: $request->input('start_date');
-        $toInput   = $request->input('to') ?: $request->input('end_date');
+        $rangeInput = $request->input('range') ?: $request->input('preset');
+        $fromInput  = $request->input('from') ?: $request->input('start_date');
+        $toInput    = $request->input('to') ?: $request->input('end_date');
+
+        if ($rangeInput === 'all' || $fromInput === 'all' || ($request->has('from') && $fromInput === '' && $request->has('to') && $toInput === '')) {
+            $startDate = Carbon::create(2020, 1, 1)->startOfDay();
+            $endDate   = Carbon::now()->endOfDay();
+            return [$startDate, $endDate];
+        }
 
         if ($fromInput && $toInput) {
             $startDate = Carbon::parse($fromInput)->startOfDay();
@@ -70,6 +77,7 @@ class ReportController extends Controller
             'Cache-Control'       => 'max-age=0',
         ]);
     }
+
     public function index(Request $request)
     {
         $branch    = current_branch();
@@ -77,10 +85,21 @@ class ReportController extends Controller
         $selectedUserId = $canSeeAll ? ($request->user_id ?: null) : auth()->id();
 
         // Determine Start & End Dates (Default to current month if not specified)
-        $fromInput = $request->input('from');
-        $toInput   = $request->input('to');
+        $fromInput  = $request->input('from');
+        $toInput    = $request->input('to');
+        $rangeInput = $request->input('range') ?: $request->input('preset');
 
-        if ($fromInput && $toInput) {
+        $isAllTime = ($rangeInput === 'all')
+            || ($fromInput === 'all')
+            || ($request->has('from') && $request->has('to') && empty($fromInput) && empty($toInput))
+            || ($request->has('range') && $rangeInput === 'all');
+
+        if ($isAllTime) {
+            $earliestSale = Sale::where('branch_id', $branch->id)->min('created_at');
+            $earliestDate = $earliestSale ? Carbon::parse($earliestSale)->startOfDay() : Carbon::now()->startOfYear()->startOfDay();
+            $startDate = $earliestDate->year < 2020 ? Carbon::now()->startOfYear()->startOfDay() : $earliestDate;
+            $endDate   = Carbon::now()->endOfDay();
+        } elseif ($fromInput && $toInput) {
             $startDate = Carbon::parse($fromInput)->startOfDay();
             $endDate   = Carbon::parse($toInput)->endOfDay();
         } elseif ($fromInput) {
@@ -93,14 +112,14 @@ class ReportController extends Controller
 
         // Base query for sales within the date range & staff scope
         $salesQuery = Sale::where('branch_id', $branch->id)
-            ->whereBetween('created_at', [$startDate, $endDate])
+            ->when(!$isAllTime, fn ($q) => $q->whereBetween('created_at', [$startDate, $endDate]))
             ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId));
 
         // 1. Dynamic Sales & Profit Trend
         $diffInDays = $startDate->diffInDays($endDate);
         $salesTrend = [];
 
-        if ($startDate->format('Y-m-d') === $endDate->format('Y-m-d')) {
+        if (!$isAllTime && $startDate->format('Y-m-d') === $endDate->format('Y-m-d')) {
             // Single Day -> Hourly Breakdown
             $hourlyTrend = (clone $salesQuery)
                 ->select(
@@ -123,7 +142,7 @@ class ReportController extends Controller
                     'count'   => (int) ($match->count ?? 0),
                 ];
             }
-        } elseif ($diffInDays <= 31) {
+        } elseif (!$isAllTime && $diffInDays <= 31) {
             // Up to 31 Days -> Daily Breakdown
             $dailyTrend = (clone $salesQuery)
                 ->select(
@@ -149,7 +168,7 @@ class ReportController extends Controller
                 $curr->addDay();
             }
         } else {
-            // More than 31 Days -> Monthly Breakdown
+            // More than 31 Days or All Time -> Monthly Breakdown
             $monthlyTrend = (clone $salesQuery)
                 ->select(
                     DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month_key"),
@@ -190,9 +209,9 @@ class ReportController extends Controller
 
         // 3. Top 5 Best Selling Items in Period
         $topItems = SaleOrder::with('item')
-            ->whereHas('sale', function ($q) use ($branch, $startDate, $endDate, $selectedUserId) {
+            ->whereHas('sale', function ($q) use ($branch, $startDate, $endDate, $selectedUserId, $isAllTime) {
                 $q->where('branch_id', $branch->id)
-                  ->whereBetween('created_at', [$startDate, $endDate])
+                  ->when(!$isAllTime, fn ($sq) => $sq->whereBetween('created_at', [$startDate, $endDate]))
                   ->when($selectedUserId, fn ($sq) => $sq->where('user_id', $selectedUserId));
             })
             ->select('item_id', 'item_name', DB::raw('SUM(qty) as total_qty'), DB::raw('SUM(total_selling_price) as total_revenue'))
@@ -203,7 +222,7 @@ class ReportController extends Controller
 
         // 4. Returns summary in Period
         $periodReturns = SaleReturnItem::whereHas('item', fn ($q) => $q->where('branch_id', $branch->id))
-            ->whereBetween('created_at', [$startDate, $endDate])
+            ->when(!$isAllTime, fn ($q) => $q->whereBetween('created_at', [$startDate, $endDate]))
             ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
             ->get(['qty', 'refund_amount']);
 
@@ -237,8 +256,9 @@ class ReportController extends Controller
             'users'               => $users,
             'canSeeAll'           => $canSeeAll,
             'filters'             => [
-                'from'    => $startDate->format('Y-m-d'),
-                'to'      => $endDate->format('Y-m-d'),
+                'from'    => $isAllTime ? '' : $startDate->format('Y-m-d'),
+                'to'      => $isAllTime ? '' : $endDate->format('Y-m-d'),
+                'range'   => $isAllTime ? 'all' : '',
                 'user_id' => $request->user_id ?? '',
             ],
         ]);

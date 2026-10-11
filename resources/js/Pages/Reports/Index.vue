@@ -46,13 +46,23 @@ const props = defineProps({
 const { format } = useCurrency()
 
 // Filter State
-const from   = ref(props.filters?.from || dayjs().startOf('month').format('YYYY-MM-DD'))
-const to     = ref(props.filters?.to || dayjs().format('YYYY-MM-DD'))
+const range  = ref(props.filters?.range || (props.filters?.from === '' && props.filters?.to === '' ? 'all' : ''))
+const from   = ref(props.filters?.from ?? (range.value === 'all' ? '' : dayjs().startOf('month').format('YYYY-MM-DD')))
+const to     = ref(props.filters?.to ?? (range.value === 'all' ? '' : dayjs().format('YYYY-MM-DD')))
 const userId = ref(props.filters?.user_id || '')
+
+watch(() => props.filters, (newFilters) => {
+    if (newFilters) {
+        range.value  = newFilters.range || (newFilters.from === '' && newFilters.to === '' ? 'all' : '')
+        from.value   = newFilters.from || ''
+        to.value     = newFilters.to || ''
+        userId.value = newFilters.user_id || ''
+    }
+}, { deep: true })
 
 // Active date preset detection
 const activeDatePreset = computed(() => {
-    if (!from.value && !to.value) return 'all'
+    if (range.value === 'all' || (!from.value && !to.value)) return 'all'
     const today = dayjs().format('YYYY-MM-DD')
     const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD')
     const startOfWeek = dayjs().startOf('week').format('YYYY-MM-DD')
@@ -81,7 +91,9 @@ const filterDescription = computed(() => {
     const startOfWeek = dayjs().startOf('week').format('YYYY-MM-DD')
     const startOfMonth = dayjs().startOf('month').format('YYYY-MM-DD')
 
-    if (from.value && to.value) {
+    if (range.value === 'all' || (!from.value && !to.value)) {
+        timeText = 'for All Time'
+    } else if (from.value && to.value) {
         if (from.value === today && to.value === today) {
             timeText = `for Today (${dayjs().format('DD MMM YYYY')})`
         } else if (from.value === yesterday && to.value === yesterday) {
@@ -120,21 +132,26 @@ const filterDescription = computed(() => {
 function applyPreset(preset) {
     const today = dayjs().format('YYYY-MM-DD')
     if (preset === 'today') {
+        range.value = ''
         from.value = today
         to.value   = today
     } else if (preset === 'yesterday') {
+        range.value = ''
         const yesterday = dayjs().subtract(1, 'day').format('YYYY-MM-DD')
         from.value = yesterday
         to.value   = yesterday
     } else if (preset === 'week') {
+        range.value = ''
         from.value = dayjs().startOf('week').format('YYYY-MM-DD')
         to.value   = today
     } else if (preset === 'month') {
+        range.value = ''
         from.value = dayjs().startOf('month').format('YYYY-MM-DD')
         to.value   = today
     } else if (preset === 'all') {
-        from.value = ''
-        to.value   = ''
+        range.value = 'all'
+        from.value  = ''
+        to.value    = ''
     }
     doFilter()
 }
@@ -143,6 +160,7 @@ function doFilter() {
     router.get(
         route('pos.reports.index'),
         {
+            range:   range.value || undefined,
             from:    from.value || undefined,
             to:      to.value || undefined,
             user_id: userId.value || undefined,
@@ -152,6 +170,7 @@ function doFilter() {
 }
 
 function resetFilters() {
+    range.value  = ''
     from.value   = dayjs().startOf('month').format('YYYY-MM-DD')
     to.value     = dayjs().format('YYYY-MM-DD')
     userId.value = ''
@@ -442,12 +461,14 @@ function renderTopItemsChart() {
                         <span class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Custom Range:</span>
                         <input
                             v-model="from"
+                            @input="range = ''"
                             type="date"
                             class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-2 py-1 rounded-md text-xs border border-slate-300 dark:border-slate-600 outline-none"
                         />
                         <span class="text-slate-400 text-xs">to</span>
                         <input
                             v-model="to"
+                            @input="range = ''"
                             type="date"
                             class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-2 py-1 rounded-md text-xs border border-slate-300 dark:border-slate-600 outline-none"
                         />

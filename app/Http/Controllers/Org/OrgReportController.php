@@ -68,6 +68,8 @@ class OrgReportController extends Controller
                     ];
                 case '30_days':
                     return [Carbon::now()->subDays(29)->startOfDay(), Carbon::now()->endOfDay()];
+                case 'all':
+                    return [Carbon::create(2020, 1, 1)->startOfDay(), Carbon::now()->endOfDay()];
             }
         }
 
