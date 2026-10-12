@@ -181,7 +181,7 @@ class HandleInertiaRequests extends Middleware
             'organizations_enabled' => (bool) config('organizations.enabled'),
 
             // ── POS permissions (Spatie-backed, branch-scoped) ─────────────────
-            'pos_permissions' => fn() => ($user && !$user->isSuperAdmin())
+            'pos_permissions' => fn() => $user
                 ? RoleService::allPermissions()
                 : [],
 

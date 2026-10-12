@@ -193,20 +193,33 @@ const allNavLinks = [
 
 // Filter nav links based on permissions, condition, and plan feature capabilities
 const navLinks = computed(() => {
+    const isFullAdmin = Boolean(
+        page.props.auth?.user?.is_super_admin || 
+        perms.value?.isSuperAdmin || 
+        perms.value?.isBranchAdmin || 
+        page.props.auth?.user?.roles?.some(r => r.name === 'branch-admin' || r.name === 'organization_admin')
+    )
+
     return allNavLinks
         .filter(link => {
             if (link.feature && !isPlanFeatureEnabled(link.feature)) return false
             if (link.condition && !link.condition()) return false
             if (link.always) return true
+            if (isFullAdmin) return true
             if (!link.perm || perms.value[link.perm]) return true
-            if (link.children && link.children.some(c => (!c.feature || isPlanFeatureEnabled(c.feature)) && (!c.perm || perms.value[c.perm]) && (!c.condition || c.condition()))) return true
+            if (link.children && link.children.some(c => (!c.feature || isPlanFeatureEnabled(c.feature)) && (isFullAdmin || !c.perm || perms.value[c.perm]) && (!c.condition || c.condition()))) return true
             return false
         })
         .map(link => {
             if (!link.children) return link
             return {
                 ...link,
-                children: link.children.filter(c => (!c.feature || isPlanFeatureEnabled(c.feature)) && (!c.perm || perms.value[c.perm]) && (!c.condition || c.condition()))
+                children: link.children.filter(c => {
+                    if (c.feature && !isPlanFeatureEnabled(c.feature)) return false
+                    if (c.condition && !c.condition()) return false
+                    if (isFullAdmin) return true
+                    return !c.perm || perms.value[c.perm]
+                })
             }
         })
         .filter(link => !link.children || link.children.length > 0)

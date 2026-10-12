@@ -22,6 +22,7 @@ class RoleController extends Controller
         'canManageBarcodes', 'canManageCustomers', 'canManageUsers', 'canEditSettings',
         'canViewReorderPoints', 'canLogExpense', 'canManageExpenses', 'canViewExpenseReports', 'canViewExpiryReport', 'canViewBatchExpiryReport',
         'view_ecommerce_activity', 'canManageTillCashMovements',
+        'canViewAccounting', 'canManageChartOfAccounts', 'canManageJournalEntries', 'canCloseFinancialPeriods',
     ];
 
     public function index()

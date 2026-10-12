@@ -40,6 +40,10 @@ class BranchUserController extends Controller
         'canViewExpenseReports'=> 'View Expenses Report',
         'canViewExpiryReport'  => 'View Item Expiry Report',
         'canViewBatchExpiryReport' => 'View Batch Expiry Report',
+        'canViewAccounting'        => 'View Accounting & Reports',
+        'canManageChartOfAccounts' => 'Manage Chart of Accounts',
+        'canManageJournalEntries'  => 'Create & Reverse Journal Entries',
+        'canCloseFinancialPeriods' => 'Close & Reopen Financial Periods',
         'canResetPassword'   => 'Reset Staff Passwords (Super Admin Granted)',
     ];
 

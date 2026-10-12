@@ -29,6 +29,8 @@ class RoleService
         $user = static::getUser();
         if (!$user) return false;
         if ($user->isSuperAdmin()) return true;
+        if ($user->isOrganizationAdmin()) return true;
+        if ($user->isBranchAdmin()) return true;
 
         // Ensure Spatie team context is set for this user's branch
         if ($user->branch_id) {
@@ -40,8 +42,6 @@ class RoleService
             if ($user->permissions->isNotEmpty()) {
                 return $user->hasDirectPermission($permission);
             }
-
-            if ($user->isBranchAdmin()) return true;
 
             return $user->hasPermissionTo($permission);
         } catch (\Spatie\Permission\Exceptions\PermissionDoesNotExist $e) {

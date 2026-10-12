@@ -137,6 +137,13 @@ class Organization extends Model
         }
 
         $column = str_starts_with($feature, 'feature_') ? $feature : "feature_{$feature}";
+        if ($column === 'feature_accounting' || $column === 'accounting') {
+            $planName = strtolower($subscription->pricingPlan?->name ?? '');
+            if (in_array($planName, ['silver', 'gold', 'enterprise'])) {
+                return true;
+            }
+        }
+
         if (isset($capabilities->{$column})) {
             return (bool) $capabilities->{$column};
         }
@@ -231,10 +238,15 @@ class Organization extends Model
                 'ai_chat_assistant'          => true,
                 'ai_reorder_prediction'      => true,
                 'broadcast_notifications'    => true,
+                'feature_accounting'         => true,
+                'accounting'                 => true,
             ];
         }
 
         $cap = $subscription->pricingPlan?->capabilities;
+        $planName = strtolower($subscription->pricingPlan?->name ?? '');
+        $isAccountingPlan = in_array($planName, ['silver', 'gold', 'enterprise']);
+        $hasAccounting = $cap ? (bool) ($cap->feature_accounting || $isAccountingPlan) : $isAccountingPlan;
 
         return [
             'is_restricted'              => true,
@@ -251,8 +263,8 @@ class Organization extends Model
             'ai_chat_assistant'          => (bool) ($cap?->feature_ai_chat_assistant ?? true),
             'ai_reorder_prediction'      => (bool) ($cap?->feature_ai_reorder_prediction ?? true),
             'broadcast_notifications'    => (bool) ($cap?->feature_broadcast_notifications ?? true),
-            'feature_accounting'         => (bool) ($cap?->feature_accounting ?? false),
-            'accounting'                 => (bool) ($cap?->feature_accounting ?? false),
+            'feature_accounting'         => $hasAccounting,
+            'accounting'                 => $hasAccounting,
         ];
     }
 
