@@ -15,23 +15,38 @@ class ItemController extends Controller
 {
     public function index(Request $request)
     {
-        $branch = current_branch();
+        $branch = $this->resolveActiveBranch($request);
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are accessing an active branch.');
+        }
 
         setPermissionsTeamId($branch->id);
         $branch->ensureDefaultRoles();
 
-        $items = Item::where('branch_id', $branch->id)
+        $itemsQuery = Item::where('branch_id', $branch->id)
             ->with(['category:id,name', 'groupAddress:id,name', 'units'])
             ->when($request->search, function ($q) use ($request) {
                 $q->where(function ($sq) use ($request) {
                     $sq->where('item_name', 'like', '%' . $request->search . '%')
-                       ->orWhere('barcode_number', 'like', '%' . $request->search . '%');
+                        ->orWhere('barcode_number', 'like', '%' . $request->search . '%');
                 });
             })
             ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))
             ->when($request->group_address_id, fn($q) => $q->where('group_address_id', $request->group_address_id))
-            ->latest()
-            ->paginate(25)
+            ->latest();
+
+        $perPageParam = $request->input('per_page', 25);
+        if ($perPageParam === 'all' || $perPageParam === 'All') {
+            $count = (clone $itemsQuery)->count();
+            $perPage = max($count, 25);
+        } elseif (in_array((int) $perPageParam, [25, 50, 100], true)) {
+            $perPage = (int) $perPageParam;
+        } else {
+            $perPage = 25;
+        }
+
+        $items = $itemsQuery
+            ->paginate($perPage)
             ->withQueryString();
 
         // Total stock worth — use the pre-computed stored column (updated on every item save)
@@ -51,14 +66,17 @@ class ItemController extends Controller
             'items' => $items,
             'categories' => $categories,
             'groupAddresses' => $groupAddresses,
-            'filters' => $request->only('search', 'category_id', 'group_address_id'),
+            'filters' => $request->only('search', 'category_id', 'group_address_id', 'per_page'),
             'totalWorth' => (float) $totalWorth,
         ]);
     }
 
     public function create(Request $request)
     {
-        $branch = current_branch();
+        $branch = $this->resolveActiveBranch($request);
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are accessing an active branch.');
+        }
 
         $clonedItem = null;
         if ($request->has('clone_from')) {
@@ -100,9 +118,9 @@ class ItemController extends Controller
 
     public function store(Request $request)
     {
-        $branch = current_branch() ?? ($request->route('branch') ? \App\Models\Branch::where('slug', $request->route('branch'))->first() : null);
-        if (!$branch && auth()->check() && auth()->user()->branch_id) {
-            $branch = \App\Models\Branch::find(auth()->user()->branch_id);
+        $branch = $this->resolveActiveBranch($request);
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are accessing an active branch.');
         }
         $data = $request->validate([
             'item_name' => 'required|string|max:255',
@@ -217,7 +235,10 @@ class ItemController extends Controller
 
     public function edit($branchParam, Item $item)
     {
-        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
+        $branch = $this->resolveActiveBranch(request(), $branchParam);
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are accessing an active branch.');
+        }
         $this->authorizeBranch($item, $branch);
 
         $totalBatchesCount = $item->batches()->count();
@@ -247,7 +268,10 @@ class ItemController extends Controller
 
     public function update(Request $request, $branchParam, Item $item)
     {
-        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
+        $branch = $this->resolveActiveBranch($request, $branchParam);
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are accessing an active branch.');
+        }
         $this->authorizeBranch($item, $branch);
 
         $data = $request->validate([
@@ -352,7 +376,10 @@ class ItemController extends Controller
 
     public function destroy($branchParam, Item $item)
     {
-        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
+        $branch = $this->resolveActiveBranch(request(), $branchParam);
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are accessing an active branch.');
+        }
         $this->authorizeBranch($item, $branch);
 
         if ($item->image_path) {
@@ -372,7 +399,10 @@ class ItemController extends Controller
     /** Duplicate an item directly into the branch catalog */
     public function duplicate(Request $request, $branchParam = null, $itemParam = null)
     {
-        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
+        $branch = $this->resolveActiveBranch($request, $branchParam);
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are accessing an active branch.');
+        }
 
         $item = $itemParam instanceof Item ? $itemParam : Item::with('units')->findOrFail($itemParam ?: $request->route('item'));
         $this->authorizeBranch($item, $branch);
@@ -417,7 +447,10 @@ class ItemController extends Controller
     /** Execute batch operations on selected items */
     public function bulkAction(Request $request, $branchParam = null)
     {
-        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
+        $branch = $this->resolveActiveBranch($request, $branchParam);
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are accessing an active branch.');
+        }
 
         $data = $request->validate([
             'action' => 'required|string|in:delete,update_category,update_group,adjust_prices',
@@ -491,10 +524,7 @@ class ItemController extends Controller
     /** API: real-time item search for POS screen */
     public function search(Request $request)
     {
-        $branch = current_branch() ?? ($request->route('branch') ? \App\Models\Branch::where('slug', $request->route('branch'))->first() : null);
-        if (!$branch && auth()->check() && auth()->user()->branch_id) {
-            $branch = \App\Models\Branch::find(auth()->user()->branch_id);
-        }
+        $branch = $this->resolveActiveBranch($request);
         if (!$branch) {
             return response()->json([]);
         }
@@ -555,7 +585,7 @@ class ItemController extends Controller
     /** API: Get available in-stock IMEIs for an item */
     public function availableImeis(Request $request, $branchParam = null, $item = null)
     {
-        $branch = current_branch() ?? ($branchParam ? \App\Models\Branch::where('slug', $branchParam)->first() : null);
+        $branch = $this->resolveActiveBranch($request, $branchParam);
         $branchId = $branch?->id;
         $itemId = $item instanceof Item ? $item->id : ($request->get('item_id') ?? $item);
 
@@ -754,8 +784,12 @@ class ItemController extends Controller
     /** Export all current branch items into CSV matching multi-row variant schema */
     public function exportCsv(Request $request)
     {
-        $branch = current_branch() ?: \App\Models\Branch::first();
-        $branchName = $branch ? $branch->name : 'branch';
+        $branch = $this->resolveActiveBranch($request);
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are accessing an active branch.');
+        }
+
+        $branchName = $branch->name;
         $fileName = 'skynet_items_' . \Illuminate\Support\Str::slug($branchName) . '_' . date('Ymd_His') . '.csv';
 
         $headers = [
@@ -765,7 +799,7 @@ class ItemController extends Controller
 
         $selectedIds = $request->query('ids') ? explode(',', $request->query('ids')) : null;
 
-        $items = Item::when($branch, fn($q) => $q->where('branch_id', $branch->id))
+        $items = Item::where('branch_id', $branch->id)
             ->when($selectedIds, fn($q) => $q->whereIn('id', $selectedIds))
             ->with(['category', 'groupAddress', 'units'])
             ->latest()
@@ -847,6 +881,62 @@ class ItemController extends Controller
         return response()->stream($callback, 200, $headers);
     }
 
+    /**
+     * Display a clean, high-resolution printable price list & catalog
+     * for offline customer price consultation and manual sales continuity.
+     */
+    public function printCatalog(Request $request)
+    {
+        $branch = $this->resolveActiveBranch($request);
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are accessing an active branch.');
+        }
+
+        $selectedIds = $request->query('ids') ? array_filter(explode(',', $request->query('ids'))) : null;
+        $categoryId = $request->query('category_id');
+        $search = $request->query('search');
+
+        $items = Item::where('branch_id', $branch->id)
+            ->when($selectedIds, fn($q) => $q->whereIn('id', $selectedIds))
+            ->when($categoryId, fn($q) => $q->where('category_id', $categoryId))
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($sq) use ($search) {
+                    $sq->where('item_name', 'like', '%' . $search . '%')
+                        ->orWhere('barcode_number', 'like', '%' . $search . '%');
+                });
+            })
+            ->with([
+                'category:id,name',
+                'groupAddress:id,name',
+                'units' => fn($q) => $q->where('status', 'active')->orderBy('sort_order'),
+            ])
+            ->orderBy('category_id')
+            ->orderBy('item_name')
+            ->get();
+
+        $categories = \App\Models\Category::where('branch_id', $branch->id)
+            ->orWhereNull('branch_id')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return Inertia::render('Items/PrintCatalog', [
+            'branch' => [
+                'id' => $branch->id,
+                'name' => $branch->name,
+                'slug' => $branch->slug,
+                'phone' => $branch->phone,
+                'email' => $branch->email,
+                'address' => $branch->address,
+                'logo_url' => $branch->logo_path ? asset('storage/' . $branch->logo_path) : null,
+            ],
+            'items' => $items,
+            'categories' => $categories,
+            'selectedCategory' => $categoryId ? (int) $categoryId : null,
+            'generatedAt' => now()->format('d M Y, h:i A'),
+            'currencySymbol' => \App\Models\SystemSetting::get('currency_symbol', '₦'),
+        ]);
+    }
+
     /** Import items using multi-row item_ref / is_base_unit format with accurate duplicate reporting */
     public function importNativeCsv(Request $request)
     {
@@ -854,7 +944,11 @@ class ItemController extends Controller
             'csv_file' => 'required|file|mimes:csv,txt|max:10240',
         ]);
 
-        $branch = current_branch() ?: \App\Models\Branch::first();
+        $branch = $this->resolveActiveBranch($request);
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are logged into an active branch.');
+        }
+
         $file = $request->file('csv_file');
         $handle = fopen($file->getRealPath(), 'r');
 
@@ -888,22 +982,12 @@ class ItemController extends Controller
         $priceIdx = $getColIndex(['selling_price', 'price', 'retail_price', 'base_unit_price', 'unit_price']);
         $wholesaleIdx = $getColIndex(['wholesale_price', 'wholesale', 'ws_price', 'base_wholesale_price', 'unit_wholesale_price']);
         $unitLabelIdx = $getColIndex(['unit_name', 'unit_label', 'base_unit_name', 'unit', 'variant_name']);
-        $qtyInBaseIdx = $getColIndex(['quantity_in_base_units', 'quantity in base units', 'base_quantity', 'qty_in_base', 'multiplier', 'units_per_pack', 'pack_quantity', 'carton_quantity', 'conversion_qty']);
+        $qtyInBaseIdx = $getColIndex(['quantity_in_base_units', 'quantity in base units', 'base_quantity', 'qty_in_base', 'multiplier', 'conversion_qty']);
         $isBaseIdx = $getColIndex(['is_base_unit', 'is base unit', 'base_unit', 'is_base', 'base', 'is base', 'is_based_unit']);
         $frontQtyIdx = $getColIndex(['front_store_qty', 'qty', 'front_qty', 'initial_stock_quantity', 'stock_qty', 'quantity']);
         $backQtyIdx = $getColIndex(['back_store_qty', 'back_qty', 'back_store_quantity']);
         $expiryIdx = $getColIndex(['expiry_date', 'expiry', 'expiration_date']);
         $descIdx = $getColIndex(['item_description', 'description', 'notes']);
-
-        // Legacy pack/carton aliases for backwards compatibility with old CSV files
-        $packNameIdx = $getColIndex(['pack_unit_name', 'pack_name', 'pack_label']);
-        $packQtyIdx = $getColIndex(['pack_quantity', 'units_per_pack', 'pack_qty', 'pack_size']);
-        $packPriceIdx = $getColIndex(['pack_price', 'pack_selling_price']);
-        $packWholesaleIdx = $getColIndex(['pack_wholesale_price', 'pack_ws_price']);
-        $cartonNameIdx = $getColIndex(['carton_unit_name', 'carton_name', 'carton_label']);
-        $cartonQtyIdx = $getColIndex(['carton_quantity', 'packs_per_carton', 'carton_qty', 'carton_size']);
-        $cartonPriceIdx = $getColIndex(['carton_price', 'carton_selling_price']);
-        $cartonWholesaleIdx = $getColIndex(['carton_wholesale_price', 'carton_ws_price']);
 
         $rowNumber = 1;
         $rawRows = [];
@@ -975,41 +1059,6 @@ class ItemController extends Controller
             $expiryDate = $expiryIdx !== null ? trim($r[$expiryIdx] ?? '') : null;
             $desc = $descIdx !== null ? trim($r[$descIdx] ?? '') : null;
 
-            // Legacy pack/carton support for single-row files
-            $legacyPack = null;
-            if ($packQtyIdx !== null || $packPriceIdx !== null) {
-                $pQty = $packQtyIdx !== null ? max(1, (int) preg_replace('/[^\d]/', '', (string) ($r[$packQtyIdx] ?? '1'))) : 1;
-                $pPrice = $packPriceIdx !== null && trim((string) ($r[$packPriceIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$packPriceIdx]) : null;
-                $pWholesale = $packWholesaleIdx !== null && trim((string) ($r[$packWholesaleIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$packWholesaleIdx]) : null;
-                $pName = $packNameIdx !== null && trim((string) ($r[$packNameIdx] ?? '')) !== '' ? trim($r[$packNameIdx]) : 'Pack';
-                if (($pPrice !== null && $pPrice > 0) || $pQty > 1) {
-                    $legacyPack = [
-                        'unit_name' => $pName,
-                        'quantity_in_base_units' => $pQty,
-                        'selling_price' => $pPrice ?? ($price * $pQty),
-                        'wholesale_price' => $pWholesale ?? ($wholesale * $pQty),
-                    ];
-                }
-            }
-
-            $legacyCarton = null;
-            if ($cartonQtyIdx !== null || $cartonPriceIdx !== null) {
-                $cQty = $cartonQtyIdx !== null ? max(1, (int) preg_replace('/[^\d]/', '', (string) ($r[$cartonQtyIdx] ?? '1'))) : 1;
-                $cPrice = $cartonPriceIdx !== null && trim((string) ($r[$cartonPriceIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$cartonPriceIdx]) : null;
-                $cWholesale = $cartonWholesaleIdx !== null && trim((string) ($r[$cartonWholesaleIdx] ?? '')) !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$cartonWholesaleIdx]) : null;
-                $cName = $cartonNameIdx !== null && trim((string) ($r[$cartonNameIdx] ?? '')) !== '' ? trim($r[$cartonNameIdx]) : 'Carton';
-                if (($cPrice !== null && $cPrice > 0) || $cQty > 1) {
-                    $pMultiplier = $legacyPack ? $legacyPack['quantity_in_base_units'] : 1;
-                    $cBaseQty = $pMultiplier * $cQty;
-                    $legacyCarton = [
-                        'unit_name' => $cName,
-                        'quantity_in_base_units' => $cBaseQty,
-                        'selling_price' => $cPrice ?? ($price * $cBaseQty),
-                        'wholesale_price' => $cWholesale ?? ($wholesale * $cBaseQty),
-                    ];
-                }
-            }
-
             $rowObj = [
                 'line' => $line,
                 'item_name' => $itemName,
@@ -1026,8 +1075,6 @@ class ItemController extends Controller
                 'back_store_qty' => $backQty,
                 'expiry_date' => $expiryDate,
                 'item_description' => $desc,
-                'legacy_pack' => $legacyPack,
-                'legacy_carton' => $legacyCarton,
             ];
 
             if (!isset($itemGroups[$refKey])) {
@@ -1161,33 +1208,6 @@ class ItemController extends Controller
                     }
                 }
 
-                // If legacy pack / carton columns were present on base row, create them as ItemUnits
-                if (!empty($baseRow['legacy_pack'])) {
-                    ItemUnit::create([
-                        'item_id' => $item->id,
-                        'branch_id' => $branch->id,
-                        'unit_name' => $baseRow['legacy_pack']['unit_name'],
-                        'quantity_in_base_units' => $baseRow['legacy_pack']['quantity_in_base_units'],
-                        'selling_price' => $baseRow['legacy_pack']['selling_price'],
-                        'wholesale_price' => $baseRow['legacy_pack']['wholesale_price'],
-                        'sort_order' => $variantIndex++,
-                        'status' => 'active',
-                    ]);
-                }
-
-                if (!empty($baseRow['legacy_carton'])) {
-                    ItemUnit::create([
-                        'item_id' => $item->id,
-                        'branch_id' => $branch->id,
-                        'unit_name' => $baseRow['legacy_carton']['unit_name'],
-                        'quantity_in_base_units' => $baseRow['legacy_carton']['quantity_in_base_units'],
-                        'selling_price' => $baseRow['legacy_carton']['selling_price'],
-                        'wholesale_price' => $baseRow['legacy_carton']['wholesale_price'],
-                        'sort_order' => $variantIndex++,
-                        'status' => 'active',
-                    ]);
-                }
-
                 $successCount++;
             }
 
@@ -1219,5 +1239,43 @@ class ItemController extends Controller
         if ($item->branch_id !== $branch?->id) {
             abort(403, 'This item does not belong to your branch.');
         }
+    }
+
+    /**
+     * Resolve the active branch from current context, route parameter, or the authenticated user.
+     */
+    protected function resolveActiveBranch(?Request $request = null, $branchParam = null): ?\App\Models\Branch
+    {
+        $branch = current_branch();
+
+        if (!$branch && $branchParam) {
+            if ($branchParam instanceof \App\Models\Branch) {
+                $branch = $branchParam;
+            } elseif (is_string($branchParam) && $branchParam !== '') {
+                $branch = \App\Models\Branch::where('slug', $branchParam)->first();
+            }
+        }
+
+        if (!$branch && $request) {
+            $param = $request->route('branch');
+            if ($param instanceof \App\Models\Branch) {
+                $branch = $param;
+            } elseif (is_string($param) && $param !== '') {
+                $branch = \App\Models\Branch::where('slug', $param)->first();
+            }
+        }
+
+        if (!$branch && auth()->check()) {
+            $user = auth()->user();
+            if ($user->relationLoaded('branch') && $user->branch) {
+                $branch = $user->branch;
+            } elseif ($user->branch) {
+                $branch = $user->branch;
+            } elseif (!empty($user->branch_id)) {
+                $branch = \App\Models\Branch::find($user->branch_id);
+            }
+        }
+
+        return $branch;
     }
 }

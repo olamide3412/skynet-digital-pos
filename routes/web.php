@@ -633,6 +633,7 @@ Route::prefix('{branch}')
         // Items
         Route::get('items/export-template', [PosItemController::class, 'exportTemplate'])->name('items.export-template')->middleware('pos.role:canManageItems');
         Route::get('items/export',          [PosItemController::class, 'exportCsv'])->name('items.export')->middleware('pos.role:canManageItems');
+        Route::get('items/print-catalog',   [PosItemController::class, 'printCatalog'])->name('items.print-catalog');
         Route::post('items/import',          [PosItemController::class, 'importNativeCsv'])->name('items.import')->middleware(['pos.role:canManageItems', 'plan.feature:inventory_import']);
         Route::post('items/import-medfusion',[PosItemController::class, 'importMedfusionCsv'])->name('items.import-medfusion')->middleware(['pos.role:canManageItems', 'plan.feature:inventory_import']);
         Route::post('items/bulk-action',     [PosItemController::class, 'bulkAction'])->name('items.bulk-action')->middleware('pos.role:canManageItems');

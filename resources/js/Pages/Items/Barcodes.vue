@@ -10,28 +10,38 @@ import axios from 'axios'
 defineOptions({ layout: PosLayout })
 
 const props = defineProps({
-    items:        { type: Object, required: true },
-    missingCount: { type: Number, default: 0 },
-    totalItems:   { type: Number, default: 0 },
-    printLogs:    { type: Object, default: () => ({ data: [] }) },
-    categories:   { type: Array,  default: () => [] },
-    settings:     { type: Object, default: () => ({}) },
-    filters:      { type: Object, default: () => ({}) },
+    items:            { type: Object, required: true },
+    missingCount:     { type: Number, default: 0 },
+    totalItems:       { type: Number, default: 0 },
+    printLogs:        { type: Object, default: () => ({ data: [] }) },
+    categories:       { type: Array,  default: () => [] },
+    settings:         { type: Object, default: () => ({}) },
+    filters:          { type: Object, default: () => ({}) },
+    preselectedItems: { type: Array,  default: () => [] },
+    branch:           { type: Object, default: null },
 })
 
 const page = usePage()
 const { format } = useCurrency()
 
 // ── Active Tab ─────────────────────────────────────────────────────────────
-const activeTab = ref(props.missingCount > 0 ? 'generator' : 'studio')
+const hasPreselected = computed(() => (props.preselectedItems && props.preselectedItems.length > 0) || Boolean(props.filters?.item_ids))
+const activeTab = ref(hasPreselected.value ? 'studio' : (props.missingCount > 0 ? 'generator' : 'studio'))
 
 // ── Search & Filter State ──────────────────────────────────────────────────
 const search       = ref(props.filters.search || '')
 const categoryId   = ref(props.filters.category_id || '')
 const filterStatus = ref(props.filters.filter || '')
 
+const currentBranchSlug = computed(() => {
+    return page.props.current_branch?.slug
+        || props.branch?.slug
+        || route().params?.branch
+        || ''
+})
+
 function applyFilters() {
-    router.get(route('pos.items.barcodes'), {
+    router.get(route('pos.items.barcodes', { branch: currentBranchSlug.value }), {
         search:      search.value || undefined,
         category_id: categoryId.value || undefined,
         filter:      filterStatus.value || undefined,
@@ -179,6 +189,33 @@ function deleteTemplate(index) {
 // Map of item_id -> { item, quantity }
 const selectedItems = ref({})
 
+function loadPreselectedItems() {
+    if (props.preselectedItems && props.preselectedItems.length > 0) {
+        props.preselectedItems.forEach(item => {
+            if (item && item.barcode_number && !item.barcode_number.startsWith('NO_BARCODE')) {
+                selectedItems.value[item.id] = {
+                    item,
+                    quantity: 1,
+                }
+            }
+        })
+        activeTab.value = 'studio'
+    } else if (props.filters?.item_ids && props.items?.data) {
+        const rawIds = String(props.filters.item_ids).split(',').map(s => s.trim())
+        props.items.data.forEach(item => {
+            if (rawIds.includes(String(item.id)) && item.barcode_number && !item.barcode_number.startsWith('NO_BARCODE')) {
+                selectedItems.value[item.id] = {
+                    item,
+                    quantity: 1,
+                }
+            }
+        })
+        if (Object.keys(selectedItems.value).length > 0) {
+            activeTab.value = 'studio'
+        }
+    }
+}
+
 function toggleItemSelection(item) {
     if (!item.barcode_number || item.barcode_number.startsWith('NO_BARCODE')) return
     if (selectedItems.value[item.id]) {
@@ -278,8 +315,17 @@ watch([selectedPreset, customWidth, customHeight, labelConfig, selectedItems, ac
     renderBarcodes()
 }, { deep: true })
 
+watch(() => props.preselectedItems, (newVal) => {
+    if (newVal && newVal.length > 0) {
+        loadPreselectedItems()
+        activeTab.value = 'studio'
+        renderBarcodes()
+    }
+}, { immediate: true, deep: true })
+
 onMounted(() => {
     loadTemplates()
+    loadPreselectedItems()
     renderBarcodes()
 })
 

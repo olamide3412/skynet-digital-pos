@@ -17,7 +17,37 @@ class BarcodeController extends Controller
 {
     public function index(Request $request)
     {
-        $branch = current_branch();
+        $branch = current_branch()
+            ?? ($request->route('branch') ? \App\Models\Branch::where('slug', $request->route('branch'))->first() : null)
+            ?? (auth()->check() && auth()->user()->branch_id ? \App\Models\Branch::find(auth()->user()->branch_id) : null);
+
+        if (!$branch) {
+            return back()->with('error', 'Active branch could not be determined. Please ensure you are logged into a branch.');
+        }
+
+        // Pre-selected items for Label Studio (e.g. sent from All Items bulk action via item_ids or ids)
+        $rawItemIds = $request->query('item_ids') ?: $request->query('ids');
+        $preselectedItems = collect();
+        if ($rawItemIds) {
+            $ids = is_array($rawItemIds) ? $rawItemIds : explode(',', (string) $rawItemIds);
+            $ids = array_filter(array_map('trim', $ids));
+            if (!empty($ids)) {
+                $targetItems = Item::where('branch_id', $branch->id)
+                    ->whereIn('id', $ids)
+                    ->with('category:id,name')
+                    ->get();
+
+                foreach ($targetItems as $targetItem) {
+                    if (!$this->hasValidBarcode($targetItem->barcode_number)) {
+                        $newBarcode = $this->generateUniqueCode($branch->id, $targetItem->id);
+                        $targetItem->update(['barcode_number' => $newBarcode]);
+                        ActivityLogger::item("Auto-generated barcode '{$newBarcode}' for item '{$targetItem->item_name}'", $branch->id);
+                    }
+                }
+
+                $preselectedItems = $targetItems->values();
+            }
+        }
 
         // 1. Items query for Label Studio & History
         $itemsQuery = Item::where('branch_id', $branch->id)
@@ -41,7 +71,7 @@ class BarcodeController extends Controller
                   ->where('barcode_number', '!=', '')
                   ->where('barcode_number', 'not like', 'NO_BARCODE%');
             })
-            ->when($request->item_ids, function ($q, $itemIds) {
+            ->when($request->item_ids && $preselectedItems->isEmpty(), function ($q, $itemIds) {
                 $ids = is_array($itemIds) ? $itemIds : explode(',', $itemIds);
                 $q->whereIn('id', $ids);
             })
@@ -79,14 +109,15 @@ class BarcodeController extends Controller
         }
 
         return Inertia::render('Items/Barcodes', [
-            'items'        => $items,
-            'missingCount' => $missingCount,
-            'totalItems'   => $totalItems,
-            'printLogs'    => $printLogs,
-            'categories'   => $categories,
-            'settings'     => $settingsData,
-            'branch'       => $branch ? ['id' => $branch->id, 'name' => $branch->name] : null,
-            'filters'      => $request->only(['search', 'category_id', 'filter']),
+            'items'            => $items,
+            'missingCount'     => $missingCount,
+            'totalItems'       => $totalItems,
+            'printLogs'        => $printLogs,
+            'categories'       => $categories,
+            'settings'         => $settingsData,
+            'branch'           => $branch ? ['id' => $branch->id, 'name' => $branch->name] : null,
+            'filters'          => $request->only(['search', 'category_id', 'filter', 'item_ids']),
+            'preselectedItems' => $preselectedItems,
         ]);
     }
 

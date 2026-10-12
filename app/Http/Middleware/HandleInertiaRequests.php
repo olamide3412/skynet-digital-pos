@@ -33,17 +33,23 @@ class HandleInertiaRequests extends Middleware
             app()->instance('current_branch', $activeBranch);
         }
 
-        if ($activeBranch) {
-            \Illuminate\Support\Facades\URL::defaults(['branch' => $activeBranch->slug]);
-        }
-
         $defaultBranch = \App\Models\Branch::orderBy('id')->first();
         $branch = $activeBranch ?? $defaultBranch;
 
+        if ($branch) {
+            \Illuminate\Support\Facades\URL::defaults(['branch' => $branch->slug]);
+        }
 
         return [
             ...parent::share($request),
             'csrf_token' => fn() => csrf_token(),
+            'branch_slug' => fn() => $branch?->slug,
+            'current_branch_slug' => fn() => $branch?->slug,
+            'ziggy' => fn() => [
+                'defaults' => array_filter([
+                    'branch' => $branch?->slug,
+                ]),
+            ],
 
             // ── Auth ──────────────────────────────────────────────────────────
             'auth' => [

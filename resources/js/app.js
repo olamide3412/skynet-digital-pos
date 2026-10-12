@@ -96,21 +96,83 @@ function applyTheme(themeColor, customPrimaryHex, customSecondaryHex, darkModeAc
     }
 }
 
-// Helper to reliably extract the active branch slug from props, URL, or defaults
+// Global storage for latest Inertia page props across visits
+let latestPageProps = null;
+
+export function cacheActiveBranchSlug(slug) {
+    if (!slug || typeof slug !== 'string') return;
+    if (typeof window !== 'undefined') {
+        window.__CURRENT_BRANCH_SLUG__ = slug;
+        try {
+            sessionStorage.setItem('active_branch_slug', slug);
+            localStorage.setItem('active_branch_slug', slug);
+        } catch (_) {}
+        syncZiggyDefaults(slug);
+    }
+}
+
+// Helper to reliably extract the active branch slug from props, URL, cache, or defaults
 export function getActiveBranchSlug(pageProps) {
     if (typeof window === 'undefined') return null;
-    const pathname = window.location.pathname;
-    const segments = pathname.split('/').filter(Boolean);
-    const firstSegment = segments[0] || '';
-    const reserved = ['superadmin', 'org', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
-    const urlBranch = (!reserved.includes(firstSegment) && firstSegment) ? firstSegment : null;
 
-    return urlBranch
+    // 1. Check explicit pageProps or latestPageProps
+    const propsCandidate = pageProps?.branch_slug
+        || pageProps?.current_branch_slug
         || pageProps?.current_branch?.slug
         || pageProps?.branch?.slug
         || pageProps?.auth?.user?.branch?.slug
-        || pageProps?.default_branch?.slug
-        || (window.Ziggy?.defaults?.branch || null);
+        || latestPageProps?.branch_slug
+        || latestPageProps?.current_branch_slug
+        || latestPageProps?.current_branch?.slug
+        || latestPageProps?.branch?.slug
+        || latestPageProps?.auth?.user?.branch?.slug;
+
+    if (propsCandidate) {
+        cacheActiveBranchSlug(propsCandidate);
+        return propsCandidate;
+    }
+
+    // 2. Check URL pathname first segment (if not reserved)
+    const pathname = window.location.pathname;
+    const segments = pathname.split('/').filter(Boolean);
+    const firstSegment = segments[0] || '';
+    const reserved = ['superadmin', 'org', 'admin', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
+    if (firstSegment && !reserved.includes(firstSegment)) {
+        cacheActiveBranchSlug(firstSegment);
+        return firstSegment;
+    }
+
+    // 3. Check memory & web storage cache
+    if (window.__CURRENT_BRANCH_SLUG__) {
+        return window.__CURRENT_BRANCH_SLUG__;
+    }
+
+    try {
+        const sessionSlug = sessionStorage.getItem('active_branch_slug');
+        if (sessionSlug) {
+            window.__CURRENT_BRANCH_SLUG__ = sessionSlug;
+            return sessionSlug;
+        }
+        const localSlug = localStorage.getItem('active_branch_slug');
+        if (localSlug) {
+            window.__CURRENT_BRANCH_SLUG__ = localSlug;
+            return localSlug;
+        }
+    } catch (_) {}
+
+    // 4. Ziggy defaults
+    if (window.Ziggy?.defaults?.branch) {
+        return window.Ziggy.defaults.branch;
+    }
+
+    // 5. Default branch fallback
+    const fallback = pageProps?.default_branch?.slug || latestPageProps?.default_branch?.slug;
+    if (fallback) {
+        cacheActiveBranchSlug(fallback);
+        return fallback;
+    }
+
+    return null;
 }
 
 function syncZiggyDefaults(branchSlug) {
@@ -135,9 +197,9 @@ router.on('start', (event) => {
         const urlStr = event?.detail?.visit?.url?.pathname || event?.detail?.visit?.url?.href || '';
         const path = urlStr.startsWith('http') ? new URL(urlStr).pathname : urlStr;
         const first = path.split('/').filter(Boolean)[0];
-        const reserved = ['superadmin', 'org', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
+        const reserved = ['superadmin', 'org', 'admin', 'api', 'build', 'storage', 'images', 'vendor', 'livewire', 'login', 'logout', 'register', 'password'];
         if (first && !reserved.includes(first)) {
-            syncZiggyDefaults(first);
+            cacheActiveBranchSlug(first);
         }
     } catch {
         // Fallback silently
@@ -147,6 +209,7 @@ router.on('start', (event) => {
 // Update on success (when page props arrive)
 router.on('success', (event) => {
     const props = event.detail.page.props;
+    latestPageProps = props;
     const branchSlug = getActiveBranchSlug(props);
     syncZiggyDefaults(branchSlug);
 });
@@ -154,6 +217,7 @@ router.on('success', (event) => {
 // Update on navigate (final phase)
 router.on('navigate', (event) => {
     const props = event.detail.page.props;
+    latestPageProps = props;
     const branchSlug = getActiveBranchSlug(props);
     applyTheme(props.theme_color, props.custom_primary_hex, props.custom_secondary_hex, props.dark_mode_accent_mode, props.custom_dark_primary_hex);
     syncZiggyDefaults(branchSlug);
@@ -222,6 +286,8 @@ createInertiaApp({
             });
     },
     setup({ el, App, props, plugin }) {
+        latestPageProps = props.initialPage.props;
+
         // Initialize theme color and Ziggy defaults
         applyTheme(props.initialPage.props.theme_color, props.initialPage.props.custom_primary_hex, props.initialPage.props.custom_secondary_hex);
 
@@ -238,10 +304,16 @@ createInertiaApp({
         const rawRoute = app.config.globalProperties.route || (typeof window !== 'undefined' ? window.route : null);
         if (rawRoute) {
             const smartRoute = (name, params, absolute, config) => {
-                if (typeof name === 'string' && name.startsWith('pos.')) {
-                    const currentSlug = getActiveBranchSlug(router.page?.props)
+                const isPos = typeof name === 'string' && name.startsWith('pos.');
+                let currentSlug = null;
+
+                if (isPos) {
+                    currentSlug = getActiveBranchSlug(latestPageProps)
                         || window.Ziggy?.defaults?.branch
+                        || window.__CURRENT_BRANCH_SLUG__
+                        || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('active_branch_slug') : null)
                         || getActiveBranchSlug(props.initialPage.props);
+
                     if (currentSlug) {
                         syncZiggyDefaults(currentSlug);
                     }
@@ -274,7 +346,35 @@ createInertiaApp({
                         }
                     }
                 }
-                return rawRoute(name, params, absolute, config);
+
+                // Defensive execution: never throw an unhandled exception into Vue SFC render
+                try {
+                    return rawRoute(name, params, absolute, config);
+                } catch (err) {
+                    console.warn(`[smartRoute] Caught route error for "${name}":`, err?.message);
+                    if (isPos) {
+                        const fallbackSlug = currentSlug
+                            || window.__CURRENT_BRANCH_SLUG__
+                            || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('active_branch_slug') : null)
+                            || window.Ziggy?.defaults?.branch
+                            || 'branch';
+
+                        try {
+                            const safeParams = (typeof params === 'object' && params !== null)
+                                ? { branch: fallbackSlug, ...params }
+                                : { branch: fallbackSlug };
+                            return rawRoute(name, safeParams, absolute, config);
+                        } catch (fallbackErr) {
+                            const ziggyConfig = config || (typeof window !== 'undefined' ? window.Ziggy : null);
+                            const routeDef = ziggyConfig?.routes?.[name];
+                            if (routeDef?.uri) {
+                                return '/' + routeDef.uri.replace('{branch}', fallbackSlug);
+                            }
+                            return '#';
+                        }
+                    }
+                    throw err;
+                }
             };
 
             app.config.globalProperties.route = smartRoute;
