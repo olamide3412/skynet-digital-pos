@@ -295,6 +295,7 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
         // Plan Capabilities & System Limits (Operational Engine)
         Route::prefix('plan-capabilities')->name('plan-capabilities.')->group(function () {
             Route::get('/',              [\App\Http\Controllers\SuperAdmin\PlanCapabilityController::class, 'index'])->name('index');
+            Route::put('/',              [\App\Http\Controllers\SuperAdmin\PlanCapabilityController::class, 'update'])->name('update.base');
             Route::put('/{plan}',        [\App\Http\Controllers\SuperAdmin\PlanCapabilityController::class, 'update'])->name('update');
         });
 

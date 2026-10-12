@@ -27,6 +27,7 @@ function createFormData(plan) {
     const isUsersUnlimited = caps.max_users_per_branch === null
 
     return {
+        plan_id: plan?.id,
         ai_credits_monthly: isAiUnmetered ? 100 : (caps.ai_credits_monthly ?? 25),
         is_ai_unmetered: isAiUnmetered,
         ai_credit_pool_type: caps.ai_credit_pool_type || 'per_branch',
@@ -80,8 +81,9 @@ function resetForm() {
 }
 
 function submit() {
-    if (!selectedPlan.value) return
-    form.put(route('superadmin.plan-capabilities.update', selectedPlan.value.id), {
+    if (!selectedPlan.value?.id) return
+    form.plan_id = selectedPlan.value.id
+    form.put(route('superadmin.plan-capabilities.update', { plan: selectedPlan.value.id }), {
         preserveScroll: true,
     })
 }

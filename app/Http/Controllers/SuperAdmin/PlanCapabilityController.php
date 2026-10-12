@@ -47,8 +47,12 @@ class PlanCapabilityController extends Controller
         ]);
     }
 
-    public function update(Request $request, PricingPlan $plan)
+    public function update(Request $request, $plan = null)
     {
+        if (!$plan instanceof PricingPlan) {
+            $planId = $plan ?? $request->input('plan_id') ?? $request->input('id');
+            $plan = PricingPlan::findOrFail($planId);
+        }
         $validated = $request->validate([
             'ai_credits_monthly'                 => 'nullable|integer|min:0',
             'is_ai_unmetered'                    => 'nullable|boolean',
