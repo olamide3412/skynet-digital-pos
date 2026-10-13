@@ -33,7 +33,7 @@ class SalePostingService
             }
 
             $settings = PosSettings::forBranch($branchId);
-            if (!$settings->accounting_started_at) {
+            if (!self::ensureBranchAccountingReady($branch, $settings)) {
                 return null;
             }
 
@@ -232,7 +232,7 @@ class SalePostingService
             }
 
             $settings = PosSettings::forBranch($branchId);
-            if (!$settings->accounting_started_at) {
+            if (!self::ensureBranchAccountingReady($branch, $settings)) {
                 return null;
             }
 
@@ -300,7 +300,7 @@ class SalePostingService
             }
 
             $settings = PosSettings::forBranch($branchId);
-            if (!$settings->accounting_started_at) {
+            if (!self::ensureBranchAccountingReady($branch, $settings)) {
                 return null;
             }
 
@@ -388,7 +388,7 @@ class SalePostingService
             }
 
             $settings = PosSettings::forBranch($branchId);
-            if (!$settings->accounting_started_at) {
+            if (!self::ensureBranchAccountingReady($branch, $settings)) {
                 return null;
             }
 
@@ -435,5 +435,18 @@ class SalePostingService
             Log::error("Accounting postTillClose failed: " . $e->getMessage(), ['exception' => $e]);
             return null;
         }
+    }
+
+    private static function ensureBranchAccountingReady(Branch $branch, PosSettings &$settings): bool
+    {
+        if (!$settings->accounting_started_at) {
+            if ($branch->organization && $branch->organization->hasFeature('accounting')) {
+                AccountSetupService::activateBranch($branch);
+                $settings = PosSettings::forBranch($branch->id);
+                return true;
+            }
+            return false;
+        }
+        return true;
     }
 }

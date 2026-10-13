@@ -216,6 +216,10 @@ class BranchController extends Controller
                 'created_at'      => now(),
             ]);
 
+            if ($branch->organization && $branch->organization->hasFeature('accounting')) {
+                \App\Modules\Accounting\Services\AccountSetupService::activateBranch($branch);
+            }
+
             return $branch;
         });
 

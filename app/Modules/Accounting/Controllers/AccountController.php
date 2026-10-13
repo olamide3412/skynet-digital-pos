@@ -16,6 +16,13 @@ class AccountController extends Controller
     {
         $branch = current_branch();
 
+        if ($branch && $branch->organization && $branch->organization->hasFeature('accounting')) {
+            $settings = \App\Models\PosSettings::forBranch($branch->id);
+            if (!$settings->accounting_started_at || Account::where('branch_id', $branch->id)->count() === 0) {
+                \App\Modules\Accounting\Services\AccountSetupService::activateBranch($branch);
+            }
+        }
+
         $accounts = Account::where('branch_id', $branch->id)
             ->when($request->search, function ($q, $search) {
                 $q->where(function ($sub) use ($search) {

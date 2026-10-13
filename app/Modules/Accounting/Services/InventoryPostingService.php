@@ -42,7 +42,7 @@ class InventoryPostingService
             }
 
             $settings = PosSettings::forBranch($branchId);
-            if (!$settings->accounting_started_at) {
+            if (!self::ensureBranchAccountingReady($branch, $settings)) {
                 return null;
             }
 
@@ -136,7 +136,7 @@ class InventoryPostingService
             }
 
             $settings = PosSettings::forBranch($branchId);
-            if (!$settings->accounting_started_at) {
+            if (!self::ensureBranchAccountingReady($branch, $settings)) {
                 return null;
             }
 
@@ -238,7 +238,7 @@ class InventoryPostingService
             $fromBranch = Branch::with('organization')->find($fromBranchId);
             if ($fromBranch && (!$fromBranch->organization || $fromBranch->organization->hasFeature('accounting'))) {
                 $fromSettings = PosSettings::forBranch($fromBranchId);
-                if ($fromSettings->accounting_started_at) {
+                if (self::ensureBranchAccountingReady($fromBranch, $fromSettings)) {
                     $accounts = Account::where('branch_id', $fromBranchId)
                         ->where('is_active', true)
                         ->get()
@@ -287,7 +287,7 @@ class InventoryPostingService
             $toBranch = Branch::with('organization')->find($toBranchId);
             if ($toBranch && (!$toBranch->organization || $toBranch->organization->hasFeature('accounting'))) {
                 $toSettings = PosSettings::forBranch($toBranchId);
-                if ($toSettings->accounting_started_at) {
+                if (self::ensureBranchAccountingReady($toBranch, $toSettings)) {
                     $accounts = Account::where('branch_id', $toBranchId)
                         ->where('is_active', true)
                         ->get()
@@ -357,7 +357,7 @@ class InventoryPostingService
             }
 
             $settings = PosSettings::forBranch($branchId);
-            if (!$settings->accounting_started_at) {
+            if (!self::ensureBranchAccountingReady($branch, $settings)) {
                 return null;
             }
 
@@ -496,7 +496,7 @@ class InventoryPostingService
             }
 
             $settings = PosSettings::forBranch($branch->id);
-            if (!$settings->accounting_started_at) {
+            if (!self::ensureBranchAccountingReady($branch, $settings)) {
                 return null;
             }
 
@@ -545,5 +545,18 @@ class InventoryPostingService
             ]);
             return null;
         }
+    }
+
+    private static function ensureBranchAccountingReady(Branch $branch, PosSettings &$settings): bool
+    {
+        if (!$settings->accounting_started_at) {
+            if ($branch->organization && $branch->organization->hasFeature('accounting')) {
+                AccountSetupService::activateBranch($branch);
+                $settings = PosSettings::forBranch($branch->id);
+                return true;
+            }
+            return false;
+        }
+        return true;
     }
 }

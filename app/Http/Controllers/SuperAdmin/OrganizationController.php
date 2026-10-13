@@ -568,6 +568,14 @@ class OrganizationController extends Controller
                 ],
                 'created_at'      => now(),
             ]);
+
+            // Auto-activate accounting for all branches if the plan has accounting
+            $orgFresh = $organization->fresh(['branches']);
+            if ($orgFresh && $orgFresh->hasFeature('accounting')) {
+                foreach ($orgFresh->branches as $branch) {
+                    \App\Modules\Accounting\Services\AccountSetupService::activateBranch($branch);
+                }
+            }
         });
 
         return back()->with('success', "Subscription plan updated successfully for {$organization->name}.");

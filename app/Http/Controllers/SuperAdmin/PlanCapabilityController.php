@@ -101,6 +101,18 @@ class PlanCapabilityController extends Controller
             $data
         );
 
+        if (!empty($data['feature_accounting'])) {
+            $orgs = \App\Models\Organization::whereHas('subscription', function ($q) use ($plan) {
+                $q->where('pricing_plan_id', $plan->id)->where('status', 'active');
+            })->with('branches')->get();
+
+            foreach ($orgs as $org) {
+                foreach ($org->branches as $branch) {
+                    \App\Modules\Accounting\Services\AccountSetupService::activateBranch($branch);
+                }
+            }
+        }
+
         ActivityLogger::log(
             'plan_capabilities_updated',
             "Updated engine capabilities and limits for plan {$plan->name}"

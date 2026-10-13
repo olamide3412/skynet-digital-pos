@@ -218,6 +218,14 @@ class SubscriptionBillingService
 
             Log::info("Confirmed subscription {$payment->type} for Org #{$org->id} ({$org->name}) on plan {$plan->name}");
 
+            // Auto-activate accounting for all branches if the plan has accounting
+            $orgFresh = $org->fresh(['branches']);
+            if ($orgFresh && $orgFresh->hasFeature('accounting')) {
+                foreach ($orgFresh->branches as $branch) {
+                    \App\Modules\Accounting\Services\AccountSetupService::activateBranch($branch);
+                }
+            }
+
             return $payment;
         });
     }
