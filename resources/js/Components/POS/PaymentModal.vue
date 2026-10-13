@@ -273,8 +273,46 @@ async function submitSale() {
     }
 
     try {
-        const res = await axios.post(route('pos.sales.store'), payload, { timeout: 3500 })
-        emit('completed', res.data?.sale ?? { receipt_id: res.data?.receipt_id, ...payload })
+        const res = await axios.post(route('pos.sales.store'), payload, {
+            timeout: 20000,
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+
+        let completedSale = res.data?.sale
+        if (!completedSale) {
+            // Build rich fallback object from active cart so receipt is NEVER blank or zero
+            completedSale = {
+                id: res.data?.sale_id || res.data?.id || null,
+                receipt_id: res.data?.receipt_id || (res.data?.sale ? res.data.sale.receipt_id : null) || `REC-${Date.now()}`,
+                created_at: new Date().toISOString(),
+                user: page.props.auth?.user || null,
+                customer: cart.customer || null,
+                payment_method: tab.value,
+                amount_paid: amountPaid.value,
+                change_bal: change.value,
+                final_total: cart.grandTotal,
+                subtotal: cart.subtotal,
+                discount_amount: cart.discountAmount,
+                tax_amount: cart.taxAmount,
+                cash: tab.value === 'Cash' || tab.value === 'Split' ? Number(cashInput.value || 0) : 0,
+                bank_transfer: tab.value === 'Bank Transfer' || tab.value === 'Split' ? Number(bankInput.value || 0) : 0,
+                is_debt: tab.value === 'Debt',
+                sale_orders: cart.items.map(item => ({
+                    item_id: item.item_id,
+                    item_name: item.item_name,
+                    imei_or_device_id: item.selected_imei || null,
+                    unit_used: item.unit_used || 'unit',
+                    selling_price: item.unit_price,
+                    total_selling_price: item.line_total ?? (item.unit_price * item.qty),
+                    qty: item.qty || 1,
+                })),
+            }
+        }
+
+        emit('completed', completedSale)
     } catch (err) {
         // If network request failed / timed out and offline mode is enabled, fallback to offline sale queue!
         const isNetworkFailure = err.code === 'ECONNABORTED' || !err.response || err.message?.includes('Network Error') || err.message?.includes('timeout')

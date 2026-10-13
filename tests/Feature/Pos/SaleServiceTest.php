@@ -46,6 +46,7 @@ class SaleServiceTest extends TestCase
             'is_qty_deduction' => true,
             'sell_interface' => 'classic',
             'business_sector' => 'commerce',
+            'require_till_opening' => false,
         ]);
 
         $customer = PosCustomer::create([

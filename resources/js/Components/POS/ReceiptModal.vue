@@ -99,12 +99,31 @@ watch(() => props.sale.receipt_id, () => {
     nextTick(renderBarcode)
 })
 
-const items = computed(() => props.sale.sale_orders || props.sale.saleOrders || props.sale.items || [])
+const items = computed(() => {
+    const raw = props.sale.sale_orders || props.sale.saleOrders || props.sale.items || []
+    return raw.map(i => {
+        const qty = Number(i.qty ?? i.quantity ?? 1) || 1
+        const unitPrice = parseFloat(i.selling_price ?? i.price ?? i.unit_price ?? 0) || 0
+        const lineTotal = parseFloat(i.total_selling_price ?? i.line_total ?? (unitPrice * qty)) || 0
+        const itemName = i.item_name || i.name || i.item?.item_name || i.item?.name || 'Item'
+
+        return {
+            ...i,
+            item_name: itemName,
+            qty: qty,
+            selling_price: unitPrice,
+            total_selling_price: lineTotal,
+        }
+    })
+})
 
 const totalUnits   = computed(() => items.value.reduce((s, i) => s + (Number(i.qty) || 0), 0))
-const subtotal     = computed(() => items.value.reduce((s, i) => s + parseFloat(i.total_selling_price || 0), 0))
+const subtotal     = computed(() => {
+    const sum = items.value.reduce((s, i) => s + parseFloat(i.total_selling_price || 0), 0)
+    return sum || parseFloat(props.sale.subtotal || props.sale.final_total || 0)
+})
 const amountPaid   = computed(() => parseFloat(props.sale.amount_paid  || 0))
-const finalTotal   = computed(() => parseFloat(props.sale.final_total  || 0))
+const finalTotal   = computed(() => parseFloat(props.sale.final_total  || subtotal.value || 0))
 const discountAmt  = computed(() => parseFloat(props.sale.discount_amount || 0))
 const taxAmt       = computed(() => parseFloat(props.sale.tax_amount   || 0))
 const changeBal    = computed(() => parseFloat(props.sale.change_bal   || 0))
@@ -179,7 +198,7 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
                     <tbody>
                         <tr>
                             <td style="color:#000000;">Receipt #</td>
-                            <td style="text-align:right; font-weight:800; color:#000000;">{{ sale.receipt_id }}</td>
+                            <td style="text-align:right; font-weight:800; color:#000000;">{{ sale.receipt_id || sale.id || '—' }}</td>
                         </tr>
                         <tr>
                             <td style="color:#000000;">Date</td>
@@ -191,7 +210,7 @@ const debtAmt      = computed(() => props.sale.is_debt ? Math.max(0, finalTotal.
                         </tr>
                         <tr>
                             <td style="color:#000000;">Cashier</td>
-                            <td style="text-align:right; color:#000000;">{{ sale.user?.full_name || sale.user?.name || '—' }}</td>
+                            <td style="text-align:right; color:#000000;">{{ sale.user?.full_name || sale.user?.name || sale.cashier_name || page.props.auth?.user?.name || '—' }}</td>
                         </tr>
                         <tr>
                             <td style="color:#000000;">Payment</td>

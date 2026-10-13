@@ -198,29 +198,20 @@ class SaleController extends Controller
     {
         try {
             $sale = SaleService::process($request->validated(), Auth::user());
-            $sale->load(['user', 'customer', 'saleOrders']);
+            $sale->load(['user', 'customer', 'saleOrders.item']);
 
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json(['sale' => $sale, 'message' => 'Sale successful']);
-            }
-
-            return back()->with([
-                'success' => true,
+            return response()->json([
+                'sale'       => $sale,
                 'receipt_id' => $sale->receipt_id,
                 'sale_id'    => $sale->id,
+                'message'    => 'Sale successful',
             ]);
         } catch (\InvalidArgumentException $e) {
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json(['message' => $e->getMessage()], 422);
-            }
-            return back()->withErrors(['sale' => $e->getMessage()]);
+            return response()->json(['message' => $e->getMessage()], 422);
         } catch (\Throwable $e) {
             report($e);
             $msg = config('app.debug') ? $e->getMessage() : 'Sale processing failed. Please try again.';
-            if ($request->wantsJson() || $request->ajax()) {
-                return response()->json(['message' => $msg], 500);
-            }
-            return back()->withErrors(['sale' => $msg]);
+            return response()->json(['message' => $msg], 500);
         }
     }
 

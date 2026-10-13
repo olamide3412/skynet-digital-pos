@@ -446,3 +446,15 @@ createInertiaApp({
         showSpinner: false,
     },
 });
+
+// Synchronize fresh CSRF token into Axios on every Inertia navigation (e.g. post-login)
+router.on('navigate', (event) => {
+    const token = event.detail.page.props?.csrf_token;
+    if (token && typeof window !== 'undefined' && window.axios) {
+        window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+        const metaToken = document.head.querySelector('meta[name="csrf-token"]');
+        if (metaToken) {
+            metaToken.setAttribute('content', token);
+        }
+    }
+});
