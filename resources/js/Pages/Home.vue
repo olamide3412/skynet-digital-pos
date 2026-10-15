@@ -1,4 +1,4 @@
-﻿<script setup>
+<script setup>
 import { Head, Link, usePage } from '@inertiajs/vue3'
 import { computed, ref, onMounted, reactive } from 'vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
@@ -235,6 +235,20 @@ const coreFeatures = [
         title: 'Deep Sales & Profit Analytics',
         desc: 'Track daily profit margins, cashier end-of-day register balancing, returned inventory logs, and comprehensive financial reports with instant exports.',
     },
+    {
+        icon: 'M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z',
+        gradient: 'from-emerald-600 to-teal-700',
+        badge: 'Double-Entry',
+        title: 'Automated Accounting & GL',
+        desc: 'Every sale, till drop, customer debt, and expense auto-posts balanced debits and credits. Real-time Trial Balance, Balance Sheet, P&L, and VAT liability reporting.',
+    },
+    {
+        icon: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z',
+        gradient: 'from-indigo-600 to-blue-700',
+        badge: 'Omnichannel Sync',
+        title: 'E-Commerce & Online Store Sync',
+        desc: 'Connect WooCommerce and online web stores via REST API. 2-way real-time stock sync and instant checkout reservations eliminate overselling across channels.',
+    },
 ]
 
 // ── Target Industries ────────────────────────────────────────────────────────
@@ -302,6 +316,14 @@ const faqs = [
     {
         q: 'Can you assist in migrating my data from an existing POS system?',
         a: 'Yes, absolutely! We provide complimentary, end-to-end data migration assistance. Whether your inventory and customer data are currently in Excel/CSV spreadsheets, QuickBooks, Loyverse, Odoo, Vend, or any custom POS, our technical team will format, verify barcodes, and import your complete database so your store transitions smoothly with zero operational downtime.',
+    },
+    {
+        q: 'Does the system include full double-entry accounting and financial reports?',
+        a: 'Yes! Starting on our Silver plan, every retail operation auto-posts balanced debits and credits into an integrated General Ledger. Sales, cash drops, customer debt settlements, returns, and expense receipts instantly update your 17 standard system accounts. You gain real-time access to Trial Balance, Profit & Loss (P&L), Balance Sheet, Cash Flow, and dedicated Account 2100 VAT Payable reports with zero bookkeeping delays.',
+    },
+    {
+        q: 'Can I connect my e-commerce website or WooCommerce store to the POS?',
+        a: 'Yes! With our Omnichannel E-Commerce Integration (available on Bronze and above), your physical retail branches and online store operate from one unified inventory. When customers checkout online, stock is instantly reserved in real time to prevent overselling. Product prices, catalog descriptions, and stock quantities sync two-way via secure REST API and webhooks.',
     },
     {
         q: 'How do I get started with Skynet Digital POS?',
@@ -777,14 +799,14 @@ function toggleFaq(index) {
                     </p>
                 </div>
 
-                <!-- 8-Card Feature Matrix Grid -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- 10-Card Feature Matrix Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                     <div
                         v-for="(feat, idx) in coreFeatures"
                         :key="idx"
                         :class="[
                             'reveal-up group relative p-6 rounded-3xl bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-violet-500/80 transition-all duration-300 shadow-md hover:shadow-2xl hover:shadow-violet-600/15 dark:hover:shadow-violet-950/50 hover:-translate-y-2.5 hover:scale-[1.025] flex flex-col justify-between space-y-4 cursor-pointer',
-                            'delay-' + ((idx % 4 + 1) * 100)
+                            'delay-' + ((idx % 5 + 1) * 100)
                         ]"
                     >
                         <div>
@@ -808,6 +830,199 @@ function toggleFaq(index) {
                         <div class="text-[11px] font-bold text-violet-600 dark:text-violet-400 flex items-center gap-1 group-hover:translate-x-1.5 transition-transform">
                             <span>Ready in Platform</span>
                             <span>→</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══ 6B. DOUBLE-ENTRY ACCOUNTING & FINANCIAL LEDGER SPOTLIGHT ══════ -->
+        <section id="accounting-spotlight" class="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden bg-gradient-to-b from-slate-100/70 via-white to-slate-50 dark:from-slate-950 dark:via-slate-900/40 dark:to-slate-950 border-t border-slate-200 dark:border-slate-800/80">
+            <div class="max-w-7xl mx-auto space-y-16 relative z-10">
+                <div class="reveal-up text-center space-y-3 max-w-3xl mx-auto">
+                    <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/70 border border-emerald-300 dark:border-emerald-700/60 text-emerald-800 dark:text-emerald-300 text-xs font-black uppercase tracking-wider">
+                        📊 Automated Double-Entry Bookkeeping
+                    </div>
+                    <h2 class="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight">
+                        Real-Time Accounting Behind Every Sale &amp; Expense
+                    </h2>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm sm:text-base leading-relaxed">
+                        Say goodbye to end-of-month manual reconciliation headaches. Every checkout, till closure, customer credit sale, and expense receipt automatically posts balanced debits and credits straight into your General Ledger.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center max-w-6xl mx-auto">
+                    <!-- Left: Interactive Live Journal Entry Mockup (7 Cols) -->
+                    <div class="reveal-left delay-100 lg:col-span-7 rounded-3xl p-6 sm:p-7 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl space-y-5">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
+                                <span class="font-mono text-xs font-bold text-slate-900 dark:text-white">JOURNAL ENTRY #JE-202610-0418</span>
+                            </div>
+                            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                Real-Time Balanced ✓
+                            </span>
+                        </div>
+
+                        <div class="space-y-2 text-xs">
+                            <div class="grid grid-cols-12 text-[10px] font-extrabold uppercase text-slate-400 px-2 pb-1">
+                                <span class="col-span-6">Account &amp; Description</span>
+                                <span class="col-span-3 text-right">Debit (DR)</span>
+                                <span class="col-span-3 text-right">Credit (CR)</span>
+                            </div>
+
+                            <div class="grid grid-cols-12 items-center p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 font-mono text-[11px]">
+                                <div class="col-span-6 font-sans">
+                                    <div class="font-bold text-slate-900 dark:text-white">1000 — Cash on Hand</div>
+                                    <div class="text-[10px] text-slate-400">Cash Register Till A Settlement</div>
+                                </div>
+                                <div class="col-span-3 text-right font-bold text-emerald-600 dark:text-emerald-400">₦25,000.00</div>
+                                <div class="col-span-3 text-right text-slate-400">—</div>
+                            </div>
+
+                            <div class="grid grid-cols-12 items-center p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 font-mono text-[11px]">
+                                <div class="col-span-6 font-sans">
+                                    <div class="font-bold text-slate-900 dark:text-white">4000 — Sales Revenue</div>
+                                    <div class="text-[10px] text-slate-400">Gross Retail Sales</div>
+                                </div>
+                                <div class="col-span-3 text-right text-slate-400">—</div>
+                                <div class="col-span-3 text-right font-bold text-slate-900 dark:text-white">₦23,255.81</div>
+                            </div>
+
+                            <div class="grid grid-cols-12 items-center p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 font-mono text-[11px]">
+                                <div class="col-span-6 font-sans">
+                                    <div class="font-bold text-slate-900 dark:text-white">2100 — VAT / Tax Payable</div>
+                                    <div class="text-[10px] text-slate-400">7.5% Output VAT Liability</div>
+                                </div>
+                                <div class="col-span-3 text-right text-slate-400">—</div>
+                                <div class="col-span-3 text-right font-bold text-amber-600 dark:text-amber-400">₦1,744.19</div>
+                            </div>
+
+                            <div class="grid grid-cols-12 items-center p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 font-mono text-[11px]">
+                                <div class="col-span-6 font-sans">
+                                    <div class="font-bold text-slate-900 dark:text-white">5000 — Cost of Goods Sold</div>
+                                    <div class="text-[10px] text-slate-400">Inventory Cost Depletion</div>
+                                </div>
+                                <div class="col-span-3 text-right font-bold text-rose-600 dark:text-rose-400">₦16,000.00</div>
+                                <div class="col-span-3 text-right text-slate-400">—</div>
+                            </div>
+
+                            <div class="grid grid-cols-12 items-center p-2 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-100 dark:border-slate-800/80 font-mono text-[11px]">
+                                <div class="col-span-6 font-sans">
+                                    <div class="font-bold text-slate-900 dark:text-white">1200 — Inventory Asset</div>
+                                    <div class="text-[10px] text-slate-400">Warehouse Asset Deduction</div>
+                                </div>
+                                <div class="col-span-3 text-right text-slate-400">—</div>
+                                <div class="col-span-3 text-right font-bold text-slate-900 dark:text-white">₦16,000.00</div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs font-mono font-bold">
+                            <span class="text-slate-500 uppercase text-[10px]">Total Balance Check:</span>
+                            <div class="flex items-center gap-6">
+                                <span class="text-emerald-600 dark:text-emerald-400">DR ₦41,000.00</span>
+                                <span class="text-slate-900 dark:text-white">CR ₦41,000.00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Pillars & Report Highlights (5 Cols) -->
+                    <div class="reveal-right delay-200 lg:col-span-5 space-y-4">
+                        <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5 shadow-xs">
+                            <div class="text-xs font-black text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
+                                <span>📚</span> 17 Core System Accounts + Custom GL
+                            </div>
+                            <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                Standard chart of accounts covering Cash, Banks, POS Clearing, Debtors (AR), Creditors (AP), Inventory, Revenue, and Operating Expenses with instant custom additions.
+                            </p>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5 shadow-xs">
+                            <div class="text-xs font-black text-violet-600 dark:text-violet-400 flex items-center gap-1.5 uppercase tracking-wider">
+                                <span>📑</span> 5 Instant Financial Reports
+                            </div>
+                            <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                Generate balanced <strong>Trial Balance</strong>, <strong>Balance Sheet</strong>, <strong>Profit &amp; Loss</strong>, <strong>Cash Flow Statement</strong>, and <strong>AR Aging Buckets</strong> with 1-click Excel and PDF export.
+                            </p>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5 shadow-xs">
+                            <div class="text-xs font-black text-amber-600 dark:text-amber-400 flex items-center gap-1.5 uppercase tracking-wider">
+                                <span>🏛️</span> Dedicated Tax &amp; VAT 2100 Ledger
+                            </div>
+                            <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                Automatically separates VAT collected from sales revenue into Account 2100. Streamline tax audits and filing without calculating percentages manually.
+                            </p>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-1.5 shadow-xs">
+                            <div class="text-xs font-black text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 uppercase tracking-wider">
+                                <span>🔒</span> Financial Period Controls &amp; Reopening Locks
+                            </div>
+                            <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                Lock closed months to prevent backdated tampering. Reopen with supervisor authorization and maintain complete audit logs for every adjustment.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══ 6C. OMNICHANNEL E-COMMERCE & WEB STORE SYNC SPOTLIGHT ════════ -->
+        <section id="ecommerce-spotlight" class="py-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden bg-white dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800/80">
+            <div class="max-w-7xl mx-auto space-y-16 relative z-10">
+                <div class="reveal-up text-center space-y-3 max-w-3xl mx-auto">
+                    <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-indigo-100 dark:bg-indigo-950/70 border border-indigo-300 dark:border-indigo-700/60 text-indigo-800 dark:text-indigo-300 text-xs font-black uppercase tracking-wider">
+                        🛍️ Unified Omnichannel E-Commerce
+                    </div>
+                    <h2 class="text-3xl sm:text-5xl font-black text-slate-900 dark:text-white tracking-tight">
+                        Sell in Store and Online Without Overselling
+                    </h2>
+                    <p class="text-slate-600 dark:text-slate-400 text-sm sm:text-base leading-relaxed">
+                        Connect your online WooCommerce store or custom web application directly to your physical store registers. Two-way live stock synchronization and cart reservations eliminate stock discrepancies permanently.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
+                    <!-- Step 1: Two-Way Real-Time Sync -->
+                    <div class="reveal-up delay-100 p-7 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm hover:shadow-xl hover:border-indigo-400 dark:hover:border-indigo-500/80 transition-all duration-300">
+                        <div class="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xl">
+                            ⚡
+                        </div>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white">Sub-0.3s Two-Way Stock Sync</h3>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            When an item is sold across an in-store cashier counter, the online catalog stock quantity decrements instantly. When an online customer places an order, your POS terminals update immediately.
+                        </p>
+                        <div class="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center gap-1.5 text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                            <span>✓ REST API &amp; Webhook Engine</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Smart Cart Reservations -->
+                    <div class="reveal-up delay-200 p-7 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm hover:shadow-xl hover:border-emerald-400 dark:hover:border-emerald-500/80 transition-all duration-300">
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold text-xl">
+                            🛡️
+                        </div>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white">Zero-Oversell Cart Reservations</h3>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            While an online customer proceeds through web checkout, their items are placed in a temporary reservation buffer. Cashiers cannot accidentally sell the reserved stock in person, preventing double-selling.
+                        </p>
+                        <div class="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center gap-1.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                            <span>✓ Auto-Expire Unpaid Carts</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 3: Central Catalog Publishing -->
+                    <div class="reveal-up delay-300 p-7 rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-4 shadow-sm hover:shadow-xl hover:border-amber-400 dark:hover:border-amber-500/80 transition-all duration-300">
+                        <div class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-xl">
+                            📦
+                        </div>
+                        <h3 class="text-lg font-black text-slate-900 dark:text-white">One Central Catalog Hub</h3>
+                        <p class="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                            Upload product images, descriptions, barcode variations, packaging sizes, and category tags once. Changes publish immediately across both your digital storefront and in-store registers.
+                        </p>
+                        <div class="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex items-center gap-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                            <span>✓ WooCommerce &amp; Custom Stores</span>
                         </div>
                     </div>
                 </div>

@@ -178,7 +178,7 @@ const getStatusBadge = (status) => {
                     </div>
 
                     <!-- Usage Meters -->
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
                         <div class="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xs border border-slate-200/80 dark:border-slate-700 rounded-2xl p-3">
                             <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Branches</span>
                             <span class="text-base font-black text-slate-900 dark:text-slate-100">
@@ -201,6 +201,13 @@ const getStatusBadge = (status) => {
                             <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">E-commerce Sync</span>
                             <span :class="['text-xs font-black inline-flex items-center gap-1 mt-1', usageStats.feature_ecommerce ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400']">
                                 <span v-if="usageStats.feature_ecommerce">✓ Enabled</span>
+                                <span v-else>✕ Locked</span>
+                            </span>
+                        </div>
+                        <div class="bg-white/80 dark:bg-slate-800/80 backdrop-blur-xs border border-slate-200/80 dark:border-slate-700 rounded-2xl p-3">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Double-Entry GL</span>
+                            <span :class="['text-xs font-black inline-flex items-center gap-1 mt-1', usageStats.feature_accounting ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400']">
+                                <span v-if="usageStats.feature_accounting">✓ Enabled</span>
                                 <span v-else>✕ Locked</span>
                             </span>
                         </div>

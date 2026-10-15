@@ -97,6 +97,7 @@ class PricingPlanSeeder extends Seeder
                 'features'         => [
                     'Everything in Starter',
                     'Multi-branch inventory lookup & transfers',
+                    'Omnichannel E-Commerce Sync & API (WooCommerce ready)',
                     'Product variants (sizes, colors, packages)',
                     'Staff performance tracking & shift reports',
                     'Automated reorder level suggestions',
@@ -115,7 +116,9 @@ class PricingPlanSeeder extends Seeder
                 'sort_order'       => 3,
                 'features'         => [
                     'Everything in Bronze',
-                    'Cross-branch expense tracking & P&L reports',
+                    'Automated Double-Entry Accounting & General Ledger',
+                    'Balance Sheet, P&L, Trial Balance & VAT Ledger',
+                    'E-Commerce Store Sync & Real-Time Stock Reservations',
                     'Centralized purchase order & supplier dispatch',
                     'Advanced discount & promotion matrix',
                     'IMEI / Serial number tracking for gadgets & electronics',
@@ -134,6 +137,8 @@ class PricingPlanSeeder extends Seeder
                 'sort_order'       => 4,
                 'features'         => [
                     'Everything in Silver',
+                    'Full Accounting Engine with Financial Period Lock Controls',
+                    'Multi-Store E-Commerce Sync & Omnichannel Allocation',
                     'Enterprise multi-warehouse distribution',
                     'Full Ask-Your-Business AI Copilot analytics',
                     'Custom receipt templates & brand styling',
@@ -155,7 +160,8 @@ class PricingPlanSeeder extends Seeder
                 'features'         => [
                     'Everything in Gold',
                     'Custom database deployment & private cloud hosting',
-                    'ERP & custom accounting software integrations',
+                    'Custom Accounting & ERP Integrations (QuickBooks, SAP, etc.)',
+                    'High-Throughput Omnichannel E-Commerce Sync Engine',
                     'Dedicated technical account engineer',
                     'Custom workflow development & bespoke reporting',
                     'Quarterly business review & capacity planning',
@@ -228,6 +234,7 @@ class PricingPlanSeeder extends Seeder
                     'feature_ai_reorder_prediction'      => in_array($name, ['bronze', 'silver', 'gold', 'enterprise']),
                     'feature_broadcast_notifications'    => in_array($name, ['bronze', 'silver', 'gold', 'enterprise']),
                     'feature_ecommerce_integration'      => in_array($name, ['bronze', 'silver', 'gold', 'enterprise']),
+                    'feature_accounting'                 => in_array($name, ['silver', 'gold', 'enterprise']),
                     'ai_credit_pool_type'                => $poolType,
                     'ai_credits_monthly'                 => $monthlyCredits,
                 ]

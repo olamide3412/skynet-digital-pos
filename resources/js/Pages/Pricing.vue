@@ -83,6 +83,14 @@ const pricingFaqs = [
         a: 'Your store continues ringing up sales without interruption! Our client-side Dexie IndexedDB engine stores transactions securely offline and automatically syncs all data to your central database once connection is restored.',
     },
     {
+        q: 'Which plans include Double-Entry Accounting and Financial Ledger?',
+        a: 'Double-Entry Accounting is unlocked on our Silver, Gold, and Enterprise plans. It automatically activates for all your branches upon plan enrollment, seeding standard Chart of Accounts (1000 Cash, 1200 Inventory, 2100 VAT, 4000 Revenue, etc.) and auto-posting balanced general ledger lines for every sale, refund, till close, debt settlement, and expense receipt.',
+    },
+    {
+        q: 'Which plans include Omnichannel E-Commerce Integration?',
+        a: 'E-Commerce Integration is included starting on the Bronze plan and above. It allows you to connect WooCommerce or custom online store REST APIs directly to your branch inventory, featuring two-way live stock synchronization and real-time cart reservations to prevent double-selling.',
+    },
+    {
         q: 'Can we upgrade our tier later as we open more branches?',
         a: 'Yes, absolutely. You can start on Starter or Bronze and upgrade to Silver, Gold, or Enterprise as your branch footprint expands with zero data loss or downtime.',
     },
