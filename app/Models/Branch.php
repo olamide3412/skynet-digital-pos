@@ -128,6 +128,21 @@ class Branch extends Model
         return $this->hasMany(Item::class);
     }
 
+    public function productGroupItems(): HasMany
+    {
+        return $this->hasMany(ProductGroupItem::class);
+    }
+
+    public function outgoingTransfers(): HasMany
+    {
+        return $this->hasMany(InterBranchTransfer::class, 'source_branch_id');
+    }
+
+    public function incomingTransfers(): HasMany
+    {
+        return $this->hasMany(InterBranchTransfer::class, 'destination_branch_id');
+    }
+
     public function sales(): HasMany
     {
         return $this->hasMany(Sale::class);

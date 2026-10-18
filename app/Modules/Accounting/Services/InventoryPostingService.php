@@ -335,6 +335,173 @@ class InventoryPostingService
     }
 
     /**
+     * Post stock transfer creation at sender branch (Rule 13).
+     * Debit Inter-Branch Receivable (1300) / Credit Inventory (1200)
+     */
+    public static function postStockTransferOut(
+        int $fromBranchId,
+        int $toBranchId,
+        float $totalCost,
+        string $reference,
+        ?int $userId = null
+    ): ?JournalEntry {
+        $totalCost = round($totalCost, 2);
+        if ($totalCost <= 0) return null;
+
+        try {
+            $fromBranch = Branch::with('organization')->find($fromBranchId);
+            if ($fromBranch && (!$fromBranch->organization || $fromBranch->organization->hasFeature('accounting'))) {
+                $fromSettings = PosSettings::forBranch($fromBranchId);
+                if (self::ensureBranchAccountingReady($fromBranch, $fromSettings)) {
+                    $accounts = Account::where('branch_id', $fromBranchId)->where('is_active', true)->get()->keyBy('code');
+                    $interReceivable = $accounts->get('1300');
+                    $inventory       = $accounts->get('1200');
+
+                    if ($interReceivable && $inventory) {
+                        return PostingService::post([
+                            'event'          => 'transfer_out_' . $reference,
+                            'branch_id'      => $fromBranchId,
+                            'created_by'     => $userId,
+                            'entry_date'     => now(),
+                            'description'    => "Stock Transfer Out to Branch #{$toBranchId} ({$reference})",
+                            'lines'          => [
+                                [
+                                    'account_id' => $interReceivable->id,
+                                    'debit'      => $totalCost,
+                                    'credit'     => 0.0,
+                                    'memo'       => "Transfer out to Branch #{$toBranchId} - Ref: {$reference}",
+                                ],
+                                [
+                                    'account_id' => $inventory->id,
+                                    'debit'      => 0.0,
+                                    'credit'     => $totalCost,
+                                    'memo'       => "Stock dispatched - Ref: {$reference}",
+                                ],
+                            ],
+                            'source_type'    => 'inter_branch_transfer',
+                            'source_id'      => (int) crc32($reference),
+                        ]);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error("Accounting postStockTransferOut failed for ref {$reference}: " . $e->getMessage(), ['exception' => $e]);
+        }
+        return null;
+    }
+
+    /**
+     * Reverse stock transfer creation at sender branch if transfer cancelled.
+     */
+    public static function reverseStockTransferOut(
+        int $fromBranchId,
+        int $toBranchId,
+        float $totalCost,
+        string $reference,
+        ?int $userId = null
+    ): ?JournalEntry {
+        $totalCost = round($totalCost, 2);
+        if ($totalCost <= 0) return null;
+
+        try {
+            $fromBranch = Branch::with('organization')->find($fromBranchId);
+            if ($fromBranch && (!$fromBranch->organization || $fromBranch->organization->hasFeature('accounting'))) {
+                $fromSettings = PosSettings::forBranch($fromBranchId);
+                if (self::ensureBranchAccountingReady($fromBranch, $fromSettings)) {
+                    $accounts = Account::where('branch_id', $fromBranchId)->where('is_active', true)->get()->keyBy('code');
+                    $interReceivable = $accounts->get('1300');
+                    $inventory       = $accounts->get('1200');
+
+                    if ($interReceivable && $inventory) {
+                        return PostingService::post([
+                            'event'          => 'transfer_cancel_' . $reference,
+                            'branch_id'      => $fromBranchId,
+                            'created_by'     => $userId,
+                            'entry_date'     => now(),
+                            'description'    => "Reversal of Cancelled Transfer Out to Branch #{$toBranchId} ({$reference})",
+                            'lines'          => [
+                                [
+                                    'account_id' => $inventory->id,
+                                    'debit'      => $totalCost,
+                                    'credit'     => 0.0,
+                                    'memo'       => "Stock returned from cancelled transfer - Ref: {$reference}",
+                                ],
+                                [
+                                    'account_id' => $interReceivable->id,
+                                    'debit'      => 0.0,
+                                    'credit'     => $totalCost,
+                                    'memo'       => "Reversal of Inter-Branch Receivable - Ref: {$reference}",
+                                ],
+                            ],
+                            'source_type'    => 'inter_branch_transfer',
+                            'source_id'      => (int) crc32($reference),
+                        ]);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error("Accounting reverseStockTransferOut failed for ref {$reference}: " . $e->getMessage(), ['exception' => $e]);
+        }
+        return null;
+    }
+
+    /**
+     * Post stock transfer acceptance at receiving branch (Rule 14).
+     * Debit Inventory (1200) / Credit Inter-Branch Payable (2200)
+     */
+    public static function postStockTransferIn(
+        int $fromBranchId,
+        int $toBranchId,
+        float $receivedCost,
+        string $reference,
+        ?int $userId = null
+    ): ?JournalEntry {
+        $receivedCost = round($receivedCost, 2);
+        if ($receivedCost <= 0) return null;
+
+        try {
+            $toBranch = Branch::with('organization')->find($toBranchId);
+            if ($toBranch && (!$toBranch->organization || $toBranch->organization->hasFeature('accounting'))) {
+                $toSettings = PosSettings::forBranch($toBranchId);
+                if (self::ensureBranchAccountingReady($toBranch, $toSettings)) {
+                    $accounts = Account::where('branch_id', $toBranchId)->where('is_active', true)->get()->keyBy('code');
+                    $inventory    = $accounts->get('1200');
+                    $interPayable = $accounts->get('2200');
+
+                    if ($inventory && $interPayable) {
+                        return PostingService::post([
+                            'event'          => 'transfer_in_' . $reference,
+                            'branch_id'      => $toBranchId,
+                            'created_by'     => $userId,
+                            'entry_date'     => now(),
+                            'description'    => "Stock Transfer In from Branch #{$fromBranchId} ({$reference})",
+                            'lines'          => [
+                                [
+                                    'account_id' => $inventory->id,
+                                    'debit'      => $receivedCost,
+                                    'credit'     => 0.0,
+                                    'memo'       => "Stock received from Branch #{$fromBranchId} - Ref: {$reference}",
+                                ],
+                                [
+                                    'account_id' => $interPayable->id,
+                                    'debit'      => 0.0,
+                                    'credit'     => $receivedCost,
+                                    'memo'       => "Inter-branch payable to Branch #{$fromBranchId} - Ref: {$reference}",
+                                ],
+                            ],
+                            'source_type'    => 'inter_branch_transfer',
+                            'source_id'      => (int) crc32($reference),
+                        ]);
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::error("Accounting postStockTransferIn failed for ref {$reference}: " . $e->getMessage(), ['exception' => $e]);
+        }
+        return null;
+    }
+
+    /**
      * Post journal entry for an operating expense (Rule 10).
      * Debit Expense category account (6xxx) / Credit Cash on Hand (1000) or Bank (1010).
      */

@@ -104,6 +104,21 @@ class Organization extends Model
         return $this->hasMany(SubscriptionPayment::class)->latest('id');
     }
 
+    public function productGroups(): HasMany
+    {
+        return $this->hasMany(ProductGroup::class);
+    }
+
+    public function interBranchTransfers(): HasMany
+    {
+        return $this->hasMany(InterBranchTransfer::class);
+    }
+
+    public function productLinkLogs(): HasMany
+    {
+        return $this->hasMany(ProductLinkLog::class);
+    }
+
     // ── Helpers ────────────────────────────────────────────────────────────────
 
     public function isActive(): bool

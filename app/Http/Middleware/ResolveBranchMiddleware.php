@@ -16,20 +16,26 @@ class ResolveBranchMiddleware
 {
     public function handle(Request $request, Closure $next): mixed
     {
-        $slug = $request->route('branch');
+        $branchParam = $request->route('branch');
 
-        if (!$slug) {
+        if (!$branchParam) {
             return $next($request);
         }
 
-        // Never attempt to resolve reserved portal prefixes as branch slugs
-        $reserved = config('organizations.reserved_slugs', ['org', 'superadmin', 'admin', 'api']);
-        if (in_array(strtolower((string) $slug), $reserved, true)) {
-            return $this->branchNotFound($request);
-        }
+        if ($branchParam instanceof Branch) {
+            $branch = $branchParam;
+        } else {
+            $slug = (string) $branchParam;
 
-        // Resolve branch by slug
-        $branch = Branch::where('slug', $slug)->first();
+            // Never attempt to resolve reserved portal prefixes as branch slugs
+            $reserved = config('organizations.reserved_slugs', ['org', 'superadmin', 'admin', 'api']);
+            if (in_array(strtolower($slug), $reserved, true)) {
+                return $this->branchNotFound($request);
+            }
+
+            // Resolve branch by slug
+            $branch = Branch::where('slug', $slug)->first();
+        }
 
         if (!$branch) {
             return $this->branchNotFound($request);

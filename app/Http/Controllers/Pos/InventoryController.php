@@ -243,7 +243,7 @@ class InventoryController extends Controller
 
         // For additions on batch-tracked items, provide prompt payload for the Create Batch modal (§5.2)
         if ($data['type'] === 'Addition' && \App\Services\BatchTrackingService::isBatchTrackingActive($branch->id, $item)) {
-            return redirect()->route('pos.inventory.index', ['branch' => $branch->slug])->with([
+            return redirect()->route('pos.inventory.adjust', ['branch' => $branch->slug])->with([
                 'success' => 'Inventory successfully adjusted.',
                 'batch_prompt' => [
                     'item_id'     => $item->id,
@@ -254,6 +254,6 @@ class InventoryController extends Controller
             ]);
         }
 
-        return redirect()->route('pos.inventory.index', ['branch' => $branch->slug])->with('success', 'Inventory successfully adjusted.');
+        return redirect()->route('pos.inventory.adjust', ['branch' => $branch->slug])->with('success', 'Inventory successfully adjusted.');
     }
 }

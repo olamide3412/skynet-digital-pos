@@ -26,6 +26,7 @@ class PlanCapability extends Model
         'feature_broadcast_notifications',
         'feature_ecommerce_integration',
         'feature_accounting',
+        'feature_inter_branch_transfers',
         'ai_credit_pool_type',
         'ai_credits_monthly',
     ];
@@ -46,6 +47,7 @@ class PlanCapability extends Model
         'feature_broadcast_notifications'    => 'boolean',
         'feature_ecommerce_integration'      => 'boolean',
         'feature_accounting'                 => 'boolean',
+        'feature_inter_branch_transfers'     => 'boolean',
         'ai_credits_monthly'                 => 'integer',
     ];
 

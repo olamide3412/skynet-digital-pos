@@ -255,6 +255,11 @@ class Item extends Model
         return $this->hasMany(StockTransfer::class);
     }
 
+    public function productGroupItem(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(ProductGroupItem::class);
+    }
+
     public function itemGrids(): HasMany
     {
         return $this->hasMany(ItemGrid::class);

@@ -183,6 +183,19 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
 
             // Organization AI Credit Top-up Management
             Route::post('/{organization}/ai-credits/topup', [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'addAiCredits'])->name('ai-credits.topup');
+
+            // Organization Product Links (Inter-Branch Linking & Catalog Management)
+            Route::get('/{organization}/product-links',                    [\App\Http\Controllers\SuperAdmin\ProductLinkController::class, 'index'])->name('product-links.index');
+            Route::post('/{organization}/product-links/link',              [\App\Http\Controllers\SuperAdmin\ProductLinkController::class, 'link'])->name('product-links.link');
+            Route::post('/{organization}/product-links/unlink',            [\App\Http\Controllers\SuperAdmin\ProductLinkController::class, 'unlink'])->name('product-links.unlink');
+            Route::post('/{organization}/product-links/groups',            [\App\Http\Controllers\SuperAdmin\ProductLinkController::class, 'createGroup'])->name('product-links.create-group');
+            Route::post('/{organization}/product-links/groups/update',     [\App\Http\Controllers\SuperAdmin\ProductLinkController::class, 'updateGroup'])->name('product-links.update-group');
+            Route::post('/{organization}/product-links/merge',             [\App\Http\Controllers\SuperAdmin\ProductLinkController::class, 'merge'])->name('product-links.merge');
+            Route::get('/{organization}/product-links/suggest',            [\App\Http\Controllers\SuperAdmin\ProductLinkController::class, 'autoSuggest'])->name('product-links.suggest');
+            Route::post('/{organization}/product-links/bulk-confirm',      [\App\Http\Controllers\SuperAdmin\ProductLinkController::class, 'bulkConfirm'])->name('product-links.bulk-confirm');
+            Route::post('/{organization}/product-links/undo-batch',        [\App\Http\Controllers\SuperAdmin\ProductLinkController::class, 'undoBatch'])->name('product-links.undo-batch');
+            Route::post('/{organization}/product-links/copy',              [\App\Http\Controllers\SuperAdmin\ProductLinkController::class, 'copyToBranches'])->name('product-links.copy');
+            Route::get('/{organization}/product-links/unlinked-items/{branch}', [\App\Http\Controllers\SuperAdmin\ProductLinkController::class, 'unlinkedItems'])->name('product-links.unlinked-items');
         });
 
         Route::prefix('branches/{branch}/users')->name('branches.users.')->group(function () {
@@ -347,6 +360,22 @@ Route::prefix('org')->name('org.')->group(function () {
         Route::get('/dashboard', [\App\Http\Controllers\Org\OrgDashboardController::class, 'index'])->name('dashboard');
         Route::get('/branches',  [\App\Http\Controllers\Org\OrgDashboardController::class, 'branches'])->name('branches');
         Route::post('/branches', [\App\Http\Controllers\Org\OrgDashboardController::class, 'storeBranch'])->name('branches.store');
+
+        // Organization Product Links (Inter-Branch Product Linking & Catalog Management)
+        Route::prefix('product-links')->name('product-links.')->group(function () {
+            Route::get('/',                   [\App\Http\Controllers\Org\OrgProductLinkController::class, 'index'])->name('index');
+            Route::post('/link',              [\App\Http\Controllers\Org\OrgProductLinkController::class, 'link'])->name('link');
+            Route::post('/unlink',            [\App\Http\Controllers\Org\OrgProductLinkController::class, 'unlink'])->name('unlink');
+            Route::post('/groups',            [\App\Http\Controllers\Org\OrgProductLinkController::class, 'createGroup'])->name('create-group');
+            Route::post('/groups/update',     [\App\Http\Controllers\Org\OrgProductLinkController::class, 'updateGroup'])->name('update-group');
+            Route::post('/merge',             [\App\Http\Controllers\Org\OrgProductLinkController::class, 'merge'])->name('merge');
+            Route::get('/suggest',            [\App\Http\Controllers\Org\OrgProductLinkController::class, 'autoSuggest'])->name('suggest');
+            Route::post('/bulk-confirm',      [\App\Http\Controllers\Org\OrgProductLinkController::class, 'bulkConfirm'])->name('bulk-confirm');
+            Route::post('/undo-batch',        [\App\Http\Controllers\Org\OrgProductLinkController::class, 'undoBatch'])->name('undo-batch');
+            Route::post('/copy',              [\App\Http\Controllers\Org\OrgProductLinkController::class, 'copyToBranches'])->name('copy');
+            Route::get('/unlinked-items/{branch}', [\App\Http\Controllers\Org\OrgProductLinkController::class, 'unlinkedItems'])->name('unlinked-items');
+        });
+
         Route::get('/reports',             [\App\Http\Controllers\Org\OrgReportController::class, 'index'])->name('reports');
         Route::get('/reports/end-of-day',   [\App\Http\Controllers\Org\OrgReportController::class, 'endOfDay'])->name('reports.end-of-day');
         Route::get('/reports/export',       [\App\Http\Controllers\Org\OrgReportController::class, 'exportSales'])->name('reports.export');
@@ -508,6 +537,15 @@ Route::prefix('{branch}')
             Route::post('/transfers',   [StockTransferController::class, 'store'])
                 ->name('transfers.store')
                 ->middleware('pos.role:canTransferStock');
+
+            // Inter-Branch Transfers & Receiving Queue (any-to-any across branches)
+            Route::prefix('transfers/inter-branch')->name('transfers.inter-branch.')->group(function () {
+                Route::get('/',                   [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'index'])->name('index')->middleware('pos.role:canTransferStock');
+                Route::get('/create',             [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'create'])->name('create')->middleware('pos.role:canTransferStock');
+                Route::post('/',                  [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'store'])->name('store')->middleware('pos.role:canTransferStock');
+                Route::post('/{transfer}/cancel', [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'cancel'])->name('cancel')->middleware('pos.role:canTransferStock');
+                Route::post('/{transfer}/accept', [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'accept'])->name('accept')->middleware('pos.role:canTransferStock');
+            });
 
             // Reorder Points & Replenishment
             Route::get('/reorder-points', [\App\Http\Controllers\Pos\ReorderPointController::class, 'index'])

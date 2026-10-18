@@ -315,6 +315,13 @@ const submitAddCredits = () => {
                     <span>{{ organization.can_create_branches !== false ? '🔒 Disable Branch Creation' : '🔓 Enable Branch Creation' }}</span>
                 </button>
 
+                <Link
+                    :href="route('superadmin.organizations.product-links.index', organization.id)"
+                    class="px-3 py-1.5 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 rounded-xl text-xs font-semibold transition flex items-center gap-1.5"
+                >
+                    <span>🔗 Product Links Grid</span>
+                </Link>
+
                 <button
                     @click="showEditModal = true"
                     type="button"

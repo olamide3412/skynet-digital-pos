@@ -520,6 +520,43 @@ class BranchController extends Controller
             return back()->with('info', 'Branch is already assigned to this organization.');
         }
 
+        // Inter-Branch Transfer Safety Guard: All pending transfers must be completed or cancelled first
+        $pendingTransfersCount = \App\Models\InterBranchTransfer::where(function ($q) use ($branch) {
+            $q->where('source_branch_id', $branch->id)
+              ->orWhere('destination_branch_id', $branch->id);
+        })->whereIn('status', ['pending', 'blocked'])->count();
+
+        if ($pendingTransfersCount > 0) {
+            return back()->with('error', "Cannot move branch '{$branch->name}' because it currently has {$pendingTransfersCount} pending or blocked inter-branch transfer(s). All transfers must be completed or cancelled first.");
+        }
+
+        // Unlink only the moved branch's product group items (Decision §12-A)
+        $movedGroupItems = \App\Models\ProductGroupItem::where('branch_id', $branch->id)->get();
+        $affectedGroupIds = $movedGroupItems->pluck('product_group_id')->unique()->all();
+
+        \App\Models\ProductGroupItem::where('branch_id', $branch->id)->delete();
+
+        // Clean up any product groups in old org that have become empty
+        foreach ($affectedGroupIds as $groupId) {
+            if (\App\Models\ProductGroupItem::where('product_group_id', $groupId)->count() === 0) {
+                \App\Models\ProductGroup::where('id', $groupId)->delete();
+            }
+        }
+
+        if ($oldOrgId) {
+            \App\Models\ProductLinkLog::create([
+                'organization_id' => $oldOrgId,
+                'action'          => 'branch_move_unlink',
+                'payload'         => [
+                    'branch_id'            => $branch->id,
+                    'branch_name'          => $branch->name,
+                    'unlinked_items_count' => $movedGroupItems->count(),
+                    'new_organization_id'  => $newOrgId,
+                ],
+                'user_id'         => Auth::id(),
+            ]);
+        }
+
         $oldOrg = $oldOrgId ? Organization::find($oldOrgId) : null;
         $newOrg = Organization::findOrFail($newOrgId);
 

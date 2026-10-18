@@ -93,6 +93,7 @@ const allNavLinks = [
             { label: 'Inventory Logs',  route: 'pos.inventory.index',           match: 'Inventory/Index',         perm: 'canAdjustStock' },
             { label: 'Adjust Stock',    route: 'pos.inventory.adjust',          match: 'Inventory/Adjust',        perm: 'canAdjustStock' },
             { label: 'Stock Transfer',  route: 'pos.inventory.transfers.index', match: 'Inventory/StockTransfer', perm: 'canTransferStock' },
+            { label: 'Inter-Branch Transfers', route: 'pos.inventory.transfers.inter-branch.index', match: 'Inventory/InterBranchTransfers', perm: 'canTransferStock' },
         ],
     },
     {

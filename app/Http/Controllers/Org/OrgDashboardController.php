@@ -148,6 +148,12 @@ class OrgDashboardController extends Controller
             ? Organization::where('status', 'active')->orderBy('name')->get(['id', 'name'])
             : [];
 
+        $inTransitTransfersCount = \App\Models\InterBranchTransfer::where('organization_id', $org->id)
+            ->where('status', 'pending')
+            ->count();
+
+        $productGroupsCount = \App\Models\ProductGroup::where('organization_id', $org->id)->count();
+
         return Inertia::render('Org/Dashboard', [
             'organization' => [
                 'id'            => $org->id,
@@ -159,17 +165,19 @@ class OrgDashboardController extends Controller
                 'address'       => $org->address,
             ],
             'kpis' => [
-                'total_branches'    => $branches->count(),
-                'active_branches'   => $branches->where('is_active', true)->count(),
-                'today_revenue'     => $todayRevenue,
-                'today_orders'      => $todaySalesCount,
-                'week_revenue'      => $weekRevenue,
-                'week_orders'       => $weekSalesCount,
-                'month_revenue'     => $monthRevenue,
-                'total_items'       => $totalItemsCount,
-                'low_stock_count'   => $lowStockCount,
-                'expiring_count'    => $expiringCount,
-                'conflicts_count'   => $pendingConflictsCount,
+                'total_branches'       => $branches->count(),
+                'active_branches'      => $branches->where('is_active', true)->count(),
+                'today_revenue'        => $todayRevenue,
+                'today_orders'         => $todaySalesCount,
+                'week_revenue'         => $weekRevenue,
+                'week_orders'          => $weekSalesCount,
+                'month_revenue'        => $monthRevenue,
+                'total_items'          => $totalItemsCount,
+                'low_stock_count'      => $lowStockCount,
+                'expiring_count'       => $expiringCount,
+                'conflicts_count'      => $pendingConflictsCount,
+                'in_transit_transfers' => $inTransitTransfersCount,
+                'product_groups_count' => $productGroupsCount,
             ],
             'branches'           => $branchCards,
             'recent_sales'       => $recentSales,

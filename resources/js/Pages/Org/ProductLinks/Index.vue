@@ -1,0 +1,1251 @@
+<script setup>
+import { ref, computed, watch } from 'vue'
+import { Head, Link, useForm, router } from '@inertiajs/vue3'
+import OrgLayout from '@/Layouts/OrgLayout.vue'
+import PaginationLinks from '@/Components/PaginationLinks.vue'
+
+defineOptions({ layout: OrgLayout })
+
+const props = defineProps({
+    organization: Object,
+    branches: {
+        type: Array,
+        default: () => [],
+    },
+    groups: {
+        type: [Object, Array],
+        default: () => [],
+    },
+    totalGroups: {
+        type: Number,
+        default: 0,
+    },
+    conflictCount: {
+        type: Number,
+        default: 0,
+    },
+    unlinkedStats: {
+        type: Object,
+        default: () => ({}),
+    },
+    allGroupOptions: {
+        type: Array,
+        default: () => [],
+    },
+    filters: {
+        type: Object,
+        default: () => ({}),
+    },
+})
+
+const formatCurrency = (val) => {
+    return '₦' + Number(val || 0).toLocaleString('en-NG', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })
+}
+
+// Normalized group list (supports both paginated object and plain array)
+const groupList = computed(() => {
+    if (Array.isArray(props.groups)) return props.groups
+    return props.groups?.data || []
+})
+
+const paginationMeta = computed(() => {
+    if (Array.isArray(props.groups)) {
+        return {
+            from: groupList.value.length ? 1 : 0,
+            to: groupList.value.length,
+            total: groupList.value.length,
+        }
+    }
+    return props.groups || {}
+})
+
+const paginationLinks = computed(() => {
+    return props.groups?.links || []
+})
+
+// Search & Filter state
+const search = ref(props.filters?.search || '')
+const statusFilter = ref(props.filters?.status || 'all')
+const perPage = ref(Number(props.filters?.per_page) || 25)
+
+const applyFilters = () => {
+    router.get(
+        route('org.product-links.index'),
+        {
+            search: search.value,
+            status: statusFilter.value,
+            per_page: perPage.value,
+        },
+        { preserveState: true, replace: true }
+    )
+}
+
+const clearFilters = () => {
+    search.value = ''
+    statusFilter.value = 'all'
+    perPage.value = 25
+    applyFilters()
+}
+
+// Options for merge dropdown across all groups in org
+const mergeGroupOptions = computed(() => {
+    return props.allGroupOptions?.length ? props.allGroupOptions : groupList.value
+})
+
+// ── Modals State ─────────────────────────────────────────────────────────────
+const showCreateGroupModal = ref(false)
+const showEditGroupModal = ref(false)
+const showLinkModal = ref(false)
+const showSuggestModal = ref(false)
+const showCopyModal = ref(false)
+const showMergeModal = ref(false)
+const showUndoModal = ref(false)
+
+// Active Context for Modals
+const selectedGroup = ref(null)
+const selectedBranch = ref(null)
+const selectedItem = ref(null)
+
+// 1. Create Group Form
+const createGroupForm = useForm({
+    name: '',
+    initial_item_id: null,
+})
+
+const submitCreateGroup = () => {
+    createGroupForm.post(route('org.product-links.create-group'), {
+        onSuccess: () => {
+            showCreateGroupModal.value = false
+            createGroupForm.reset()
+        },
+    })
+}
+
+// 1b. Edit Group Form
+const editGroupForm = useForm({
+    product_group_id: null,
+    name: '',
+})
+
+const openEditGroupModal = (group) => {
+    editGroupForm.product_group_id = group.id
+    editGroupForm.name = group.name
+    editGroupForm.clearErrors()
+    showEditGroupModal.value = true
+}
+
+const submitEditGroup = () => {
+    editGroupForm.post(route('org.product-links.update-group'), {
+        onSuccess: () => {
+            showEditGroupModal.value = false
+            editGroupForm.reset()
+        },
+    })
+}
+
+// 2. Link Item Modal & Search
+const linkForm = useForm({
+    product_group_id: null,
+    branch_id: null,
+    item_id: null,
+    link_source: 'manual',
+})
+
+const unlinkedItemsList = ref([])
+const loadingUnlinked = ref(false)
+const itemSearchQuery = ref('')
+let unlinkedSearchTimeout = null
+let unlinkedAbortController = null
+
+const openLinkModal = (group, branch) => {
+    selectedGroup.value = group
+    selectedBranch.value = branch
+    linkForm.product_group_id = group.id
+    linkForm.branch_id = branch.id
+    linkForm.item_id = null
+    itemSearchQuery.value = ''
+    unlinkedItemsList.value = []
+    showLinkModal.value = true
+    fetchUnlinkedItems(branch.id, '')
+}
+
+const fetchUnlinkedItems = async (branchId, q = '') => {
+    if (!branchId) return
+
+    if (unlinkedAbortController) {
+        unlinkedAbortController.abort()
+    }
+    unlinkedAbortController = new AbortController()
+
+    loadingUnlinked.value = true
+    try {
+        const url = route('org.product-links.unlinked-items', {
+            branch: branchId,
+            search: q || '',
+            limit: 25,
+        })
+        const res = await fetch(url, { signal: unlinkedAbortController.signal })
+        if (!res.ok) throw new Error('Failed to fetch unlinked items')
+        unlinkedItemsList.value = await res.json()
+    } catch (err) {
+        if (err.name !== 'AbortError') {
+            unlinkedItemsList.value = []
+        }
+    } finally {
+        loadingUnlinked.value = false
+    }
+}
+
+// Watch itemSearchQuery with 250ms debounce
+watch(itemSearchQuery, (newQuery) => {
+    if (!showLinkModal.value || !selectedBranch.value) return
+    if (unlinkedSearchTimeout) clearTimeout(unlinkedSearchTimeout)
+    unlinkedSearchTimeout = setTimeout(() => {
+        fetchUnlinkedItems(selectedBranch.value.id, newQuery)
+    }, 250)
+})
+
+const clearItemSearch = () => {
+    itemSearchQuery.value = ''
+    if (unlinkedSearchTimeout) clearTimeout(unlinkedSearchTimeout)
+    if (selectedBranch.value) {
+        fetchUnlinkedItems(selectedBranch.value.id, '')
+    }
+}
+
+const submitLink = (itemId) => {
+    linkForm.item_id = itemId
+    linkForm.post(route('org.product-links.link'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            showLinkModal.value = false
+        },
+    })
+}
+
+// Unlink action
+const confirmUnlink = (item) => {
+    if (!confirm(`Are you sure you want to unlink '${item.name}' from this group? This will affect future transfers only.`)) {
+        return
+    }
+    router.post(
+        route('org.product-links.unlink'),
+        { item_id: item.item_id },
+        { preserveScroll: true }
+    )
+}
+
+// 3. Copy to Other Branches
+const copyError = ref('')
+const copyForm = useForm({
+    source_item_id: null,
+    target_branch_ids: [],
+    include_prices: true,
+})
+
+const openCopyModal = (group, item) => {
+    selectedGroup.value = group
+    selectedItem.value = item
+    copyError.value = ''
+    copyForm.source_item_id = item.item_id
+    // Pre-check all branches missing this item
+    const missingBranches = props.branches.filter(b => !group.items_by_branch[b.id]).map(b => b.id)
+    copyForm.target_branch_ids = missingBranches
+    copyForm.include_prices = true
+    showCopyModal.value = true
+}
+
+const submitCopy = () => {
+    copyError.value = ''
+    copyForm.post(route('org.product-links.copy'), {
+        preserveScroll: true,
+        onSuccess: (page) => {
+            if (page.props.flash?.error) {
+                copyError.value = page.props.flash.error
+            } else {
+                showCopyModal.value = false
+                copyForm.reset()
+            }
+        },
+        onError: (errors) => {
+            copyError.value = Object.values(errors).flat().join(' ') || 'An error occurred while copying.'
+        },
+    })
+}
+
+// 4. Auto-Suggest Modal
+const templateBranchId = ref(props.branches?.[0]?.id || null)
+const suggestLoading = ref(false)
+const suggestData = ref({ barcode_matches: [], name_matches: [] })
+const suggestTab = ref('barcode')
+const selectedBarcodeMatches = ref([])
+const selectedNameMatches = ref([])
+const barcodeFilterQuery = ref('')
+const nameFilterQuery = ref('')
+const barcodeDisplayLimit = ref(50)
+const nameDisplayLimit = ref(50)
+const confirmingBulk = ref(false)
+
+const filteredBarcodeMatches = computed(() => {
+    const list = suggestData.value.barcode_matches || []
+    const q = barcodeFilterQuery.value.trim().toLowerCase()
+    if (!q) return list
+    return list.filter(m =>
+        (m.template_item_name && m.template_item_name.toLowerCase().includes(q)) ||
+        (m.target_item_name && m.target_item_name.toLowerCase().includes(q)) ||
+        (m.template_barcode && m.template_barcode.toLowerCase().includes(q)) ||
+        (m.target_branch_name && m.target_branch_name.toLowerCase().includes(q))
+    )
+})
+
+const displayedBarcodeMatches = computed(() => {
+    return filteredBarcodeMatches.value.slice(0, barcodeDisplayLimit.value)
+})
+
+const filteredNameMatches = computed(() => {
+    const list = suggestData.value.name_matches || []
+    const q = nameFilterQuery.value.trim().toLowerCase()
+    if (!q) return list
+    return list.filter(m =>
+        (m.template_item_name && m.template_item_name.toLowerCase().includes(q)) ||
+        (m.target_item_name && m.target_item_name.toLowerCase().includes(q)) ||
+        (m.target_branch_name && m.target_branch_name.toLowerCase().includes(q))
+    )
+})
+
+const displayedNameMatches = computed(() => {
+    return filteredNameMatches.value.slice(0, nameDisplayLimit.value)
+})
+
+const openSuggestModal = () => {
+    showSuggestModal.value = true
+    barcodeDisplayLimit.value = 50
+    nameDisplayLimit.value = 50
+    barcodeFilterQuery.value = ''
+    nameFilterQuery.value = ''
+    if (templateBranchId.value) {
+        fetchSuggestions()
+    }
+}
+
+const fetchSuggestions = async () => {
+    if (!templateBranchId.value) return
+    suggestLoading.value = true
+    barcodeDisplayLimit.value = 50
+    nameDisplayLimit.value = 50
+    try {
+        const res = await fetch(route('org.product-links.suggest') + `?template_branch_id=${templateBranchId.value}`)
+        suggestData.value = await res.json()
+        selectedBarcodeMatches.value = [...(suggestData.value.barcode_matches || [])]
+        selectedNameMatches.value = []
+    } catch (e) {
+        suggestData.value = { barcode_matches: [], name_matches: [] }
+    } finally {
+        suggestLoading.value = false
+    }
+}
+
+const confirmSelectedMatches = (matches) => {
+    if (!matches || matches.length === 0 || confirmingBulk.value) return
+    confirmingBulk.value = true
+    const payload = matches.map(m => ({
+        template_item_id: m.template_item_id,
+        target_item_id: m.target_item_id,
+        target_branch_id: m.target_branch_id,
+        match_type: m.match_type,
+    }))
+    router.post(
+        route('org.product-links.bulk-confirm'),
+        { matches: payload },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                showSuggestModal.value = false
+            },
+            onFinish: () => {
+                confirmingBulk.value = false
+            },
+        }
+    )
+}
+
+// 5. Merge Groups Modal
+const mergeForm = useForm({
+    keep_group_id: null,
+    merge_group_id: null,
+    branch_resolutions: {},
+})
+
+const openMergeModal = () => {
+    mergeForm.keep_group_id = mergeGroupOptions.value[0]?.id || null
+    mergeForm.merge_group_id = mergeGroupOptions.value[1]?.id || null
+    mergeForm.branch_resolutions = {}
+    showMergeModal.value = true
+}
+
+const submitMerge = () => {
+    mergeForm.post(route('org.product-links.merge'), {
+        onSuccess: () => {
+            showMergeModal.value = false
+            mergeForm.reset()
+        },
+    })
+}
+
+// 6. Undo Batch Modal
+const undoForm = useForm({
+    batch_id: '',
+})
+
+const openUndoModal = () => {
+    undoForm.batch_id = ''
+    showUndoModal.value = true
+}
+
+const submitUndo = () => {
+    undoForm.post(route('org.product-links.undo-batch'), {
+        onSuccess: () => {
+            showUndoModal.value = false
+            undoForm.reset()
+        },
+    })
+}
+</script>
+
+<template>
+    <Head :title="`Product Links — ${organization?.name || 'Organization'}`" />
+
+    <div class="space-y-6 pb-12">
+        <!-- Breadcrumbs & Header -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mb-1">
+                    <Link :href="route('org.dashboard')" class="hover:text-indigo-600 dark:hover:text-indigo-400 transition">Dashboard</Link>
+                    <span>/</span>
+                    <span class="text-slate-800 dark:text-slate-200 font-medium">Product Links (Inter-Branch)</span>
+                </div>
+                <h1 class="text-2xl font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-3">
+                    Product Links Catalog Grid
+                    <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                        {{ totalGroups }} Product Groups
+                    </span>
+                    <span v-if="conflictCount > 0" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1 animate-pulse">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        {{ conflictCount }} Unit Mismatch Warning{{ conflictCount > 1 ? 's' : '' }}
+                    </span>
+                </h1>
+                <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                    Shared product groups linking each branch's catalog items for warehouse-style inter-branch stock movement.
+                </p>
+            </div>
+
+            <!-- Header Action Buttons -->
+            <div class="flex flex-wrap items-center gap-2.5">
+                <button
+                    @click="openSuggestModal"
+                    class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white shadow-xs hover:bg-emerald-700 active:scale-95 transition"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    Auto-Suggest Matches
+                </button>
+
+                <button
+                    @click="showCreateGroupModal = true"
+                    class="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white shadow-xs hover:bg-indigo-700 active:scale-95 transition"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    New Group
+                </button>
+
+                <button
+                    @click="openMergeModal"
+                    title="Merge duplicate product groups"
+                    class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                >
+                    Merge Groups
+                </button>
+
+                <button
+                    @click="openUndoModal"
+                    title="Undo a bulk auto-linking batch"
+                    class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 transition"
+                >
+                    Undo Batch
+                </button>
+            </div>
+        </div>
+
+        <!-- Flash Messages Banner -->
+        <div v-if="$page.props.flash?.success" class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 flex items-center justify-between text-sm shadow-xs">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                <span class="font-medium">{{ $page.props.flash.success }}</span>
+            </div>
+            <button @click="$page.props.flash.success = null" class="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400">✕</button>
+        </div>
+
+        <div v-if="$page.props.flash?.warning" class="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300 flex items-center justify-between text-sm shadow-xs">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                <span class="font-medium">{{ $page.props.flash.warning }}</span>
+            </div>
+            <button @click="$page.props.flash.warning = null" class="text-amber-600 hover:text-amber-800 dark:text-amber-400">✕</button>
+        </div>
+
+        <div v-if="$page.props.flash?.error" class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300 flex items-center justify-between text-sm shadow-xs">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                <span class="font-medium">{{ $page.props.flash.error }}</span>
+            </div>
+            <button @click="$page.props.flash.error = null" class="text-rose-600 hover:text-rose-800 dark:text-rose-400">✕</button>
+        </div>
+
+        <!-- Filter & Search Section -->
+        <div class="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 divide-y divide-slate-100 dark:divide-slate-800">
+            <!-- Main Filter Toolbar -->
+            <div class="p-4 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3">
+                <!-- Search Box with Guaranteed Width -->
+                <div class="relative flex-1 min-w-[240px] md:min-w-[320px]">
+                    <svg class="w-4 h-4 absolute left-3.5 top-3 text-slate-400 dark:text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                    <input
+                        v-model="search"
+                        @keyup.enter="applyFilters"
+                        type="text"
+                        placeholder="Search by group name, item name, or barcode..."
+                        class="w-full pl-9 pr-9 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-2xs"
+                    />
+                    <button
+                        v-if="search"
+                        type="button"
+                        @click="search = ''; applyFilters()"
+                        class="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded transition"
+                        title="Clear search"
+                    >
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                </div>
+
+                <!-- Select Filters & Action Buttons -->
+                <div class="flex flex-wrap items-center gap-2.5 shrink-0">
+                    <select
+                        v-model="statusFilter"
+                        @change="applyFilters"
+                        class="text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white py-2 pl-3 pr-8 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shrink-0 shadow-2xs"
+                    >
+                        <option value="all">All Groups</option>
+                        <option value="incomplete">Incomplete Links (Missing branches)</option>
+                        <option value="complete">Fully Linked in All Branches</option>
+                        <option value="conflicts">Unit Conflicts Only</option>
+                    </select>
+
+                    <select
+                        v-model="perPage"
+                        @change="applyFilters"
+                        class="text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white py-2 pl-3 pr-8 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shrink-0 shadow-2xs"
+                        title="Groups per page"
+                    >
+                        <option :value="15">15 / page</option>
+                        <option :value="25">25 / page</option>
+                        <option :value="50">50 / page</option>
+                        <option :value="100">100 / page</option>
+                    </select>
+
+                    <button
+                        @click="applyFilters"
+                        class="px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs active:scale-95 transition shrink-0"
+                    >
+                        Filter
+                    </button>
+                    <button
+                        v-if="search || statusFilter !== 'all' || perPage !== 25"
+                        @click="clearFilters"
+                        class="text-sm font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 px-2 shrink-0 transition"
+                    >
+                        Reset
+                    </button>
+                </div>
+            </div>
+
+            <!-- Dedicated Catalog Health Sub-Bar (Accommodates 10+ branches gracefully) -->
+            <div class="px-4 py-2.5 bg-slate-50/60 dark:bg-slate-800/40 flex flex-wrap items-center gap-2 text-xs">
+                <div class="flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-300 shrink-0 mr-1">
+                    <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                    <span>Catalog Health:</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-1.5 overflow-x-auto max-w-full">
+                    <span
+                        v-for="b in branches"
+                        :key="b.id"
+                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 shadow-2xs transition hover:border-slate-300 dark:hover:border-slate-600"
+                        :title="`${b.name}: ${unlinkedStats[b.id] ?? 0} items unlinked`"
+                    >
+                        <span class="w-1.5 h-1.5 rounded-full" :class="(unlinkedStats[b.id] ?? 0) > 0 ? 'bg-amber-500' : 'bg-emerald-500'"></span>
+                        <span class="font-medium max-w-[150px] truncate">{{ b.name }}</span>
+                        <span
+                            class="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+                            :class="(unlinkedStats[b.id] ?? 0) > 0 ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300' : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300'"
+                        >
+                            {{ unlinkedStats[b.id] ?? 0 }} unlinked
+                        </span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Matrix Grid Table -->
+        <div class="bg-white dark:bg-slate-900 rounded-xl shadow-xs border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm border-collapse">
+                    <thead>
+                        <tr class="bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800">
+                            <th class="py-3 px-4 font-semibold text-slate-700 dark:text-slate-300 w-64 min-w-[240px] sticky left-0 bg-slate-50 dark:bg-slate-800 z-10 shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#334155]">
+                                Shared Product Group
+                            </th>
+                            <th
+                                v-for="branch in branches"
+                                :key="branch.id"
+                                class="py-3 px-4 font-semibold text-slate-700 dark:text-slate-300 min-w-[260px]"
+                            >
+                                <div class="flex items-center justify-between">
+                                    <span>{{ branch.name }}</span>
+                                    <span class="text-xs px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-normal">
+                                        {{ unlinkedStats[branch.id] ?? 0 }} unlinked
+                                    </span>
+                                </div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        <tr v-if="groupList.length === 0">
+                            <td :colspan="branches.length + 1" class="py-12 text-center text-slate-500 dark:text-slate-400">
+                                <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                                <p class="font-medium text-slate-700 dark:text-slate-300">No product groups found.</p>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Click "Auto-Suggest Matches" or "New Group" above to start linking products across branches.</p>
+                            </td>
+                        </tr>
+
+                        <tr
+                            v-for="group in groupList"
+                            :key="group.id"
+                            class="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition"
+                        >
+                            <!-- Group Row Header -->
+                            <td class="py-4 px-4 sticky left-0 bg-white dark:bg-slate-900 group-hover:bg-slate-50/70 dark:group-hover:bg-slate-800/40 z-10 shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#334155]">
+                                <div class="space-y-1">
+                                    <div class="font-semibold text-slate-900 dark:text-white flex items-center justify-between group/header gap-1.5">
+                                        <span class="truncate" :title="group.name">{{ group.name }}</span>
+                                        <button
+                                            type="button"
+                                            @click="openEditGroupModal(group)"
+                                            class="opacity-0 group-hover/header:opacity-100 hover:opacity-100 p-1 text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 rounded-md transition cursor-pointer flex-shrink-0"
+                                            title="Edit product group name"
+                                        >
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                                        </button>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span
+                                            class="text-[11px] font-medium px-2 py-0.5 rounded-full"
+                                            :class="group.is_complete ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'"
+                                        >
+                                            {{ group.linked_branches }} / {{ group.total_branches }} branches
+                                        </span>
+                                        <span
+                                            v-if="group.has_unit_conflict"
+                                            class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300 dark:border-amber-700 flex items-center gap-1"
+                                            :title="`Conflicting base units: ${group.conflicting_units.join(' vs ')}. Transfers will be blocked until units align.`"
+                                        >
+                                            ⚠️ Unit Mismatch
+                                        </span>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- Branch Columns -->
+                            <td
+                                v-for="branch in branches"
+                                :key="branch.id"
+                                class="py-3 px-3 align-top"
+                            >
+                                <!-- Cell: Item Linked -->
+                                <div
+                                    v-if="group.items_by_branch[branch.id]"
+                                    class="p-3 rounded-lg border bg-slate-50/60 dark:bg-slate-800/50 transition relative group/cell"
+                                    :class="group.has_unit_conflict ? 'border-amber-200 dark:border-amber-800 bg-amber-50/20 dark:bg-amber-950/20' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-500 hover:shadow-xs'"
+                                >
+                                    <div class="flex items-start justify-between gap-1">
+                                        <div class="font-medium text-slate-900 dark:text-white text-xs leading-snug line-clamp-2">
+                                            {{ group.items_by_branch[branch.id].name }}
+                                        </div>
+                                        <button
+                                            @click="confirmUnlink(group.items_by_branch[branch.id])"
+                                            class="opacity-0 group-hover/cell:opacity-100 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition p-0.5 rounded"
+                                            title="Unlink from group"
+                                        >
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                        </button>
+                                    </div>
+
+                                    <div class="mt-2 flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                                        <span class="font-mono text-[10px] bg-white dark:bg-slate-700 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300">
+                                            {{ group.items_by_branch[branch.id].barcode || 'No barcode' }}
+                                        </span>
+                                        <span
+                                            class="font-semibold px-1.5 py-0.5 rounded"
+                                            :class="group.has_unit_conflict ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200' : 'bg-slate-200/70 dark:bg-slate-700 text-slate-700 dark:text-slate-300'"
+                                        >
+                                            {{ group.items_by_branch[branch.id].unit_label }}
+                                        </span>
+                                    </div>
+
+                                    <div class="mt-2 pt-2 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between text-[11px]">
+                                        <span class="text-slate-500 dark:text-slate-400">
+                                            Stock: <strong class="text-slate-800 dark:text-slate-200">{{ group.items_by_branch[branch.id].stock_total }}</strong>
+                                        </span>
+                                        <span class="text-slate-500 dark:text-slate-400">
+                                            Sell: <strong class="text-emerald-700 dark:text-emerald-400">{{ formatCurrency(group.items_by_branch[branch.id].price) }}</strong>
+                                        </span>
+                                    </div>
+
+                                    <div class="mt-2 flex items-center justify-between pt-1">
+                                        <button
+                                            @click="openCopyModal(group, group.items_by_branch[branch.id])"
+                                            class="text-[10px] font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 flex items-center gap-0.5"
+                                            title="Copy this product with prices to other branches"
+                                        >
+                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/></svg>
+                                            Copy to others
+                                        </button>
+                                        <span class="text-[9px] uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                                            {{ group.items_by_branch[branch.id].link_source }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <!-- Cell: Unlinked / Empty -->
+                                <div
+                                    v-else
+                                    class="p-3 rounded-lg border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/30 dark:bg-slate-800/20 flex flex-col items-center justify-center min-h-[110px] text-center hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition"
+                                >
+                                    <span class="text-xs text-slate-400 dark:text-slate-500 mb-2">Not stocked / linked</span>
+                                    <div class="flex items-center gap-2">
+                                        <button
+                                            @click="openLinkModal(group, branch)"
+                                            class="px-2.5 py-1 text-xs font-semibold rounded bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 shadow-2xs transition"
+                                        >
+                                            + Link
+                                        </button>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination Footer -->
+            <PaginationLinks
+                v-if="paginationLinks.length > 3"
+                :links="paginationLinks"
+                :meta="paginationMeta"
+            />
+        </div>
+
+        <!-- ── MODAL: Edit Product Group Name ─────────────────────────────────── -->
+        <div v-if="showEditGroupModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+            <div class="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Edit Product Group Name</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Rename this shared product group across all branches</p>
+                    </div>
+                    <button @click="showEditGroupModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">✕</button>
+                </div>
+                <form @submit.prevent="submitEditGroup" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Group Name</label>
+                        <input
+                            v-model="editGroupForm.name"
+                            type="text"
+                            placeholder="e.g. Peak Evaporated Milk 160g"
+                            required
+                            autofocus
+                            class="w-full text-sm rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                        <div v-if="editGroupForm.errors.name" class="text-xs text-red-500 mt-1">{{ editGroupForm.errors.name }}</div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">This shared product name is used for inter-branch linking and stock transfers.</p>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2.5 pt-2">
+                        <button
+                            type="button"
+                            @click="showEditGroupModal = false"
+                            class="px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            :disabled="editGroupForm.processing || !editGroupForm.name.trim()"
+                            class="px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 shadow-xs transition"
+                        >
+                            {{ editGroupForm.processing ? 'Saving...' : 'Save Changes' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── MODAL 1: Create Product Group ────────────────────────────────────── -->
+        <div v-if="showCreateGroupModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">Create New Product Group</h3>
+                    <button @click="showCreateGroupModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">✕</button>
+                </div>
+                <form @submit.prevent="submitCreateGroup" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Group Name</label>
+                        <input
+                            v-model="createGroupForm.name"
+                            type="text"
+                            placeholder="e.g. Peak Evaporated Milk 160g"
+                            required
+                            class="w-full text-sm rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+                        />
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">This represents the real-world product name across all branches.</p>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-2">
+                        <button type="button" @click="showCreateGroupModal = false" class="px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Cancel</button>
+                        <button type="submit" :disabled="createGroupForm.processing" class="px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition">
+                            Create Group
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── MODAL 2: Link Item to Group ──────────────────────────────────────── -->
+        <div v-if="showLinkModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Link Item in {{ selectedBranch?.name }}</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Group: <strong class="text-slate-800 dark:text-slate-200">{{ selectedGroup?.name }}</strong></p>
+                    </div>
+                    <button @click="showLinkModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">✕</button>
+                </div>
+
+                <!-- Search Input with Icon and Clear Button -->
+                <div class="space-y-1.5">
+                    <div class="relative">
+                        <svg class="w-4 h-4 absolute left-3 top-3 text-slate-400 dark:text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input
+                            v-model="itemSearchQuery"
+                            type="text"
+                            placeholder="Type to search items by name or barcode..."
+                            class="w-full pl-9 pr-9 py-2 text-sm rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                            autofocus
+                        />
+                        <button
+                            v-if="itemSearchQuery"
+                            @click="clearItemSearch"
+                            type="button"
+                            class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs px-1 rounded transition"
+                            title="Clear search"
+                        >
+                            ✕
+                        </button>
+                    </div>
+
+                    <!-- Search Count / Loading Indicator -->
+                    <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 px-1">
+                        <span v-if="loadingUnlinked" class="flex items-center gap-1.5 text-indigo-600 dark:text-indigo-400 font-medium">
+                            <svg class="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            Searching catalog...
+                        </span>
+                        <span v-else-if="itemSearchQuery">
+                            Found {{ unlinkedItemsList.length }} match{{ unlinkedItemsList.length === 1 ? '' : 'es' }} (showing max 25)
+                        </span>
+                        <span v-else>
+                            Showing first {{ unlinkedItemsList.length }} unlinked items (type above to search)
+                        </span>
+                    </div>
+                </div>
+
+                <div class="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
+                    <div v-if="loadingUnlinked" class="p-8 text-center text-xs text-slate-400 dark:text-slate-500 flex flex-col items-center justify-center gap-2">
+                        <svg class="animate-spin w-5 h-5 text-indigo-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        Searching matching unlinked items...
+                    </div>
+                    <div v-else-if="unlinkedItemsList.length === 0" class="p-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                        <span v-if="itemSearchQuery">
+                            No unlinked items matching "<strong class="text-slate-700 dark:text-slate-300">{{ itemSearchQuery }}</strong>" found in {{ selectedBranch?.name }}.
+                        </span>
+                        <span v-else>
+                            No unlinked items found in {{ selectedBranch?.name }}. All items in this branch are already linked to product groups.
+                        </span>
+                    </div>
+                    <div
+                        v-for="item in unlinkedItemsList"
+                        :key="item.id"
+                        class="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                    >
+                        <div>
+                            <div class="text-xs font-semibold text-slate-900 dark:text-white">{{ item.item_name }}</div>
+                            <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2 mt-0.5">
+                                <span>Barcode: {{ item.barcode_number || 'None' }}</span>
+                                <span>Unit: <strong>{{ item.unit_label || 'pcs' }}</strong></span>
+                                <span>Stock: {{ (item.front_store_qty || 0) + (item.back_store_qty || 0) }}</span>
+                            </div>
+                        </div>
+                        <button
+                            @click="submitLink(item.id)"
+                            :disabled="linkForm.processing"
+                            class="px-3 py-1.5 text-xs font-semibold rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+                        >
+                            Link Item
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex justify-end pt-2">
+                    <button type="button" @click="showLinkModal = false" class="px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── MODAL 3: Copy to Other Branches ──────────────────────────────────── -->
+        <div v-if="showCopyModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Create in Other Branches (Copy)</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Template item: <strong class="text-slate-800 dark:text-slate-200">{{ selectedItem?.name }}</strong></p>
+                    </div>
+                    <button @click="showCopyModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">✕</button>
+                </div>
+
+                <div class="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-xs text-blue-800 dark:text-blue-300 space-y-1">
+                    <div class="font-semibold">⚠️ "Copied once, not synced."</div>
+                    <p>Copies item name, barcode, units, and initial prices into destination branches. After copying, each branch manages its catalog independently.</p>
+                </div>
+
+                <!-- Error notice in modal -->
+                <div v-if="copyError || $page.props.flash?.error" class="p-3 text-xs rounded-lg bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-start gap-2">
+                    <span class="font-bold shrink-0">⚠️</span>
+                    <span>{{ copyError || $page.props.flash?.error }}</span>
+                </div>
+
+                <form @submit.prevent="submitCopy" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">Destination Branches</label>
+                        <div class="space-y-2 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 p-3 rounded-lg">
+                            <label
+                                v-for="b in branches"
+                                :key="b.id"
+                                class="flex items-center gap-2.5 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800 p-1 rounded text-slate-800 dark:text-slate-200"
+                            >
+                                <input
+                                    type="checkbox"
+                                    :value="b.id"
+                                    v-model="copyForm.target_branch_ids"
+                                    class="rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500"
+                                />
+                                <span>{{ b.name }}</span>
+                                <span v-if="selectedGroup?.items_by_branch[b.id]" class="text-[11px] text-amber-600 dark:text-amber-400 ml-auto font-medium">
+                                    Already linked
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="pt-1">
+                        <label class="flex items-center gap-2 text-sm text-slate-800 dark:text-slate-200 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                v-model="copyForm.include_prices"
+                                class="rounded border-slate-300 dark:border-slate-600 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span class="font-medium">Include cost and selling prices (default ON)</span>
+                        </label>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 ml-6 mt-0.5">
+                            If the destination branch has profit-percentage pricing enabled, only cost is copied and selling price is calculated automatically.
+                        </p>
+                    </div>
+
+                    <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+                        <button type="button" @click="showCopyModal = false" class="px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Cancel</button>
+                        <button type="submit" :disabled="copyForm.processing || copyForm.target_branch_ids.length === 0" class="px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition">
+                            Create & Link in Branches
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── MODAL 4: Auto-Suggest Matches ────────────────────────────────────── -->
+        <div v-if="showSuggestModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-3xl w-full p-6 space-y-4 max-h-[90vh] flex flex-col">
+                <div class="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white">Auto-Suggest Matches Across Branches</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Scan candidate items in other branches matching your template branch catalog.</p>
+                    </div>
+                    <button @click="showSuggestModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">✕</button>
+                </div>
+
+                <!-- Template branch picker -->
+                <div class="flex items-center gap-3">
+                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 whitespace-nowrap">Template Branch (Fullest catalog):</label>
+                    <select
+                        v-model="templateBranchId"
+                        @change="fetchSuggestions"
+                        class="text-sm rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white py-1.5 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                        <option v-for="b in branches" :key="b.id" :value="b.id">{{ b.name }}</option>
+                    </select>
+                    <button
+                        @click="fetchSuggestions"
+                        :disabled="suggestLoading"
+                        class="px-3 py-1.5 text-xs font-semibold rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition"
+                    >
+                        {{ suggestLoading ? 'Scanning...' : 'Rescan' }}
+                    </button>
+                </div>
+
+                <!-- Tabs: Exact Barcode vs Similar Name -->
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                    <div class="flex gap-4 text-xs font-semibold">
+                        <button
+                            @click="suggestTab = 'barcode'"
+                            class="pb-2 transition relative"
+                            :class="suggestTab === 'barcode' ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+                        >
+                            Exact Barcode Matches ({{ suggestData.barcode_matches?.length || 0 }})
+                            <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300">1-Click Bulk Safe</span>
+                        </button>
+                        <button
+                            @click="suggestTab = 'name'"
+                            class="pb-2 transition relative"
+                            :class="suggestTab === 'name' ? 'text-indigo-600 dark:text-indigo-400 border-b-2 border-indigo-600 dark:border-indigo-400' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+                        >
+                            Similar Name Matches ({{ suggestData.name_matches?.length || 0 }})
+                            <span class="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">Manual Review Required</span>
+                        </button>
+                    </div>
+
+                    <!-- Quick search in preview -->
+                    <div class="relative w-48">
+                        <input
+                            v-if="suggestTab === 'barcode' && (suggestData.barcode_matches?.length || 0) > 10"
+                            v-model="barcodeFilterQuery"
+                            type="text"
+                            placeholder="Filter matches..."
+                            class="w-full text-xs rounded-md border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 px-2 text-slate-800 dark:text-white"
+                        />
+                        <input
+                            v-else-if="suggestTab === 'name' && (suggestData.name_matches?.length || 0) > 10"
+                            v-model="nameFilterQuery"
+                            type="text"
+                            placeholder="Filter matches..."
+                            class="w-full text-xs rounded-md border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 px-2 text-slate-800 dark:text-white"
+                        />
+                    </div>
+                </div>
+
+                <!-- Matches List Container -->
+                <div class="flex-1 overflow-y-auto min-h-[250px] border border-slate-200 dark:border-slate-800 rounded-lg p-3 divide-y divide-slate-100 dark:divide-slate-800">
+                    <div v-if="suggestLoading" class="p-8 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                        <svg class="animate-spin h-6 w-6 text-indigo-500" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <span>Scanning catalog databases for barcode & name correlations...</span>
+                    </div>
+
+                    <!-- TAB 1: Barcode Matches -->
+                    <template v-else-if="suggestTab === 'barcode'">
+                        <div v-if="(suggestData.barcode_matches?.length || 0) === 0" class="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                            No unlinked items with identical barcodes found in other branches.
+                        </div>
+                        <div v-else-if="displayedBarcodeMatches.length === 0" class="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                            No matches match filter "{{ barcodeFilterQuery }}".
+                        </div>
+                        <template v-else>
+                            <div
+                                v-for="(m, idx) in displayedBarcodeMatches"
+                                :key="idx"
+                                class="py-2.5 flex items-center justify-between text-xs"
+                            >
+                                <div class="space-y-0.5">
+                                    <div class="font-semibold text-slate-900 dark:text-white">{{ m.template_item_name }}</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                        <span class="font-mono bg-slate-100 dark:bg-slate-800 px-1 rounded">{{ m.template_barcode }}</span>
+                                        <span>Branch: <strong>{{ m.target_branch_name }}</strong></span>
+                                        <span>Match: <strong class="text-slate-800 dark:text-slate-200">{{ m.target_item_name }}</strong></span>
+                                    </div>
+                                </div>
+                                <span class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                                    100% Barcode Match
+                                </span>
+                            </div>
+
+                            <div v-if="filteredBarcodeMatches.length > displayedBarcodeMatches.length" class="pt-3 text-center">
+                                <button
+                                    type="button"
+                                    @click="barcodeDisplayLimit += 50"
+                                    class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                                >
+                                    Showing {{ displayedBarcodeMatches.length }} of {{ filteredBarcodeMatches.length }} matches. Click to load 50 more...
+                                </button>
+                            </div>
+                        </template>
+                    </template>
+
+                    <!-- TAB 2: Name Matches -->
+                    <template v-else>
+                        <div v-if="(suggestData.name_matches?.length || 0) === 0" class="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                            No high-confidence name similarities found.
+                        </div>
+                        <div v-else-if="displayedNameMatches.length === 0" class="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                            No matches match filter "{{ nameFilterQuery }}".
+                        </div>
+                        <template v-else>
+                            <div
+                                v-for="(m, idx) in displayedNameMatches"
+                                :key="idx"
+                                class="py-2.5 flex items-center justify-between text-xs"
+                            >
+                                <div class="space-y-0.5">
+                                    <div class="font-semibold text-slate-900 dark:text-white">{{ m.template_item_name }}</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                        <span>Branch: <strong>{{ m.target_branch_name }}</strong></span>
+                                        <span>Candidate: <strong class="text-slate-800 dark:text-slate-200">{{ m.target_item_name }}</strong></span>
+                                        <span>Barcode: {{ m.target_barcode || 'None' }}</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">
+                                        {{ m.confidence }}% Match
+                                    </span>
+                                    <button
+                                        @click="confirmSelectedMatches([m])"
+                                        :disabled="confirmingBulk"
+                                        class="px-2.5 py-1 text-xs font-medium rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        Confirm Link
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-if="filteredNameMatches.length > displayedNameMatches.length" class="pt-3 text-center">
+                                <button
+                                    type="button"
+                                    @click="nameDisplayLimit += 50"
+                                    class="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
+                                >
+                                    Showing {{ displayedNameMatches.length }} of {{ filteredNameMatches.length }} matches. Click to load 50 more...
+                                </button>
+                            </div>
+                        </template>
+                    </template>
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <span class="text-xs text-slate-500 dark:text-slate-400">
+                        All bulk links generate an undo batch ID.
+                    </span>
+                    <div class="flex items-center gap-2">
+                        <button type="button" @click="showSuggestModal = false" class="px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition">Close</button>
+                        <button
+                            v-if="suggestTab === 'barcode' && (suggestData.barcode_matches?.length || 0) > 0"
+                            type="button"
+                            :disabled="confirmingBulk"
+                            @click="confirmSelectedMatches(suggestData.barcode_matches)"
+                            class="px-4 py-2 text-sm font-semibold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition flex items-center gap-2"
+                        >
+                            <svg v-if="confirmingBulk" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                            <span>{{ confirmingBulk ? 'Linking items...' : `Confirm All ${suggestData.barcode_matches.length} Exact Barcode Matches` }}</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── MODAL 5: Merge Groups ────────────────────────────────────────────── -->
+        <div v-if="showMergeModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">Merge Two Product Groups</h3>
+                    <button @click="showMergeModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">✕</button>
+                </div>
+                <form @submit.prevent="submitMerge" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Group to Keep (Primary)</label>
+                        <select v-model="mergeForm.keep_group_id" required class="w-full text-sm rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                            <option v-for="g in mergeGroupOptions" :key="g.id" :value="g.id">{{ g.name }}</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Group to Merge (Will be deleted)</label>
+                        <select v-model="mergeForm.merge_group_id" required class="w-full text-sm rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
+                            <option v-for="g in mergeGroupOptions.filter(g => g.id !== mergeForm.keep_group_id)" :key="g.id" :value="g.id">{{ g.name }}</option>
+                        </select>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <button type="button" @click="showMergeModal = false" class="px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+                        <button type="submit" :disabled="mergeForm.processing || !mergeForm.keep_group_id || !mergeForm.merge_group_id" class="px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700">
+                            Merge Groups
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- ── MODAL 6: Undo Batch ──────────────────────────────────────────────── -->
+        <div v-if="showUndoModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">Undo Bulk Link Batch</h3>
+                    <button @click="showUndoModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">✕</button>
+                </div>
+                <form @submit.prevent="submitUndo" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Batch UUID</label>
+                        <input
+                            v-model="undoForm.batch_id"
+                            type="text"
+                            placeholder="Paste the batch UUID from activity logs..."
+                            required
+                            class="w-full text-sm rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 font-mono"
+                        />
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <button type="button" @click="showUndoModal = false" class="px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+                        <button type="submit" :disabled="undoForm.processing || !undoForm.batch_id" class="px-4 py-2 text-sm font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">
+                            Revert Batch Links
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</template>

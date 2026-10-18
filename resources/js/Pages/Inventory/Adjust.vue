@@ -1,7 +1,8 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useForm, Link, usePage } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
+import CreateBatchModal from '@/Components/CreateBatchModal.vue'
 import axios from 'axios'
 
 defineOptions({ layout: PosLayout })
@@ -25,6 +26,9 @@ const isSearching = ref(false)
 const isDropdownOpen = ref(false)
 const selectedItem = ref(null)
 const dropdownContainer = ref(null)
+
+const showBatchModal = ref(false)
+const batchPromptItem = ref(null)
 
 const isBatchTracked = computed(() => {
     return Boolean(selectedItem.value?.batch_tracking_enabled && page.props.pos_settings?.batch_tracking_enabled)
@@ -67,12 +71,12 @@ const selectItem = (item) => {
     isDropdownOpen.value = false
 }
 
-const clearSelection = () => {
+const clearSelection = (openDropdown = true) => {
     selectedItem.value = null
     form.item_id = ''
     searchQuery.value = ''
     searchResults.value = props.items || []
-    isDropdownOpen.value = true
+    isDropdownOpen.value = Boolean(openDropdown)
 }
 
 const handleClickOutside = (event) => {
@@ -81,8 +85,25 @@ const handleClickOutside = (event) => {
     }
 }
 
+watch(() => props.items, (newItems) => {
+    if (!searchQuery.value) {
+        searchResults.value = newItems || []
+    }
+})
+
+watch(() => page.props.flash?.batch_prompt, (prompt) => {
+    if (prompt) {
+        batchPromptItem.value = prompt
+        showBatchModal.value = true
+    }
+}, { immediate: true })
+
 onMounted(() => {
     document.addEventListener('click', handleClickOutside)
+    if (page.props.flash?.batch_prompt) {
+        batchPromptItem.value = page.props.flash.batch_prompt
+        showBatchModal.value = true
+    }
 })
 
 onUnmounted(() => {
@@ -91,7 +112,14 @@ onUnmounted(() => {
 
 function submit() {
     if (!form.item_id) return
-    form.post(route('pos.inventory.process-adjust'))
+    form.post(route('pos.inventory.process-adjust'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            form.reset('qty', 'reason', 'deduct_from_batch')
+            form.clearErrors()
+            clearSelection(false)
+        },
+    })
 }
 </script>
 
@@ -107,6 +135,27 @@ function submit() {
 
         <div class="flex-1 overflow-y-auto p-6">
             <form @submit.prevent="submit" class="max-w-xl mx-auto space-y-5">
+                <!-- Success Alert -->
+                <div v-if="$page.props.flash?.success" class="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 text-emerald-700 dark:text-emerald-400 text-sm font-semibold flex items-center justify-between gap-3 shadow-xs">
+                    <div class="flex items-center gap-2.5">
+                        <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span>{{ $page.props.flash.success }}</span>
+                    </div>
+                    <span class="text-xs font-normal text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full">
+                        Ready for next item
+                    </span>
+                </div>
+
+                <!-- Error Alert -->
+                <div v-if="$page.props.flash?.error" class="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 text-rose-700 dark:text-rose-400 text-sm font-semibold flex items-center gap-2.5 shadow-xs">
+                    <svg class="w-5 h-5 text-rose-600 dark:text-rose-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                    <span>{{ $page.props.flash.error }}</span>
+                </div>
+
                 <div class="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-amber-700 dark:text-amber-400 text-xs leading-relaxed font-medium">
                     <strong>Warning:</strong> Manual adjustments directly impact inventory levels without associated sales or purchase records. Always provide a clear reason for the adjustment (e.g., Damage, Expiry, Stock-take correction).
                 </div>
@@ -255,5 +304,12 @@ function submit() {
                 </div>
             </form>
         </div>
+
+        <!-- Optional Create Batch Modal (§5.2) -->
+        <CreateBatchModal
+            v-model="showBatchModal"
+            :item="batchPromptItem"
+        />
     </div>
 </template>
+
