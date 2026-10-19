@@ -472,7 +472,7 @@ class InterBranchProductLinkingAndTransfersTest extends TestCase
         // Ensure branch user has permission
         setPermissionsTeamId($this->branchA->id);
         $this->branchA->ensureDefaultRoles();
-        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferInterBranchStock', 'guard_name' => 'web']);
         $this->user->givePermissionTo($perm);
 
         // Cancel via web POST route
@@ -679,7 +679,7 @@ class InterBranchProductLinkingAndTransfersTest extends TestCase
         setPermissionsTeamId($this->branchA->id);
         $this->branchA->ensureDefaultRoles();
 
-        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferInterBranchStock', 'guard_name' => 'web']);
         $this->user->givePermissionTo($perm);
 
         $response = $this->actingAs($this->user)->get(
@@ -952,7 +952,7 @@ class InterBranchProductLinkingAndTransfersTest extends TestCase
         ]);
         setPermissionsTeamId($this->branchB->id);
         $this->branchB->ensureDefaultRoles();
-        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferInterBranchStock', 'guard_name' => 'web']);
         $userB->givePermissionTo($perm);
 
         // 1. Verify index controller response detects the matching item in Branch B
@@ -1051,7 +1051,7 @@ class InterBranchProductLinkingAndTransfersTest extends TestCase
         ]);
         setPermissionsTeamId($this->branchB->id);
         $this->branchB->ensureDefaultRoles();
-        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferInterBranchStock', 'guard_name' => 'web']);
         $userB->givePermissionTo($perm);
 
         // 1. Verify index controller response detects name match
@@ -1150,7 +1150,7 @@ class InterBranchProductLinkingAndTransfersTest extends TestCase
         ]);
         setPermissionsTeamId($this->branchB->id);
         $this->branchB->ensureDefaultRoles();
-        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferInterBranchStock', 'guard_name' => 'web']);
         $userB->givePermissionTo($perm);
 
         // 2. Receiver views incoming transfers - verifies notes are present
@@ -1232,7 +1232,7 @@ class InterBranchProductLinkingAndTransfersTest extends TestCase
         ]);
         setPermissionsTeamId($this->branchB->id);
         $this->branchB->ensureDefaultRoles();
-        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferInterBranchStock', 'guard_name' => 'web']);
         $userB->givePermissionTo($perm);
 
         // Also ensure userA has permission on branch A
@@ -1298,6 +1298,50 @@ class InterBranchProductLinkingAndTransfersTest extends TestCase
             'branch'   => $this->branchB->slug,
             'transfer' => $transfer->id,
         ]));
+    }
+
+    /**
+     * Test 18: Inter-Branch transfer routes strictly enforce canTransferInterBranchStock permission.
+     */
+    public function test_inter_branch_transfer_routes_require_can_transfer_inter_branch_stock_permission(): void
+    {
+        $staffUser = User::create([
+            'organization_id' => $this->org->id,
+            'branch_id'       => $this->branchA->id,
+            'name'            => 'Warehouse Front Staff',
+            'username'        => 'warehouse_staff_' . uniqid(),
+            'email'           => 'warehouse_staff_' . uniqid() . '@example.com',
+            'password'        => bcrypt('secret'),
+            'is_active'       => true,
+        ]);
+
+        setPermissionsTeamId($this->branchA->id);
+        $this->branchA->ensureDefaultRoles();
+
+        // 1. Grant ONLY standard canTransferStock (front/back store transfer)
+        $frontBackPerm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $staffUser->givePermissionTo($frontBackPerm);
+
+        // Attempting to access Inter-Branch Transfers without canTransferInterBranchStock must return 403
+        $response = $this->actingAs($staffUser)->get(
+            route('pos.inventory.transfers.inter-branch.index', ['branch' => $this->branchA->slug])
+        );
+        $response->assertStatus(403);
+
+        // 2. Grant canTransferInterBranchStock permission
+        $interBranchPerm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferInterBranchStock', 'guard_name' => 'web']);
+        $staffUser->givePermissionTo($interBranchPerm);
+
+        // Now access must succeed
+        $allowedResponse = $this->actingAs($staffUser)->get(
+            route('pos.inventory.transfers.inter-branch.index', ['branch' => $this->branchA->slug])
+        );
+        $allowedResponse->assertOk();
+
+        $createResponse = $this->actingAs($staffUser)->get(
+            route('pos.inventory.transfers.inter-branch.create', ['branch' => $this->branchA->slug])
+        );
+        $createResponse->assertOk();
     }
 }
 

@@ -27,6 +27,7 @@ class BranchRoleController extends Controller
         'canGiveDebt'        => 'Give Debt / Sell on Credit',
         'canAdjustStock'     => 'Adjust Stock / Inventory Logs',
         'canTransferStock'   => 'Transfer Stock (Front/Back Store)',
+        'canTransferInterBranchStock' => 'Inter-Branch Stock Movement',
         'canManagePurchases' => 'Manage Purchases & Vendors',
         'canManageItems'     => 'Manage Items, Categories & Grid',
         'canManageBarcodes'  => 'Manage & Print Barcodes',

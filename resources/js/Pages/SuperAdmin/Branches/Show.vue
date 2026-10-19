@@ -181,6 +181,7 @@ watch(() => userForm.role, (newRole) => {
             'canGiveDebt',
             'canAdjustStock',
             'canTransferStock',
+            'canTransferInterBranchStock',
             'canViewReorderPoints',
             'canManagePurchases',
             'canManageItems',
@@ -197,6 +198,7 @@ watch(() => userForm.role, (newRole) => {
         userForm.permissions = [
             'canAdjustStock',
             'canTransferStock',
+            'canTransferInterBranchStock',
             'canViewReorderPoints',
             'canManagePurchases',
             'canManageItems',

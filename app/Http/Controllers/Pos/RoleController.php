@@ -18,7 +18,7 @@ class RoleController extends Controller
         'canAccessPos', 'canViewSales', 'canDeleteSale', 'canProcessReturn',
         'canApplyDiscount', 'canEditPrice', 'canViewBuyPrice', 'canViewEndOfDay',
         'canViewReports', 'canViewProfitLoss', 'canManageDebt', 'canGiveDebt',
-        'canAdjustStock', 'canTransferStock', 'canManagePurchases', 'canManageItems',
+        'canAdjustStock', 'canTransferStock', 'canTransferInterBranchStock', 'canManagePurchases', 'canManageItems',
         'canManageBarcodes', 'canManageCustomers', 'canManageUsers', 'canEditSettings',
         'canViewReorderPoints', 'canLogExpense', 'canManageExpenses', 'canViewExpenseReports', 'canViewExpiryReport', 'canViewBatchExpiryReport',
         'view_ecommerce_activity', 'canManageTillCashMovements',

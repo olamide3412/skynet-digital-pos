@@ -79,9 +79,10 @@ class BranchController extends Controller
                 'address'            => $b->address,
                 'phone'              => $b->phone,
                 'email'              => $b->email,
-                'is_active'          => (bool) $b->is_active,
-                'is_ai_enabled'      => (bool) ($b->is_ai_enabled ?? true),
-                'logo_url'           => $b->logo_path ? asset('storage/' . $b->logo_path) : null,
+                'is_active'              => (bool) $b->is_active,
+                'is_ai_enabled'          => (bool) ($b->is_ai_enabled ?? true),
+                'public_catalog_enabled' => (bool) ($b->public_catalog_enabled ?? false),
+                'logo_url'               => $b->logo_path ? asset('storage/' . $b->logo_path) : null,
                 'users_count'        => $b->users_count,
                 'items_count'        => $b->items_count,
                 'sales_count'        => $b->sales_count,
@@ -783,6 +784,25 @@ class BranchController extends Controller
         );
 
         return back()->with('success', "AI intelligence features {$status} for {$branch->name}.");
+    }
+
+    /**
+     * Toggle branch public catalog enablement status.
+     */
+    public function togglePublicCatalog(Branch $branch)
+    {
+        $newState = !($branch->public_catalog_enabled ?? false);
+        $branch->public_catalog_enabled = $newState;
+        $branch->save();
+        $status = $newState ? 'enabled' : 'disabled';
+
+        ActivityLogger::log(
+            'setting',
+            "Super Admin {$status} public catalog price list for branch '{$branch->name}'",
+            $branch->id
+        );
+
+        return back()->with('success', "Public catalog {$status} for {$branch->name}.");
     }
 
     /**

@@ -37,6 +37,7 @@ const form = useForm({
     expiry_date:            props.clonedItem?.expiry_date ?? '',
     item_description:       props.clonedItem?.item_description ?? '',
     price_locked:           props.clonedItem?.price_locked ?? false,
+    hide_from_public_catalog: props.clonedItem?.hide_from_public_catalog ?? false,
     is_imei_tracked:        props.clonedItem?.is_imei_tracked ?? false,
     batch_tracking_enabled: props.clonedItem?.batch_tracking_enabled ?? false,
     initial_imeis:          '',
@@ -208,6 +209,15 @@ function submit() {
                                 class="w-4 h-4 accent-emerald-500 rounded cursor-pointer flex-shrink-0" />
                             <label for="price_locked" class="text-xs text-slate-600 dark:text-slate-300 cursor-pointer select-none">
                                 <strong class="text-slate-900 dark:text-white font-semibold">Lock base prices against global margin updates</strong> — protects this item from auto-overwrites when global profit percentages change.
+                            </label>
+                        </div>
+
+                        <!-- Hide from Public Catalog Checkbox (§7) -->
+                        <div class="flex items-center gap-2 bg-slate-50 dark:bg-slate-900/60 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700/60">
+                            <input v-model="form.hide_from_public_catalog" type="checkbox" id="hide_from_public_catalog"
+                                class="w-4 h-4 accent-emerald-500 rounded cursor-pointer flex-shrink-0" />
+                            <label for="hide_from_public_catalog" class="text-xs text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                                <strong class="text-slate-900 dark:text-white font-semibold">Hide from Public Catalog</strong> — excludes this product from the branch's shareable public price list.
                             </label>
                         </div>
                     </div>

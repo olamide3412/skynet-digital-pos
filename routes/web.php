@@ -56,7 +56,7 @@ self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then(keys =
 self.addEventListener('fetch', (e) => {
     if (e.request.method !== 'GET') return;
     const url = new URL(e.request.url);
-    if (url.pathname.includes('/api/')) return;
+    if (url.pathname.includes('/api/') || url.pathname.startsWith('/catalog')) return;
     e.respondWith(fetch(e.request).then(res => {
         if (res && res.status === 200 && res.type === 'basic') {
             const clone = res.clone();
@@ -145,6 +145,8 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.toggle-turnstile');
         Route::post('/branches/{branch}/toggle-ai', [BranchController::class, 'toggleAi'])
             ->name('branches.toggle-ai');
+        Route::post('/branches/{branch}/toggle-public-catalog', [BranchController::class, 'togglePublicCatalog'])
+            ->name('branches.toggle-public-catalog');
         Route::post('/branches/{branch}/toggle-auto-fullscreen', [BranchController::class, 'toggleAutoFullscreen'])
             ->name('branches.toggle-auto-fullscreen');
         Route::post('/branches/{branch}/toggle-till-opening', [BranchController::class, 'toggleTillOpening'])
@@ -411,6 +413,14 @@ Route::prefix('org')->name('org.')->group(function () {
 });
 
 /* ══════════════════════════════════════════════════════════════════════════════
+ *  PUBLIC BRANCH CATALOG (SHAREABLE READ-ONLY PRICE LIST) — /catalog/{slug}
+ *  Dedicated route: no auth required, rate limited, safe from POS app shell.
+ * ══════════════════════════════════════════════════════════════════════════════ */
+Route::get('/catalog/{slug}', [\App\Modules\PublicCatalog\Controllers\PublicCatalogController::class, 'show'])
+    ->name('catalog.show')
+    ->middleware(['throttle:public-catalog']);
+
+/* ══════════════════════════════════════════════════════════════════════════════
  *  BRANCH POS PANEL — /{branch}/...
  *  branch = slug (route model binding via getRouteKeyName = 'slug')
  *  ResolveBranchMiddleware runs first: resolves Branch, checks is_active.
@@ -540,13 +550,13 @@ Route::prefix('{branch}')
 
             // Inter-Branch Transfers & Receiving Queue (any-to-any across branches)
             Route::prefix('transfers/inter-branch')->name('transfers.inter-branch.')->group(function () {
-                Route::get('/',                   [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'index'])->name('index')->middleware('pos.role:canTransferStock');
-                Route::get('/create',             [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'create'])->name('create')->middleware('pos.role:canTransferStock');
-                Route::post('/',                  [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'store'])->name('store')->middleware('pos.role:canTransferStock');
-                Route::get('/{transfer}/receive', [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'showReceive'])->name('receive')->middleware('pos.role:canTransferStock');
-                Route::get('/{transfer}',         [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'show'])->name('show')->middleware('pos.role:canTransferStock');
-                Route::post('/{transfer}/cancel', [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'cancel'])->name('cancel')->middleware('pos.role:canTransferStock');
-                Route::post('/{transfer}/accept', [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'accept'])->name('accept')->middleware('pos.role:canTransferStock');
+                Route::get('/',                   [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'index'])->name('index')->middleware('pos.role:canTransferInterBranchStock');
+                Route::get('/create',             [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'create'])->name('create')->middleware('pos.role:canTransferInterBranchStock');
+                Route::post('/',                  [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'store'])->name('store')->middleware('pos.role:canTransferInterBranchStock');
+                Route::get('/{transfer}/receive', [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'showReceive'])->name('receive')->middleware('pos.role:canTransferInterBranchStock');
+                Route::get('/{transfer}',         [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'show'])->name('show')->middleware('pos.role:canTransferInterBranchStock');
+                Route::post('/{transfer}/cancel', [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'cancel'])->name('cancel')->middleware('pos.role:canTransferInterBranchStock');
+                Route::post('/{transfer}/accept', [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'accept'])->name('accept')->middleware('pos.role:canTransferInterBranchStock');
             });
 
             // Reorder Points & Replenishment

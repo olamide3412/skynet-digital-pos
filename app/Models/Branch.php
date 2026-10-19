@@ -13,14 +13,15 @@ class Branch extends Model
 {
     protected $fillable = [
         'organization_id', 'name', 'slug', 'address', 'logo_path',
-        'phone', 'email', 'is_active', 'is_ai_enabled',
+        'phone', 'email', 'is_active', 'is_ai_enabled', 'public_catalog_enabled',
     ];
 
     protected function casts(): array
     {
         return [
-            'is_active'     => 'boolean',
-            'is_ai_enabled' => 'boolean',
+            'is_active'              => 'boolean',
+            'is_ai_enabled'          => 'boolean',
+            'public_catalog_enabled' => 'boolean',
         ];
     }
 
@@ -257,6 +258,7 @@ class Branch extends Model
                     'canGiveDebt',
                     'canAdjustStock',
                     'canTransferStock',
+                    'canTransferInterBranchStock',
                     'canViewReorderPoints',
                     'canManagePurchases',
                     'canManageItems',
@@ -285,6 +287,7 @@ class Branch extends Model
                 ->whereIn('name', [
                     'canAdjustStock',
                     'canTransferStock',
+                    'canTransferInterBranchStock',
                     'canViewReorderPoints',
                     'canManagePurchases',
                     'canManageItems',

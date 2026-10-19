@@ -28,6 +28,7 @@ class RolePermissionSeeder extends Seeder
         'canGiveDebt',
         'canAdjustStock',
         'canTransferStock',
+        'canTransferInterBranchStock',
         'canManagePurchases',
         'canManageItems',
         'canManageBarcodes',

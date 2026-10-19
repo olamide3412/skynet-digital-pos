@@ -37,8 +37,8 @@ self.addEventListener('fetch', (event) => {
 
     const url = new URL(event.request.url);
 
-    // Skip caching for backend API and sync endpoints (IndexedDB handles offline data)
-    if (url.pathname.includes('/api/')) return;
+    // Skip caching for backend API, sync endpoints, and public catalog
+    if (url.pathname.includes('/api/') || url.pathname.startsWith('/catalog')) return;
 
     event.respondWith(
         fetch(event.request)

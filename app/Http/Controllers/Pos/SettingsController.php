@@ -22,6 +22,9 @@ class SettingsController extends Controller
             $settingsData['business_contact_number'] = $branch->phone;
             $settingsData['business_email']          = $branch->email;
             $settingsData['logo_url']                = $branch->logo_path ? asset('storage/' . $branch->logo_path) : null;
+            $settingsData['public_catalog_enabled']   = (bool) $branch->public_catalog_enabled;
+            $settingsData['public_catalog_url']       = route('catalog.show', ['slug' => $branch->slug]);
+            $settingsData['branch_slug']              = $branch->slug;
         }
 
         $branchItems = $branch ? \App\Models\Item::where('branch_id', $branch->id)
@@ -95,16 +98,18 @@ class SettingsController extends Controller
             'show_receipt_preview'     => 'nullable|boolean',
             'require_till_opening'     => 'nullable|boolean',
             'print_till_slip'          => 'nullable|boolean',
+            'public_catalog_enabled'   => 'nullable|boolean',
         ]);
 
         // ── 1. Update branch business details & logo ───────────────────────────
         $branch = current_branch();
         if ($branch) {
             $branchData = [
-                'name'    => $data['business_name'],
-                'address' => $data['business_address'] ?? $branch->address,
-                'phone'   => $data['business_contact_number'] ?? $branch->phone,
-                'email'   => $data['business_email'] ?? $branch->email,
+                'name'                   => $data['business_name'],
+                'address'                => $data['business_address'] ?? $branch->address,
+                'phone'                  => $data['business_contact_number'] ?? $branch->phone,
+                'email'                  => $data['business_email'] ?? $branch->email,
+                'public_catalog_enabled' => !empty($data['public_catalog_enabled']),
             ];
 
             if ($request->hasFile('logo')) {
@@ -119,7 +124,7 @@ class SettingsController extends Controller
 
         // ── 2. Update POS operational settings ────────────────────────────────
         $settingsData = array_diff_key($data, array_flip([
-            'business_name', 'business_address', 'business_contact_number', 'business_email', 'logo', '_method',
+            'business_name', 'business_address', 'business_contact_number', 'business_email', 'logo', '_method', 'public_catalog_enabled',
         ]));
 
         $settings = PosSettings::current();

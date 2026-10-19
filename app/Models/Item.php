@@ -17,6 +17,7 @@ class Item extends Model
         'reorder_point', 'reorder_unit',
         'unit_label',
         'expiry_date', 'item_description', 'image_path',
+        'hide_from_public_catalog',
     ];
 
     protected $appends = ['image_url', 'total_qty', 'needs_reorder', 'reorder_deficit_base_units'];
@@ -24,17 +25,18 @@ class Item extends Model
     protected function casts(): array
     {
         return [
-            'price_locked'           => 'boolean',
-            'is_imei_tracked'        => 'boolean',
-            'batch_tracking_enabled' => 'boolean',
-            'buy_price'              => 'decimal:2',
-            'stock_worth'            => 'decimal:2',
-            'price'                  => 'decimal:2',
-            'wholesale_price'        => 'decimal:2',
-            'expiry_date'            => 'date',
-            'back_store_qty'         => 'integer',
-            'front_store_qty'        => 'integer',
-            'reorder_point'          => 'integer',
+            'price_locked'              => 'boolean',
+            'is_imei_tracked'           => 'boolean',
+            'batch_tracking_enabled'    => 'boolean',
+            'hide_from_public_catalog'  => 'boolean',
+            'buy_price'                 => 'decimal:2',
+            'stock_worth'               => 'decimal:2',
+            'price'                     => 'decimal:2',
+            'wholesale_price'           => 'decimal:2',
+            'expiry_date'               => 'date',
+            'back_store_qty'            => 'integer',
+            'front_store_qty'           => 'integer',
+            'reorder_point'             => 'integer',
         ];
     }
 

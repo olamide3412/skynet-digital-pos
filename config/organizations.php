@@ -27,6 +27,7 @@ return [
     'reserved_slugs' => [
         'admin',
         'api',
+        'catalog',
         'dashboard',
         'features',
         'industries',

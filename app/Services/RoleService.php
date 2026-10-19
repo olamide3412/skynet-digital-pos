@@ -165,6 +165,11 @@ class RoleService
         return static::can('canTransferStock');
     }
 
+    public static function canTransferInterBranchStock(): bool
+    {
+        return static::can('canTransferInterBranchStock');
+    }
+
     public static function isActiveUser(): bool
     {
         $user = static::getUser();
@@ -217,6 +222,7 @@ class RoleService
             'canManagePurchases' => static::canManagePurchases(),
             'canAdjustStock'     => static::canAdjustStock(),
             'canTransferStock'   => static::canTransferStock(),
+            'canTransferInterBranchStock' => static::canTransferInterBranchStock(),
             'canProcessReturn'   => static::canProcessReturn(),
             'canViewReports'     => static::canViewReports(),
             'canViewAllReports'  => static::canViewAllReports(),

@@ -1,8 +1,9 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useForm, Link } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import { useCurrency } from '@/Composables/useCurrency'
+import { BrowserQRCodeSvgWriter } from '@zxing/library'
 
 defineOptions({ layout: PosLayout })
 
@@ -54,6 +55,7 @@ const form = useForm({
     show_receipt_preview:          props.settings.show_receipt_preview !== false && props.settings.show_receipt_preview !== 0,
     require_till_opening:          props.settings.require_till_opening !== false && props.settings.require_till_opening !== 0,
     print_till_slip:               !!props.settings.print_till_slip,
+    public_catalog_enabled:        !!props.settings.public_catalog_enabled,
 })
 
 // Pinned Items Search State
@@ -110,6 +112,147 @@ function toggleCategory(catId) {
     } else if (form.quick_access_category_ids.length < 6) {
         form.quick_access_category_ids.push(catId)
     }
+}
+
+// ── Public Catalog & QR Code Handlers ─────────────────────────────────────────
+const publicCatalogUrl = computed(() => {
+    if (props.settings.public_catalog_url) return props.settings.public_catalog_url
+    if (typeof window !== 'undefined' && props.settings.branch_slug) {
+        return `${window.location.origin}/catalog/${props.settings.branch_slug}`
+    }
+    return ''
+})
+
+const qrContainerRef = ref(null)
+const copySuccess = ref(false)
+
+function copyCatalogLink() {
+    if (!publicCatalogUrl.value) return
+    navigator.clipboard.writeText(publicCatalogUrl.value).then(() => {
+        copySuccess.value = true
+        setTimeout(() => copySuccess.value = false, 2500)
+    })
+}
+
+function renderQr() {
+    if (!qrContainerRef.value || !form.public_catalog_enabled || !publicCatalogUrl.value) return
+    qrContainerRef.value.innerHTML = ''
+    try {
+        const writer = new BrowserQRCodeSvgWriter()
+        const svg = writer.write(publicCatalogUrl.value, 180, 180)
+        svg.setAttribute('class', 'w-full h-full')
+        qrContainerRef.value.appendChild(svg)
+    } catch (e) {
+        console.error('Failed to generate QR Code:', e)
+    }
+}
+
+watch(() => [form.public_catalog_enabled, publicCatalogUrl.value], () => {
+    if (form.public_catalog_enabled) {
+        nextTick(() => renderQr())
+    }
+})
+
+onMounted(() => {
+    if (form.public_catalog_enabled) {
+        renderQr()
+    }
+})
+
+function downloadQrPng() {
+    const svgElement = qrContainerRef.value?.querySelector('svg')
+    if (!svgElement) return
+    const svgData = new XMLSerializer().serializeToString(svgElement)
+    const canvas = document.createElement('canvas')
+    canvas.width = 600
+    canvas.height = 600
+    const ctx = canvas.getContext('2d')
+    const img = new Image()
+    img.onload = () => {
+        ctx.fillStyle = '#ffffff'
+        ctx.fillRect(0, 0, 600, 600)
+        ctx.drawImage(img, 30, 30, 540, 540)
+        const pngUrl = canvas.toDataURL('image/png')
+        const downloadLink = document.createElement('a')
+        downloadLink.href = pngUrl
+        downloadLink.download = `${props.settings.branch_slug || 'branch'}-catalog-qr.png`
+        document.body.appendChild(downloadLink)
+        downloadLink.click()
+        document.body.removeChild(downloadLink)
+    }
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)))
+}
+
+function printQrPoster() {
+    const svgElement = qrContainerRef.value?.querySelector('svg')
+    if (!svgElement) return
+    const svgData = new XMLSerializer().serializeToString(svgElement)
+    const printWindow = window.open('', '_blank', 'width=750,height=900')
+    if (!printWindow) return
+
+    const logoHtml = props.settings.logo_url 
+        ? `<img src="${props.settings.logo_url}" style="max-height: 60px; max-width: 140px; margin-bottom: 12px; object-fit: contain;">`
+        : ''
+
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <title>Scan for Price List — ${props.settings.business_name || 'Branch'}</title>
+            <style>
+                @page { size: A4 portrait; margin: 15mm; }
+                body {
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                    text-align: center;
+                    padding: 30px 15px;
+                    color: #0f172a;
+                    margin: 0;
+                    background: #ffffff;
+                }
+                .card {
+                    max-width: 440px;
+                    margin: 0 auto;
+                    border: 3px solid #10b981;
+                    border-radius: 28px;
+                    padding: 36px 28px;
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+                }
+                h1 { font-size: 24px; margin: 0 0 6px; font-weight: 800; color: #0f172a; }
+                p.sub { font-size: 13px; color: #475569; margin: 0 0 24px; line-height: 1.4; }
+                .qr-box {
+                    background: #f8fafc;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 20px;
+                    padding: 20px;
+                    display: inline-block;
+                    margin-bottom: 20px;
+                }
+                .qr-box svg { width: 220px; height: 220px; display: block; }
+                .prompt { font-size: 15px; font-weight: 800; color: #059669; text-transform: uppercase; letter-spacing: 0.05em; }
+                .url { margin-top: 6px; font-size: 11px; font-family: monospace; color: #64748b; word-break: break-all; }
+                .address { margin-top: 20px; font-size: 11px; color: #94a3b8; border-top: 1px solid #f1f5f9; padding-top: 14px; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                ${logoHtml}
+                <h1>${props.settings.business_name || 'Our Shop'}</h1>
+                <p class="sub">View our live prices and available products right on your phone!</p>
+                <div class="qr-box">
+                    ${svgData}
+                </div>
+                <div class="prompt">Scan with Camera to Browse</div>
+                <div class="url">${publicCatalogUrl.value}</div>
+                ${props.settings.business_address ? `<div class="address">${props.settings.business_address}</div>` : ''}
+            </div>
+            <script>
+                window.onload = function() { window.print(); }
+            <\/script>
+        </body>
+        </html>
+    `)
+    printWindow.document.close()
 }
 
 function submit() {
@@ -693,6 +836,137 @@ function submit() {
                         </div>
                         <div v-else-if="!is_accounting_enabled" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
                             <span>ℹ️</span> Accounting is available for organizations on the Silver plan and above. Upgrade your subscription to enable automatic double-entry books.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ══ PUBLIC BRANCH CATALOG & SHAREABLE PRICE LIST CARD ═══════════ -->
+                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/60 p-6 space-y-4 shadow-xs">
+                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">🌐</span>
+                            <div>
+                                <h2 class="text-base font-bold text-slate-900 dark:text-white">Public Branch Catalog & Shareable Price List</h2>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Share your current front-store items and live selling prices with customers via a public link or QR code.</p>
+                            </div>
+                        </div>
+                        <span
+                            :class="form.public_catalog_enabled
+                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                                : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 border border-slate-200 dark:border-slate-600'"
+                            class="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider"
+                        >
+                            {{ form.public_catalog_enabled ? 'Active (Live Link)' : 'Disabled (Off)' }}
+                        </span>
+                    </div>
+
+                    <div class="space-y-4 pt-1">
+                        <!-- On/Off Toggle -->
+                        <label class="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700/80 cursor-pointer transition hover:border-slate-300 dark:hover:border-slate-600">
+                            <input
+                                type="checkbox"
+                                v-model="form.public_catalog_enabled"
+                                class="w-4 h-4 mt-0.5 accent-emerald-500 rounded cursor-pointer shrink-0"
+                            />
+                            <div class="flex-1">
+                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Public Customer Catalog</span>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                    When turned on, anyone with the link can view your branch's selling prices and available front-store items. It is strictly read-only (no orders, no cart, no checkout).
+                                </p>
+                            </div>
+                        </label>
+
+                        <!-- Expanded Section When Enabled -->
+                        <div v-if="form.public_catalog_enabled" class="space-y-4 pt-2">
+                            
+                            <!-- Shareable URL & Copy -->
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                    Your Shareable Public Catalog Link
+                                </label>
+                                <div class="flex items-center gap-2">
+                                    <div class="relative flex-1">
+                                        <input
+                                            type="text"
+                                            readonly
+                                            :value="publicCatalogUrl"
+                                            class="w-full bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 font-mono text-xs select-all focus:outline-none"
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        @click="copyCatalogLink"
+                                        class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
+                                    >
+                                        <svg v-if="!copySuccess" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                        <svg v-else class="w-4 h-4 text-emerald-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>{{ copySuccess ? 'Copied Link!' : 'Copy Link' }}</span>
+                                    </button>
+                                    <a
+                                        :href="publicCatalogUrl"
+                                        target="_blank"
+                                        class="px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold transition shrink-0"
+                                        title="Preview in new tab"
+                                    >
+                                        Preview &rarr;
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- QR Code Stand & Download -->
+                            <div class="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center gap-5">
+                                <div class="bg-white p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs shrink-0 flex items-center justify-center">
+                                    <div ref="qrContainerRef" class="w-36 h-36 flex items-center justify-center">
+                                        <!-- SVG QR Code mounted here -->
+                                    </div>
+                                </div>
+
+                                <div class="space-y-3 text-center sm:text-left flex-1">
+                                    <div>
+                                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Shop Counter & Window QR Code</h3>
+                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                            Print this QR code to display at your shop counter, store window, or marketing banners. Customers can scan it with their phone camera to open your live catalog immediately without downloading an app.
+                                        </p>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                                        <button
+                                            type="button"
+                                            @click="downloadQrPng"
+                                            class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-bold text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                            </svg>
+                                            <span>Download PNG</span>
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            @click="printQrPoster"
+                                            class="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
+                                        >
+                                            <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                            </svg>
+                                            <span>Print Counter Display Poster</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Privacy & Security Guarantee Callout -->
+                            <div class="p-3 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 flex items-start gap-2.5 text-xs text-emerald-900 dark:text-emerald-300">
+                                <span class="text-base shrink-0">🔒</span>
+                                <p class="leading-relaxed">
+                                    <strong>Privacy Guard Active:</strong> Your wholesale prices, cost prices, inventory quantities, barcodes, and IMEI records are completely protected and will never appear on the public catalog or in its source code.
+                                </p>
+                            </div>
+
                         </div>
                     </div>
                 </div>

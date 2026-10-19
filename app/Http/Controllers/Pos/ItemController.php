@@ -93,6 +93,7 @@ class ItemController extends Controller
                     'item_description' => $cloned->item_description,
                     'is_imei_tracked' => $cloned->is_imei_tracked,
                     'price_locked' => $cloned->price_locked,
+                    'hide_from_public_catalog' => (bool) $cloned->hide_from_public_catalog,
                     'expiry_date' => $cloned->expiry_date?->format('Y-m-d'),
                     'units' => $cloned->units->map(fn($u) => [
                         'unit_name' => $u->unit_name,
@@ -131,6 +132,7 @@ class ItemController extends Controller
             'price' => 'required|numeric|min:0',
             'wholesale_price' => 'nullable|numeric|min:0',
             'price_locked' => 'boolean',
+            'hide_from_public_catalog' => 'nullable|boolean',
             'is_imei_tracked' => 'nullable|boolean',
             'batch_tracking_enabled' => 'nullable|boolean',
             'initial_imeis' => 'nullable|string',
@@ -172,6 +174,7 @@ class ItemController extends Controller
         $data['branch_id'] = $branch->id;
         $data['wholesale_price'] = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? (float) $data['wholesale_price'] : (float) $data['price'];
         $data['price_locked'] = !empty($data['price_locked']);
+        $data['hide_from_public_catalog'] = !empty($data['hide_from_public_catalog']);
         $data['is_imei_tracked'] = !empty($data['is_imei_tracked']);
         $data['batch_tracking_enabled'] = !empty($data['batch_tracking_enabled']);
         $data['front_store_qty'] = $data['front_store_qty'] ?? 0;
@@ -283,6 +286,7 @@ class ItemController extends Controller
             'price' => 'required|numeric|min:0',
             'wholesale_price' => 'nullable|numeric|min:0',
             'price_locked' => 'nullable|boolean',
+            'hide_from_public_catalog' => 'nullable|boolean',
             'is_imei_tracked' => 'nullable|boolean',
             'batch_tracking_enabled' => 'nullable|boolean',
             'unit_label' => 'nullable|string|max:50',
@@ -320,6 +324,7 @@ class ItemController extends Controller
 
         $data['wholesale_price'] = (!empty($data['wholesale_price']) && $data['wholesale_price'] > 0) ? (float) $data['wholesale_price'] : (float) $data['price'];
         $data['price_locked'] = !empty($data['price_locked']);
+        $data['hide_from_public_catalog'] = !empty($data['hide_from_public_catalog']);
         $data['is_imei_tracked'] = !empty($data['is_imei_tracked']);
         $data['batch_tracking_enabled'] = !empty($data['batch_tracking_enabled']);
         $data['unit_label'] = !empty($data['unit_label']) ? $data['unit_label'] : 'Unit';
