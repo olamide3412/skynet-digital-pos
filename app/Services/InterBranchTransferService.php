@@ -90,8 +90,31 @@ class InterBranchTransferService
                     throw new RuntimeException("Insufficient stock for '{$sourceItem->item_name}' in {$locationName} (Available: {$available}, Requested: {$qty}).");
                 }
 
-                // Deduct stock immediately
-                $sourceItem->decrement($qtyField, $qty);
+                // Deduct stock immediately and record inventory transaction
+                $prevSenderQty = $available;
+                $newSenderQty = $available - $qty;
+                $sourceItem->{$qtyField} = $newSenderQty;
+                $sourceItem->save();
+
+                $dispatchNote = "Inter-branch transfer out to {$destBranch->name} ({$transfer->reference})";
+                if (!empty($line['notes'])) {
+                    $dispatchNote .= " - Note: {$line['notes']}";
+                } elseif (!empty($notes)) {
+                    $dispatchNote .= " - Note: {$notes}";
+                }
+
+                InventoryTransaction::create([
+                    'branch_id'        => $sourceBranchId,
+                    'item_id'          => $sourceItem->id,
+                    'transaction_type' => 'transfer',
+                    'qty'              => -$qty,
+                    'previous_qty'     => $prevSenderQty,
+                    'new_qty'          => $newSenderQty,
+                    'location'         => $fromLocation,
+                    'reference_id'     => $transfer->reference,
+                    'notes'            => $dispatchNote,
+                    'user_id'          => $userId ?? auth()->id() ?? 1,
+                ]);
 
                 // Check linking and destination item
                 $productGroupId = null;
@@ -183,16 +206,35 @@ class InterBranchTransferService
     public static function cancelTransfer(InterBranchTransfer $transfer, ?int $userId = null): InterBranchTransfer
     {
         return DB::transaction(function () use ($transfer, $userId) {
+            $transfer->load(['items.sourceItem', 'sourceBranch', 'destinationBranch']);
+
             if (!in_array($transfer->status, ['pending', 'blocked'])) {
                 throw new RuntimeException("Only pending or blocked transfers can be cancelled.");
             }
 
             $qtyField = $transfer->from_location === 'back_store' ? 'back_store_qty' : 'front_store_qty';
 
-            // Restore stock to sender originating location
+            // Restore stock to sender originating location and record inventory transaction
             foreach ($transfer->items as $itemLine) {
                 if ($itemLine->sourceItem) {
-                    $itemLine->sourceItem->increment($qtyField, $itemLine->quantity_sent);
+                    $sourceItem = $itemLine->sourceItem;
+                    $prevQty = (int) ($sourceItem->{$qtyField} ?? 0);
+                    $newQty = $prevQty + $itemLine->quantity_sent;
+                    $sourceItem->{$qtyField} = $newQty;
+                    $sourceItem->save();
+
+                    InventoryTransaction::create([
+                        'branch_id'        => $transfer->source_branch_id,
+                        'item_id'          => $sourceItem->id,
+                        'transaction_type' => 'transfer',
+                        'qty'              => $itemLine->quantity_sent,
+                        'previous_qty'     => $prevQty,
+                        'new_qty'          => $newQty,
+                        'location'         => $transfer->from_location,
+                        'reference_id'     => $transfer->reference,
+                        'notes'            => "Inter-branch transfer cancelled ({$transfer->reference}) - Stock restored to " . ($transfer->from_location === 'back_store' ? 'Back Store' : 'Front Store'),
+                        'user_id'          => $userId ?? auth()->id() ?? 1,
+                    ]);
                 }
             }
 
@@ -242,9 +284,12 @@ class InterBranchTransferService
         InterBranchTransfer $transfer,
         array $itemReceipts,
         string $toLocation = 'back_store',
-        ?int $userId = null
+        ?int $userId = null,
+        ?string $receiverNotes = null
     ): InterBranchTransfer {
-        return DB::transaction(function () use ($transfer, $itemReceipts, $toLocation, $userId) {
+        return DB::transaction(function () use ($transfer, $itemReceipts, $toLocation, $userId, $receiverNotes) {
+            $transfer->load(['items.sourceItem', 'items.destinationItem', 'items.productGroup', 'sourceBranch', 'destinationBranch']);
+
             if ($transfer->status === 'blocked') {
                 throw new RuntimeException("This transfer is blocked due to unit mismatches. Base units must be resolved before acceptance.");
             }
@@ -281,13 +326,7 @@ class InterBranchTransferService
                         $destItem = Item::where('branch_id', $transfer->destination_branch_id)->findOrFail($receiptData['existing_item_id']);
 
                         if ($line->product_group_id) {
-                            ProductLinkingService::linkItem(
-                                $line->product_group_id,
-                                $transfer->destination_branch_id,
-                                $destItem->id,
-                                $userId,
-                                'receiving_queue'
-                            );
+                            $targetGroupId = $line->product_group_id;
                         } else {
                             $group = ProductLinkingService::createGroup(
                                 $transfer->organization_id,
@@ -296,14 +335,23 @@ class InterBranchTransferService
                                 $line->source_item_id,
                                 'receiving_queue'
                             );
+                            $targetGroupId = $group->id;
+                            $line->product_group_id = $group->id;
+                        }
+
+                        $existingDestGi = ProductGroupItem::where('item_id', $destItem->id)->first();
+                        if ($existingDestGi) {
+                            if ($existingDestGi->product_group_id !== $targetGroupId) {
+                                ProductLinkingService::mergeGroups($targetGroupId, $existingDestGi->product_group_id, $userId);
+                            }
+                        } else {
                             ProductLinkingService::linkItem(
-                                $group->id,
+                                $targetGroupId,
                                 $transfer->destination_branch_id,
                                 $destItem->id,
                                 $userId,
                                 'receiving_queue'
                             );
-                            $line->product_group_id = $group->id;
                         }
 
                         $line->destination_item_id = $destItem->id;
@@ -343,7 +391,7 @@ class InterBranchTransferService
                     if ($shortfall > 0) {
                         $receiverNote .= " [Sent: {$sentQty}, Received: {$receivedQty}, Shortfall: {$shortfall}]";
                     }
-                    $customNote = !empty($line->notes) ? $line->notes : (!empty($transfer->notes) ? $transfer->notes : null);
+                    $customNote = !empty($receiverNotes) ? $receiverNotes : (!empty($line->notes) ? $line->notes : (!empty($transfer->notes) ? $transfer->notes : null));
                     if ($customNote) {
                         $receiverNote .= " - Note: {$customNote}";
                     }
@@ -362,35 +410,17 @@ class InterBranchTransferService
                     ]);
                 }
 
-                // 2. Source / Sender Branch Inventory Deduction Log
-                $sourceItem = $line->source_item_id ? Item::find($line->source_item_id) : null;
-                if ($sourceItem) {
-                    $currentSenderQty = (int) ($sourceItem->{$fromQtyField} ?? 0);
-                    // Stock was already decremented at createTransfer; calculate balance prior to dispatch:
-                    $prevSenderQty = $currentSenderQty + $sentQty;
-                    $newSenderQty = $currentSenderQty;
-
-                    $senderNote = "Inter-branch transfer out to {$destBranchName} ({$transfer->reference})";
-                    if ($shortfall > 0) {
-                        $senderNote .= " [Shortfall: {$shortfall}]";
+                // If shortfall occurred, update sender dispatch transaction note to document shortfall
+                if ($shortfall > 0) {
+                    $senderTxn = InventoryTransaction::where('branch_id', $transfer->source_branch_id)
+                        ->where('reference_id', $transfer->reference)
+                        ->where('item_id', $line->source_item_id)
+                        ->first();
+                    if ($senderTxn && !str_contains($senderTxn->notes, 'Shortfall:')) {
+                        $senderTxn->update([
+                            'notes' => $senderTxn->notes . " [Shortfall: {$shortfall}]",
+                        ]);
                     }
-                    $customNote = !empty($line->notes) ? $line->notes : (!empty($transfer->notes) ? $transfer->notes : null);
-                    if ($customNote) {
-                        $senderNote .= " - Note: {$customNote}";
-                    }
-
-                    InventoryTransaction::create([
-                        'branch_id'        => $transfer->source_branch_id,
-                        'item_id'          => $sourceItem->id,
-                        'transaction_type' => 'transfer',
-                        'qty'              => -$sentQty,
-                        'previous_qty'     => $prevSenderQty,
-                        'new_qty'          => $newSenderQty,
-                        'location'         => $fromLocation,
-                        'reference_id'     => $transfer->reference,
-                        'notes'            => $senderNote,
-                        'user_id'          => $transfer->sent_by_user_id ?? $userId ?? auth()->id() ?? 1,
-                    ]);
                 }
 
                 $line->update([
@@ -408,6 +438,7 @@ class InterBranchTransferService
             $transfer->update([
                 'to_location'          => $toLocation,
                 'status'               => 'accepted',
+                'receiver_notes'       => $receiverNotes,
                 'accepted_at'          => now(),
                 'accepted_by_user_id'  => $userId,
             ]);
@@ -459,6 +490,8 @@ class InterBranchTransferService
         if ($transfer->status !== 'blocked') {
             return false;
         }
+
+        $transfer->load(['items.sourceItem', 'items.destinationItem']);
 
         $hasMismatch = false;
         foreach ($transfer->items as $line) {

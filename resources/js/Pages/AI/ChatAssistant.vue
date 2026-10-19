@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, nextTick, onMounted, inject } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { router, usePage, Link } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
@@ -7,7 +7,20 @@ import ThemeToggle from '@/Components/ThemeToggle.vue'
 
 defineOptions({ layout: null })
 
-const toggleMobileSidebar = inject('toggleMobileSidebar', null)
+const layoutRef = ref(null)
+
+const toggleSidebarMenu = (slotToggle) => {
+    if (typeof slotToggle === 'function') {
+        slotToggle()
+    } else if (layoutRef.value?.toggleMobile) {
+        layoutRef.value.toggleMobile()
+    } else {
+        window.dispatchEvent(new CustomEvent('toggle-mobile-sidebar'))
+        window.dispatchEvent(new CustomEvent('toggle-pos-mobile-sidebar'))
+        window.dispatchEvent(new CustomEvent('toggle-superadmin-mobile-sidebar'))
+    }
+}
+
 import { useCurrency } from '@/Composables/useCurrency'
 import axios from 'axios'
 import { marked } from 'marked'
@@ -275,19 +288,19 @@ function copyMessage(text) {
 </script>
 
 <template>
-    <component :is="layoutComponent">
+    <component :is="layoutComponent" ref="layoutRef" v-slot="layoutProps">
         <div class="w-full h-full flex-1 flex flex-col items-center justify-center p-3 sm:p-5 lg:p-6 min-h-0 overflow-hidden bg-slate-100/70 dark:bg-slate-950/70">
             <div class="w-full max-w-4xl xl:max-w-5xl h-full flex flex-col bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/80 dark:border-slate-800 shadow-xl overflow-hidden transition-all">
                 <!-- ── Header Bar ────────────────────────────────────────────────── -->
                 <div class="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850/80 backdrop-blur-xs flex items-center justify-between gap-3 sm:gap-4 flex-shrink-0">
                     <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
-                        <!-- Mobile Hamburger Button -->
+                        <!-- Mobile / Small Device Sidebar Menu Toggle Button -->
                         <button
-                            v-if="toggleMobileSidebar"
                             type="button"
-                            @click="toggleMobileSidebar"
-                            class="lg:hidden p-1.5 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-800 transition flex-shrink-0 cursor-pointer"
-                            title="Toggle menu"
+                            @click="toggleSidebarMenu(layoutProps?.toggleMobile)"
+                            class="lg:hidden p-2 -ml-1 rounded-xl text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition flex-shrink-0 cursor-pointer border border-slate-200/80 dark:border-slate-700/80 shadow-2xs"
+                            title="Toggle Navigation Menu"
+                            aria-label="Toggle Navigation Menu"
                         >
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>

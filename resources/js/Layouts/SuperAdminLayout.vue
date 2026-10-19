@@ -1,5 +1,5 @@
 <script setup>
-import { ref, provide, computed } from 'vue'
+import { ref, provide, computed, onMounted, onUnmounted } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 import FlashMessages from '@/Components/FlashMessages.vue'
@@ -10,6 +10,25 @@ const isCollapsed  = ref(false)
 const toggleMobile = () => {
     isMobileOpen.value = !isMobileOpen.value
 }
+
+defineExpose({
+    toggleMobile,
+    isMobileOpen,
+})
+
+const handleSidebarToggleEvent = () => {
+    toggleMobile()
+}
+
+onMounted(() => {
+    window.addEventListener('toggle-mobile-sidebar', handleSidebarToggleEvent)
+    window.addEventListener('toggle-superadmin-mobile-sidebar', handleSidebarToggleEvent)
+})
+
+onUnmounted(() => {
+    window.removeEventListener('toggle-mobile-sidebar', handleSidebarToggleEvent)
+    window.removeEventListener('toggle-superadmin-mobile-sidebar', handleSidebarToggleEvent)
+})
 
 provide('toggleMobileSidebar', toggleMobile)
 provide('isMobileSidebarOpen', isMobileOpen)
@@ -283,7 +302,7 @@ function toggleCollapse() {
                 'flex-1 min-h-0 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950',
                 page.component === 'AI/ChatAssistant' ? 'p-0 flex flex-col' : 'p-4 sm:p-6 lg:p-8'
             ]">
-                <slot/>
+                <slot :toggleMobile="toggleMobile" :isMobileOpen="isMobileOpen" />
             </div>
 
         </main>

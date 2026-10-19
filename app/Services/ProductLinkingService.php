@@ -7,11 +7,14 @@ use App\Models\Category;
 use App\Models\Item;
 use App\Models\ItemUnit;
 use App\Models\Organization;
+use App\Models\OrganizationActivityLog;
 use App\Models\PosSettings;
 use App\Models\ProductGroup;
 use App\Models\ProductGroupItem;
 use App\Models\ProductLinkLog;
+use App\Services\ActivityLogger;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
@@ -184,12 +187,18 @@ class ProductLinkingService
                 ->first();
 
             if ($existingInGroup) {
+                if ($existingInGroup->item_id === $itemId) {
+                    return $existingInGroup;
+                }
                 throw new RuntimeException("Branch '{$branch->name}' already has an item linked to product group '{$group->name}'.");
             }
 
             // Check: Item already belongs to another group
             $existingLink = ProductGroupItem::where('item_id', $itemId)->first();
             if ($existingLink) {
+                if ($existingLink->product_group_id === $productGroupId) {
+                    return $existingLink;
+                }
                 $otherGroup = ProductGroup::find($existingLink->product_group_id);
                 throw new RuntimeException("Item '{$item->name}' is already linked to group '{$otherGroup?->name}'. Unlink it first.");
             }
@@ -803,6 +812,46 @@ class ProductLinkingService
                 'user_id' => $userId,
             ]);
 
+            // Determine branch for logging (template branch or first branch in organization)
+            $logBranchId = null;
+            if (!empty($matches[0]['template_item_id'])) {
+                $firstTemplate = $items->get((int) $matches[0]['template_item_id']);
+                $logBranchId = $firstTemplate?->branch_id;
+            }
+            if (!$logBranchId && !empty($matches[0]['target_branch_id'])) {
+                $logBranchId = (int) $matches[0]['target_branch_id'];
+            }
+            if (!$logBranchId) {
+                $logBranchId = Branch::where('organization_id', $organizationId)->value('id');
+            }
+
+            // 1. Log to PosLog (viewable in SuperAdmin Logs and Org Activity Logs)
+            ActivityLogger::log(
+                'bulk_link',
+                "Auto-suggest bulk link confirmed: linked {$linkedCount} items across branches. Batch UUID: {$batchId}",
+                $logBranchId,
+                [
+                    'batch_id'           => $batchId,
+                    'linked_count'       => $linkedCount,
+                    'organization_id'   => $organizationId,
+                    'template_branch_id' => $logBranchId,
+                ],
+                $userId
+            );
+
+            // 2. Log to OrganizationActivityLog (viewable on SuperAdmin Org details page)
+            OrganizationActivityLog::create([
+                'organization_id' => $organizationId,
+                'actor_user_id'   => $userId ?? Auth::id(),
+                'action'          => 'bulk_product_link_confirmed',
+                'details'         => [
+                    'batch_id'     => $batchId,
+                    'linked_count' => $linkedCount,
+                    'branch_id'    => $logBranchId,
+                ],
+                'created_at'      => now(),
+            ]);
+
             return [
                 'batch_id' => $batchId,
                 'linked_count' => $linkedCount,
@@ -819,6 +868,14 @@ class ProductLinkingService
         @ini_set('max_execution_time', '300');
 
         return DB::transaction(function () use ($organizationId, $batchId, $userId) {
+            $alreadyUndone = ProductLinkLog::where('organization_id', $organizationId)
+                ->where('batch_id', $batchId)
+                ->where('action', 'undo_batch')
+                ->exists();
+            if ($alreadyUndone) {
+                throw new \Exception("Batch {$batchId} has already been undone.");
+            }
+
             $log = ProductLinkLog::where('organization_id', $organizationId)
                 ->where('batch_id', $batchId)
                 ->where('action', 'bulk_confirm')
@@ -867,8 +924,67 @@ class ProductLinkingService
                 'user_id' => $userId,
             ]);
 
+            $logBranchId = Branch::where('organization_id', $organizationId)->value('id');
+
+            // 1. Log to PosLog (viewable in SuperAdmin Logs and Org Activity Logs)
+            ActivityLogger::log(
+                'undo_batch',
+                "Bulk link batch reverted: unlinked {$unlinkedCount} items. Batch UUID: {$batchId}",
+                $logBranchId,
+                [
+                    'batch_id'        => $batchId,
+                    'unlinked_count'  => $unlinkedCount,
+                    'organization_id' => $organizationId,
+                ],
+                $userId
+            );
+
+            // 2. Log to OrganizationActivityLog (viewable on SuperAdmin Org details page)
+            OrganizationActivityLog::create([
+                'organization_id' => $organizationId,
+                'actor_user_id'   => $userId ?? Auth::id(),
+                'action'          => 'bulk_product_link_undone',
+                'details'         => [
+                    'batch_id'       => $batchId,
+                    'unlinked_count' => $unlinkedCount,
+                ],
+                'created_at'      => now(),
+            ]);
+
             return $unlinkedCount;
         });
+    }
+
+    /**
+     * Get recent bulk linking batches for an organization.
+     */
+    public static function getRecentBatches(int $organizationId, int $limit = 10): array
+    {
+        $undoneBatchIds = ProductLinkLog::where('organization_id', $organizationId)
+            ->where('action', 'undo_batch')
+            ->pluck('batch_id')
+            ->filter()
+            ->all();
+
+        return ProductLinkLog::with('user:id,name,username')
+            ->where('organization_id', $organizationId)
+            ->where('action', 'bulk_confirm')
+            ->latest('id')
+            ->limit($limit)
+            ->get()
+            ->map(function ($log) use ($undoneBatchIds) {
+                return [
+                    'id'               => $log->id,
+                    'batch_id'         => $log->batch_id,
+                    'linked_count'     => (int) ($log->payload['linked_count'] ?? 0),
+                    'is_undone'        => in_array($log->batch_id, $undoneBatchIds, true),
+                    'created_at'       => $log->created_at?->toIso8601String(),
+                    'created_at_human' => $log->created_at?->diffForHumans(),
+                    'user_name'        => $log->user?->name ?? 'System',
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**
@@ -945,29 +1061,49 @@ class ProductLinkingService
                     }
                 }
 
-                // If target branch already has an item with this barcode, link it instead of failing
+                // If target branch already has an item with this barcode or name, link it instead of creating duplicate
+                $existingItem = null;
                 if (!empty($sourceItem->barcode_number)) {
-                    $existingItemWithBarcode = Item::where('branch_id', $targetBranchId)
+                    $existingItem = Item::where('branch_id', $targetBranchId)
                         ->where('barcode_number', $sourceItem->barcode_number)
                         ->first();
+                }
 
-                    if ($existingItemWithBarcode) {
-                        ProductGroupItem::firstOrCreate([
-                            'product_group_id' => $productGroupId,
-                            'branch_id' => $targetBranchId,
-                            'item_id' => $existingItemWithBarcode->id,
-                        ], [
-                            'linked_by' => $userId,
-                            'link_source' => 'copy_match',
-                        ]);
-
-                        $createdItems[] = [
-                            'branch_id' => $targetBranchId,
-                            'item_id' => $existingItemWithBarcode->id,
-                            'name' => $existingItemWithBarcode->item_name,
-                        ];
-                        continue;
+                // If not matched by barcode, check if target branch already has an item with matching name
+                if (!$existingItem) {
+                    $trimmedName = strtolower(trim($sourceItem->item_name ?? ''));
+                    if ($trimmedName !== '') {
+                        $existingItem = Item::where('branch_id', $targetBranchId)
+                            ->whereRaw('LOWER(TRIM(item_name)) = ?', [$trimmedName])
+                            ->first();
                     }
+                }
+
+                if ($existingItem) {
+                    $existingPgi = ProductGroupItem::where('item_id', $existingItem->id)->first();
+                    if ($existingPgi) {
+                        if ($existingPgi->product_group_id !== $productGroupId) {
+                            self::mergeGroups($productGroupId, $existingPgi->product_group_id, $userId);
+                        }
+                    } else {
+                        $branchInGroup = ProductGroupItem::where('product_group_id', $productGroupId)->where('branch_id', $targetBranchId)->first();
+                        if (!$branchInGroup) {
+                            ProductGroupItem::create([
+                                'product_group_id' => $productGroupId,
+                                'branch_id'        => $targetBranchId,
+                                'item_id'          => $existingItem->id,
+                                'linked_by'        => $userId,
+                                'link_source'      => 'copy_match',
+                            ]);
+                        }
+                    }
+
+                    $createdItems[] = [
+                        'branch_id' => $targetBranchId,
+                        'item_id'   => $existingItem->id,
+                        'name'      => $existingItem->item_name,
+                    ];
+                    continue;
                 }
 
                 $targetSettings = PosSettings::forBranch($targetBranchId);

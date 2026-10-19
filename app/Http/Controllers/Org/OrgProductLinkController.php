@@ -62,6 +62,7 @@ class OrgProductLinkController extends Controller
             'conflictCount'   => $gridData['conflict_count'],
             'unlinkedStats'   => $gridData['unlinked_stats'],
             'allGroupOptions' => $gridData['all_group_options'] ?? [],
+            'recentBatches'   => ProductLinkingService::getRecentBatches($organization->id),
             'filters'         => $filters,
         ]);
     }

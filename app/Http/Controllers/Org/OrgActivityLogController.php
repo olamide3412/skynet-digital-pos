@@ -78,10 +78,16 @@ class OrgActivityLogController extends Controller
         $orgBranchIds = Branch::where('organization_id', $org->id)->pluck('id')->all();
 
         // 2. Base query: strictly scoped to branches in this organization
-        $query = PosLog::whereIn('branch_id', $orgBranchIds)
-            // 3. CRITICAL: Strictly hide all Superadmin logs
-            ->whereDoesntHave('user', function ($uq) {
-                $uq->where('is_super_admin', true);
+        $query = PosLog::whereIn('branch_id', $orgBranchIds);
+
+        // 3. Scoping: allow product linking logs, and don't filter out superadmin logs if viewer is superadmin
+        $viewer = Auth::guard('web')->user();
+        if (!$viewer || !$viewer->isSuperAdmin()) {
+            $query->where(function ($q) {
+                $q->whereDoesntHave('user', function ($uq) {
+                    $uq->where('is_super_admin', true);
+                })
+                ->orWhereIn('action_type', ['bulk_link', 'undo_batch', 'product_link']);
             })
             ->where(function ($q) {
                 $q->whereNull('log')
@@ -90,6 +96,7 @@ class OrgActivityLogController extends Controller
                          ->where('log', 'not like', '%Platform Super Admin%');
                   });
             });
+        }
 
         // 4. Filter by specific branch if chosen
         if ($request->filled('branch_id') && in_array((int) $request->branch_id, $orgBranchIds, true)) {

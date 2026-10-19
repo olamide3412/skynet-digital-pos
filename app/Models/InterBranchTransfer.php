@@ -21,6 +21,7 @@ class InterBranchTransfer extends Model
         'status',
         'blocked_reason',
         'notes',
+        'receiver_notes',
         'sent_by_user_id',
         'accepted_by_user_id',
         'cancelled_by_user_id',

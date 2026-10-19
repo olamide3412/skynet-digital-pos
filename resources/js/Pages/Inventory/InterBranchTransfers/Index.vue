@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed } from 'vue'
-import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3'
+import { Head, Link, router, usePage } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 
 defineOptions({ layout: PosLayout })
@@ -31,43 +31,13 @@ const outgoingPendingCount = computed(() => {
     return props.outgoingTransfers?.data?.filter(t => t.status === 'pending' || t.status === 'blocked').length || 0
 })
 
-// Accept Modal State
-const showAcceptModal = ref(false)
-const selectedTransfer = ref(null)
+// Details Modal State
+const showDetailsModal = ref(false)
+const selectedDetailsTransfer = ref(null)
 
-const acceptForm = useForm({
-    to_location: 'back_store',
-    items: [],
-})
-
-const openAcceptModal = (transfer) => {
-    selectedTransfer.value = transfer
-    acceptForm.to_location = 'back_store'
-    acceptForm.items = transfer.items.map(item => ({
-        line_id: item.id,
-        item_name: item.source_item?.item_name || 'Item',
-        unit_label: item.source_item?.unit_label || 'pcs',
-        quantity_sent: item.quantity_sent,
-        quantity_received: item.quantity_sent,
-        has_destination_item: !!item.destination_item_id,
-        destination_item_name: item.destination_item?.item_name,
-        link_action: item.destination_item_id ? 'none' : 'copy',
-        existing_item_id: null,
-    }))
-    showAcceptModal.value = true
-}
-
-const submitAccept = () => {
-    if (!selectedTransfer.value) return
-    acceptForm.post(
-        route('pos.inventory.transfers.inter-branch.accept', { branch: currentBranchSlug.value, transfer: selectedTransfer.value.id }),
-        {
-            onSuccess: () => {
-                showAcceptModal.value = false
-                selectedTransfer.value = null
-            },
-        }
-    )
+const openDetailsModal = (transfer) => {
+    selectedDetailsTransfer.value = transfer
+    showDetailsModal.value = true
 }
 
 const confirmCancel = (transfer) => {
@@ -231,7 +201,14 @@ const confirmCancel = (transfer) => {
                                 >
                                     <td class="py-2.5 px-4">
                                         <div class="font-mono font-bold text-slate-900 dark:text-white text-xs">{{ t.reference }}</div>
-                                        <div v-if="t.notes" class="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-xs">{{ t.notes }}</div>
+                                        <div v-if="t.notes" class="mt-1 flex items-start gap-1 text-[11px] text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 rounded-md px-2 py-0.5 max-w-xs" :title="t.notes">
+                                            <span class="flex-shrink-0 text-amber-600 dark:text-amber-400">📝</span>
+                                            <span class="truncate font-medium">{{ t.notes }}</span>
+                                        </div>
+                                        <div v-if="t.receiver_notes" class="mt-0.5 flex items-start gap-1 text-[10px] text-teal-800 dark:text-teal-200 bg-teal-50 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800/60 rounded-md px-1.5 py-0.5 max-w-xs" :title="t.receiver_notes">
+                                            <span class="flex-shrink-0 text-teal-600 dark:text-teal-400">📥</span>
+                                            <span class="truncate">{{ t.receiver_notes }}</span>
+                                        </div>
                                     </td>
 
                                     <td class="py-2.5 px-4 font-semibold text-slate-800 dark:text-slate-200">
@@ -239,8 +216,21 @@ const confirmCancel = (transfer) => {
                                     </td>
 
                                     <td class="py-2.5 px-4">
-                                        <span class="font-bold text-slate-800 dark:text-slate-100">{{ t.items?.length || 0 }}</span> items
-                                        <span class="text-[11px] text-slate-400 dark:text-slate-500">({{ t.items?.reduce((sum, i) => sum + i.quantity_sent, 0) }} units)</span>
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="font-bold text-slate-800 dark:text-slate-100">{{ t.items?.length || 0 }}</span> items
+                                            <span class="text-[11px] text-slate-400 dark:text-slate-500">({{ t.items?.reduce((sum, i) => sum + i.quantity_sent, 0) }} units)</span>
+                                        </div>
+                                        <div v-if="t.status === 'pending'" class="mt-1 flex items-center gap-1 text-[10px]">
+                                            <span v-if="t.items?.every(i => i.destination_item_id)" class="px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-medium">
+                                                All items linked
+                                            </span>
+                                            <span v-else-if="t.items?.some(i => !i.destination_item_id && i.matched_destination_item)" class="px-1.5 py-0.5 rounded bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 font-medium" title="Items match existing products in your branch">
+                                                Matches existing stock
+                                            </span>
+                                            <span v-else class="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-medium">
+                                                New catalog items
+                                            </span>
+                                        </div>
                                     </td>
 
                                     <td class="py-2.5 px-4">
@@ -287,17 +277,34 @@ const confirmCancel = (transfer) => {
                                     </td>
 
                                     <td class="py-2.5 px-4 text-right">
-                                        <button
-                                            v-if="t.status === 'pending'"
-                                            @click="openAcceptModal(t)"
-                                            class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs active:scale-95 transition cursor-pointer"
-                                        >
-                                            Accept & Receive
-                                        </button>
-                                        <span v-else-if="t.status === 'blocked'" class="text-[11px] text-rose-600 dark:text-rose-400 font-semibold" :title="t.blocked_reason">
-                                            Units Differ
-                                        </span>
-                                        <span v-else class="text-[11px] text-slate-400 dark:text-slate-500">Completed</span>
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <button
+                                                type="button"
+                                                @click="openDetailsModal(t)"
+                                                class="px-2 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                                                title="View full transfer details and notes"
+                                            >
+                                                <svg class="w-3.5 h-3.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                                <span>Details</span>
+                                            </button>
+
+                                            <Link
+                                                v-if="t.status === 'pending'"
+                                                :href="route('pos.inventory.transfers.inter-branch.receive', { branch: currentBranchSlug, transfer: t.id })"
+                                                class="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-2xs active:scale-95 transition cursor-pointer flex items-center gap-1"
+                                            >
+                                                <span>Accept & Receive</span>
+                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                                </svg>
+                                            </Link>
+                                            <span v-else-if="t.status === 'blocked'" class="text-[11px] text-rose-600 dark:text-rose-400 font-semibold" :title="t.blocked_reason">
+                                                Units Differ
+                                            </span>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>
@@ -340,7 +347,14 @@ const confirmCancel = (transfer) => {
                                 >
                                     <td class="py-2.5 px-4">
                                         <div class="font-mono font-bold text-slate-900 dark:text-white text-xs">{{ t.reference }}</div>
-                                        <div v-if="t.notes" class="text-[10px] text-slate-500 dark:text-slate-400 truncate max-w-xs">{{ t.notes }}</div>
+                                        <div v-if="t.notes" class="mt-1 flex items-start gap-1 text-[11px] text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/60 rounded-md px-2 py-0.5 max-w-xs" :title="t.notes">
+                                            <span class="flex-shrink-0 text-amber-600 dark:text-amber-400">📝</span>
+                                            <span class="truncate font-medium">{{ t.notes }}</span>
+                                        </div>
+                                        <div v-if="t.receiver_notes" class="mt-0.5 flex items-start gap-1 text-[10px] text-teal-800 dark:text-teal-200 bg-teal-50 dark:bg-teal-950/40 border border-teal-200/80 dark:border-teal-800/60 rounded-md px-1.5 py-0.5 max-w-xs" :title="t.receiver_notes">
+                                            <span class="flex-shrink-0 text-teal-600 dark:text-teal-400">📥</span>
+                                            <span class="truncate">{{ t.receiver_notes }}</span>
+                                        </div>
                                     </td>
 
                                     <td class="py-2.5 px-4 font-semibold text-slate-800 dark:text-slate-200">
@@ -396,14 +410,28 @@ const confirmCancel = (transfer) => {
                                     </td>
 
                                     <td class="py-2.5 px-4 text-right">
-                                        <button
-                                            v-if="['pending', 'blocked'].includes(t.status)"
-                                            @click="confirmCancel(t)"
-                                            class="px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-800 transition cursor-pointer"
-                                        >
-                                            Cancel Transfer
-                                        </button>
-                                        <span v-else class="text-[11px] text-slate-400 dark:text-slate-500">Completed</span>
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <button
+                                                type="button"
+                                                @click="openDetailsModal(t)"
+                                                class="px-2 py-1 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 transition cursor-pointer flex items-center gap-1 shadow-2xs"
+                                                title="View full transfer details and notes"
+                                            >
+                                                <svg class="w-3.5 h-3.5 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                </svg>
+                                                <span>Details</span>
+                                            </button>
+
+                                            <button
+                                                v-if="['pending', 'blocked'].includes(t.status)"
+                                                @click="confirmCancel(t)"
+                                                class="px-2.5 py-1 text-xs font-semibold rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-800 transition cursor-pointer"
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             </tbody>
@@ -413,114 +441,113 @@ const confirmCancel = (transfer) => {
             </div>
         </div>
 
-        <!-- ── MODAL: Accept Transfer (Receiving Queue) ────────────────────────── -->
-        <div v-if="showAcceptModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+
+
+        <!-- ── MODAL: View Transfer Details ────────────────────────────────────── -->
+        <div v-if="showDetailsModal && selectedDetailsTransfer" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
             <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-700 max-w-2xl w-full p-5 space-y-4 max-h-[90vh] flex flex-col">
+                <!-- Header -->
                 <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
                     <div>
-                        <h3 class="text-base font-bold text-slate-900 dark:text-white">Accept Incoming Stock Transfer</h3>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Ref: <strong class="font-mono text-slate-800 dark:text-slate-200">{{ selectedTransfer?.reference }}</strong> from {{ selectedTransfer?.source_branch?.name }}</p>
+                        <div class="flex items-center gap-2">
+                            <h3 class="text-base font-bold text-slate-900 dark:text-white">Transfer Details</h3>
+                            <span class="font-mono font-bold text-xs px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200">
+                                {{ selectedDetailsTransfer.reference }}
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            From <strong>{{ selectedDetailsTransfer.source_branch?.name }}</strong> to <strong>{{ selectedDetailsTransfer.destination_branch?.name }}</strong>
+                        </p>
                     </div>
-                    <button @click="showAcceptModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg p-1 cursor-pointer">✕</button>
+                    <button @click="showDetailsModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg p-1 cursor-pointer">✕</button>
                 </div>
 
-                <!-- Destination Store Location Selector -->
-                <div class="p-3 bg-slate-50 dark:bg-slate-750 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
-                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                        Deposit Received Stock Into:
-                    </label>
-                    <div class="flex items-center gap-6">
-                        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800 dark:text-slate-200">
-                            <input
-                                type="radio"
-                                value="back_store"
-                                v-model="acceptForm.to_location"
-                                class="text-theme focus:ring-theme"
-                            />
-                            <span>Back Store (Storage / Warehouse)</span>
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-800 dark:text-slate-200">
-                            <input
-                                type="radio"
-                                value="front_store"
-                                v-model="acceptForm.to_location"
-                                class="text-theme focus:ring-theme"
-                            />
-                            <span>Front Store (Direct to Sales Shelves)</span>
-                        </label>
+                <!-- Info Grid -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-slate-50 dark:bg-slate-750 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                    <div>
+                        <span class="text-slate-400 dark:text-slate-500 block text-[10px] uppercase font-bold">Status</span>
+                        <span class="font-bold capitalize text-slate-800 dark:text-slate-200">{{ selectedDetailsTransfer.status }}</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 dark:text-slate-500 block text-[10px] uppercase font-bold">Drawn From</span>
+                        <span class="font-bold text-slate-800 dark:text-slate-200">{{ selectedDetailsTransfer.from_location === 'back_store' ? 'Back Store' : 'Front Store' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 dark:text-slate-500 block text-[10px] uppercase font-bold">Dispatched</span>
+                        <span class="font-medium text-slate-800 dark:text-slate-200">{{ selectedDetailsTransfer.sent_at ? new Date(selectedDetailsTransfer.sent_at).toLocaleDateString() : '—' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 dark:text-slate-500 block text-[10px] uppercase font-bold">Destination Store</span>
+                        <span class="font-medium text-slate-800 dark:text-slate-200">{{ selectedDetailsTransfer.to_location ? (selectedDetailsTransfer.to_location === 'back_store' ? 'Back Store' : 'Front Store') : 'Pending' }}</span>
                     </div>
                 </div>
 
-                <!-- Items Counted / Shortfall Input Table -->
+                <!-- Sender Note Box -->
+                <div class="p-3 bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl text-xs space-y-1">
+                    <div class="font-bold flex items-center gap-1.5 text-amber-900 dark:text-amber-200">
+                        <span>📝 Sender's Dispatch Note:</span>
+                    </div>
+                    <p class="text-amber-800 dark:text-amber-300 whitespace-pre-wrap font-medium">
+                        {{ selectedDetailsTransfer.notes || 'No dispatch notes provided.' }}
+                    </p>
+                </div>
+
+                <!-- Receiver Note Box (if present) -->
+                <div v-if="selectedDetailsTransfer.receiver_notes" class="p-3 bg-teal-50/80 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 rounded-xl text-xs space-y-1">
+                    <div class="font-bold flex items-center gap-1.5 text-teal-900 dark:text-teal-200">
+                        <span>📥 Receiver's Acceptance Note:</span>
+                    </div>
+                    <p class="text-teal-800 dark:text-teal-300 whitespace-pre-wrap font-medium">
+                        {{ selectedDetailsTransfer.receiver_notes }}
+                    </p>
+                </div>
+
+                <!-- Items Breakdown List -->
                 <div class="flex-1 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl divide-y divide-slate-100 dark:divide-slate-700/60 max-h-72">
                     <div
-                        v-for="(item, idx) in acceptForm.items"
-                        :key="idx"
-                        class="p-3 space-y-2 text-xs bg-white dark:bg-slate-800"
+                        v-for="item in selectedDetailsTransfer.items"
+                        :key="item.id"
+                        class="p-3 bg-white dark:bg-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
                     >
-                        <div class="flex items-center justify-between">
+                        <div class="min-w-0">
+                            <div class="font-bold text-slate-900 dark:text-white truncate">
+                                {{ item.source_item?.item_name || 'Item' }}
+                            </div>
+                            <div class="text-[10px] text-slate-400 font-mono">
+                                {{ item.source_item?.barcode_number || 'No Barcode' }}
+                            </div>
+                            <div v-if="item.notes" class="mt-1 text-[11px] text-amber-800 dark:text-amber-200 bg-amber-50/80 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200/70 dark:border-amber-800/60 inline-flex items-center gap-1">
+                                <span class="font-bold">📝 Note:</span>
+                                <span>{{ item.notes }}</span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-4 text-right flex-shrink-0">
                             <div>
-                                <span class="font-bold text-slate-900 dark:text-white text-xs">{{ item.item_name }}</span>
-                                <span class="text-slate-400 dark:text-slate-500 ml-2 text-[11px]">Sent: <strong>{{ item.quantity_sent }} {{ item.unit_label }}</strong></span>
+                                <span class="text-[10px] text-slate-400 uppercase font-semibold block">Sent</span>
+                                <span class="font-bold text-slate-800 dark:text-slate-200">{{ item.quantity_sent }}</span>
                             </div>
-
-                            <div class="flex items-center gap-2">
-                                <label class="text-slate-600 dark:text-slate-400 font-medium text-xs">Actual Received:</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    :max="item.quantity_sent"
-                                    v-model.number="item.quantity_received"
-                                    class="w-20 px-2 py-1 text-center font-bold text-xs border rounded-lg outline-none focus:ring-1 focus:ring-theme"
-                                    :class="item.quantity_received < item.quantity_sent
-                                        ? 'border-amber-400 bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200'
-                                        : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white'"
-                                />
+                            <div v-if="selectedDetailsTransfer.status === 'accepted'">
+                                <span class="text-[10px] text-slate-400 uppercase font-semibold block">Received</span>
+                                <span class="font-bold text-emerald-600 dark:text-emerald-400">{{ item.quantity_received }}</span>
                             </div>
-                        </div>
-
-                        <!-- Shortfall alert -->
-                        <div v-if="item.quantity_received < item.quantity_sent" class="text-[11px] text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1">
-                            ⚠️ Shortfall of {{ item.quantity_sent - item.quantity_received }} unit(s) will be logged as a discrepancy.
-                        </div>
-
-                        <!-- On-the-fly linking notice if item not yet linked -->
-                        <div v-if="!item.has_destination_item" class="p-2.5 rounded-lg bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-800 space-y-1 text-[11px]">
-                            <div class="font-bold text-indigo-900 dark:text-indigo-300 flex items-center gap-1">
-                                🔗 Item not linked yet in your branch catalog
-                            </div>
-                            <div class="flex items-center gap-4 text-slate-700 dark:text-slate-300">
-                                <label class="flex items-center gap-1.5 cursor-pointer">
-                                    <input type="radio" value="copy" v-model="item.link_action" class="text-theme" />
-                                    <span>Create item in my branch (copy catalog & link)</span>
-                                </label>
+                            <div v-if="selectedDetailsTransfer.status === 'accepted' && item.shortfall_quantity > 0">
+                                <span class="text-[10px] text-rose-500 uppercase font-semibold block">Shortfall</span>
+                                <span class="font-bold text-rose-600 dark:text-rose-400">-{{ item.shortfall_quantity }}</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Footer -->
-                <div class="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700">
-                    <div class="text-[11px] text-slate-400 dark:text-slate-500">
-                        Receiving branch retains its own item cost price.
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button
-                            type="button"
-                            @click="showAcceptModal = false"
-                            class="px-3.5 py-1.5 text-xs font-semibold rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="button"
-                            @click="submitAccept"
-                            :disabled="acceptForm.processing"
-                            class="px-4 py-1.5 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-xs transition cursor-pointer"
-                        >
-                            Confirm Acceptance & Update Stock
-                        </button>
-                    </div>
+                <div class="flex items-center justify-end pt-2 border-t border-slate-200 dark:border-slate-700">
+                    <button
+                        type="button"
+                        @click="showDetailsModal = false"
+                        class="px-4 py-2 text-xs font-semibold rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition cursor-pointer"
+                    >
+                        Close
+                    </button>
                 </div>
             </div>
         </div>

@@ -31,13 +31,16 @@ class InterBranchTransferController extends Controller
 
         // Incoming Transfers (Receiving Queue)
         $incoming = InterBranchTransfer::where('destination_branch_id', $branch->id)
-            ->with(['sourceBranch:id,name,slug', 'items.sourceItem', 'items.destinationItem', 'items.productGroup'])
+            ->with(['sourceBranch:id,name,slug', 'destinationBranch:id,name,slug', 'items.sourceItem', 'items.destinationItem', 'items.productGroup', 'sentByUser:id,name', 'acceptedByUser:id,name'])
             ->latest('id')
             ->paginate(15, ['*'], 'incoming_page');
 
+        // Detect existing destination branch items for unlinked incoming transfer items
+        $this->attachDestinationMatches($branch, $incoming->getCollection());
+
         // Outgoing Transfers (Sent)
         $outgoing = InterBranchTransfer::where('source_branch_id', $branch->id)
-            ->with(['destinationBranch:id,name,slug', 'items.sourceItem', 'items.destinationItem'])
+            ->with(['sourceBranch:id,name,slug', 'destinationBranch:id,name,slug', 'items.sourceItem', 'items.destinationItem', 'items.productGroup', 'sentByUser:id,name', 'acceptedByUser:id,name'])
             ->latest('id')
             ->paginate(15, ['*'], 'outgoing_page');
 
@@ -132,6 +135,8 @@ class InterBranchTransferController extends Controller
             abort(403, 'Unauthorized. You can only cancel transfers dispatched by your branch.');
         }
 
+        $transfer->load(['items.sourceItem', 'sourceBranch', 'destinationBranch']);
+
         try {
             InterBranchTransferService::cancelTransfer($transfer, $request->user()?->id);
             return back()->with('success', "Transfer {$transfer->reference} cancelled. Stock restored to originating store.");
@@ -154,8 +159,11 @@ class InterBranchTransferController extends Controller
             abort(403, 'Unauthorized. You can only accept transfers sent to your branch.');
         }
 
+        $transfer->load(['items.sourceItem', 'items.destinationItem', 'items.productGroup', 'sourceBranch', 'destinationBranch']);
+
         $data = $request->validate([
             'to_location'               => 'required|string|in:back_store,front_store',
+            'receiver_notes'            => 'nullable|string|max:500',
             'items'                     => 'required|array|min:1',
             'items.*.line_id'           => 'required|integer|exists:inter_branch_transfer_items,id',
             'items.*.quantity_received' => 'required|integer|min:0',
@@ -168,12 +176,189 @@ class InterBranchTransferController extends Controller
                 $transfer,
                 $data['items'],
                 $data['to_location'],
-                $request->user()?->id
+                $request->user()?->id,
+                $data['receiver_notes'] ?? null
             );
 
-            return back()->with('success', "Transfer {$transfer->reference} accepted successfully into " . ($data['to_location'] === 'back_store' ? 'Back Store' : 'Front Store') . ".");
+            return redirect()->route('pos.inventory.transfers.inter-branch.index', [$branch->slug, 'tab' => 'incoming'])
+                ->with('success', "Transfer {$transfer->reference} accepted successfully into " . ($data['to_location'] === 'back_store' ? 'Back Store' : 'Front Store') . ".");
         } catch (\Throwable $e) {
             return back()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Show full dedicated page for receiving and inspecting an incoming transfer.
+     */
+    public function showReceive(Request $request, mixed $param1 = null, mixed $param2 = null): Response|RedirectResponse
+    {
+        $branch = $this->getBranch($request, ($param1 instanceof Branch ? $param1 : null));
+        $transfer = ($param1 instanceof InterBranchTransfer) 
+            ? $param1 
+            : (($param2 instanceof InterBranchTransfer) ? $param2 : InterBranchTransfer::findOrFail($param2 ?? $param1));
+
+        if ($transfer->destination_branch_id !== $branch->id) {
+            abort(403, 'Unauthorized. You can only receive transfers sent to your branch.');
+        }
+
+        if ($transfer->status !== 'pending') {
+            return redirect()->route('pos.inventory.transfers.inter-branch.show', [$branch->slug, $transfer->id])
+                ->with('info', "Transfer {$transfer->reference} is already {$transfer->status}.");
+        }
+
+        $transfer->load([
+            'sourceBranch:id,name,slug',
+            'destinationBranch:id,name,slug',
+            'sentByUser:id,name',
+            'items.sourceItem',
+            'items.destinationItem',
+            'items.productGroup',
+        ]);
+
+        $this->attachDestinationMatches($branch, [$transfer]);
+
+        return Inertia::render('Inventory/InterBranchTransfers/Receive', [
+            'transfer' => $transfer,
+        ]);
+    }
+
+    /**
+     * Show full details page for any transfer.
+     */
+    public function show(Request $request, mixed $param1 = null, mixed $param2 = null): Response
+    {
+        $branch = $this->getBranch($request, ($param1 instanceof Branch ? $param1 : null));
+        $transfer = ($param1 instanceof InterBranchTransfer) 
+            ? $param1 
+            : (($param2 instanceof InterBranchTransfer) ? $param2 : InterBranchTransfer::findOrFail($param2 ?? $param1));
+
+        if ($transfer->source_branch_id !== $branch->id && $transfer->destination_branch_id !== $branch->id) {
+            abort(403, 'Unauthorized.');
+        }
+
+        $transfer->load([
+            'sourceBranch:id,name,slug',
+            'destinationBranch:id,name,slug',
+            'sentByUser:id,name',
+            'acceptedByUser:id,name',
+            'cancelledByUser:id,name',
+            'items.sourceItem',
+            'items.destinationItem',
+            'items.productGroup',
+        ]);
+
+        return Inertia::render('Inventory/InterBranchTransfers/Show', [
+            'transfer'   => $transfer,
+            'isReceiver' => $transfer->destination_branch_id === $branch->id,
+        ]);
+    }
+
+    /**
+     * Attach auto-detected destination branch items to unlinked transfer item lines.
+     */
+    protected function attachDestinationMatches(Branch $branch, iterable $transfers): void
+    {
+        $unlinkedLines = collect();
+        foreach ($transfers as $t) {
+            if ($t->status !== 'pending') {
+                continue;
+            }
+            foreach ($t->items as $itemLine) {
+                if (!$itemLine->destination_item_id && $itemLine->sourceItem) {
+                    $unlinkedLines->push($itemLine);
+                }
+            }
+        }
+
+        if ($unlinkedLines->isNotEmpty()) {
+            $barcodes = $unlinkedLines->pluck('sourceItem.barcode_number')
+                ->filter(fn($b) => !empty(trim($b)))
+                ->unique()
+                ->values()
+                ->all();
+
+            $names = $unlinkedLines->pluck('sourceItem.item_name')
+                ->filter(fn($n) => !empty(trim($n)))
+                ->map(fn($n) => strtolower(trim($n)))
+                ->unique()
+                ->values()
+                ->all();
+
+            $destItems = Item::where('branch_id', $branch->id)
+                ->where(function ($q) use ($barcodes, $names) {
+                    $hasClause = false;
+                    if (!empty($barcodes)) {
+                        $q->whereIn('barcode_number', $barcodes);
+                        $hasClause = true;
+                    }
+                    if (!empty($names)) {
+                        if ($hasClause) {
+                            $q->orWhere(function ($sub) use ($names) {
+                                foreach ($names as $name) {
+                                    $sub->orWhereRaw('LOWER(TRIM(item_name)) = ?', [$name]);
+                                }
+                            });
+                        } else {
+                            $q->where(function ($sub) use ($names) {
+                                foreach ($names as $name) {
+                                    $sub->orWhereRaw('LOWER(TRIM(item_name)) = ?', [$name]);
+                                }
+                            });
+                        }
+                    }
+                })
+                ->get();
+
+            $barcodeMap = [];
+            $nameMap = [];
+            foreach ($destItems as $di) {
+                $b = trim($di->barcode_number ?? '');
+                if ($b !== '') {
+                    $barcodeMap[$b] = $di;
+                }
+                $n = strtolower(trim($di->item_name ?? ''));
+                if ($n !== '') {
+                    $nameMap[$n] = $di;
+                }
+            }
+
+            foreach ($unlinkedLines as $line) {
+                $srcBarcode = trim($line->sourceItem->barcode_number ?? '');
+                $srcName = strtolower(trim($line->sourceItem->item_name ?? ''));
+
+                $matched = null;
+                $matchType = null;
+
+                if ($srcBarcode !== '' && isset($barcodeMap[$srcBarcode])) {
+                    $matched = $barcodeMap[$srcBarcode];
+                    $matchType = 'barcode';
+                } elseif ($srcName !== '' && isset($nameMap[$srcName])) {
+                    $matched = $nameMap[$srcName];
+                    $matchType = 'name';
+                }
+
+                if ($matched) {
+                    $line->setAttribute('matched_destination_item', [
+                        'id'              => $matched->id,
+                        'item_name'       => $matched->item_name,
+                        'barcode_number'  => $matched->barcode_number,
+                        'unit_label'      => $matched->unit_label ?: 'pcs',
+                        'front_store_qty' => (int) $matched->front_store_qty,
+                        'back_store_qty'  => (int) $matched->back_store_qty,
+                        'match_type'      => $matchType,
+                    ]);
+                } else {
+                    $line->setAttribute('matched_destination_item', null);
+                }
+            }
+        }
+
+        foreach ($transfers as $t) {
+            foreach ($t->items as $itemLine) {
+                if (!$itemLine->offsetExists('matched_destination_item')) {
+                    $itemLine->setAttribute('matched_destination_item', null);
+                }
+            }
         }
     }
 }

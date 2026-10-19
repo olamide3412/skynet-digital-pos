@@ -194,10 +194,55 @@ class InterBranchProductLinkingAndTransfersTest extends TestCase
         $this->assertEquals(1, $result['linked_count']);
         $this->assertDatabaseHas('product_group_items', ['item_id' => $itemB->id]);
 
+        // Verify Activity Logging on bulk confirm:
+        // a. PosLog (for SuperAdmin Logs and Org Activity Logs)
+        $this->assertDatabaseHas('pos_logs', [
+            'action_type' => 'bulk_link',
+            'branch_id'   => $this->branchA->id,
+        ]);
+        $bulkPosLog = \App\Models\PosLog::where('action_type', 'bulk_link')->latest('id')->first();
+        $this->assertStringContainsString($batchId, $bulkPosLog->log);
+        $this->assertEquals($batchId, $bulkPosLog->details['batch_id'] ?? null);
+
+        // b. OrganizationActivityLog (for SuperAdmin Org Show page)
+        $this->assertDatabaseHas('organization_activity_log', [
+            'organization_id' => $this->org->id,
+            'action'          => 'bulk_product_link_confirmed',
+        ]);
+        $orgLog = \App\Models\OrganizationActivityLog::where('action', 'bulk_product_link_confirmed')->latest('id')->first();
+        $this->assertEquals($batchId, $orgLog->details['batch_id'] ?? null);
+
+        // c. Check getRecentBatches contains the batch and is_undone = false
+        $recentBatches = ProductLinkingService::getRecentBatches($this->org->id);
+        $this->assertNotEmpty($recentBatches);
+        $this->assertEquals($batchId, $recentBatches[0]['batch_id']);
+        $this->assertFalse($recentBatches[0]['is_undone']);
+
         // 2. Undo batch
         $unlinkedCount = ProductLinkingService::undoBatch($this->org->id, $batchId, $this->user->id);
         $this->assertEquals(1, $unlinkedCount);
         $this->assertDatabaseMissing('product_group_items', ['item_id' => $itemB->id]);
+
+        // Verify Activity Logging on undo batch:
+        // a. PosLog
+        $this->assertDatabaseHas('pos_logs', [
+            'action_type' => 'undo_batch',
+        ]);
+        $undoPosLog = \App\Models\PosLog::where('action_type', 'undo_batch')->latest('id')->first();
+        $this->assertStringContainsString($batchId, $undoPosLog->log);
+        $this->assertEquals($batchId, $undoPosLog->details['batch_id'] ?? null);
+
+        // b. OrganizationActivityLog
+        $this->assertDatabaseHas('organization_activity_log', [
+            'organization_id' => $this->org->id,
+            'action'          => 'bulk_product_link_undone',
+        ]);
+        $undoOrgLog = \App\Models\OrganizationActivityLog::where('action', 'bulk_product_link_undone')->latest('id')->first();
+        $this->assertEquals($batchId, $undoOrgLog->details['batch_id'] ?? null);
+
+        // c. Check getRecentBatches updates is_undone = true
+        $recentBatchesAfter = ProductLinkingService::getRecentBatches($this->org->id);
+        $this->assertTrue($recentBatchesAfter[0]['is_undone']);
     }
 
     /**
@@ -424,14 +469,48 @@ class InterBranchProductLinkingAndTransfersTest extends TestCase
         $itemA->refresh();
         $this->assertEquals(35, $itemA->front_store_qty);
 
-        // Cancel
-        InterBranchTransferService::cancelTransfer($transfer, $this->user->id);
+        // Ensure branch user has permission
+        setPermissionsTeamId($this->branchA->id);
+        $this->branchA->ensureDefaultRoles();
+        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $this->user->givePermissionTo($perm);
+
+        // Cancel via web POST route
+        $response = $this->actingAs($this->user)->post(
+            route('pos.inventory.transfers.inter-branch.cancel', [
+                'branch'   => $this->branchA->slug,
+                'transfer' => $transfer->id,
+            ])
+        );
+
+        $response->assertSessionHasNoErrors();
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
 
         $transfer->refresh();
         $this->assertEquals('cancelled', $transfer->status);
 
         $itemA->refresh();
         $this->assertEquals(50, $itemA->front_store_qty); // Fully restored!
+
+        // Verify dispatch transaction (-15)
+        $dispatchTx = InventoryTransaction::where('branch_id', $this->branchA->id)
+            ->where('reference_id', $transfer->reference)
+            ->where('qty', -15)
+            ->first();
+        $this->assertNotNull($dispatchTx);
+        $this->assertEquals(50, $dispatchTx->previous_qty);
+        $this->assertEquals(35, $dispatchTx->new_qty);
+
+        // Verify cancellation restoration transaction (+15)
+        $restoreTx = InventoryTransaction::where('branch_id', $this->branchA->id)
+            ->where('reference_id', $transfer->reference)
+            ->where('qty', 15)
+            ->first();
+        $this->assertNotNull($restoreTx);
+        $this->assertEquals(35, $restoreTx->previous_qty);
+        $this->assertEquals(50, $restoreTx->new_qty);
+        $this->assertStringContainsString('cancelled', $restoreTx->notes);
     }
 
     /**
@@ -775,8 +854,14 @@ class InterBranchProductLinkingAndTransfersTest extends TestCase
 
         $line = $transfer->items->first();
 
-        // Before accepting: verify no inventory transaction logs exist for this reference
-        $this->assertEquals(0, InventoryTransaction::where('reference_id', $transfer->reference)->count());
+        // Before accepting: verify sender dispatch inventory transaction exists immediately
+        $preDispatchTx = InventoryTransaction::where('reference_id', $transfer->reference)
+            ->where('branch_id', $this->branchA->id)
+            ->first();
+        $this->assertNotNull($preDispatchTx);
+        $this->assertEquals(-15, $preDispatchTx->qty);
+        $this->assertEquals(50, $preDispatchTx->previous_qty);
+        $this->assertEquals(35, $preDispatchTx->new_qty);
 
         // Receiver accepts 15 cartons into front_store
         InterBranchTransferService::acceptTransfer(
@@ -814,5 +899,406 @@ class InterBranchProductLinkingAndTransfersTest extends TestCase
         $this->assertEquals('front_store', $receiverLog->location);
         $this->assertStringContainsString("Inter-branch transfer in from {$this->branchA->name}", $receiverLog->notes);
     }
+
+    public function test_incoming_transfers_detects_existing_branch_item_by_barcode_and_name_and_updates_quantity(): void
+    {
+        $barcode = 'BAR-MATCH-' . uniqid();
+
+        // Sender item in Branch A
+        $itemA = Item::create([
+            'branch_id'      => $this->branchA->id,
+            'item_name'      => 'Peak Milk 400g',
+            'barcode_number' => $barcode,
+            'unit_label'     => 'tin',
+            'buy_price'      => 800,
+            'price'          => 1000,
+            'back_store_qty' => 50,
+        ]);
+
+        // Existing unlinked item in Branch B with same barcode
+        $itemB = Item::create([
+            'branch_id'      => $this->branchB->id,
+            'item_name'      => 'Peak Evaporated Milk 400g',
+            'barcode_number' => $barcode,
+            'unit_label'     => 'tin',
+            'buy_price'      => 820,
+            'price'          => 1050,
+            'back_store_qty' => 10,
+        ]);
+
+        // Create transfer from Branch A to Branch B without prior linking
+        $transfer = InterBranchTransferService::createTransfer(
+            $this->branchA->id,
+            $this->branchB->id,
+            [['item_id' => $itemA->id, 'quantity' => 12]],
+            'back_store',
+            'Transfer test matching',
+            $this->user->id
+        );
+
+        // Line in transfer
+        $line = $transfer->items()->first();
+        $this->assertNull($line->destination_item_id);
+
+        // Branch B Manager User
+        $userB = User::create([
+            'organization_id' => $this->org->id,
+            'branch_id'       => $this->branchB->id,
+            'name'            => 'Branch B Manager ' . uniqid(),
+            'username'        => 'mgr_b_' . uniqid(),
+            'email'           => 'mgr_b_' . uniqid() . '@example.com',
+            'password'        => bcrypt('secret'),
+            'is_active'       => true,
+        ]);
+        setPermissionsTeamId($this->branchB->id);
+        $this->branchB->ensureDefaultRoles();
+        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $userB->givePermissionTo($perm);
+
+        // 1. Verify index controller response detects the matching item in Branch B
+        $response = $this->actingAs($userB)->get(route('pos.inventory.transfers.inter-branch.index', ['branch' => $this->branchB->slug]));
+        $response->assertOk();
+
+        $incomingData = $response->viewData('page')['props']['incomingTransfers']['data'];
+        $foundTransfer = collect($incomingData)->firstWhere('id', $transfer->id);
+        $this->assertNotNull($foundTransfer);
+
+        $firstLine = $foundTransfer['items'][0];
+        $this->assertNotNull($firstLine['matched_destination_item']);
+        $this->assertEquals($itemB->id, $firstLine['matched_destination_item']['id']);
+        $this->assertEquals('barcode', $firstLine['matched_destination_item']['match_type']);
+        $this->assertEquals(10, $firstLine['matched_destination_item']['back_store_qty']);
+
+        // 2. Accept transfer linking to the existing item in Branch B
+        $acceptResponse = $this->actingAs($userB)->post(
+            route('pos.inventory.transfers.inter-branch.accept', ['branch' => $this->branchB->slug, 'transfer' => $transfer->id]),
+            [
+                'to_location' => 'back_store',
+                'items' => [
+                    [
+                        'line_id'           => $line->id,
+                        'quantity_received' => 12,
+                        'link_action'       => 'existing',
+                        'existing_item_id'  => $itemB->id,
+                    ]
+                ]
+            ]
+        );
+
+        $acceptResponse->assertRedirect();
+
+        // 3. Verify stock is updated on existing item B without creating duplicates
+        $itemB->refresh();
+        $this->assertEquals(22, $itemB->back_store_qty); // 10 + 12
+
+        $totalItemsInBranchB = Item::where('branch_id', $this->branchB->id)->where('barcode_number', $barcode)->count();
+        $this->assertEquals(1, $totalItemsInBranchB, 'Should not create duplicate item in destination branch');
+
+        // Verify product group was established
+        $this->assertDatabaseHas('product_group_items', [
+            'branch_id' => $this->branchB->id,
+            'item_id'   => $itemB->id,
+        ]);
+    }
+
+    public function test_incoming_transfers_detects_existing_branch_item_by_name_match_and_updates_quantity(): void
+    {
+        $uniqueName = 'Corn Flakes Luxury ' . uniqid();
+
+        // Sender item in Branch A without barcode
+        $itemA = Item::create([
+            'branch_id'      => $this->branchA->id,
+            'item_name'      => strtoupper($uniqueName),
+            'barcode_number' => null,
+            'unit_label'     => 'box',
+            'buy_price'      => 1200,
+            'price'          => 1500,
+            'back_store_qty' => 30,
+        ]);
+
+        // Existing unlinked item in Branch B with different case and trailing spaces
+        $itemB = Item::create([
+            'branch_id'      => $this->branchB->id,
+            'item_name'      => strtolower($uniqueName) . ' ',
+            'barcode_number' => null,
+            'unit_label'     => 'box',
+            'buy_price'      => 1250,
+            'price'          => 1550,
+            'back_store_qty' => 5,
+        ]);
+
+        // Create transfer from Branch A to Branch B
+        $transfer = InterBranchTransferService::createTransfer(
+            $this->branchA->id,
+            $this->branchB->id,
+            [['item_id' => $itemA->id, 'quantity' => 10]],
+            'back_store',
+            'Transfer name match test',
+            $this->user->id
+        );
+
+        $line = $transfer->items()->first();
+
+        // Branch B Manager User
+        $userB = User::create([
+            'organization_id' => $this->org->id,
+            'branch_id'       => $this->branchB->id,
+            'name'            => 'Branch B Manager ' . uniqid(),
+            'username'        => 'mgr_b2_' . uniqid(),
+            'email'           => 'mgr_b2_' . uniqid() . '@example.com',
+            'password'        => bcrypt('secret'),
+            'is_active'       => true,
+        ]);
+        setPermissionsTeamId($this->branchB->id);
+        $this->branchB->ensureDefaultRoles();
+        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $userB->givePermissionTo($perm);
+
+        // 1. Verify index controller response detects name match
+        $response = $this->actingAs($userB)->get(route('pos.inventory.transfers.inter-branch.index', ['branch' => $this->branchB->slug]));
+        $response->assertOk();
+
+        $incomingData = $response->viewData('page')['props']['incomingTransfers']['data'];
+        $foundTransfer = collect($incomingData)->firstWhere('id', $transfer->id);
+        $this->assertNotNull($foundTransfer);
+
+        $firstLine = $foundTransfer['items'][0];
+        $this->assertNotNull($firstLine['matched_destination_item']);
+        $this->assertEquals($itemB->id, $firstLine['matched_destination_item']['id']);
+        $this->assertEquals('name', $firstLine['matched_destination_item']['match_type']);
+
+        // 2. Accept transfer linking to the existing item in Branch B
+        $acceptResponse = $this->actingAs($userB)->post(
+            route('pos.inventory.transfers.inter-branch.accept', ['branch' => $this->branchB->slug, 'transfer' => $transfer->id]),
+            [
+                'to_location' => 'back_store',
+                'items' => [
+                    [
+                        'line_id'           => $line->id,
+                        'quantity_received' => 10,
+                        'link_action'       => 'existing',
+                        'existing_item_id'  => $itemB->id,
+                    ]
+                ]
+            ]
+        );
+
+        $acceptResponse->assertRedirect();
+
+        // 3. Verify stock is updated on existing item B
+        $itemB->refresh();
+        $this->assertEquals(15, $itemB->back_store_qty); // 5 + 10
+    }
+
+    /**
+     * Test 16: Transfer notes (sender notes & receiver notes) are properly persisted and surfaced.
+     */
+    public function test_transfer_notes_persisted_and_displayed_on_both_sender_and_receiver_ends(): void
+    {
+        $itemA = Item::create([
+            'branch_id'       => $this->branchA->id,
+            'item_name'       => 'Fragile Perfume 100ml',
+            'unit_label'      => 'pcs',
+            'buy_price'       => 50,
+            'price'           => 100,
+            'back_store_qty'  => 30,
+        ]);
+
+        $itemB = Item::create([
+            'branch_id'       => $this->branchB->id,
+            'item_name'       => 'Fragile Perfume 100ml',
+            'unit_label'      => 'pcs',
+            'buy_price'       => 50,
+            'price'           => 100,
+            'back_store_qty'  => 10,
+        ]);
+
+        $group = ProductLinkingService::createGroup($this->org->id, 'Fragile Perfume Group', $this->user->id, $itemA->id);
+        ProductLinkingService::linkItem($group->id, $this->branchB->id, $itemB->id, $this->user->id);
+
+        $senderNote = 'Handle with care, fragile glass perfume bottles.';
+        $itemLineNote = 'Batch #PF-2026 exp 2028';
+
+        // 1. Sender dispatches transfer with notes via service / controller
+        $transfer = InterBranchTransferService::createTransfer(
+            $this->branchA->id,
+            $this->branchB->id,
+            [
+                [
+                    'item_id'  => $itemA->id,
+                    'quantity' => 5,
+                    'notes'    => $itemLineNote,
+                ]
+            ],
+            'back_store',
+            $senderNote,
+            $this->user->id
+        );
+
+        $this->assertEquals($senderNote, $transfer->notes);
+        $this->assertEquals($itemLineNote, $transfer->items()->first()->notes);
+
+        // Branch B User setup
+        $userB = User::create([
+            'organization_id' => $this->org->id,
+            'branch_id'       => $this->branchB->id,
+            'name'            => 'Branch B Receiver',
+            'username'        => 'receiver_b_' . uniqid(),
+            'email'           => 'receiver_b_' . uniqid() . '@example.com',
+            'password'        => bcrypt('secret'),
+            'is_active'       => true,
+        ]);
+        setPermissionsTeamId($this->branchB->id);
+        $this->branchB->ensureDefaultRoles();
+        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $userB->givePermissionTo($perm);
+
+        // 2. Receiver views incoming transfers - verifies notes are present
+        $indexResponse = $this->actingAs($userB)->get(route('pos.inventory.transfers.inter-branch.index', ['branch' => $this->branchB->slug]));
+        $indexResponse->assertOk();
+        $incomingList = $indexResponse->viewData('page')['props']['incomingTransfers']['data'];
+        $found = collect($incomingList)->firstWhere('id', $transfer->id);
+        $this->assertNotNull($found);
+        $this->assertEquals($senderNote, $found['notes']);
+        $this->assertEquals($itemLineNote, $found['items'][0]['notes']);
+
+        // 3. Receiver accepts transfer and enters receiver_notes
+        $receiverRemarks = 'Received in perfect condition, all 5 units checked.';
+        $line = $transfer->items()->first();
+
+        $acceptResponse = $this->actingAs($userB)->post(
+            route('pos.inventory.transfers.inter-branch.accept', ['branch' => $this->branchB->slug, 'transfer' => $transfer->id]),
+            [
+                'to_location'    => 'front_store',
+                'receiver_notes' => $receiverRemarks,
+                'items' => [
+                    [
+                        'line_id'           => $line->id,
+                        'quantity_received' => 5,
+                        'link_action'       => 'existing',
+                        'existing_item_id'  => $itemB->id,
+                    ]
+                ]
+            ]
+        );
+        $acceptResponse->assertRedirect();
+
+        $transfer->refresh();
+        $this->assertEquals('accepted', $transfer->status);
+        $this->assertEquals($senderNote, $transfer->notes);
+        $this->assertEquals($receiverRemarks, $transfer->receiver_notes);
+
+        // 4. Verify inventory transaction contains the note
+        $txn = InventoryTransaction::where('branch_id', $this->branchB->id)
+            ->where('reference_id', $transfer->reference)
+            ->first();
+        $this->assertNotNull($txn);
+        $this->assertStringContainsString($receiverRemarks, $txn->notes);
+    }
+
+    /**
+     * Test 17: Dedicated receive page renders for pending transfer and guards non-pending / unauthorized access.
+     */
+    public function test_dedicated_receive_page_renders_and_guards_access(): void
+    {
+        $itemA = Item::create([
+            'branch_id'      => $this->branchA->id,
+            'item_name'      => 'Aura Glow Cleanser',
+            'barcode_number' => 'CLEANSER-881',
+            'unit_label'     => 'pcs',
+            'buy_price'      => 10,
+            'price'          => 20,
+            'back_store_qty' => 50,
+        ]);
+
+        $transfer = InterBranchTransferService::createTransfer(
+            $this->branchA->id,
+            $this->branchB->id,
+            [['item_id' => $itemA->id, 'quantity' => 15, 'notes' => 'Handle with care']],
+            'back_store',
+            'Sender dispatch note for warehouse',
+            $this->user->id
+        );
+
+        // Create authorized User for Destination Branch B
+        $userB = User::create([
+            'organization_id' => $this->org->id,
+            'branch_id'       => $this->branchB->id,
+            'name'            => 'Branch B Receiver',
+            'username'        => 'receiver_b_' . uniqid(),
+            'email'           => 'receiver_b_' . uniqid() . '@example.com',
+            'password'        => bcrypt('secret'),
+            'is_active'       => true,
+        ]);
+        setPermissionsTeamId($this->branchB->id);
+        $this->branchB->ensureDefaultRoles();
+        $perm = \Spatie\Permission\Models\Permission::firstOrCreate(['name' => 'canTransferStock', 'guard_name' => 'web']);
+        $userB->givePermissionTo($perm);
+
+        // Also ensure userA has permission on branch A
+        setPermissionsTeamId($this->branchA->id);
+        $this->branchA->ensureDefaultRoles();
+        $this->user->givePermissionTo($perm);
+
+        // 1. Destination branch B user views receive page -> 200 with Receive component
+        $response = $this->actingAs($userB)->get(
+            route('pos.inventory.transfers.inter-branch.receive', [
+                'branch'   => $this->branchB->slug,
+                'transfer' => $transfer->id,
+            ])
+        );
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) => $page
+            ->component('Inventory/InterBranchTransfers/Receive')
+            ->has('transfer')
+            ->where('transfer.reference', $transfer->reference)
+            ->where('transfer.notes', 'Sender dispatch note for warehouse')
+        );
+
+        // 2. Sender branch A user attempts to access receive page -> 403 Forbidden
+        $unauthorizedResponse = $this->actingAs($this->user)->get(
+            route('pos.inventory.transfers.inter-branch.receive', [
+                'branch'   => $this->branchA->slug,
+                'transfer' => $transfer->id,
+            ])
+        );
+        $unauthorizedResponse->assertStatus(403);
+
+        // 3. Complete the transfer, then attempt to revisit receive page -> redirects to index
+        $this->actingAs($userB)->post(
+            route('pos.inventory.transfers.inter-branch.accept', [
+                'branch'   => $this->branchB->slug,
+                'transfer' => $transfer->id,
+            ]),
+            [
+                'to_location'    => 'front_store',
+                'receiver_notes' => 'Received clean',
+                'items'          => [
+                    [
+                        'line_id'           => $transfer->items->first()->id,
+                        'quantity_received' => 15,
+                        'link_action'       => 'copy',
+                        'existing_item_id'  => null,
+                    ]
+                ]
+            ]
+        );
+
+        $transfer->refresh();
+        $this->assertEquals('accepted', $transfer->status);
+
+        $revisitResponse = $this->actingAs($userB)->get(
+            route('pos.inventory.transfers.inter-branch.receive', [
+                'branch'   => $this->branchB->slug,
+                'transfer' => $transfer->id,
+            ])
+        );
+        $revisitResponse->assertRedirect(route('pos.inventory.transfers.inter-branch.show', [
+            'branch'   => $this->branchB->slug,
+            'transfer' => $transfer->id,
+        ]));
+    }
 }
+
 

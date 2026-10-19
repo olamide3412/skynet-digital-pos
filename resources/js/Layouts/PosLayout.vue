@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, provide } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import FlashMessages from '@/Components/FlashMessages.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
@@ -9,6 +9,15 @@ const isCollapsed  = ref(false)
 
 const toggleMobile = () => {
     isMobileOpen.value = !isMobileOpen.value
+}
+
+defineExpose({
+    toggleMobile,
+    isMobileOpen,
+})
+
+const handleSidebarToggleEvent = () => {
+    toggleMobile()
 }
 
 provide('toggleMobileSidebar', toggleMobile)
@@ -271,11 +280,18 @@ const toggleCollapse = () => {
 }
 
 onMounted(() => {
+    window.addEventListener('toggle-mobile-sidebar', handleSidebarToggleEvent)
+    window.addEventListener('toggle-pos-mobile-sidebar', handleSidebarToggleEvent)
     const saved = localStorage.getItem('pos_sidebar_collapsed')
     if (saved !== null) isCollapsed.value = saved === 'true'
     navLinks.value.forEach(link => {
         if (link.children && isActive(link)) expandedMenus.value.push(link.label)
     })
+})
+
+onUnmounted(() => {
+    window.removeEventListener('toggle-mobile-sidebar', handleSidebarToggleEvent)
+    window.removeEventListener('toggle-pos-mobile-sidebar', handleSidebarToggleEvent)
 })
 </script>
 
@@ -506,7 +522,7 @@ onMounted(() => {
                 </div>
             </header>
 
-            <slot />
+            <slot :toggleMobile="toggleMobile" :isMobileOpen="isMobileOpen" />
         </main>
 
         <FlashMessages />

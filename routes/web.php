@@ -543,6 +543,8 @@ Route::prefix('{branch}')
                 Route::get('/',                   [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'index'])->name('index')->middleware('pos.role:canTransferStock');
                 Route::get('/create',             [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'create'])->name('create')->middleware('pos.role:canTransferStock');
                 Route::post('/',                  [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'store'])->name('store')->middleware('pos.role:canTransferStock');
+                Route::get('/{transfer}/receive', [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'showReceive'])->name('receive')->middleware('pos.role:canTransferStock');
+                Route::get('/{transfer}',         [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'show'])->name('show')->middleware('pos.role:canTransferStock');
                 Route::post('/{transfer}/cancel', [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'cancel'])->name('cancel')->middleware('pos.role:canTransferStock');
                 Route::post('/{transfer}/accept', [\App\Http\Controllers\Pos\InterBranchTransferController::class, 'accept'])->name('accept')->middleware('pos.role:canTransferStock');
             });

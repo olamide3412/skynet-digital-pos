@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { Head, Link, useForm, router } from '@inertiajs/vue3'
+import { Head, Link, useForm, router, usePage } from '@inertiajs/vue3'
 import OrgLayout from '@/Layouts/OrgLayout.vue'
 import PaginationLinks from '@/Components/PaginationLinks.vue'
 
@@ -29,6 +29,10 @@ const props = defineProps({
         default: () => ({}),
     },
     allGroupOptions: {
+        type: Array,
+        default: () => [],
+    },
+    recentBatches: {
         type: Array,
         default: () => [],
     },
@@ -348,6 +352,48 @@ const fetchSuggestions = async () => {
     }
 }
 
+const page = usePage()
+const copiedBatchId = ref(false)
+const lastConfirmedBatch = ref(null)
+
+const extractedBatchId = computed(() => {
+    const flashMsg = page.props?.flash?.success || ''
+    const m = flashMsg.match(/Batch:\s*([a-f0-9\-]+)/i)
+    return m ? m[1] : null
+})
+
+const activeBatchCount = computed(() => {
+    return (props.recentBatches || []).filter(b => !b.is_undone).length
+})
+
+const copyToClipboard = (text) => {
+    if (!text) return
+    if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(text)
+    } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+    }
+    copiedBatchId.value = true
+    setTimeout(() => {
+        copiedBatchId.value = false
+    }, 2500)
+}
+
+const openUndoModalWithBatch = (batchId) => {
+    undoForm.batch_id = batchId
+    showUndoModal.value = true
+}
+
+const selectBatchForUndo = (b) => {
+    if (b.is_undone) return
+    undoForm.batch_id = b.batch_id
+}
+
 const confirmSelectedMatches = (matches) => {
     if (!matches || matches.length === 0 || confirmingBulk.value) return
     confirmingBulk.value = true
@@ -362,7 +408,16 @@ const confirmSelectedMatches = (matches) => {
         { matches: payload },
         {
             preserveScroll: true,
-            onSuccess: () => {
+            onSuccess: (pageObj) => {
+                const flashMsg = pageObj?.props?.flash?.success || ''
+                const match = flashMsg.match(/Batch:\s*([a-f0-9\-]+)/i)
+                const batchId = match ? match[1] : (pageObj?.props?.recentBatches?.[0]?.batch_id || null)
+                if (batchId) {
+                    lastConfirmedBatch.value = {
+                        batch_id: batchId,
+                        count: payload.length,
+                    }
+                }
                 showSuggestModal.value = false
             },
             onFinish: () => {
@@ -401,7 +456,16 @@ const undoForm = useForm({
 })
 
 const openUndoModal = () => {
-    undoForm.batch_id = ''
+    if (!undoForm.batch_id) {
+        if (lastConfirmedBatch.value?.batch_id) {
+            undoForm.batch_id = lastConfirmedBatch.value.batch_id
+        } else {
+            const firstActive = props.recentBatches?.find(b => !b.is_undone)
+            if (firstActive) {
+                undoForm.batch_id = firstActive.batch_id
+            }
+        }
+    }
     showUndoModal.value = true
 }
 
@@ -409,6 +473,9 @@ const submitUndo = () => {
     undoForm.post(route('org.product-links.undo-batch'), {
         onSuccess: () => {
             showUndoModal.value = false
+            if (lastConfirmedBatch.value?.batch_id === undoForm.batch_id) {
+                lastConfirmedBatch.value = null
+            }
             undoForm.reset()
         },
     })
@@ -473,18 +540,67 @@ const submitUndo = () => {
                     title="Undo a bulk auto-linking batch"
                     class="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 transition"
                 >
-                    Undo Batch
+                    <svg class="w-4 h-4 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                    <span>Undo Batch</span>
+                    <span v-if="activeBatchCount > 0" class="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                        {{ activeBatchCount }}
+                    </span>
                 </button>
             </div>
         </div>
 
         <!-- Flash Messages Banner -->
-        <div v-if="$page.props.flash?.success" class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 flex items-center justify-between text-sm shadow-xs">
-            <div class="flex items-center gap-2">
+        <div v-if="$page.props.flash?.success" class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm shadow-xs">
+            <div class="flex items-center gap-2 flex-wrap">
                 <svg class="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                 <span class="font-medium">{{ $page.props.flash.success }}</span>
+                <template v-if="extractedBatchId">
+                    <button
+                        type="button"
+                        @click="copyToClipboard(extractedBatchId)"
+                        class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-100 dark:bg-emerald-900/80 hover:bg-emerald-200 text-emerald-900 dark:text-emerald-200 transition"
+                    >
+                        <span>{{ copiedBatchId ? 'Copied UUID!' : 'Copy Batch UUID' }}</span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="openUndoModalWithBatch(extractedBatchId)"
+                        class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white transition shadow-2xs"
+                    >
+                        Undo This Batch
+                    </button>
+                </template>
             </div>
-            <button @click="$page.props.flash.success = null" class="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400">✕</button>
+            <button @click="$page.props.flash.success = null" class="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 self-end sm:self-center">✕</button>
+        </div>
+
+        <!-- Last Confirmed Batch Reminder Card -->
+        <div
+            v-if="lastConfirmedBatch && !$page.props.flash?.success"
+            class="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm shadow-xs"
+        >
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-lg">🎉</span>
+                <span>Auto-suggest bulk link confirmed ({{ lastConfirmedBatch.count }} item{{ lastConfirmedBatch.count === 1 ? '' : 's' }} linked). Batch:</span>
+                <code class="px-2 py-0.5 rounded bg-white dark:bg-slate-900 border border-emerald-300 dark:border-emerald-700 font-mono text-xs font-bold text-slate-900 dark:text-slate-100">
+                    {{ lastConfirmedBatch.batch_id }}
+                </code>
+                <button
+                    type="button"
+                    @click="copyToClipboard(lastConfirmedBatch.batch_id)"
+                    class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-100 dark:bg-emerald-900/80 hover:bg-emerald-200 text-emerald-900 dark:text-emerald-200 transition"
+                >
+                    <span>{{ copiedBatchId ? 'Copied UUID!' : 'Copy Batch UUID' }}</span>
+                </button>
+                <button
+                    type="button"
+                    @click="openUndoModalWithBatch(lastConfirmedBatch.batch_id)"
+                    class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-600 hover:bg-red-700 text-white transition shadow-2xs"
+                >
+                    Undo This Batch
+                </button>
+            </div>
+            <button @click="lastConfirmedBatch = null" class="text-emerald-600 hover:text-emerald-800 dark:text-emerald-400 self-end sm:self-center">✕</button>
         </div>
 
         <div v-if="$page.props.flash?.warning" class="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-300 flex items-center justify-between text-sm shadow-xs">
@@ -1221,27 +1337,126 @@ const submitUndo = () => {
 
         <!-- ── MODAL 6: Undo Batch ──────────────────────────────────────────────── -->
         <div v-if="showUndoModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-            <div class="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 space-y-4">
-                <div class="flex items-center justify-between">
-                    <h3 class="text-lg font-bold text-slate-900 dark:text-white">Undo Bulk Link Batch</h3>
-                    <button @click="showUndoModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">✕</button>
+            <div class="bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-4">
+                <div class="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <span>↩️</span> Undo Bulk Link Batch
+                        </h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            Revert all product links created in a specific auto-suggest bulk operation.
+                        </p>
+                    </div>
+                    <button @click="showUndoModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-lg font-bold">✕</button>
                 </div>
+
+                <!-- Recent Bulk Batches Selection -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                            Recent Bulk Batches
+                        </label>
+                        <span class="text-[11px] text-slate-400">Click a batch to select</span>
+                    </div>
+
+                    <div v-if="recentBatches && recentBatches.length > 0" class="max-h-48 overflow-y-auto space-y-1.5 pr-1 border border-slate-200 dark:border-slate-800 rounded-lg p-2 bg-slate-50 dark:bg-slate-800/40">
+                        <div
+                            v-for="b in recentBatches"
+                            :key="b.batch_id"
+                            @click="selectBatchForUndo(b)"
+                            :class="[
+                                'p-2.5 rounded-lg border transition text-xs flex items-center justify-between gap-3',
+                                b.is_undone
+                                    ? 'opacity-60 bg-slate-100 dark:bg-slate-800/20 border-slate-200 dark:border-slate-800 cursor-not-allowed'
+                                    : undoForm.batch_id === b.batch_id
+                                        ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-400 dark:border-indigo-600 shadow-2xs cursor-pointer'
+                                        : 'bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700/60 hover:border-indigo-300 dark:hover:border-indigo-700 cursor-pointer'
+                            ]"
+                        >
+                            <div class="space-y-0.5 min-w-0">
+                                <div class="font-mono text-[11px] font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                    <span class="truncate">{{ b.batch_id }}</span>
+                                    <button
+                                        type="button"
+                                        @click.stop="copyToClipboard(b.batch_id)"
+                                        class="text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 p-0.5 shrink-0"
+                                        title="Copy UUID"
+                                    >
+                                        📋
+                                    </button>
+                                </div>
+                                <div class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                    <span class="font-medium text-slate-700 dark:text-slate-300">{{ b.linked_count }} links</span>
+                                    <span>•</span>
+                                    <span>{{ b.created_at_human || 'Recent' }}</span>
+                                    <span>•</span>
+                                    <span>{{ b.user_name }}</span>
+                                </div>
+                            </div>
+                            <div class="shrink-0">
+                                <span
+                                    v-if="b.is_undone"
+                                    class="px-2 py-0.5 text-[10px] font-bold rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 uppercase tracking-wider"
+                                >
+                                    Already Undone
+                                </span>
+                                <span
+                                    v-else
+                                    :class="[
+                                        'px-2.5 py-0.5 text-[10px] font-bold rounded-full border transition uppercase tracking-wider',
+                                        undoForm.batch_id === b.batch_id
+                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-2xs'
+                                            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700 hover:bg-indigo-600 hover:text-white'
+                                    ]"
+                                >
+                                    {{ undoForm.batch_id === b.batch_id ? 'Selected' : 'Select' }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-else class="p-3 text-center text-xs text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg">
+                        No bulk linking batches recorded yet.
+                    </div>
+                </div>
+
                 <form @submit.prevent="submitUndo" class="space-y-4">
                     <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1">Batch UUID</label>
-                        <input
-                            v-model="undoForm.batch_id"
-                            type="text"
-                            placeholder="Paste the batch UUID from activity logs..."
-                            required
-                            class="w-full text-sm rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 font-mono"
-                        />
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                                Batch UUID to Revert
+                            </label>
+                            <Link :href="route('org.activity-logs')" class="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline">
+                                View in Activity Logs ↗
+                            </Link>
+                        </div>
+                        <div class="relative">
+                            <input
+                                v-model="undoForm.batch_id"
+                                type="text"
+                                placeholder="Paste or select the batch UUID..."
+                                required
+                                class="w-full text-xs font-mono rounded-lg border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-indigo-500 focus:border-indigo-500 pr-10"
+                            />
+                            <button
+                                v-if="undoForm.batch_id"
+                                type="button"
+                                @click="copyToClipboard(undoForm.batch_id)"
+                                class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-indigo-600 p-1"
+                                title="Copy"
+                            >
+                                📋
+                            </button>
+                        </div>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                            Reverting this batch will unlink only the target items linked during this batch.
+                        </p>
                     </div>
 
                     <div class="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
                         <button type="button" @click="showUndoModal = false" class="px-3.5 py-2 text-sm font-medium rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
-                        <button type="submit" :disabled="undoForm.processing || !undoForm.batch_id" class="px-4 py-2 text-sm font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700">
-                            Revert Batch Links
+                        <button type="submit" :disabled="undoForm.processing || !undoForm.batch_id" class="px-4 py-2 text-sm font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition flex items-center gap-1.5">
+                            <svg v-if="undoForm.processing" class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                            <span>{{ undoForm.processing ? 'Reverting...' : 'Revert Batch Links' }}</span>
                         </button>
                     </div>
                 </form>

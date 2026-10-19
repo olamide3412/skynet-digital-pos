@@ -677,6 +677,18 @@ const submitAddCredits = () => {
                                     <span v-if="log.details?.expires_at" class="text-slate-400"> (Expires: {{ log.details.expires_at }})</span>
                                     <span v-if="log.details?.notes" class="text-slate-400 block italic">"{{ log.details.notes }}"</span>
                                 </span>
+                                <span v-else-if="log.action === 'bulk_product_link_confirmed'">
+                                    🔗 <strong>Linked {{ log.details?.linked_count }} items across branches</strong>
+                                    <span v-if="log.details?.batch_id" class="block font-mono text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Batch UUID: <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded select-all">{{ log.details?.batch_id }}</code>
+                                    </span>
+                                </span>
+                                <span v-else-if="log.action === 'bulk_product_link_undone'">
+                                    ↩️ <strong>Reverted {{ log.details?.unlinked_count }} links</strong>
+                                    <span v-if="log.details?.batch_id" class="block font-mono text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Batch UUID: <code class="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded select-all">{{ log.details?.batch_id }}</code>
+                                    </span>
+                                </span>
                                 <span v-else-if="log.details?.branch_name">
                                     Branch: <strong>{{ log.details.branch_name }}</strong>
                                     <span v-if="log.details.from_organization_name"> (moved from {{ log.details.from_organization_name }})</span>
