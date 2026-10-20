@@ -1,10 +1,11 @@
 <?php
 
-namespace App\Modules\CommerceIntegration\Controllers\Api;
+namespace App\Modules\CommerceIntegration\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Modules\CommerceIntegration\Models\CommerceIntegration;
 use App\Modules\CommerceIntegration\Models\CommerceReservation;
+use App\Modules\CommerceIntegration\Services\CommerceWebhookDispatcher;
 use App\Modules\CommerceIntegration\Services\InsufficientStockException;
 use App\Modules\CommerceIntegration\Services\InventoryConfirmationService;
 use App\Modules\CommerceIntegration\Services\InventoryReservationService;
@@ -21,7 +22,7 @@ class ReservationApiController extends Controller
     }
 
     /**
-     * Create an atomic inventory reservation.
+     * Create an atomic inventory reservation (V1).
      */
     public function reserve(Request $request): JsonResponse
     {
@@ -66,26 +67,36 @@ class ReservationApiController extends Controller
         $validated = $validator->validated();
 
         try {
-            $reservation = $this->reservationService->reserve(
-                integration: $integration,
-                externalOrderReference: $validated['external_order_reference'],
-                items: $validated['items'],
-                ttlMinutes: $validated['ttl_minutes'] ?? null,
-                metadata: $validated['metadata'] ?? null
-            );
+            $reservation = CommerceWebhookDispatcher::withoutWebhooks(function () use ($integration, $validated) {
+                return $this->reservationService->reserve(
+                    integration: $integration,
+                    externalOrderReference: $validated['external_order_reference'],
+                    items: $validated['items'],
+                    ttlMinutes: $validated['ttl_minutes'] ?? null,
+                    metadata: $validated['metadata'] ?? null
+                );
+            });
 
             return response()->json([
                 'success' => true,
+                'status' => true,
                 'message' => 'Inventory successfully reserved.',
+                'reservation_id' => $reservation->id,
+                'reference' => $reservation->external_order_reference,
+                'external_order_reference' => $reservation->external_order_reference,
+                'expires_at' => $reservation->expires_at->toIso8601String(),
                 'data' => [
                     'reservation_id' => $reservation->id,
                     'external_order_reference' => $reservation->external_order_reference,
+                    'reference' => $reservation->external_order_reference,
                     'status' => $reservation->status,
                     'expires_at' => $reservation->expires_at->toIso8601String(),
                     'items' => $reservation->items->map(fn ($i) => [
                         'item_id' => $i->item_id,
+                        'pos_item_id' => $i->item_id,
                         'name' => $i->item?->name,
                         'quantity' => $i->quantity,
+                        'reserved_quantity' => $i->quantity,
                         'unit_price' => (float) $i->unit_price,
                     ]),
                 ],
@@ -93,6 +104,7 @@ class ReservationApiController extends Controller
         } catch (InsufficientStockException $e) {
             return response()->json([
                 'success' => false,
+                'status' => false,
                 'message' => $e->getMessage(),
                 'error_code' => 'INSUFFICIENT_STOCK',
                 'failures' => $e->getFailures(),
@@ -100,12 +112,14 @@ class ReservationApiController extends Controller
         } catch (HttpException $e) {
             return response()->json([
                 'success' => false,
+                'status' => false,
                 'message' => $e->getMessage(),
                 'error_code' => 'RESERVATION_ERROR',
             ], $e->getStatusCode());
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
+                'status' => false,
                 'message' => $e->getMessage(),
                 'error_code' => 'SERVER_ERROR',
             ], 500);
@@ -113,7 +127,7 @@ class ReservationApiController extends Controller
     }
 
     /**
-     * Confirm a reserved order and deduct inventory.
+     * Confirm a reserved order and deduct inventory (V1).
      */
     public function confirm(Request $request, ?string $externalReference = null): JsonResponse
     {
@@ -127,20 +141,25 @@ class ReservationApiController extends Controller
         if (!$ref) {
             return response()->json([
                 'success' => false,
+                'status' => false,
                 'message' => 'The external order reference is required.',
             ], 422);
         }
 
         try {
-            $reservation = $this->confirmationService->confirm(
-                integration: $integration,
-                externalOrderReference: $ref,
-                fulfillmentDetails: $request->input('fulfillment')
-            );
+            $reservation = CommerceWebhookDispatcher::withoutWebhooks(function () use ($integration, $ref, $request) {
+                return $this->confirmationService->confirm(
+                    integration: $integration,
+                    externalOrderReference: $ref,
+                    fulfillmentDetails: $request->input('fulfillment')
+                );
+            });
 
             return response()->json([
                 'success' => true,
+                'status' => true,
                 'message' => 'Order inventory successfully confirmed and deducted.',
+                'reference' => $reservation->external_order_reference,
                 'data' => [
                     'reservation_id' => $reservation->id,
                     'external_order_reference' => $reservation->external_order_reference,
@@ -148,6 +167,7 @@ class ReservationApiController extends Controller
                     'confirmed_at' => $reservation->confirmed_at?->toIso8601String(),
                     'items' => $reservation->items->map(fn ($i) => [
                         'item_id' => $i->item_id,
+                        'pos_item_id' => $i->item_id,
                         'name' => $i->item?->name,
                         'quantity_deducted' => $i->quantity,
                         'current_front_store_qty' => $i->item?->front_store_qty,
@@ -157,12 +177,14 @@ class ReservationApiController extends Controller
         } catch (HttpException $e) {
             return response()->json([
                 'success' => false,
+                'status' => false,
                 'message' => $e->getMessage(),
                 'error_code' => 'CONFIRMATION_ERROR',
             ], $e->getStatusCode());
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
+                'status' => false,
                 'message' => $e->getMessage(),
                 'error_code' => 'SERVER_ERROR',
             ], 500);
@@ -170,7 +192,7 @@ class ReservationApiController extends Controller
     }
 
     /**
-     * Release a pending reservation.
+     * Release a pending reservation (V1).
      */
     public function release(Request $request, ?string $externalReference = null): JsonResponse
     {
@@ -184,20 +206,25 @@ class ReservationApiController extends Controller
         if (!$ref) {
             return response()->json([
                 'success' => false,
+                'status' => false,
                 'message' => 'The external order reference is required.',
             ], 422);
         }
 
         try {
-            $reservation = $this->reservationService->release(
-                integration: $integration,
-                externalOrderReference: $ref,
-                reason: $request->input('reason', 'cancelled')
-            );
+            $reservation = CommerceWebhookDispatcher::withoutWebhooks(function () use ($integration, $ref, $request) {
+                return $this->reservationService->release(
+                    integration: $integration,
+                    externalOrderReference: $ref,
+                    reason: $request->input('reason', 'cancelled')
+                );
+            });
 
             return response()->json([
                 'success' => true,
+                'status' => true,
                 'message' => 'Reservation successfully released.',
+                'reference' => $reservation->external_order_reference,
                 'data' => [
                     'reservation_id' => $reservation->id,
                     'external_order_reference' => $reservation->external_order_reference,
@@ -208,12 +235,14 @@ class ReservationApiController extends Controller
         } catch (HttpException $e) {
             return response()->json([
                 'success' => false,
+                'status' => false,
                 'message' => $e->getMessage(),
                 'error_code' => 'RELEASE_ERROR',
             ], $e->getStatusCode());
         } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
+                'status' => false,
                 'message' => $e->getMessage(),
                 'error_code' => 'SERVER_ERROR',
             ], 500);
@@ -221,7 +250,7 @@ class ReservationApiController extends Controller
     }
 
     /**
-     * Check status of a reservation by external order reference.
+     * Check status of a reservation by external order reference (V1).
      */
     public function status(Request $request, string $externalReference): JsonResponse
     {
@@ -236,6 +265,7 @@ class ReservationApiController extends Controller
         if (!$reservation) {
             return response()->json([
                 'success' => false,
+                'status' => false,
                 'message' => "Reservation with reference '{$externalReference}' not found.",
                 'error_code' => 'NOT_FOUND',
             ], 404);
@@ -243,6 +273,10 @@ class ReservationApiController extends Controller
 
         return response()->json([
             'success' => true,
+            'status' => true,
+            'reference' => $reservation->external_order_reference,
+            'reservation_status' => $reservation->status,
+            'expires_at' => $reservation->expires_at?->toIso8601String(),
             'data' => [
                 'reservation_id' => $reservation->id,
                 'external_order_reference' => $reservation->external_order_reference,
@@ -253,6 +287,7 @@ class ReservationApiController extends Controller
                 'released_at' => $reservation->released_at?->toIso8601String(),
                 'items' => $reservation->items->map(fn ($i) => [
                     'item_id' => $i->item_id,
+                    'pos_item_id' => $i->item_id,
                     'name' => $i->item?->name,
                     'quantity' => $i->quantity,
                     'unit_price' => (float) $i->unit_price,

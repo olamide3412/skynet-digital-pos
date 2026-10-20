@@ -149,10 +149,17 @@ class OfflineSyncService
             throw new \InvalidArgumentException("Offline sale [{$offlineSaleId}] contains no line items.");
         }
 
-        // 2. Resolve Cashier User
+        // 2. Resolve Cashier User (handling post-move offline sync via UserBranchHistory)
         $user = null;
         if (!empty($data['cashier_id'])) {
             $user = User::where('branch_id', $branch->id)->find($data['cashier_id']);
+            if (!$user) {
+                // If user was moved to another branch after selling offline, retain attribution via branch history
+                $candidate = User::find($data['cashier_id']);
+                if ($candidate && \App\Models\UserBranchHistory::where('user_id', $candidate->id)->where('branch_id', $branch->id)->exists()) {
+                    $user = $candidate;
+                }
+            }
         }
         if (!$user) {
             $user = Auth::user() ?? User::where('branch_id', $branch->id)->first();
@@ -178,7 +185,7 @@ class OfflineSyncService
 
             $unitUsed  = $cartItem['unit_used'] ?? 'unit';
             $price     = (float) $cartItem['price'];
-            $qty       = (int) $cartItem['qty'];
+            $qty       = (int) ($cartItem['qty'] ?? $cartItem['quantity'] ?? 1);
             $baseQty   = $item->toBaseUnits($qty, $unitUsed);
             $buyPrice  = (float) $item->buy_price;
 
@@ -302,7 +309,7 @@ class OfflineSyncService
                 $item = $itemsMap->get($cartItem['item_id']);
                 if (!$item) continue;
 
-                $qty      = (int) $cartItem['qty'];
+                $qty      = (int) ($cartItem['qty'] ?? $cartItem['quantity'] ?? 1);
                 $unitUsed = $cartItem['unit_used'] ?? 'unit';
                 $price    = (float) $cartItem['price'];
                 $baseQty  = $item->toBaseUnits($qty, $unitUsed);

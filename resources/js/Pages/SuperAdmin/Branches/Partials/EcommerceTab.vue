@@ -108,6 +108,22 @@ const submitUpdateSettings = () => {
     })
 }
 
+// ── Webhook Testing ────────────────────────────────────────────────────────
+const isTestingWebhook = ref(false)
+const executeTestWebhook = () => {
+    isTestingWebhook.value = true
+    router.post(
+        route('superadmin.branches.ecommerce.test-webhook', { branch: props.branch.slug }),
+        {},
+        {
+            preserveScroll: true,
+            onFinish: () => {
+                isTestingWebhook.value = false
+            },
+        }
+    )
+}
+
 // ── Action State & Modals ──────────────────────────────────────────────────
 const isActionProcessing = ref(false)
 const showDeactivateModal = ref(false)
@@ -592,9 +608,20 @@ const executeDisconnect = () => {
                         </div>
 
                         <div v-if="commerceIntegration.webhook_url">
-                            <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                                Configured Webhook URL
-                            </label>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-semibold text-slate-600 dark:text-slate-400">
+                                    Configured Webhook URL
+                                </label>
+                                <button
+                                    type="button"
+                                    @click="executeTestWebhook"
+                                    :disabled="isTestingWebhook"
+                                    class="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                >
+                                    <span v-if="isTestingWebhook">Sending Test…</span>
+                                    <span v-else>⚡ Send Test Webhook</span>
+                                </button>
+                            </div>
                             <div class="text-xs font-mono text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-700/60 truncate">
                                 {{ commerceIntegration.webhook_url }}
                             </div>
@@ -658,6 +685,30 @@ const executeDisconnect = () => {
                                     <span class="ml-2 text-slate-800 dark:text-slate-200">/reservations/release</span>
                                 </div>
                                 <span class="text-slate-400 text-[11px] font-sans">Release cart</span>
+                            </div>
+
+                            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between">
+                                <div>
+                                    <span class="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 font-bold">POST</span>
+                                    <span class="ml-2 text-slate-800 dark:text-slate-200">/mappings/register</span>
+                                </div>
+                                <span class="text-slate-400 text-[11px] font-sans">Register deletion protection links</span>
+                            </div>
+
+                            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between">
+                                <div>
+                                    <span class="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-300 font-bold">POST</span>
+                                    <span class="ml-2 text-slate-800 dark:text-slate-200">/mappings/unregister</span>
+                                </div>
+                                <span class="text-slate-400 text-[11px] font-sans">Remove deletion protection</span>
+                            </div>
+
+                            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/50 dark:border-slate-700/50 flex items-center justify-between">
+                                <div>
+                                    <span class="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold">POST</span>
+                                    <span class="ml-2 text-slate-800 dark:text-slate-200">/mappings/reconcile</span>
+                                </div>
+                                <span class="text-slate-400 text-[11px] font-sans">Sync active mappings</span>
                             </div>
                         </div>
                     </div>

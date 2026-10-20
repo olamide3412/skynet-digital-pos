@@ -31,7 +31,8 @@ class InventoryConfirmationService
         string $externalOrderReference,
         ?array $fulfillmentDetails = null
     ): CommerceReservation {
-        return DB::transaction(function () use ($integration, $externalOrderReference, $fulfillmentDetails) {
+        return CommerceWebhookDispatcher::withoutWebhooks(function () use ($integration, $externalOrderReference, $fulfillmentDetails) {
+            return DB::transaction(function () use ($integration, $externalOrderReference, $fulfillmentDetails) {
             $reservation = CommerceReservation::where('commerce_integration_id', $integration->id)
                 ->where('external_order_reference', $externalOrderReference)
                 ->lockForUpdate()
@@ -112,6 +113,7 @@ class InventoryConfirmationService
             CommerceStockConfirmed::dispatch($reservation);
 
             return $reservation->load(['items.item', 'movements']);
+        });
         });
     }
 }

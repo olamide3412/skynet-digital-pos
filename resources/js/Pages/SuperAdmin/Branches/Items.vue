@@ -81,6 +81,10 @@ const submitImportAll = () => {
 }
 
 const removeItem = (item) => {
+    if (item.is_linked_to_ecommerce) {
+        alert(`Cannot remove "${item.item_name}". It is currently linked to an active product in your online Ecommerce store. Please unlink it from Ecommerce first.`)
+        return
+    }
     if (confirm(`Remove "${item.item_name}" from ${props.branch.name} catalog?`)) {
         router.delete(route('superadmin.branches.items.destroy', { branch: props.branch.slug, item: item.id }))
     }
@@ -186,7 +190,21 @@ const removeItem = (item) => {
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800/60">
                         <tr v-for="item in items.data" :key="item.id" class="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors">
-                            <td class="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">{{ item.item_name }}</td>
+                            <td class="px-6 py-4 font-semibold text-slate-900 dark:text-slate-100">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span>{{ item.item_name }}</span>
+                                    <span
+                                        v-if="item.is_linked_to_ecommerce"
+                                        class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                                        title="Linked to active Online Ecommerce Store product. Deletion is locked."
+                                    >
+                                        <svg class="w-3 h-3 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                        </svg>
+                                        Online Store
+                                    </span>
+                                </div>
+                            </td>
                             <td class="px-6 py-4 text-xs">
                                 <span v-if="item.category" class="px-2 py-0.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 rounded border border-indigo-200 dark:border-indigo-500/20 font-medium">
                                     {{ item.category.name }}
@@ -200,7 +218,17 @@ const removeItem = (item) => {
                             <td class="px-6 py-4 font-mono text-xs text-slate-700 dark:text-slate-200">{{ item.back_store_qty }}</td>
                             <td class="px-6 py-4 font-mono font-bold text-slate-900 dark:text-slate-100 text-xs">{{ item.total_qty }}</td>
                             <td class="px-6 py-4 text-right">
-                                <button @click="removeItem(item)" class="text-xs font-semibold text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition px-2 py-1 cursor-pointer">
+                                <span
+                                    v-if="item.is_linked_to_ecommerce"
+                                    class="text-xs font-semibold text-amber-500/80 dark:text-amber-400/80 inline-flex items-center gap-1 cursor-not-allowed px-2 py-1"
+                                    title="Cannot remove: Linked to active Online Ecommerce product"
+                                >
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                    </svg>
+                                    Locked
+                                </span>
+                                <button v-else @click="removeItem(item)" class="text-xs font-semibold text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 transition px-2 py-1 cursor-pointer">
                                     Remove
                                 </button>
                             </td>

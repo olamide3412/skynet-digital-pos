@@ -20,7 +20,7 @@ class Item extends Model
         'hide_from_public_catalog',
     ];
 
-    protected $appends = ['image_url', 'total_qty', 'needs_reorder', 'reorder_deficit_base_units'];
+    protected $appends = ['image_url', 'total_qty', 'needs_reorder', 'reorder_deficit_base_units', 'is_linked_to_ecommerce'];
 
     protected function casts(): array
     {
@@ -52,6 +52,20 @@ class Item extends Model
         static::creating($recalculate);
         static::updating($recalculate);
 
+        static::saved(function (Item $item) {
+            if (\App\Modules\CommerceIntegration\Services\CommerceWebhookDispatcher::isSuppressed()) {
+                return;
+            }
+
+            if ($item->wasChanged(['front_store_qty', 'price', 'buy_price', 'item_name', 'barcode_number'])) {
+                try {
+                    \App\Modules\CommerceIntegration\Services\CommerceWebhookDispatcher::dispatchItemUpdated($item);
+                } catch (\Throwable $e) {
+                    // Fail silently to never interrupt POS transactions
+                }
+            }
+        });
+
         static::deleting(function (Item $item) {
             // Guard 1: Active reservations
             $hasActiveReservation = \Illuminate\Support\Facades\DB::table('commerce_reservation_items')
@@ -65,13 +79,9 @@ class Item extends Model
                 throw new \RuntimeException("Cannot delete item '{$item->name}' because it has active e-commerce reservations.");
             }
 
-            // Guard 2: Active catalog mappings
-            $hasMapping = \Illuminate\Support\Facades\DB::table('commerce_item_mappings')
-                ->where('item_id', $item->id)
-                ->exists();
-
-            if ($hasMapping) {
-                throw new \RuntimeException("Cannot delete item '{$item->name}' because it is mapped to an external e-commerce catalog. Please remove the e-commerce mapping first.");
+            // Guard 2: Active online store reverse links or catalog mappings
+            if ($item->isLinkedToEcommerce()) {
+                throw new \RuntimeException("Cannot delete item '{$item->name}'. It is currently linked to an active product in your online Ecommerce store. Please unlink it from Ecommerce first.");
             }
         });
     }
@@ -270,6 +280,35 @@ class Item extends Model
     public function barcodePrintLogs(): HasMany
     {
         return $this->hasMany(BarcodePrintLog::class);
+    }
+
+    public function ecommerceLinks(): HasMany
+    {
+        return $this->hasMany(EcommerceProductLink::class, 'pos_item_id');
+    }
+
+    public function isLinkedToEcommerce(): bool
+    {
+        if ($this->relationLoaded('ecommerceLinks')) {
+            $hasActiveLink = $this->ecommerceLinks->where('is_active', true)->isNotEmpty();
+            if ($hasActiveLink) {
+                return true;
+            }
+        } else {
+            if ($this->ecommerceLinks()->where('is_active', true)->exists()) {
+                return true;
+            }
+        }
+
+        return \Illuminate\Support\Facades\DB::table('commerce_item_mappings')
+            ->where('item_id', $this->id)
+            ->where('is_active', true)
+            ->exists();
+    }
+
+    public function getIsLinkedToEcommerceAttribute(): bool
+    {
+        return $this->isLinkedToEcommerce();
     }
 
     public function batches(): HasMany

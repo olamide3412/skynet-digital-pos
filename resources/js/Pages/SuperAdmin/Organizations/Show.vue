@@ -104,6 +104,7 @@ const editForm = useForm({
     address: props.organization.address || '',
     status: props.organization.status || 'active',
     can_create_branches: props.organization.can_create_branches ?? true,
+    can_manage_staff: props.organization.can_manage_staff ?? true,
     notes: props.organization.notes || '',
 })
 
@@ -117,6 +118,12 @@ const submitEdit = () => {
 
 const toggleBranchCreation = () => {
     router.post(route('superadmin.organizations.toggle-branch-creation', props.organization.id), {}, {
+        preserveScroll: true,
+    })
+}
+
+const toggleStaffManagement = () => {
+    router.post(route('superadmin.organizations.toggle-staff-management', props.organization.id), {}, {
         preserveScroll: true,
     })
 }
@@ -354,6 +361,13 @@ const submitAddCredits = () => {
                             >
                                 <span class="w-1.5 h-1.5 rounded-full" :class="organization.can_create_branches !== false ? 'bg-indigo-600' : 'bg-rose-600'"></span>
                                 {{ organization.can_create_branches !== false ? 'Branch Creation: Allowed' : 'Branch Creation: Disabled' }}
+                            </span>
+                            <span
+                                :class="organization.can_manage_staff !== false ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:border-purple-500/30' : 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/30'"
+                                class="px-2.5 py-0.5 rounded-full text-xs font-bold border flex items-center gap-1"
+                            >
+                                <span class="w-1.5 h-1.5 rounded-full" :class="organization.can_manage_staff !== false ? 'bg-purple-600' : 'bg-amber-600'"></span>
+                                {{ organization.can_manage_staff !== false ? 'Staff Delegation: Enabled' : 'Staff Delegation: Read-Only' }}
                             </span>
                         </div>
                         <p class="text-xs text-slate-400 font-mono mt-0.5">
@@ -1806,6 +1820,23 @@ const submitAddCredits = () => {
                                 v-model="editForm.can_create_branches"
                                 type="checkbox"
                                 class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer"
+                            />
+                        </label>
+                    </div>
+
+                    <!-- Staff Management Delegation Control (Phase 6) -->
+                    <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                        <label class="flex items-center justify-between cursor-pointer">
+                            <div class="space-y-0.5 pr-4">
+                                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Delegate Staff Management to Org Admin</span>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                    When checked, Org Admins can move staff across branches and manage user accounts. When unchecked, staff directory is view-only for the organization.
+                                </p>
+                            </div>
+                            <input
+                                v-model="editForm.can_manage_staff"
+                                type="checkbox"
+                                class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 dark:border-slate-600 cursor-pointer"
                             />
                         </label>
                     </div>

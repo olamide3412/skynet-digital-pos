@@ -176,4 +176,43 @@ class CommerceIntegrationController extends Controller
 
         return back()->with('success', 'Ecommerce integration disconnected successfully.');
     }
+
+    /**
+     * Test the configured webhook notification URL.
+     */
+    public function testWebhook(Request $request, Branch $branch): RedirectResponse
+    {
+        $integration = CommerceIntegration::where('branch_id', $branch->id)->firstOrFail();
+
+        if (empty($integration->webhook_url)) {
+            return back()->with('error', 'No webhook notification URL has been configured yet.');
+        }
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(5)
+                ->withHeaders([
+                    'Content-Type'   => 'application/json',
+                    'Accept'         => 'application/json',
+                    'User-Agent'     => 'SkynetPOS-Webhook/1.0',
+                    'X-Skynet-Event' => 'test.ping',
+                    'X-Branch-Id'    => (string) $branch->id,
+                ])
+                ->post($integration->webhook_url, [
+                    'event'       => 'test.ping',
+                    'timestamp'   => now()->toIso8601String(),
+                    'branch_id'   => $branch->id,
+                    'branch_name' => $branch->name,
+                    'message'     => 'Webhook test notification from Skynet POS.',
+                ]);
+
+            if ($response->successful()) {
+                return back()->with('success', "Webhook test successful! Your ecommerce server responded with HTTP {$response->status()}.");
+            }
+
+            return back()->with('error', "Webhook test failed: Ecommerce server returned HTTP {$response->status()} ({$response->reason()}).");
+        } catch (\Throwable $e) {
+            return back()->with('error', "Webhook test connection error: {$e->getMessage()}");
+        }
+    }
 }
+

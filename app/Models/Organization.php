@@ -19,6 +19,7 @@ class Organization extends Model
         'address',
         'status',
         'can_create_branches',
+        'can_manage_staff',
         'notes',
     ];
 
@@ -26,9 +27,15 @@ class Organization extends Model
     {
         return [
             'can_create_branches' => 'boolean',
-            'created_at' => 'datetime',
-            'updated_at' => 'datetime',
+            'can_manage_staff'    => 'boolean',
+            'created_at'          => 'datetime',
+            'updated_at'          => 'datetime',
         ];
+    }
+
+    public function canManageStaff(): bool
+    {
+        return (bool) ($this->can_manage_staff ?? true);
     }
 
     // ── Relationships ──────────────────────────────────────────────────────────

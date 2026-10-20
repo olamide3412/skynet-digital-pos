@@ -24,7 +24,7 @@ class ItemController extends Controller
         $branch->ensureDefaultRoles();
 
         $itemsQuery = Item::where('branch_id', $branch->id)
-            ->with(['category:id,name', 'groupAddress:id,name', 'units'])
+            ->with(['category:id,name', 'groupAddress:id,name', 'units', 'ecommerceLinks:id,pos_item_id,is_active'])
             ->when($request->search, function ($q) use ($request) {
                 $q->where(function ($sq) use ($request) {
                     $sq->where('item_name', 'like', '%' . $request->search . '%')
@@ -387,6 +387,18 @@ class ItemController extends Controller
         }
         $this->authorizeBranch($item, $branch);
 
+        // Prevent accidental deletion if mapped to active online product
+        if ($item->isLinkedToEcommerce()) {
+            $msg = "Cannot delete item '{$item->name}'. It is currently linked to an active product in your online Ecommerce store. Please unlink it from Ecommerce first.";
+            if (request()->wantsJson() || request()->ajax()) {
+                return response()->json([
+                    'status'  => false,
+                    'message' => $msg,
+                ], 422);
+            }
+            return back()->with('error', $msg);
+        }
+
         if ($item->image_path) {
             Storage::disk('public')->delete($item->image_path);
         }
@@ -479,12 +491,28 @@ class ItemController extends Controller
 
         switch ($data['action']) {
             case 'delete':
+                $blockedItems = [];
+                $deletedCount = 0;
                 foreach ($items as $item) {
+                    if ($item->isLinkedToEcommerce()) {
+                        $blockedItems[] = $item->name;
+                        continue;
+                    }
                     if ($item->image_path) {
                         Storage::disk('public')->delete($item->image_path);
                     }
                     $item->delete();
+                    $deletedCount++;
                 }
+
+                if (!empty($blockedItems)) {
+                    $blockedCount = count($blockedItems);
+                    if ($deletedCount > 0) {
+                        return back()->with('warning', "Deleted {$deletedCount} item(s). {$blockedCount} item(s) were protected from deletion because they are linked to active products in your online Ecommerce store.");
+                    }
+                    return back()->with('error', "Cannot delete the selected item(s). They are currently linked to active products in your online Ecommerce store. Please unlink them from Ecommerce first.");
+                }
+
                 \App\Services\ActivityLogger::item("Bulk deleted {$count} items", $branch->id);
                 return back()->with('success', "Successfully deleted {$count} item(s).");
 

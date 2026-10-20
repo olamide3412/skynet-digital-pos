@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\CommerceIntegration\Controllers\Api;
+namespace App\Modules\CommerceIntegration\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Modules\CommerceIntegration\Models\CommerceIntegration;
@@ -18,7 +18,7 @@ class MappingApiController extends Controller
     }
 
     /**
-     * List current product mappings for this integration.
+     * List current product mappings for this integration (V1).
      */
     public function index(Request $request): JsonResponse
     {
@@ -42,7 +42,7 @@ class MappingApiController extends Controller
     }
 
     /**
-     * Create or update a single product mapping.
+     * Create or update a single product mapping (V1).
      */
     public function upsert(Request $request): JsonResponse
     {
@@ -86,7 +86,7 @@ class MappingApiController extends Controller
     }
 
     /**
-     * Batch upsert multiple mappings.
+     * Batch upsert multiple mappings (V1).
      */
     public function batchUpsert(Request $request): JsonResponse
     {
@@ -99,19 +99,19 @@ class MappingApiController extends Controller
         foreach ($rawMappings as $m) {
             $normalized[] = [
                 'item_id' => $m['item_id'] ?? $m['pos_item_id'] ?? null,
-                'external_product_id' => (string) ($m['external_product_id'] ?? $m['product_id'] ?? ''),
-                'external_variant_id' => isset($m['external_variant_id']) ? (string) $m['external_variant_id'] : (isset($m['variant_id']) ? (string) $m['variant_id'] : null),
-                'external_sku' => $m['external_sku'] ?? $m['sku'] ?? null,
+                'external_product_id' => (string) ($m['external_product_id'] ?? $m['ecommerce_product_id'] ?? $m['product_id'] ?? ''),
+                'external_variant_id' => isset($m['external_variant_id']) ? (string) $m['external_variant_id'] : null,
+                'external_sku' => isset($m['external_sku']) ? (string) $m['external_sku'] : null,
                 'metadata' => $m['metadata'] ?? null,
             ];
         }
 
         $validator = validator(['mappings' => $normalized], [
-            'mappings' => 'required|array|min:1|max:500',
+            'mappings' => 'required|array|min:1',
             'mappings.*.item_id' => 'required|integer',
-            'mappings.*.external_product_id' => 'required|string',
-            'mappings.*.external_variant_id' => 'nullable|string',
-            'mappings.*.external_sku' => 'nullable|string',
+            'mappings.*.external_product_id' => 'required|string|max:191',
+            'mappings.*.external_variant_id' => 'nullable|string|max:191',
+            'mappings.*.external_sku' => 'nullable|string|max:191',
             'mappings.*.metadata' => 'nullable|array',
         ]);
 
@@ -123,43 +123,32 @@ class MappingApiController extends Controller
             ], 422);
         }
 
-        $result = $this->mappingService->batchUpsertMappings($integration, $validator->validated()['mappings']);
+        try {
+            $results = $this->mappingService->batchUpsertMappings(
+                integration: $integration,
+                mappings: $validator->validated()['mappings']
+            );
 
-        return response()->json([
-            'success' => true,
-            'message' => "Successfully synced {$result['synced']} mappings.",
-            'data' => $result,
-        ]);
-    }
-
-    /**
-     * Batch delete/unregister mappings.
-     */
-    public function batchUnregister(Request $request): JsonResponse
-    {
-        /** @var CommerceIntegration $integration */
-        $integration = $request->attributes->get('commerce_integration');
-
-        $itemIds = $request->input('pos_item_ids', $request->input('item_ids', []));
-
-        $count = 0;
-        foreach ($itemIds as $id) {
-            try {
-                $this->mappingService->deleteMapping($integration, (int) $id);
-                $count++;
-            } catch (\Throwable) {
-                // Skip if not found
-            }
+            return response()->json([
+                'success' => true,
+                'message' => "Successfully processed " . count($results) . " mappings.",
+                'data' => $results,
+            ]);
+        } catch (HttpException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], $e->getStatusCode());
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
         }
-
-        return response()->json([
-            'success' => true,
-            'message' => "Successfully unregistered {$count} mappings.",
-        ]);
     }
 
     /**
-     * Delete an existing item mapping.
+     * Remove / deactivate a mapping (V1).
      */
     public function destroy(Request $request, int $itemId): JsonResponse
     {
@@ -167,17 +156,22 @@ class MappingApiController extends Controller
         $integration = $request->attributes->get('commerce_integration');
 
         try {
-            $this->mappingService->deleteMapping($integration, $itemId);
+            $this->mappingService->deactivateMapping($integration, $itemId);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Mapping removed successfully.',
+                'message' => "Mapping for item ID {$itemId} deactivated successfully.",
             ]);
         } catch (HttpException $e) {
             return response()->json([
                 'success' => false,
                 'message' => $e->getMessage(),
             ], $e->getStatusCode());
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ], 500);
         }
     }
 }

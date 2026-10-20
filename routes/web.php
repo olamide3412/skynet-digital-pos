@@ -183,6 +183,9 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             // Organization Branch Creation Toggle
             Route::post('/{organization}/toggle-branch-creation', [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'toggleBranchCreation'])->name('toggle-branch-creation');
 
+            // Organization Staff Management Toggle (Phase 6 Delegation Toggle)
+            Route::post('/{organization}/toggle-staff-management', [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'toggleStaffManagement'])->name('toggle-staff-management');
+
             // Organization AI Credit Top-up Management
             Route::post('/{organization}/ai-credits/topup', [\App\Http\Controllers\SuperAdmin\OrganizationController::class, 'addAiCredits'])->name('ai-credits.topup');
 
@@ -230,6 +233,7 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             Route::put('/settings',              [\App\Http\Controllers\SuperAdmin\CommerceIntegrationController::class, 'updateSettings'])->name('settings.update');
             Route::post('/regenerate-token',     [\App\Http\Controllers\SuperAdmin\CommerceIntegrationController::class, 'regenerateToken'])->name('regenerate-token');
             Route::post('/toggle-status',        [\App\Http\Controllers\SuperAdmin\CommerceIntegrationController::class, 'toggleStatus'])->name('toggle-status');
+            Route::post('/test-webhook',         [\App\Http\Controllers\SuperAdmin\CommerceIntegrationController::class, 'testWebhook'])->name('test-webhook');
             Route::delete('/',                   [\App\Http\Controllers\SuperAdmin\CommerceIntegrationController::class, 'destroy'])->name('destroy');
         });
 
@@ -363,6 +367,16 @@ Route::prefix('org')->name('org.')->group(function () {
         Route::get('/branches',  [\App\Http\Controllers\Org\OrgDashboardController::class, 'branches'])->name('branches');
         Route::post('/branches', [\App\Http\Controllers\Org\OrgDashboardController::class, 'storeBranch'])->name('branches.store');
 
+        // Organization Staff & User Management (Multi-Branch Staff Transfers & Status)
+        Route::prefix('users')->name('users.')->group(function () {
+            Route::get('/',                     [\App\Http\Controllers\Org\OrgUserController::class, 'index'])->name('index');
+            Route::get('/{user}',               [\App\Http\Controllers\Org\OrgUserController::class, 'show'])->name('show');
+            Route::get('/{user}/precheck-move', [\App\Http\Controllers\Org\OrgUserController::class, 'precheckMove'])->name('precheck-move');
+            Route::post('/{user}/move',         [\App\Http\Controllers\Org\OrgUserController::class, 'move'])->name('move');
+            Route::post('/{user}/disable',      [\App\Http\Controllers\Org\OrgUserController::class, 'disable'])->name('disable');
+            Route::post('/{user}/enable',       [\App\Http\Controllers\Org\OrgUserController::class, 'enable'])->name('enable');
+        });
+
         // Organization Product Links (Inter-Branch Product Linking & Catalog Management)
         Route::prefix('product-links')->name('product-links.')->group(function () {
             Route::get('/',                   [\App\Http\Controllers\Org\OrgProductLinkController::class, 'index'])->name('index');
@@ -392,6 +406,7 @@ Route::prefix('org')->name('org.')->group(function () {
         // Organization Ecommerce Activity (Multi-Branch Aggregated Visibility & Corrective Actions)
         Route::prefix('ecommerce-activity')->name('ecommerce-activity.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Org\OrgEcommerceActivityController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\Org\OrgEcommerceActivityController::class, 'export'])->name('export');
             Route::post('/reservations/{reservation}/release', [\App\Http\Controllers\Org\OrgEcommerceActivityController::class, 'releaseReservation'])->name('reservations.release');
             Route::post('/mappings/{mapping}/deactivate', [\App\Http\Controllers\Org\OrgEcommerceActivityController::class, 'deactivateMapping'])->name('mappings.deactivate');
         });
@@ -819,6 +834,8 @@ Route::prefix('{branch}')
         Route::prefix('ecommerce-activity')->name('ecommerce-activity.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Pos\EcommerceActivityController::class, 'index'])
                 ->name('index');
+            Route::get('/export', [\App\Http\Controllers\Pos\EcommerceActivityController::class, 'export'])
+                ->name('export');
             Route::post('/reservations/{reservation}/release', [\App\Http\Controllers\Pos\EcommerceActivityController::class, 'releaseReservation'])
                 ->name('reservations.release');
             Route::post('/mappings/{mapping}/deactivate', [\App\Http\Controllers\Pos\EcommerceActivityController::class, 'deactivateMapping'])

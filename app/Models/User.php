@@ -16,7 +16,8 @@ class User extends Authenticatable
 
     protected $fillable = [
         'name', 'full_name', 'username', 'email', 'password',
-        'is_active', 'is_super_admin', 'branch_id', 'organization_id', 'staff_id',
+        'is_active', 'disabled_at', 'disabled_by', 'disabled_reason',
+        'is_super_admin', 'branch_id', 'organization_id', 'staff_id',
     ];
 
     protected $hidden = [
@@ -30,6 +31,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password'          => 'hashed',
             'is_active'         => 'boolean',
+            'disabled_at'       => 'datetime',
             'is_super_admin'    => 'boolean',
         ];
     }
@@ -43,6 +45,16 @@ class User extends Authenticatable
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function branchHistories(): HasMany
+    {
+        return $this->hasMany(UserBranchHistory::class)->orderBy('started_at', 'desc');
+    }
+
+    public function disabledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'disabled_by');
     }
 
     public function staff(): BelongsTo

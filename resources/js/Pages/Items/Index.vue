@@ -198,7 +198,17 @@ function duplicateItem(item) {
 }
 
 // ── Single Item Delete ────────────────────────────────────────────────────────
+const selectedLinkedItemsCount = computed(() => {
+    const data = props.items?.data || []
+    return data.filter(i => selectedIds.value.includes(i.id) && i.is_linked_to_ecommerce).length
+})
+
 function destroy(id) {
+    const item = (props.items?.data || []).find(i => i.id === id)
+    if (item?.is_linked_to_ecommerce) {
+        alert(`Cannot delete item "${item.item_name}". It is currently linked to an active product in your online Ecommerce store. Please unlink it from Ecommerce first.`)
+        return
+    }
     if (confirm('Delete this item?')) {
         router.delete(route('pos.items.destroy', id), {
             onSuccess: () => {
@@ -648,7 +658,19 @@ function expiryClass(date) {
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
                                         </div>
                                         <div>
-                                            <span class="font-bold block">{{ item.item_name }}</span>
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <span class="font-bold">{{ item.item_name }}</span>
+                                                <span
+                                                    v-if="item.is_linked_to_ecommerce"
+                                                    class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                                                    title="Linked to active Online Ecommerce Store product. Deletion is locked."
+                                                >
+                                                    <svg class="w-3 h-3 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                                    </svg>
+                                                    Online Store
+                                                </span>
+                                            </div>
                                             <span v-if="item.unit_label" class="text-[10px] text-slate-400">{{ item.unit_label }}</span>
                                         </div>
                                     </div>
@@ -731,8 +753,18 @@ function expiryClass(date) {
                                             Edit
                                         </Link>
 
-                                        <!-- Delete -->
+                                        <!-- Delete or Padlocked -->
+                                        <span
+                                            v-if="item.is_linked_to_ecommerce"
+                                            class="p-1.5 text-amber-500/80 dark:text-amber-400/80 cursor-not-allowed inline-flex items-center"
+                                            title="Cannot delete: Linked to active Online Ecommerce product"
+                                        >
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                                            </svg>
+                                        </span>
                                         <button
+                                            v-else
                                             type="button"
                                             @click="destroy(item.id)"
                                             class="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition cursor-pointer"
@@ -897,7 +929,12 @@ function expiryClass(date) {
                     </div>
                     <div>
                         <h3 class="font-bold text-base text-slate-900 dark:text-white">Delete {{ selectedIds.length }} Selected Items?</h3>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">This action cannot be undone. All selected items will be permanently removed from this branch catalog.</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">This action cannot be undone. Selected unlinked items will be permanently removed from this branch catalog.</p>
+                        
+                        <div v-if="selectedLinkedItemsCount > 0" class="mt-3 p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl text-xs text-amber-800 dark:text-amber-300 text-left flex items-start gap-2">
+                            <span class="text-base">🔒</span>
+                            <span><strong>{{ selectedLinkedItemsCount }} item(s)</strong> are linked to the active online store and will be skipped to protect your ecommerce store from drift.</span>
+                        </div>
                     </div>
                     <div class="flex gap-2 pt-2">
                         <button type="button" @click="showBulkDeleteModal = false" class="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-semibold hover:bg-slate-200 transition cursor-pointer">Cancel</button>

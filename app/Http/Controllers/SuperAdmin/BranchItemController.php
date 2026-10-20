@@ -18,7 +18,7 @@ class BranchItemController extends Controller
     {
         // Branch items
         $branchItems = Item::where('branch_id', $branch->id)
-            ->with('category')
+            ->with(['category', 'ecommerceLinks:id,pos_item_id,is_active'])
             ->when($request->search, function ($q) use ($request) {
                 $q->where(function ($sq) use ($request) {
                     $sq->where('item_name', 'like', '%' . $request->search . '%')
@@ -189,6 +189,12 @@ class BranchItemController extends Controller
     {
         if ($item->branch_id !== $branch->id) {
             abort(403, 'Item does not belong to this branch.');
+        }
+
+        if ($item->isLinkedToEcommerce()) {
+            return redirect()
+                ->route('superadmin.branches.items.index', $branch->slug)
+                ->with('error', "Cannot delete item '{$item->name}'. It is currently linked to an active product in your online Ecommerce store. Please unlink it from Ecommerce first.");
         }
 
         try {

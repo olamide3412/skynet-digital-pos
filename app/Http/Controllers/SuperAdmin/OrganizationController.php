@@ -71,11 +71,13 @@ class OrganizationController extends Controller
             'contact_phone'       => 'nullable|string|max:50',
             'address'             => 'nullable|string|max:500',
             'can_create_branches' => 'nullable|boolean',
+            'can_manage_staff'    => 'nullable|boolean',
             'notes'               => 'nullable|string|max:2000',
         ]);
 
         $data['status'] = 'active';
         $data['can_create_branches'] = $request->has('can_create_branches') ? $request->boolean('can_create_branches') : true;
+        $data['can_manage_staff']    = $request->has('can_manage_staff') ? $request->boolean('can_manage_staff') : true;
 
         $organization = DB::transaction(function () use ($data) {
             $org = Organization::create($data);
@@ -311,6 +313,7 @@ class OrganizationController extends Controller
             'address'             => 'nullable|string|max:500',
             'status'              => 'required|in:active,suspended',
             'can_create_branches' => 'nullable|boolean',
+            'can_manage_staff'    => 'nullable|boolean',
             'notes'               => 'nullable|string|max:2000',
         ]);
 
@@ -318,8 +321,13 @@ class OrganizationController extends Controller
             $data['can_create_branches'] = $request->boolean('can_create_branches');
         }
 
+        if ($request->has('can_manage_staff')) {
+            $data['can_manage_staff'] = $request->boolean('can_manage_staff');
+        }
+
         $oldStatus = $organization->status;
         $oldCanCreateBranches = $organization->can_create_branches;
+        $oldCanManageStaff = $organization->can_manage_staff;
         $organization->update($data);
 
         OrganizationActivityLog::create([
@@ -333,6 +341,8 @@ class OrganizationController extends Controller
                 'new_status'                  => $organization->status,
                 'can_create_branches_changed' => isset($data['can_create_branches']) && $oldCanCreateBranches !== $organization->can_create_branches,
                 'can_create_branches'         => $organization->can_create_branches,
+                'can_manage_staff_changed'    => isset($data['can_manage_staff']) && $oldCanManageStaff !== $organization->can_manage_staff,
+                'can_manage_staff'            => $organization->can_manage_staff,
             ],
             'created_at'      => now(),
         ]);
@@ -371,6 +381,34 @@ class OrganizationController extends Controller
         );
 
         return back()->with('success', "Branch creation has been {$statusText} for {$organization->name}.");
+    }
+
+    /**
+     * Toggle whether this organization's admins can manage staff accounts (Phase 6 Delegation Toggle).
+     */
+    public function toggleStaffManagement(Organization $organization)
+    {
+        $organization->can_manage_staff = !$organization->can_manage_staff;
+        $organization->save();
+
+        $statusText = $organization->can_manage_staff ? 'enabled' : 'disabled';
+
+        OrganizationActivityLog::create([
+            'organization_id' => $organization->id,
+            'actor_user_id'   => Auth::id(),
+            'action'          => "staff_management_{$statusText}",
+            'details'         => [
+                'can_manage_staff' => $organization->can_manage_staff,
+            ],
+            'created_at'      => now(),
+        ]);
+
+        ActivityLogger::log(
+            'setting',
+            "Platform Super Admin {$statusText} staff management delegation for organization '{$organization->name}'"
+        );
+
+        return back()->with('success', "Staff management delegation has been {$statusText} for {$organization->name}.");
     }
 
     /**

@@ -1,14 +1,23 @@
 <?php
 
-use App\Modules\CommerceIntegration\Controllers\Api\CatalogApiController;
-use App\Modules\CommerceIntegration\Controllers\Api\MappingApiController;
-use App\Modules\CommerceIntegration\Controllers\Api\ReservationApiController;
+use App\Modules\CommerceIntegration\Controllers\Api\V1\CatalogApiController;
+use App\Modules\CommerceIntegration\Controllers\Api\V1\EcommerceMappingController;
+use App\Modules\CommerceIntegration\Controllers\Api\V1\MappingApiController;
+use App\Modules\CommerceIntegration\Controllers\Api\V1\ReservationApiController;
 use App\Modules\CommerceIntegration\Middleware\CommerceApiAuthenticate;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware([CommerceApiAuthenticate::class])
     ->group(function () {
-        foreach (['api/commerce/v1', 'api/pos-integration'] as $prefix) {
+        // Supported API prefixes: Canonical V1 versioned only (no backward compatibility)
+        $prefixes = [
+            'api/v1/pos-integration',
+            'api/pos-integration/v1',
+            'api/v1/commerce',
+            'api/commerce/v1',
+        ];
+
+        foreach ($prefixes as $prefix) {
             Route::prefix($prefix)->group(function () {
                 // Connection Verification endpoint
                 Route::get('/ping', [CatalogApiController::class, 'ping']);
@@ -33,10 +42,19 @@ Route::middleware([CommerceApiAuthenticate::class])
                 Route::get('/mappings', [MappingApiController::class, 'index']);
                 Route::post('/mappings', [MappingApiController::class, 'upsert']);
                 Route::post('/mappings/batch', [MappingApiController::class, 'batchUpsert']);
-                Route::post('/mappings/register', [MappingApiController::class, 'batchUpsert']);
-                Route::post('/mappings/reconcile', [MappingApiController::class, 'batchUpsert']);
-                Route::post('/mappings/unregister', [MappingApiController::class, 'batchUnregister']);
+                Route::post('/mappings/register', [EcommerceMappingController::class, 'register']);
+                Route::post('/mappings/reconcile', [EcommerceMappingController::class, 'reconcile']);
+                Route::post('/mappings/unregister', [EcommerceMappingController::class, 'unregister']);
                 Route::delete('/mappings/{itemId}', [MappingApiController::class, 'destroy'])->whereNumber('itemId');
+            });
+        }
+
+        // Direct /v1/mappings/* and /api/v1/mappings/* endpoints
+        foreach (['v1/mappings', 'api/v1/mappings'] as $mappingPrefix) {
+            Route::prefix($mappingPrefix)->group(function () {
+                Route::post('/register', [EcommerceMappingController::class, 'register']);
+                Route::post('/unregister', [EcommerceMappingController::class, 'unregister']);
+                Route::post('/reconcile', [EcommerceMappingController::class, 'reconcile']);
             });
         }
     });
