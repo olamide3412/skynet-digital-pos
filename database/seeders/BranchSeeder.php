@@ -22,7 +22,7 @@ class BranchSeeder extends Seeder
 
         // ── Ensure Default Organization Exists ───────────────────────────────
         $org = Organization::firstOrCreate(
-            ['name' => 'SkyNet Digital Technologies'],
+            ['name' => 'Demo Digital Technologies'],
             [
                 'status' => 'active',
             ]
@@ -33,24 +33,24 @@ class BranchSeeder extends Seeder
             Subscription::create([
                 'organization_id' => $org->id,
                 'pricing_plan_id' => $enterprisePlan->id,
-                'status'          => 'active',
-                'started_at'      => Carbon::now()->subMonths(1)->toDateString(),
-                'renewal_date'    => Carbon::now()->addYears(2)->toDateString(),
+                'status' => 'active',
+                'started_at' => Carbon::now()->subMonths(1)->toDateString(),
+                'renewal_date' => Carbon::now()->addYears(2)->toDateString(),
             ]);
         }
 
         // ── Seed Org Admin ────────────────────────────────────────────────────
         Role::firstOrCreate(['name' => 'organization_admin', 'guard_name' => 'web']);
         $orgAdmin = User::updateOrCreate(
-            ['email' => 'orgadmin@skynetpos.com'],
+            ['email' => 'orgadmin@pos.com'],
             [
-                'name'            => 'Org Admin',
-                'full_name'       => 'SkyNet Organization Admin',
-                'username'        => 'orgadmin',
-                'email'           => 'orgadmin@skynetpos.com',
-                'password'        => Hash::make('admin123'),
-                'is_active'       => true,
-                'is_super_admin'  => false,
+                'name' => 'Org Admin',
+                'full_name' => 'Demo Organization Admin',
+                'username' => 'orgadmin',
+                'email' => 'orgadmin@pos.com',
+                'password' => Hash::make('admin123'),
+                'is_active' => true,
+                'is_super_admin' => false,
                 'organization_id' => $org->id,
             ]
         );
@@ -60,25 +60,25 @@ class BranchSeeder extends Seeder
         // ── Branches to seed ─────────────────────────────────────────────────
         $branchesData = [
             [
-                'slug'    => 'skynet-digital-enterprise',
-                'name'    => 'SkyNet Digital Enterprise',
+                'slug' => 'demo-digital-enterprise',
+                'name' => 'Demo Digital Enterprise',
                 'address' => 'Plot 4 Victoria Island, Lagos',
-                'phone'   => '+2348000000000',
-                'email'   => 'enterprise@skynetpos.com',
+                'phone' => '+2348000000000',
+                'email' => 'enterprise@skynetpos.com',
             ],
             [
-                'slug'    => 'felix-enterprise',
-                'name'    => 'Felix Enterprise',
+                'slug' => 'felix-enterprise',
+                'name' => 'Felix Enterprise',
                 'address' => '24 Broad Street, Lagos',
-                'phone'   => '+2348023456789',
-                'email'   => 'felix@gmail.com',
+                'phone' => '+2348023456789',
+                'email' => 'felix@gmail.com',
             ],
             [
-                'slug'    => 'hub-enterprise',
-                'name'    => 'HUB Enterprise',
+                'slug' => 'hub-enterprise',
+                'name' => 'HUB Enterprise',
                 'address' => '12 Commercial Road, Asaba, Delta State',
-                'phone'   => '+2348012345678',
-                'email'   => 'hub@gmail.com',
+                'phone' => '+2348012345678',
+                'email' => 'hub@gmail.com',
             ],
         ];
 
@@ -86,12 +86,12 @@ class BranchSeeder extends Seeder
             $branch = Branch::firstOrCreate(
                 ['slug' => $bData['slug']],
                 [
-                    'name'            => $bData['name'],
+                    'name' => $bData['name'],
                     'organization_id' => $org->id,
-                    'address'         => $bData['address'],
-                    'phone'           => $bData['phone'],
-                    'email'           => $bData['email'],
-                    'is_active'       => true,
+                    'address' => $bData['address'],
+                    'phone' => $bData['phone'],
+                    'email' => $bData['email'],
+                    'is_active' => true,
                 ]
             );
 
@@ -99,16 +99,16 @@ class BranchSeeder extends Seeder
             setPermissionsTeamId($branch->id);
 
             $branchAdminRole = Role::firstOrCreate([
-                'name'       => 'branch-admin',
+                'name' => 'branch-admin',
                 'guard_name' => 'web',
-                'team_id'    => $branch->id,
+                'team_id' => $branch->id,
             ]);
             $branchAdminRole->syncPermissions(Permission::where('name', '!=', 'canResetPassword')->get());
 
             $cashierRole = Role::firstOrCreate([
-                'name'       => 'cashier',
+                'name' => 'cashier',
                 'guard_name' => 'web',
-                'team_id'    => $branch->id,
+                'team_id' => $branch->id,
             ]);
             $cashierRole->syncPermissions([
                 'canAccessPos',
@@ -127,15 +127,15 @@ class BranchSeeder extends Seeder
             $admin = User::updateOrCreate(
                 ['username' => 'admin'],
                 [
-                    'name'            => 'Branch Admin',
-                    'full_name'       => 'SkyNet Branch Admin',
-                    'username'        => 'admin',
-                    'email'           => 'admin@skynetpos.com',
-                    'password'        => Hash::make('admin123'),
-                    'is_active'       => true,
-                    'is_super_admin'  => false,
+                    'name' => 'Branch Admin',
+                    'full_name' => 'Branch Admin',
+                    'username' => 'admin',
+                    'email' => 'admin@pos.com',
+                    'password' => Hash::make('admin123'),
+                    'is_active' => true,
+                    'is_super_admin' => false,
                     'organization_id' => $org->id,
-                    'branch_id'       => $mainBranch->id,
+                    'branch_id' => $mainBranch->id,
                 ]
             );
             setPermissionsTeamId($mainBranch->id);
@@ -145,15 +145,15 @@ class BranchSeeder extends Seeder
             $cashier = User::updateOrCreate(
                 ['username' => 'cashier1'],
                 [
-                    'name'            => 'Jane Cashier',
-                    'full_name'       => 'Jane Cashier',
-                    'username'        => 'cashier1',
-                    'email'           => 'cashier@skynetpos.com',
-                    'password'        => Hash::make('cashier123'),
-                    'is_active'       => true,
-                    'is_super_admin'  => false,
+                    'name' => 'Jane Cashier',
+                    'full_name' => 'Jane Cashier',
+                    'username' => 'cashier1',
+                    'email' => 'cashier@skynetpos.com',
+                    'password' => Hash::make('cashier123'),
+                    'is_active' => true,
+                    'is_super_admin' => false,
                     'organization_id' => $org->id,
-                    'branch_id'       => $mainBranch->id,
+                    'branch_id' => $mainBranch->id,
                 ]
             );
             setPermissionsTeamId($mainBranch->id);
