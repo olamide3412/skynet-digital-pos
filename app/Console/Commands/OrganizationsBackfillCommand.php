@@ -16,7 +16,7 @@ class OrganizationsBackfillCommand extends Command
      */
     protected $signature = 'organizations:backfill
                             {--map= : Path to CSV file mapping branch_slug to organization_name (columns: branch_slug,organization_name[,contact_name,contact_email,contact_phone,address])}
-                            {--auto : Automatically create/assign each unassigned branch to an organization with the same name}
+                            {--auto : Automatically create/assign each unassigned branch to an organization with the same name (or auto-assign branches missing from CSV map)}
                             {--dry-run : Simulate execution without persisting any database changes}
                             {--rollback : Roll back organization assignments recorded in organization_activity_log}';
 
@@ -34,6 +34,7 @@ class OrganizationsBackfillCommand extends Command
     {
         $isDryRun = (bool) $this->option('dry-run');
         $isRollback = (bool) $this->option('rollback');
+        $isAuto = (bool) $this->option('auto');
         $mapPath = $this->option('map');
 
         $this->info('====================================================');
@@ -44,7 +45,7 @@ class OrganizationsBackfillCommand extends Command
             return $this->handleRollback($isDryRun);
         }
 
-        if ($this->option('auto')) {
+        if ($isAuto && empty($mapPath)) {
             return $this->handleAutoBackfill($isDryRun);
         }
 
@@ -53,10 +54,11 @@ class OrganizationsBackfillCommand extends Command
             $this->line('Usage:');
             $this->line('  php artisan organizations:backfill --map=path/to/mapping.csv [--dry-run]');
             $this->line('  php artisan organizations:backfill --auto [--dry-run]');
+            $this->line('  php artisan organizations:backfill --map=path/to/mapping.csv --auto [--dry-run]');
             return Command::FAILURE;
         }
 
-        return $this->handleBackfill($mapPath, $isDryRun);
+        return $this->handleBackfill($mapPath, $isDryRun, $isAuto);
     }
 
     /**
@@ -91,7 +93,7 @@ class OrganizationsBackfillCommand extends Command
     /**
      * Handle backfilling branches into organizations using a mapping file.
      */
-    protected function handleBackfill(string $mapPath, bool $isDryRun): int
+    protected function handleBackfill(string $mapPath, bool $isDryRun, bool $isAuto = false): int
     {
         if (!file_exists($mapPath)) {
             $this->error("Mapping file not found at: {$mapPath}");
@@ -114,22 +116,47 @@ class OrganizationsBackfillCommand extends Command
             return Command::SUCCESS;
         }
 
-        // Verify that EVERY branch with null organization_id is in the map
-        $unmappedSlugs = [];
+        // Identify any unassigned branches missing from CSV mapping
+        $unmappedBranches = [];
         foreach ($unassignedBranches as $branch) {
             if (!isset($mappings[$branch->slug])) {
-                $unmappedSlugs[] = "ID {$branch->id}: {$branch->name} (slug: '{$branch->slug}')";
+                $unmappedBranches[] = $branch;
             }
         }
 
-        if (!empty($unmappedSlugs)) {
-            $this->error('ABORTING: The following unassigned branches are missing from the mapping file:');
-            foreach ($unmappedSlugs as $unmapped) {
-                $this->line("  - {$unmapped}");
+        if (!empty($unmappedBranches)) {
+            $this->warn('The following unassigned branch(es) are missing from the mapping file:');
+            foreach ($unmappedBranches as $branch) {
+                $this->line("  - ID {$branch->id}: {$branch->name} (slug: '{$branch->slug}')");
             }
-            $this->warn('Per specification, the command will NOT guess or assign a default organization.');
-            $this->line('Please add these branches to the mapping file, or run with --auto.');
-            return Command::FAILURE;
+
+            $shouldAuto = $isAuto;
+            if (!$shouldAuto && $this->input->isInteractive()) {
+                $shouldAuto = $this->confirm(
+                    'Would you like to automatically assign the missing branch(es) to organizations using their branch profiles?',
+                    true
+                );
+            }
+
+            if ($shouldAuto) {
+                $this->info('Auto-generating organization mappings for missing branch(es)...');
+                foreach ($unmappedBranches as $branch) {
+                    $mappings[$branch->slug] = [
+                        'branch_slug'       => $branch->slug,
+                        'organization_name' => $branch->name,
+                        'contact_name'      => $branch->name,
+                        'contact_email'     => $branch->email,
+                        'contact_phone'     => $branch->phone,
+                        'address'           => $branch->address,
+                    ];
+                }
+            } else {
+                $this->error('ABORTING: Missing branch mappings.');
+                $this->warn('Per specification, the command will NOT guess or assign a default organization.');
+                $this->line('Please add these branches to the mapping file, or run with --auto:');
+                $this->line('  php artisan organizations:backfill --map=' . $mapPath . ' --auto' . ($isDryRun ? ' --dry-run' : ''));
+                return Command::FAILURE;
+            }
         }
 
         return $this->executeBackfill($mappings, $unassignedBranches, $isDryRun);
@@ -159,10 +186,10 @@ class OrganizationsBackfillCommand extends Command
                 if (!$organization) {
                     $insertData = [
                         'name'          => $orgName,
-                        'contact_name'  => $mapping['contact_name'] ?? null,
-                        'contact_email' => $mapping['contact_email'] ?? null,
-                        'contact_phone' => $mapping['contact_phone'] ?? null,
-                        'address'       => $mapping['address'] ?? null,
+                        'contact_name'  => !empty($mapping['contact_name']) ? $mapping['contact_name'] : $branch->name,
+                        'contact_email' => !empty($mapping['contact_email']) ? $mapping['contact_email'] : $branch->email,
+                        'contact_phone' => !empty($mapping['contact_phone']) ? $mapping['contact_phone'] : $branch->phone,
+                        'address'       => !empty($mapping['address']) ? $mapping['address'] : $branch->address,
                         'status'        => 'active',
                         'notes'         => 'Created via organizations:backfill migration',
                         'created_at'    => now(),

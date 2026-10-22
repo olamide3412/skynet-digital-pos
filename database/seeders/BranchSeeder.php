@@ -121,8 +121,9 @@ class BranchSeeder extends Seeder
             $branch->getSettings();
         }
 
-        // ── Primary Branch Admin for main/skynet-digital-enterprise branch ────
-        $mainBranch = Branch::where('slug', 'skynet-digital-enterprise')->first();
+        // ── Primary Branch Admin for main/demo branch ────────────────────────
+        $mainBranch = Branch::whereIn('slug', ['demo-digital-enterprise', 'skynet-digital-enterprise'])->first()
+            ?: Branch::where('organization_id', $org->id)->first();
         if ($mainBranch) {
             $admin = User::updateOrCreate(
                 ['username' => 'admin'],
