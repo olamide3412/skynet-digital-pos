@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useForm, Link } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import { useCurrency } from '@/Composables/useCurrency'
-import { BrowserQRCodeSvgWriter } from '@zxing/library'
+import { BrowserQRCodeSvgWriter, EncodeHintType } from '@zxing/library'
 
 defineOptions({ layout: PosLayout })
 
@@ -56,7 +56,12 @@ const form = useForm({
     require_till_opening:          props.settings.require_till_opening !== false && props.settings.require_till_opening !== 0,
     print_till_slip:               !!props.settings.print_till_slip,
     public_catalog_enabled:        !!props.settings.public_catalog_enabled,
+    default_interface:             props.settings.default_interface ?? 'pos',
 })
+
+const isLaundryEnabled = computed(() => !!props.settings.laundry_enabled)
+const isPosEnabled = computed(() => props.settings.pos_enabled !== false && props.settings.pos_enabled !== 0)
+const isMixedStore = computed(() => isLaundryEnabled.value && isPosEnabled.value)
 
 // Pinned Items Search State
 const itemSearchQuery = ref('')
@@ -139,8 +144,13 @@ function renderQr() {
     qrContainerRef.value.innerHTML = ''
     try {
         const writer = new BrowserQRCodeSvgWriter()
-        const svg = writer.write(publicCatalogUrl.value, 180, 180)
-        svg.setAttribute('class', 'w-full h-full')
+        const hints = new Map()
+        hints.set(EncodeHintType.MARGIN, 1)
+        const size = 200
+        const svg = writer.write(publicCatalogUrl.value, size, size, hints)
+        svg.setAttribute('viewBox', `0 0 ${size} ${size}`)
+        svg.setAttribute('preserveAspectRatio', 'xMidYMid meet')
+        svg.setAttribute('class', 'w-full h-full block')
         qrContainerRef.value.appendChild(svg)
     } catch (e) {
         console.error('Failed to generate QR Code:', e)
@@ -155,7 +165,7 @@ watch(() => [form.public_catalog_enabled, publicCatalogUrl.value], () => {
 
 onMounted(() => {
     if (form.public_catalog_enabled) {
-        renderQr()
+        nextTick(() => renderQr())
     }
 })
 
@@ -318,6 +328,155 @@ function submit() {
                         <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Address</label>
                         <input v-model="form.business_address" type="text" maxlength="255"
                             class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
+                    </div>
+                </div>
+
+                <!-- ══ OPERATIONAL MODULES & BRANCH INTERFACES (POS & LAUNDRY) ════════════════ -->
+                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700 gap-2">
+                        <div>
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                <span>⚙️</span>
+                                <span>Operational Modules & Branch Interfaces</span>
+                            </h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Operating mode and active modules for this location.
+                            </p>
+                        </div>
+                        <div>
+                            <span v-if="isMixedStore" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                                <span>🏪</span> Mixed Store (POS & Laundry)
+                            </span>
+                            <span v-else-if="isPosEnabled && !isLaundryEnabled" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                                <span>💻</span> POS Only (Standard Retail)
+                            </span>
+                            <span v-else class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
+                                <span>🧺</span> Laundry Only
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Module Status Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- POS Module Info -->
+                        <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-lg">💻</span>
+                                    <span class="text-xs font-bold text-slate-800 dark:text-white">Retail POS Interface</span>
+                                </div>
+                                <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
+                                    :class="isPosEnabled
+                                        ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'">
+                                    {{ isPosEnabled ? 'Active' : 'Disabled' }}
+                                </span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                Cash register, item catalogs, barcode scanning, stock tracking, and till sessions.
+                            </p>
+                        </div>
+
+                        <!-- Laundry Module Info -->
+                        <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-lg">🧺</span>
+                                    <span class="text-xs font-bold text-slate-800 dark:text-white">Laundry Management</span>
+                                </div>
+                                <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
+                                    :class="isLaundryEnabled
+                                        ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
+                                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'">
+                                    {{ isLaundryEnabled ? 'Active' : 'Inactive' }}
+                                </span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                                Order intake, garment status pipeline (Received, In Progress, Ready), ticket printing, and WhatsApp pickup notifications.
+                            </p>
+                            <p v-if="!isLaundryEnabled" class="text-[10px] text-slate-400 dark:text-slate-500 italic">
+                                Note: To activate the Laundry module for this branch, please request activation from your Platform Super Admin.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Default Landing Interface Selection (Shown when both modules are on) -->
+                    <div v-if="isMixedStore" class="pt-3 border-t border-slate-200 dark:border-slate-700 space-y-2.5">
+                        <label class="block text-xs font-bold text-slate-800 dark:text-white">
+                            Default Interface After Staff Login
+                        </label>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                            Because this branch has both Retail POS and Laundry enabled, choose which interface staff will land on right after logging in. Staff can switch seamlessly between systems at any time from the navigation menu.
+                        </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                            <label
+                                :class="[
+                                    'p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-3',
+                                    form.default_interface === 'pos'
+                                        ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-500 ring-1 ring-emerald-500/20'
+                                        : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                                ]"
+                            >
+                                <input
+                                    type="radio"
+                                    value="pos"
+                                    v-model="form.default_interface"
+                                    class="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                                />
+                                <div>
+                                    <div class="font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                                        <span>💻</span> Retail POS Interface
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Land on checkout screen and product catalogs.
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-3',
+                                    form.default_interface === 'laundry'
+                                        ? 'bg-purple-50/50 dark:bg-purple-950/30 border-purple-500 dark:border-purple-500 ring-1 ring-purple-500/20'
+                                        : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                                ]"
+                            >
+                                <input
+                                    type="radio"
+                                    value="laundry"
+                                    v-model="form.default_interface"
+                                    class="mt-0.5 text-purple-600 focus:ring-purple-500"
+                                />
+                                <div>
+                                    <div class="font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                                        <span>🧺</span> Laundry Operations Hub
+                                    </div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                        Land on laundry intake, order pipeline & pickup dashboard.
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Direct Links to Laundry Settings when active -->
+                    <div v-if="isLaundryEnabled" class="pt-3 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-3">
+                        <Link
+                            :href="route('laundry.settings.index', { branch: settings.branch_slug })"
+                            class="px-3.5 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-xs font-semibold flex items-center gap-1.5 transition"
+                        >
+                            <span>⚙️</span>
+                            <span>Laundry Operational Settings</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </Link>
+                        <Link
+                            :href="route('laundry.services.index', { branch: settings.branch_slug })"
+                            class="px-3.5 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-semibold flex items-center gap-1.5 transition"
+                        >
+                            <span>🏷️</span>
+                            <span>Laundry Services & Pricing</span>
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </Link>
                     </div>
                 </div>
 
@@ -920,7 +1079,7 @@ function submit() {
                             <!-- QR Code Stand & Download -->
                             <div class="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center gap-5">
                                 <div class="bg-white p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs shrink-0 flex items-center justify-center">
-                                    <div ref="qrContainerRef" class="w-36 h-36 flex items-center justify-center">
+                                    <div ref="qrContainerRef" class="w-36 h-36 flex items-center justify-center overflow-hidden">
                                         <!-- SVG QR Code mounted here -->
                                     </div>
                                 </div>

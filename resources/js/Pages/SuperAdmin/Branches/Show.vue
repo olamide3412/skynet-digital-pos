@@ -354,6 +354,9 @@ const settingsForm = useForm({
     business_sector: props.settings?.business_sector || 'commerce',
     require_till_opening: Boolean(props.settings?.require_till_opening ?? true),
     print_till_slip: Boolean(props.settings?.print_till_slip ?? false),
+    laundry_enabled: Boolean(props.settings?.laundry_enabled ?? false),
+    pos_enabled: Boolean(props.settings?.pos_enabled !== false),
+    default_interface: props.settings?.default_interface || 'pos',
 })
 
 const submitSettings = () => {
@@ -721,6 +724,8 @@ const toggleBranchOffline = () => router.post(route('superadmin.branches.toggle-
 const toggleBranchOfflineQty = () => router.post(route('superadmin.branches.toggle-offline-qty-deduction', { branch: props.branch.slug }))
 const toggleBranchAi = () => router.post(route('superadmin.branches.toggle-ai', { branch: props.branch.slug }))
 const toggleTillOpening = () => router.post(route('superadmin.branches.toggle-till-opening', { branch: props.branch.slug }), {}, { preserveScroll: true })
+const toggleLaundry = () => router.post(route('superadmin.branches.toggle-laundry', { branch: props.branch.slug }), {}, { preserveScroll: true })
+const togglePos = () => router.post(route('superadmin.branches.toggle-pos', { branch: props.branch.slug }), {}, { preserveScroll: true })
 </script>
 
 <template>
@@ -799,6 +804,26 @@ const toggleTillOpening = () => router.post(route('superadmin.branches.toggle-ti
                             >
                                 <span class="w-1.5 h-1.5 rounded-full" :class="settings.require_till_opening ? 'bg-emerald-500' : 'bg-slate-400'"></span>
                                 {{ settings.require_till_opening ? 'Till Float Required' : 'Direct Checkout (No Till)' }}
+                            </span>
+                            <span
+                                :class="settings.laundry_enabled ? 'bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700'"
+                                class="px-2.5 py-0.5 rounded-full text-xs font-semibold border flex items-center gap-1"
+                            >
+                                <span class="w-1.5 h-1.5 rounded-full" :class="settings.laundry_enabled ? 'bg-purple-500' : 'bg-slate-400'"></span>
+                                {{ settings.laundry_enabled ? '🧺 Laundry Active' : '🧺 Laundry Off' }}
+                            </span>
+                            <span
+                                :class="settings.pos_enabled ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/30' : 'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/30'"
+                                class="px-2.5 py-0.5 rounded-full text-xs font-semibold border flex items-center gap-1"
+                            >
+                                <span class="w-1.5 h-1.5 rounded-full" :class="settings.pos_enabled ? 'bg-emerald-500' : 'bg-rose-400'"></span>
+                                {{ settings.pos_enabled ? '💻 POS Active' : '💻 POS Off' }}
+                            </span>
+                            <span
+                                v-if="settings.laundry_enabled && settings.pos_enabled"
+                                class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                            >
+                                Mode: Mixed Store
                             </span>
                             <Link
                                 v-if="$page.props.organizations_enabled && branch.organization"
@@ -896,6 +921,26 @@ const toggleTillOpening = () => router.post(route('superadmin.branches.toggle-ti
                         :title="settings.require_till_opening ? 'Click to allow direct checkout without opening till' : 'Click to require cashiers to declare opening float'"
                     >
                         {{ settings.require_till_opening ? 'Disable Till Requirement' : 'Require Till Float' }}
+                    </button>
+                    <button
+                        type="button"
+                        @click="toggleLaundry"
+                        :class="settings.laundry_enabled ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900 hover:bg-amber-100' : 'bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-900 hover:bg-purple-100'"
+                        class="px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center gap-1.5"
+                        :title="settings.laundry_enabled ? 'Click to disable Laundry module' : 'Click to enable Laundry module'"
+                    >
+                        <span>🧺</span>
+                        <span>{{ settings.laundry_enabled ? 'Disable Laundry' : 'Enable Laundry' }}</span>
+                    </button>
+                    <button
+                        type="button"
+                        @click="togglePos"
+                        :class="settings.pos_enabled ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-900 hover:bg-amber-100' : 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900 hover:bg-emerald-100'"
+                        class="px-3.5 py-2.5 rounded-xl text-xs font-bold border transition cursor-pointer flex items-center gap-1.5"
+                        :title="settings.pos_enabled ? 'Click to disable POS interface' : 'Click to enable POS interface'"
+                    >
+                        <span>💻</span>
+                        <span>{{ settings.pos_enabled ? 'Disable POS' : 'Enable POS' }}</span>
                     </button>
                 </div>
             </div>
@@ -1304,6 +1349,140 @@ const toggleTillOpening = () => router.post(route('superadmin.branches.toggle-ti
         <!-- ══════════════════════════════════════════════════════════════════════ -->
         <div v-show="activeTab === 'settings'" class="space-y-6">
             <form @submit.prevent="submitSettings" class="space-y-6">
+                <!-- Row 0: Operational Interfaces & Modules (POS & Laundry) -->
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-5">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800 gap-3">
+                        <div>
+                            <div class="flex items-center gap-2.5 flex-wrap">
+                                <h3 class="font-bold text-slate-900 dark:text-white text-base">Operational Modules & Branch Interfaces</h3>
+                                <span
+                                    class="text-[11px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border"
+                                    :class="settingsForm.pos_enabled && settingsForm.laundry_enabled
+                                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800'
+                                        : (settingsForm.laundry_enabled
+                                            ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+                                            : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800')"
+                                >
+                                    Mode: {{ settingsForm.pos_enabled && settingsForm.laundry_enabled ? 'Mixed Store (POS & Laundry)' : (settingsForm.laundry_enabled ? 'Laundry Only' : 'Retail POS Only') }}
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                Control which operational interfaces staff can access in this branch: Retail POS terminal and Laundry operations module.
+                            </p>
+                        </div>
+                        <span class="text-2xl">🧺</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <!-- Laundry Module Toggle -->
+                        <div class="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-bold text-slate-900 dark:text-white">Enable Laundry Management Module</span>
+                                    <span
+                                        class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider"
+                                        :class="settingsForm.laundry_enabled
+                                            ? 'bg-purple-100 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400 border border-purple-200 dark:border-purple-800'
+                                            : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'"
+                                    >
+                                        {{ settingsForm.laundry_enabled ? 'Active (Enabled)' : 'Disabled' }}
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                    Unlocks self-contained Laundry operations: order intake, garment stage tracking (Received, In Progress, Ready, Collected), pickup ticket printing, and WhatsApp pickup notifications.
+                                </p>
+                                <p class="text-[11px] text-amber-600 dark:text-amber-400 font-medium pt-1">
+                                    ⚠️ Platform Super Admin only. Cannot be disabled while active orders exist.
+                                </p>
+                            </div>
+                            <input
+                                v-model="settingsForm.laundry_enabled"
+                                type="checkbox"
+                                class="w-5 h-5 rounded text-indigo-600 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer shrink-0 mt-0.5"
+                            />
+                        </div>
+
+                        <!-- Retail POS Interface Toggle -->
+                        <div class="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 flex items-start justify-between gap-4">
+                            <div class="space-y-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-bold text-slate-900 dark:text-white">Enable Retail POS Interface</span>
+                                    <span
+                                        class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider"
+                                        :class="settingsForm.pos_enabled
+                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                                            : 'bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400'"
+                                    >
+                                        {{ settingsForm.pos_enabled ? 'Active (Enabled)' : 'Disabled' }}
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                                    Unlocks standard retail register, item barcode scanning, stock tracking, and discounts. When disabled, retail routes redirect to Laundry.
+                                </p>
+                                <p class="text-[11px] text-amber-600 dark:text-amber-400 font-medium pt-1">
+                                    ⚠️ Platform Super Admin only. Cannot be disabled while a till session is open.
+                                </p>
+                            </div>
+                            <input
+                                v-model="settingsForm.pos_enabled"
+                                type="checkbox"
+                                class="w-5 h-5 rounded text-indigo-600 border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 cursor-pointer shrink-0 mt-0.5"
+                            />
+                        </div>
+                    </div>
+
+                    <!-- Default Landing Interface Selection (Shown when both interfaces are on) -->
+                    <div v-if="settingsForm.laundry_enabled && settingsForm.pos_enabled" class="p-4 bg-indigo-50/50 dark:bg-indigo-950/20 rounded-2xl border border-indigo-200/80 dark:border-indigo-800/60 space-y-3">
+                        <div>
+                            <span class="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Default Interface After Staff Login</span>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                In a mixed store, staff can use both systems. Choose which interface they will land on upon login. Staff can switch anytime from the sidebar.
+                            </p>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <label
+                                :class="[
+                                    'p-3.5 rounded-xl border text-xs cursor-pointer transition flex items-start gap-3',
+                                    settingsForm.default_interface === 'pos'
+                                        ? 'bg-white dark:bg-slate-900 border-indigo-600 dark:border-indigo-500 shadow-xs'
+                                        : 'bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 opacity-80 hover:opacity-100'
+                                ]"
+                            >
+                                <input
+                                    type="radio"
+                                    value="pos"
+                                    v-model="settingsForm.default_interface"
+                                    class="mt-0.5 accent-indigo-600"
+                                />
+                                <div>
+                                    <div class="font-bold text-slate-900 dark:text-white">Retail POS Selling Register</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Standard checkout counter with item catalog & scanner.</div>
+                                </div>
+                            </label>
+
+                            <label
+                                :class="[
+                                    'p-3.5 rounded-xl border text-xs cursor-pointer transition flex items-start gap-3',
+                                    settingsForm.default_interface === 'laundry'
+                                        ? 'bg-white dark:bg-slate-900 border-indigo-600 dark:border-indigo-500 shadow-xs'
+                                        : 'bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 opacity-80 hover:opacity-100'
+                                ]"
+                            >
+                                <input
+                                    type="radio"
+                                    value="laundry"
+                                    v-model="settingsForm.default_interface"
+                                    class="mt-0.5 accent-indigo-600"
+                                />
+                                <div>
+                                    <div class="font-bold text-slate-900 dark:text-white">Laundry Operations Terminal</div>
+                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Intake counter, laundry stage pipeline & order list.</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Row 1: Tax & Offline Settings -->
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <!-- Tax Settings Card -->

@@ -246,6 +246,7 @@ createInertiaApp({
                     name.startsWith('Auth/') ||
                     name.startsWith('Notifications/') ||
                     name.startsWith('Printer/') ||
+                    name.startsWith('Laundry/') ||
                     name === 'Home' ||
                     name === 'Error' ||
                     name === 'BranchUnavailable'
@@ -304,10 +305,10 @@ createInertiaApp({
         const rawRoute = app.config.globalProperties.route || (typeof window !== 'undefined' ? window.route : null);
         if (rawRoute) {
             const smartRoute = (name, params, absolute, config) => {
-                const isPos = typeof name === 'string' && name.startsWith('pos.');
+                const isBranchScoped = typeof name === 'string' && (name.startsWith('pos.') || name.startsWith('laundry.'));
                 let currentSlug = null;
 
-                if (isPos) {
+                if (isBranchScoped) {
                     currentSlug = getActiveBranchSlug(latestPageProps)
                         || window.Ziggy?.defaults?.branch
                         || window.__CURRENT_BRANCH_SLUG__
@@ -352,7 +353,7 @@ createInertiaApp({
                     return rawRoute(name, params, absolute, config);
                 } catch (err) {
                     console.warn(`[smartRoute] Caught route error for "${name}":`, err?.message);
-                    if (isPos) {
+                    if (isBranchScoped) {
                         const fallbackSlug = currentSlug
                             || window.__CURRENT_BRANCH_SLUG__
                             || (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('active_branch_slug') : null)

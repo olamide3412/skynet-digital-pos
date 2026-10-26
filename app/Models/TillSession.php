@@ -72,10 +72,15 @@ class TillSession extends Model
         return $this->status === 'open';
     }
 
+    public function laundryPayments(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Laundry\Models\LaundryPayment::class, 'till_session_id');
+    }
+
     /**
      * Calculate financial summary and expected cash for this till session.
      * Formula:
-     * Expected Cash = Opening Amount + Cash Sales − Cash Refunds + Cash Added − Cash Removed
+     * Expected Cash = Opening Amount + (POS Cash + Laundry Cash) − (POS Refunds + Laundry Refunds) + Cash Added − Cash Removed
      */
     public function calculateSummary(): array
     {
@@ -108,27 +113,55 @@ class TillSession extends Model
         });
         $cashRefunds = (float) $refundQuery->sum('refund_amount');
 
+        // Laundry cash collections & refunds
+        $laundryCash = 0;
+        $laundryBankTransfer = 0;
+        $laundryRefunds = 0;
+
+        if (\Illuminate\Support\Facades\Schema::hasTable('laundry_payments')) {
+            $laundryCash = (float) $this->laundryPayments()
+                ->where('type', 'payment')
+                ->where('method', 'Cash')
+                ->sum('amount');
+
+            $laundryBankTransfer = (float) $this->laundryPayments()
+                ->where('type', 'payment')
+                ->where('method', '!=', 'Cash')
+                ->sum('amount');
+
+            $laundryRefunds = (float) $this->laundryPayments()
+                ->where('type', 'refund')
+                ->where('method', 'Cash')
+                ->sum('amount');
+        }
+
         // Cash Movements (Add / Remove)
         $cashAdded = (float) $this->cashMovements()->where('type', 'add')->sum('amount');
         $cashRemoved = (float) $this->cashMovements()->where('type', 'remove')->sum('amount');
 
-        $expectedCash = round($openingAmount + $cashSales - $cashRefunds + $cashAdded - $cashRemoved, 2);
+        $effectiveCashIn = $cashSales + $laundryCash;
+        $effectiveCashRefunds = $cashRefunds + $laundryRefunds;
+
+        $expectedCash = round($openingAmount + $effectiveCashIn - $effectiveCashRefunds + $cashAdded - $cashRemoved, 2);
 
         $actualCounted = $this->closing_amount !== null ? (float) $this->closing_amount : null;
         $variance = $actualCounted !== null ? round($actualCounted - $expectedCash, 2) : null;
 
         return [
-            'opening_amount'       => $openingAmount,
-            'cash_sales'           => round($cashSales, 2),
-            'bank_transfer_sales'  => round($bankTransferSales, 2),
-            'total_sales'          => round($totalSales, 2),
-            'sales_count'          => $salesCount,
-            'cash_refunds'         => round($cashRefunds, 2),
-            'cash_added'           => round($cashAdded, 2),
-            'cash_removed'         => round($cashRemoved, 2),
-            'expected_cash'        => $expectedCash,
-            'actual_counted'       => $actualCounted,
-            'variance'             => $variance,
+            'opening_amount'         => $openingAmount,
+            'cash_sales'             => round($cashSales, 2),
+            'bank_transfer_sales'    => round($bankTransferSales, 2),
+            'laundry_cash'           => round($laundryCash, 2),
+            'laundry_bank_transfer'  => round($laundryBankTransfer, 2),
+            'total_sales'            => round($totalSales, 2),
+            'sales_count'            => $salesCount,
+            'cash_refunds'           => round($cashRefunds, 2),
+            'laundry_refunds'        => round($laundryRefunds, 2),
+            'cash_added'             => round($cashAdded, 2),
+            'cash_removed'           => round($cashRemoved, 2),
+            'expected_cash'          => $expectedCash,
+            'actual_counted'         => $actualCounted,
+            'variance'               => $variance,
         ];
     }
 }

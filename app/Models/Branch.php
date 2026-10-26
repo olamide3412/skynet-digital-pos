@@ -179,7 +179,42 @@ class Branch extends Model
         return $this->hasMany(TillSession::class);
     }
 
+    public function laundryServices(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Laundry\Models\LaundryService::class);
+    }
+
+    public function laundryOrders(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Laundry\Models\LaundryOrder::class);
+    }
+
+    public function laundryPayments(): HasMany
+    {
+        return $this->hasMany(\App\Modules\Laundry\Models\LaundryPayment::class);
+    }
+
+    public function laundrySettings(): HasOne
+    {
+        return $this->hasOne(\App\Modules\Laundry\Models\LaundrySetting::class);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+    public function laundryEnabled(): bool
+    {
+        return (bool) ($this->getSettings()->laundry_enabled ?? false);
+    }
+
+    public function posEnabled(): bool
+    {
+        return (bool) ($this->getSettings()->pos_enabled ?? true);
+    }
+
+    public function defaultInterface(): string
+    {
+        return $this->getSettings()->default_interface ?? 'pos';
+    }
+
     /**
      * Get or create the POS settings for this branch.
      */
@@ -188,9 +223,12 @@ class Branch extends Model
         return $this->settings()->firstOrCreate(
             ['branch_id' => $this->id],
             [
-                'sell_interface'  => 'classic',
-                'business_sector' => 'commerce',
-                'out_of_stock'    => 25,
+                'sell_interface'    => 'classic',
+                'business_sector'   => 'commerce',
+                'laundry_enabled'   => false,
+                'pos_enabled'       => true,
+                'default_interface' => 'pos',
+                'out_of_stock'      => 25,
             ]
         );
     }
@@ -230,6 +268,10 @@ class Branch extends Model
                     'canViewEndOfDay',
                     'canProcessReturn',
                     'canManageCustomers',
+                    'laundry.access',
+                    'laundry.create_order',
+                    'laundry.update_status',
+                    'laundry.record_payment',
                 ])->get();
             if ($cashierPerms->isNotEmpty()) {
                 $cashierRole->syncPermissions($cashierPerms);

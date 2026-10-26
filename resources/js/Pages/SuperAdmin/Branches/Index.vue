@@ -154,6 +154,12 @@ const toggleTillOpening = (branchSlug) => {
     })
 }
 
+const toggleLaundry = (branchSlug) => {
+    router.post(route('superadmin.branches.toggle-laundry', { branch: branchSlug }), {}, {
+        preserveScroll: true,
+    })
+}
+
 const copiedBranchSlug = ref(null)
 const copyBranchUrl = (slug) => {
     const fullUrl = typeof window !== 'undefined' && window.location?.origin
@@ -352,6 +358,12 @@ const triggerExport = () => {
                         >
                             {{ branch.is_active ? 'Active' : 'Disabled' }}
                         </span>
+                        <span
+                            v-if="branch.settings?.laundry_enabled"
+                            class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800"
+                        >
+                            🧺 Laundry
+                        </span>
                     </div>
                     </div>
 
@@ -474,6 +486,33 @@ const triggerExport = () => {
                             :title="(branch.settings?.require_till_opening ?? true) ? 'Click to disable till opening requirement' : 'Click to require opening float before checkout'"
                         >
                             <span v-if="(branch.settings?.require_till_opening ?? true)">● Required</span>
+                            <span v-else>○ Disabled</span>
+                        </button>
+                    </div>
+
+                    <!-- Laundry Module Toggle Control (Super Admin only) -->
+                    <div class="p-3 rounded-2xl bg-purple-50/50 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-900/40 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-base">🧺</span>
+                            <div>
+                                <div class="text-xs font-bold text-slate-800 dark:text-slate-200">Laundry Module</div>
+                                <div class="text-[10px] text-slate-500 dark:text-slate-400">
+                                    {{ branch.settings?.laundry_enabled ? 'Active (Intake & Orders)' : 'Disabled' }}
+                                </div>
+                            </div>
+                        </div>
+                        <button
+                            @click="toggleLaundry(branch.slug)"
+                            type="button"
+                            :class="[
+                                'px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1 cursor-pointer',
+                                branch.settings?.laundry_enabled
+                                    ? 'bg-purple-600 hover:bg-purple-500 text-white shadow-xs'
+                                    : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300'
+                            ]"
+                            :title="branch.settings?.laundry_enabled ? 'Click to disable Laundry module for this branch' : 'Click to enable Laundry module for this branch'"
+                        >
+                            <span v-if="branch.settings?.laundry_enabled">● Active</span>
                             <span v-else>○ Disabled</span>
                         </button>
                     </div>

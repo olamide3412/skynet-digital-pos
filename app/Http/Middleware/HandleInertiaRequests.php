@@ -200,6 +200,9 @@ class HandleInertiaRequests extends Middleware
             'pos_settings' => fn() => $branch ? [
                 'batch_tracking_enabled' => (bool) (\App\Models\PosSettings::forBranch($branch->id)->batch_tracking_enabled ?? false),
                 'expiry_alert_days'      => (int) (\App\Models\PosSettings::forBranch($branch->id)->expiry_alert_days ?? 30),
+                'laundry_enabled'        => (bool) $branch->laundryEnabled(),
+                'pos_enabled'            => (bool) $branch->posEnabled(),
+                'default_interface'      => (string) $branch->defaultInterface(),
             ] : null,
 
             'cart_count'     => fn() => 0,

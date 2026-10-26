@@ -25,6 +25,13 @@ use App\Http\Controllers\SuperAdmin\ProfileController as SuperAdminProfileContro
 // Storefront Controllers
 use App\Http\Controllers\Frontend\HomeController;
 
+// Laundry Module Controllers
+use App\Modules\Laundry\Controllers\LaundryHomeController;
+use App\Modules\Laundry\Controllers\LaundryOrderController;
+use App\Modules\Laundry\Controllers\LaundryServiceController;
+use App\Modules\Laundry\Controllers\LaundryReportController;
+use App\Modules\Laundry\Controllers\LaundrySettingController;
+
 use Illuminate\Support\Facades\Route;
 
 Route::get('/',                      [HomeController::class, 'index'])->name('home');
@@ -151,6 +158,10 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.toggle-auto-fullscreen');
         Route::post('/branches/{branch}/toggle-till-opening', [BranchController::class, 'toggleTillOpening'])
             ->name('branches.toggle-till-opening');
+        Route::post('/branches/{branch}/toggle-laundry', [BranchController::class, 'toggleLaundry'])
+            ->name('branches.toggle-laundry');
+        Route::post('/branches/{branch}/toggle-pos', [BranchController::class, 'togglePos'])
+            ->name('branches.toggle-pos');
         Route::put('/branches/{branch}/settings', [BranchController::class, 'updateSettings'])
             ->name('branches.settings.update');
         Route::post('/branches/{branch}/logo', [BranchController::class, 'updateLogo'])
@@ -455,7 +466,7 @@ Route::prefix('{branch}')
 
         // Main POS Screen
         Route::get('/', [PosController::class, 'index'])->name('index')
-            ->middleware('pos.role:canAccessPos');
+            ->middleware(['ensure.pos.enabled', 'pos.role:canAccessPos']);
 
         // Sales
         Route::get('/sales/search-receipt', [SaleController::class, 'searchReceipt'])->name('sales.search-receipt')
@@ -937,3 +948,44 @@ Route::prefix('{branch}')
         });
     });
 });
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ *  BRANCH LAUNDRY MODULE — /{branch}/laundry/...
+ *  branch = slug (route model binding via getRouteKeyName = 'slug')
+ * ══════════════════════════════════════════════════════════════════════════════ */
+Route::prefix('{branch}/laundry')
+    ->name('laundry.')
+    ->middleware(['resolve.branch', 'auth:web', 'branch.scope', 'ensure.laundry.enabled'])
+    ->group(function () {
+        Route::get('/', [LaundryHomeController::class, 'index'])->name('home');
+
+        // Customer search & quick add for laundry intake
+        Route::get('/customers/search', [LaundryOrderController::class, 'searchCustomers'])->name('customers.search');
+        Route::post('/customers/quick', [LaundryOrderController::class, 'quickCreateCustomer'])->name('customers.quick');
+
+        // Orders
+        Route::get('/orders', [LaundryOrderController::class, 'index'])->name('orders.index');
+        Route::get('/orders/create', [LaundryOrderController::class, 'create'])->name('orders.create');
+        Route::post('/orders', [LaundryOrderController::class, 'store'])->name('orders.store');
+        Route::get('/orders/{order}', [LaundryOrderController::class, 'show'])->name('orders.show');
+        Route::post('/orders/{order}/status', [LaundryOrderController::class, 'updateStatus'])->name('orders.update-status');
+        Route::post('/orders/{order}/payments', [LaundryOrderController::class, 'recordPayment'])->name('orders.record-payment');
+        Route::post('/orders/{order}/cancel', [LaundryOrderController::class, 'cancel'])->name('orders.cancel');
+        Route::post('/orders/{order}/collect', [LaundryOrderController::class, 'markCollected'])->name('orders.collect');
+        Route::get('/orders/{order}/ticket', [LaundryOrderController::class, 'printTicket'])->name('orders.ticket');
+        Route::get('/orders/{order}/whatsapp-link', [LaundryOrderController::class, 'whatsappLink'])->name('orders.whatsapp-link');
+
+        // Services Catalog
+        Route::get('/services', [LaundryServiceController::class, 'index'])->name('services.index');
+        Route::post('/services', [LaundryServiceController::class, 'store'])->name('services.store');
+        Route::put('/services/{service}', [LaundryServiceController::class, 'update'])->name('services.update');
+        Route::patch('/services/{service}/toggle', [LaundryServiceController::class, 'toggleActive'])->name('services.toggle');
+        Route::delete('/services/{service}', [LaundryServiceController::class, 'destroy'])->name('services.destroy');
+
+        // Reports
+        Route::get('/reports', [LaundryReportController::class, 'index'])->name('reports.index');
+
+        // Settings
+        Route::get('/settings', [LaundrySettingController::class, 'index'])->name('settings.index');
+        Route::post('/settings', [LaundrySettingController::class, 'update'])->name('settings.update');
+    });

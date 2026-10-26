@@ -99,6 +99,7 @@ class SettingsController extends Controller
             'require_till_opening'     => 'nullable|boolean',
             'print_till_slip'          => 'nullable|boolean',
             'public_catalog_enabled'   => 'nullable|boolean',
+            'default_interface'        => 'nullable|string|in:pos,laundry',
         ]);
 
         // ── 1. Update branch business details & logo ───────────────────────────

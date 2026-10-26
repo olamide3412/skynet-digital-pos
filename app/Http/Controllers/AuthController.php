@@ -24,7 +24,8 @@ class AuthController extends Controller
         if (Auth::guard('web')->check()) {
             $user = Auth::guard('web')->user();
             if ($user->branch_id === $branch?->id || $user->isSuperAdmin()) {
-                return redirect()->route('pos.index', ['branch' => $branch?->slug]);
+                $landingUrl = $branch ? \App\Modules\Laundry\Services\BranchLandingService::resolveLandingUrl($branch, $user) : route('pos.index', ['branch' => $branch?->slug]);
+                return redirect()->to($landingUrl);
             }
         }
 
@@ -107,7 +108,8 @@ class AuthController extends Controller
             RateLimiter::clear($key);
             $request->session()->regenerate();
 
-            return redirect()->route('pos.index', ['branch' => $branch?->slug]);
+            $landingUrl = $branch ? \App\Modules\Laundry\Services\BranchLandingService::resolveLandingUrl($branch, $user) : route('pos.index', ['branch' => $branch?->slug]);
+            return redirect()->to($landingUrl);
         }
 
         RateLimiter::hit($key, 7200);

@@ -57,6 +57,15 @@ const allNavLinks = [
         perm:  'canAccessPos',
     },
     {
+        label: 'Laundry',
+        route: 'laundry.home',
+        match: 'Laundry/',
+        icon:  'M19 4h-3V2h-2v2h-4V2H8v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V8h14v12z M12 9c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z',
+        color: 'text-indigo-500',
+        perm:  'laundry.access',
+        condition: () => Boolean(page.props.pos_settings?.laundry_enabled),
+    },
+    {
         label: 'Items',
         icon:  'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10',
         perm: 'canManageItems',

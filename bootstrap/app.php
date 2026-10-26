@@ -33,6 +33,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'role'           => \Spatie\Permission\Middleware\RoleMiddleware::class,
             'permission'     => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            'ensure.laundry.enabled' => \App\Modules\Laundry\Middleware\EnsureLaundryEnabledMiddleware::class,
+            'ensure.pos.enabled'     => \App\Modules\Laundry\Middleware\EnsurePosEnabledMiddleware::class,
         ]);
         $middleware->validateCsrfTokens(except:[
             'flw-webhook',

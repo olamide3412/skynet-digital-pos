@@ -658,9 +658,39 @@ class BranchController extends Controller
             'business_sector'          => 'required|string|in:commerce,health',
             'require_till_opening'     => 'nullable|boolean',
             'print_till_slip'          => 'nullable|boolean',
+            'laundry_enabled'          => 'nullable|boolean',
+            'pos_enabled'              => 'nullable|boolean',
+            'default_interface'        => 'nullable|string|in:pos,laundry',
         ]);
 
         $settings = $branch->getSettings();
+
+        // ── Interface Safety Rules ─────────────────────────────────────────────
+        $newLaundry = array_key_exists('laundry_enabled', $validated) ? (bool) $validated['laundry_enabled'] : (bool) $branch->laundryEnabled();
+        $newPos     = array_key_exists('pos_enabled', $validated) ? (bool) $validated['pos_enabled'] : (bool) $branch->posEnabled();
+
+        if (!$newLaundry && !$newPos) {
+            return back()->withErrors(['interface' => 'At least one interface (POS or Laundry) must remain enabled for the branch.']);
+        }
+
+        // Turning POS off check
+        if ($branch->posEnabled() && !$newPos) {
+            $openTillCount = \App\Models\TillSession::where('branch_id', $branch->id)->where('status', 'open')->count();
+            if ($openTillCount > 0) {
+                return back()->withErrors(['pos_enabled' => "Cannot disable POS interface while {$openTillCount} till session(s) are currently open. Please reconcile and close all open tills first."]);
+            }
+        }
+
+        // Turning Laundry off check
+        if ($branch->laundryEnabled() && !$newLaundry) {
+            $openOrdersCount = \App\Modules\Laundry\Models\LaundryOrder::where('branch_id', $branch->id)
+                ->whereIn('status', ['received', 'in_progress', 'ready'])
+                ->count();
+            if ($openOrdersCount > 0) {
+                return back()->withErrors(['laundry_enabled' => "Cannot disable Laundry module while {$openOrdersCount} laundry order(s) are active (Received, In Progress, or Ready). Complete or cancel all open orders first."]);
+            }
+        }
+
         $settings->update($validated);
 
         ActivityLogger::log(
@@ -841,6 +871,72 @@ class BranchController extends Controller
         );
 
         return back()->with('success', "Till opening requirement {$status} for {$branch->name}.");
+    }
+
+    /**
+     * Toggle branch laundry module enablement status.
+     */
+    public function toggleLaundry(Branch $branch)
+    {
+        $settings = $branch->getSettings();
+        $currentState = (bool) ($settings->laundry_enabled ?? false);
+        $newState = !$currentState;
+
+        if (!$newState && !(bool) ($settings->pos_enabled ?? true)) {
+            return back()->withErrors(['interface' => 'At least one interface (POS or Laundry) must remain enabled for the branch.']);
+        }
+
+        if (!$newState) {
+            $openOrdersCount = \App\Modules\Laundry\Models\LaundryOrder::where('branch_id', $branch->id)
+                ->whereIn('status', ['received', 'in_progress', 'ready'])
+                ->count();
+            if ($openOrdersCount > 0) {
+                return back()->withErrors(['laundry_enabled' => "Cannot disable Laundry module while {$openOrdersCount} laundry order(s) are active (Received, In Progress, or Ready). Complete or cancel all open orders first."]);
+            }
+        }
+
+        $settings->update(['laundry_enabled' => $newState]);
+        $status = $newState ? 'enabled' : 'disabled';
+
+        ActivityLogger::log(
+            'setting',
+            "Super Admin {$status} Laundry module for branch '{$branch->name}'",
+            $branch->id
+        );
+
+        return back()->with('success', "Laundry module {$status} for {$branch->name}.");
+    }
+
+    /**
+     * Toggle branch POS interface enablement status.
+     */
+    public function togglePos(Branch $branch)
+    {
+        $settings = $branch->getSettings();
+        $currentState = (bool) ($settings->pos_enabled ?? true);
+        $newState = !$currentState;
+
+        if (!$newState && !(bool) ($settings->laundry_enabled ?? false)) {
+            return back()->withErrors(['interface' => 'At least one interface (POS or Laundry) must remain enabled for the branch.']);
+        }
+
+        if (!$newState) {
+            $openTillCount = \App\Models\TillSession::where('branch_id', $branch->id)->where('status', 'open')->count();
+            if ($openTillCount > 0) {
+                return back()->withErrors(['pos_enabled' => "Cannot disable POS interface while {$openTillCount} till session(s) are currently open. Please reconcile and close all open tills first."]);
+            }
+        }
+
+        $settings->update(['pos_enabled' => $newState]);
+        $status = $newState ? 'enabled' : 'disabled';
+
+        ActivityLogger::log(
+            'setting',
+            "Super Admin {$status} POS interface for branch '{$branch->name}'",
+            $branch->id
+        );
+
+        return back()->with('success', "POS interface {$status} for {$branch->name}.");
     }
 
     private function streamExcelOrCsv(Spreadsheet $spreadsheet, string $filenamePrefix, string $format = 'xlsx')
