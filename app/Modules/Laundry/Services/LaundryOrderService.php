@@ -7,12 +7,14 @@ use App\Models\DebtPayment;
 use App\Models\PosCustomer;
 use App\Models\TillSession;
 use App\Models\User;
+use App\Modules\Laundry\Models\LaundryDiscount;
 use App\Modules\Laundry\Models\LaundryOrder;
 use App\Modules\Laundry\Models\LaundryOrderItem;
 use App\Modules\Laundry\Models\LaundryOrderStatusHistory;
 use App\Modules\Laundry\Models\LaundryPayment;
 use App\Modules\Laundry\Models\LaundryService;
 use App\Modules\Laundry\Models\LaundrySetting;
+use App\Modules\Laundry\Services\LaundryDiscountService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -29,8 +31,7 @@ class LaundryOrderService
             $posSettings = $branch->getSettings();
 
             // 1. Resolve Customer & Snapshots
-            $customer = PosCustomer::where('branch_id', $branch->id)
-                ->findOrFail($data['customer_id']);
+            $customer = PosCustomer::findOrFail($data['customer_id']);
 
             // 2. Race-Safe Order Number Generation
             $prefix = $laundrySettings->order_prefix ?: 'LDY-';
@@ -68,36 +69,73 @@ class LaundryOrderService
 
                 $serviceName = $service ? $service->name : ($line['service_name'] ?? 'Custom Service');
                 $pricingType = $service ? $service->pricing_type : ($line['pricing_type'] ?? 'per_piece');
-                $unitPrice   = isset($line['unit_price']) ? (float) $line['unit_price'] : ($service ? (float) $service->price : 0);
                 $quantity    = (float) ($line['quantity'] ?? 1);
 
                 if ($quantity <= 0) {
                     throw ValidationException::withMessages(["items.{$idx}.quantity" => 'Quantity/Weight must be greater than zero.']);
                 }
 
+                // Resolve service discount if applicable
+                $originalPrice = $service ? (float) $service->price : (isset($line['original_price']) ? (float) $line['original_price'] : (isset($line['unit_price']) ? (float) $line['unit_price'] : 0));
+                $unitPrice = isset($line['unit_price']) ? (float) $line['unit_price'] : $originalPrice;
+                $serviceDiscountId = $line['laundry_discount_id'] ?? null;
+                $lineDiscountAmount = isset($line['discount_amount']) ? (float) $line['discount_amount'] : 0;
+
+                if ($service && empty($line['unit_price'])) {
+                    $discountInfo = LaundryDiscountService::resolveServiceDiscount($service);
+                    if ($discountInfo['has_discount']) {
+                        $unitPrice = $discountInfo['discounted_price'];
+                        $serviceDiscountId = $discountInfo['discount_id'];
+                        $lineDiscountAmount = $discountInfo['discount_amount'];
+                    }
+                }
+
                 $lineTotal = round($unitPrice * $quantity, 2);
                 $subtotal += $lineTotal;
 
                 $preparedLines[] = [
-                    'service_id'   => $service?->id,
-                    'service_name' => $serviceName,
-                    'pricing_type' => $pricingType,
-                    'unit_price'   => $unitPrice,
-                    'quantity'     => $quantity,
-                    'line_total'   => $lineTotal,
-                    'note'         => $line['note'] ?? null,
+                    'service_id'          => $service?->id,
+                    'service_name'        => $serviceName,
+                    'pricing_type'        => $pricingType,
+                    'original_price'      => $originalPrice,
+                    'unit_price'          => $unitPrice,
+                    'quantity'            => $quantity,
+                    'discount_amount'     => $lineDiscountAmount,
+                    'laundry_discount_id' => $serviceDiscountId,
+                    'line_total'          => $lineTotal,
+                    'note'                => $line['note'] ?? null,
                 ];
             }
 
-            // 4. Calculate Discounts & Taxes
+            // 4. Calculate Order-Level Discounts & Taxes
             $discountAmount = 0;
             $discountType = $data['discount_type'] ?? null;
-            if (!empty($data['discount_amount']) && (float) $data['discount_amount'] > 0) {
+            $generalDiscountId = $data['laundry_discount_id'] ?? null;
+
+            // If general promo discount ID supplied, load it to verify/calculate
+            if ($generalDiscountId) {
+                $genDiscount = LaundryDiscount::forBranch($branch->id)->general()->find($generalDiscountId);
+                if ($genDiscount && $genDiscount->isActiveNow()) {
+                    $discountType = $genDiscount->discount_type;
+                    $discountAmount = $genDiscount->computeDiscount($subtotal);
+                } else {
+                    $generalDiscountId = null;
+                }
+            } elseif (!empty($data['discount_amount']) && (float) $data['discount_amount'] > 0) {
+                // Manual discount
                 $rawDiscount = (float) $data['discount_amount'];
                 if ($discountType === 'percentage') {
                     $discountAmount = round($subtotal * (min(100, $rawDiscount) / 100), 2);
                 } else {
                     $discountAmount = min($subtotal, round($rawDiscount, 2));
+                }
+            } elseif (!array_key_exists('laundry_discount_id', $data) && !array_key_exists('discount_amount', $data)) {
+                // Auto-apply active general branch discount if available and not explicitly submitted
+                $activeGenPromo = LaundryDiscountService::getActiveGeneralDiscount($branch->id);
+                if ($activeGenPromo) {
+                    $generalDiscountId = $activeGenPromo->id;
+                    $discountType = $activeGenPromo->discount_type;
+                    $discountAmount = $activeGenPromo->computeDiscount($subtotal);
                 }
             }
 
@@ -116,23 +154,24 @@ class LaundryOrderService
 
             // 6. Create Order Header
             $order = LaundryOrder::create([
-                'branch_id'       => $branch->id,
-                'order_number'    => $orderNumber,
-                'customer_id'     => $customer->id,
-                'customer_name'   => $customer->name,
-                'customer_phone'  => $customer->phone ?? '',
-                'status'          => 'received',
-                'received_at'     => Carbon::now(),
-                'due_at'          => $dueAt,
-                'created_by'      => $user->id,
-                'subtotal'        => $subtotal,
-                'discount_amount' => $discountAmount,
-                'discount_type'   => $discountType,
-                'tax_amount'      => $taxAmount,
-                'total'           => $total,
-                'amount_paid'     => 0,
-                'balance'         => $total,
-                'note'            => $data['note'] ?? null,
+                'branch_id'           => $branch->id,
+                'order_number'        => $orderNumber,
+                'customer_id'         => $customer->id,
+                'customer_name'       => $customer->name,
+                'customer_phone'      => $customer->phone ?? '',
+                'status'              => 'received',
+                'received_at'         => Carbon::now(),
+                'due_at'              => $dueAt,
+                'created_by'          => $user->id,
+                'subtotal'            => $subtotal,
+                'discount_amount'     => $discountAmount,
+                'discount_type'       => $discountType,
+                'laundry_discount_id' => $generalDiscountId,
+                'tax_amount'          => $taxAmount,
+                'total'               => $total,
+                'amount_paid'         => 0,
+                'balance'             => $total,
+                'note'                => $data['note'] ?? null,
             ]);
 
             // 7. Insert Item Lines
@@ -168,9 +207,9 @@ class LaundryOrderService
     /**
      * Record a payment (deposit or balance settlement) against an order.
      */
-    public function recordPayment(LaundryOrder $order, User $user, array $data): LaundryPayment
+    public function recordPayment(LaundryOrder $order, User $user, array $data, bool $syncDebtLedger = true): LaundryPayment
     {
-        return DB::transaction(function () use ($order, $user, $data) {
+        return DB::transaction(function () use ($order, $user, $data, $syncDebtLedger) {
             $amount = round((float) ($data['amount'] ?? 0), 2);
             if ($amount <= 0) {
                 throw ValidationException::withMessages(['amount' => 'Payment amount must be greater than zero.']);
@@ -182,7 +221,8 @@ class LaundryOrderService
             }
 
             // Check Till Session Requirement
-            $posSettings = $order->branch->getSettings();
+            $branch = $order->relationLoaded('branch') ? $order->branch : Branch::find($order->branch_id);
+            $posSettings = $branch ? $branch->getSettings() : null;
             $tillSessionId = null;
 
             $activeTill = TillSession::where('branch_id', $order->branch_id)
@@ -194,7 +234,8 @@ class LaundryOrderService
                 ->latest('id')
                 ->first();
 
-            if (!empty($posSettings->require_till_opening) && !$activeTill) {
+            // Till session requirement applies only to counter/POS transactions, not automated debt ledger settlements
+            if ($syncDebtLedger && !empty($posSettings->require_till_opening) && !$activeTill) {
                 throw ValidationException::withMessages(['till' => 'An active till session is required to record cash payments. Please open a till first.']);
             }
 
@@ -227,6 +268,41 @@ class LaundryOrderService
                 'amount_paid' => round($totalPaid, 2),
                 'balance'     => $newBalance,
             ]);
+
+            // Sync with Customer Debt Ledger if this order had previously moved balance to customer debt
+            if ($syncDebtLedger && $order->customer_id) {
+                $hasPriorDebt = $order->status === 'collected'
+                    || DebtPayment::where('laundry_order_id', $order->id)->where('type', 'debit')->exists();
+
+                if ($hasPriorDebt) {
+                    $customer = $order->customer;
+                    if ($customer && (float) $customer->debt_bal > 0) {
+                        $currentDebt = (float) $customer->debt_bal;
+                        $creditAmount = min($amount, $currentDebt);
+
+                        if ($creditAmount > 0) {
+                            $balAfter = round(max(0, $currentDebt - $creditAmount), 2);
+
+                            $debtPayment = DebtPayment::create([
+                                'branch_id'        => $order->branch_id,
+                                'customer_id'      => $customer->id,
+                                'user_id'          => $user->id,
+                                'laundry_order_id' => $order->id,
+                                'source'           => 'laundry',
+                                'amount'           => $creditAmount,
+                                'type'             => 'credit',
+                                'narration'        => "Payment received for collected laundry order #{$order->order_number} ({$method})",
+                                'balance_before'   => $currentDebt,
+                                'balance_after'    => $balAfter,
+                            ]);
+
+                            $customer->update(['debt_bal' => $balAfter]);
+
+                            \App\Modules\Accounting\Services\SalePostingService::postDebtPayment($debtPayment);
+                        }
+                    }
+                }
+            }
 
             return $payment;
         });
@@ -281,14 +357,16 @@ class LaundryOrderService
                         $balanceAfter  = round($balanceBefore + $balance, 2);
 
                         DebtPayment::create([
-                            'branch_id'      => $order->branch_id,
-                            'customer_id'    => $customer->id,
-                            'user_id'        => $user->id,
-                            'amount'         => $balance,
-                            'type'           => 'debit',
-                            'narration'      => "Unpaid balance released on laundry order #{$order->order_number}",
-                            'balance_before' => $balanceBefore,
-                            'balance_after'  => $balanceAfter,
+                            'branch_id'        => $order->branch_id,
+                            'customer_id'      => $customer->id,
+                            'user_id'          => $user->id,
+                            'laundry_order_id' => $order->id,
+                            'source'           => 'laundry',
+                            'amount'           => $balance,
+                            'type'             => 'debit',
+                            'narration'        => "Unpaid balance released on laundry order #{$order->order_number}",
+                            'balance_before'   => $balanceBefore,
+                            'balance_after'    => $balanceAfter,
                         ]);
 
                         $customer->update(['debt_bal' => $balanceAfter]);
@@ -405,5 +483,30 @@ class LaundryOrderService
         }
 
         return $countryDigits . $clean;
+    }
+
+    /**
+     * Generate click-to-chat WhatsApp link using customer's whatsapp_number or phone.
+     */
+    public static function generateWhatsAppLink(LaundryOrder $order, LaundrySetting $settings): ?string
+    {
+        $targetPhone = $order->customer?->whatsapp_number ?: $order->customer_phone;
+        if (empty($targetPhone)) {
+            return null;
+        }
+
+        $normalizedPhone = static::normalizeWhatsAppPhone($targetPhone, $settings->default_country_code ?: '+234');
+        if (empty($normalizedPhone)) {
+            return null;
+        }
+
+        $branchName = $order->branch?->name ?: 'our store';
+        $msg = str_replace(
+            ['{customer_name}', '{order_number}', '{branch_name}', '{balance}'],
+            [$order->customer_name, $order->order_number, $branchName, '₦' . number_format($order->balance, 2)],
+            $settings->whatsapp_template ?: "Hello {customer_name}, your laundry order #{order_number} is ready for pickup at {branch_name}! Total due: {balance}. Thank you for choosing us."
+        );
+
+        return "https://wa.me/{$normalizedPhone}?text=" . urlencode($msg);
     }
 }

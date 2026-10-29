@@ -45,7 +45,7 @@ function submit() {
 }
 
 const isCoreRole = (name) => {
-    return ['branch-admin', 'admin', 'cashier'].includes((name || '').toLowerCase())
+    return ['branch-admin', 'admin', 'cashier', 'manager', 'inventory-manager', 'laundry-staff'].includes((name || '').toLowerCase())
 }
 
 function destroy(role) {

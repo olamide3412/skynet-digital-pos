@@ -73,6 +73,8 @@ function pick(c) {
                 </div>
                 <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">
                     {{ customer.phone }}
+                    <span v-if="customer.whatsapp_number && customer.whatsapp_number !== customer.phone" class="ml-1 text-emerald-600 dark:text-emerald-400 font-mono">· 💬 {{ customer.whatsapp_number }}</span>
+                    <span v-if="customer.email" class="ml-1 font-sans text-slate-400 dark:text-slate-500">· {{ customer.email }}</span>
                     <span v-if="Number(customer.debt_bal) > 0" class="text-red-600 dark:text-red-400 font-semibold ml-1.5">
                         · Owing: {{ format(customer.debt_bal) }}
                     </span>
@@ -97,7 +99,7 @@ function pick(c) {
                 @input="onInput"
                 @keydown.escape="results = []; query = ''"
                 type="text"
-                placeholder="Search customer (optional)…"
+                placeholder="Search by name, phone, or email (optional)…"
                 class="flex-1 bg-transparent text-slate-900 dark:text-white placeholder-slate-400 text-xs outline-none"
             />
             <span v-if="loading" class="text-slate-500 dark:text-slate-400 text-xs">…</span>
@@ -118,7 +120,11 @@ function pick(c) {
                             ⚠️ Flagged
                         </span>
                     </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ c.phone }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                        {{ c.phone }}
+                        <span v-if="c.whatsapp_number && c.whatsapp_number !== c.phone" class="ml-1 text-emerald-600 dark:text-emerald-400 font-mono">· 💬 {{ c.whatsapp_number }}</span>
+                        <span v-if="c.email" class="ml-1 font-sans text-slate-400 dark:text-slate-500 truncate">· {{ c.email }}</span>
+                    </p>
                 </div>
 
                 <!-- Outstanding Debt Display (In Red, Bit Smaller Than Name) -->

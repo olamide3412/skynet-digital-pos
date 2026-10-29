@@ -18,6 +18,7 @@ const modalType  = ref('credit') // 'credit' | 'debit'
 const form = useForm({
     type:      'credit',
     amount:    '',
+    method:    'Cash',
     narration: '',
 })
 
@@ -197,9 +198,23 @@ function fmtDate(val) {
                             </td>
                             <!-- Narration -->
                             <td class="px-4 py-3 text-slate-800 dark:text-slate-200 max-w-xs">
-                                <p class="truncate font-medium">{{ tx.narration }}</p>
-                                <p v-if="tx.sale_id" class="text-xs text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
-                                    Linked to Sale #{{ tx.sale_id }}
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <span v-if="tx.source === 'laundry'" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                        🧺 Laundry
+                                    </span>
+                                    <span v-else-if="tx.source === 'pos'" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                        🛒 POS Retail
+                                    </span>
+                                    <span v-else class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                                        📝 Manual / Ledger
+                                    </span>
+                                    <span class="truncate font-medium">{{ tx.narration }}</span>
+                                </div>
+                                <p v-if="tx.sale_id" class="text-xs text-blue-600 dark:text-blue-400 font-mono mt-0.5">
+                                    Linked to Sale #{{ tx.sale?.receipt_id || tx.sale_id }}
+                                </p>
+                                <p v-if="tx.laundry_order_id" class="text-xs text-purple-600 dark:text-purple-400 font-mono mt-0.5">
+                                    Linked to Laundry Order #{{ tx.laundry_order?.order_number || tx.laundryOrder?.order_number || tx.laundry_order_id }}
                                 </p>
                             </td>
                             <!-- User -->
@@ -294,6 +309,17 @@ function fmtDate(val) {
                                     </svg>
                                     {{ amountError }}
                                 </p>
+                            </div>
+
+                            <!-- Payment Method (For Credits/Payments) -->
+                            <div v-if="modalType === 'credit'">
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Payment Method</label>
+                                <select v-model="form.method"
+                                    class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white text-sm outline-none focus:border-emerald-500 font-semibold transition">
+                                    <option value="Cash">Cash</option>
+                                    <option value="Bank Transfer">Bank Transfer</option>
+                                    <option value="Card / POS">Card / POS</option>
+                                </select>
                             </div>
 
                             <!-- Narration -->

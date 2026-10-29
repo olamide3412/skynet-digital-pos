@@ -23,6 +23,9 @@ class RoleController extends Controller
         'canViewReorderPoints', 'canLogExpense', 'canManageExpenses', 'canViewExpenseReports', 'canViewExpiryReport', 'canViewBatchExpiryReport',
         'view_ecommerce_activity', 'canManageTillCashMovements',
         'canViewAccounting', 'canManageChartOfAccounts', 'canManageJournalEntries', 'canCloseFinancialPeriods',
+        'laundry.access', 'laundry.create_order', 'laundry.update_status', 'laundry.record_payment',
+        'laundry.cancel_order', 'laundry.refund', 'laundry.release_unpaid', 'laundry.override_price',
+        'laundry.manage_services', 'laundry.manage_discounts', 'laundry.view_reports', 'laundry.manage_settings',
     ];
 
     public function index()

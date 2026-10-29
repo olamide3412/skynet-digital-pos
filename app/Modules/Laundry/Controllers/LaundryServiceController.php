@@ -3,6 +3,7 @@
 namespace App\Modules\Laundry\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Laundry\Models\LaundryCategory;
 use App\Modules\Laundry\Models\LaundryService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -19,14 +20,19 @@ class LaundryServiceController extends Controller
 
         $query = LaundryService::query()
             ->forBranch($branch->id)
+            ->with(['category:id,name,slug', 'activeDiscount'])
             ->when($request->search, function ($q, $search) {
                 $q->where(function ($sub) use ($search) {
                     $sub->where('name', 'like', "%{$search}%")
-                        ->orWhere('category', 'like', "%{$search}%");
+                        ->orWhereHas('category', fn($c) => $c->where('name', 'like', "%{$search}%"));
                 });
             })
             ->when($request->category, function ($q, $cat) {
-                $q->where('category', $cat);
+                if (is_numeric($cat)) {
+                    $q->where('category_id', $cat);
+                } else {
+                    $q->whereHas('category', fn($c) => $c->where('name', $cat)->orWhere('slug', $cat));
+                }
             })
             ->when($request->status, function ($q, $status) {
                 if ($status === 'active') {
@@ -40,10 +46,11 @@ class LaundryServiceController extends Controller
 
         $services = $query->paginate(25)->withQueryString();
 
-        $categories = LaundryService::forBranch($branch->id)
-            ->whereNotNull('category')
-            ->distinct()
-            ->pluck('category');
+        $categories = LaundryCategory::forBranch($branch->id)
+            ->withCount('services')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
 
         return Inertia::render('Laundry/Services/Index', [
             'services'   => $services,
@@ -58,16 +65,13 @@ class LaundryServiceController extends Controller
      */
     public function store(Request $request)
     {
-        $user = auth()->user();
-        if (!$user->isBranchAdmin() && !$user->isSuperAdmin() && !$user->hasPermissionTo('laundry.manage_services')) {
-            abort(403, 'Unauthorized to manage laundry services.');
-        }
+        $this->authorizeManage();
 
         $branch = current_branch();
 
         $validated = $request->validate([
             'name'         => ['required', 'string', 'max:255'],
-            'category'     => ['nullable', 'string', 'max:100'],
+            'category_id'  => ['nullable', 'integer', 'exists:laundry_categories,id'],
             'pricing_type' => ['required', 'string', 'in:per_piece,per_kg'],
             'price'        => ['required', 'numeric', 'min:0'],
             'is_active'    => ['boolean'],
@@ -88,10 +92,7 @@ class LaundryServiceController extends Controller
      */
     public function update(Request $request, LaundryService $service)
     {
-        $user = auth()->user();
-        if (!$user->isBranchAdmin() && !$user->isSuperAdmin() && !$user->hasPermissionTo('laundry.manage_services')) {
-            abort(403, 'Unauthorized to manage laundry services.');
-        }
+        $this->authorizeManage();
 
         $branch = current_branch();
         if ($service->branch_id !== $branch->id) {
@@ -100,7 +101,7 @@ class LaundryServiceController extends Controller
 
         $validated = $request->validate([
             'name'         => ['required', 'string', 'max:255'],
-            'category'     => ['nullable', 'string', 'max:100'],
+            'category_id'  => ['nullable', 'integer', 'exists:laundry_categories,id'],
             'pricing_type' => ['required', 'string', 'in:per_piece,per_kg'],
             'price'        => ['required', 'numeric', 'min:0'],
             'is_active'    => ['boolean'],
@@ -117,10 +118,7 @@ class LaundryServiceController extends Controller
      */
     public function toggleActive(LaundryService $service)
     {
-        $user = auth()->user();
-        if (!$user->isBranchAdmin() && !$user->isSuperAdmin() && !$user->hasPermissionTo('laundry.manage_services')) {
-            abort(403, 'Unauthorized to manage laundry services.');
-        }
+        $this->authorizeManage();
 
         $branch = current_branch();
         if ($service->branch_id !== $branch->id) {
@@ -140,10 +138,7 @@ class LaundryServiceController extends Controller
      */
     public function destroy(LaundryService $service)
     {
-        $user = auth()->user();
-        if (!$user->isBranchAdmin() && !$user->isSuperAdmin() && !$user->hasPermissionTo('laundry.manage_services')) {
-            abort(403, 'Unauthorized to manage laundry services.');
-        }
+        $this->authorizeManage();
 
         $branch = current_branch();
         if ($service->branch_id !== $branch->id) {
@@ -151,7 +146,6 @@ class LaundryServiceController extends Controller
         }
 
         if ($service->orderItems()->exists()) {
-            // Soft deactivate instead of delete to preserve historical integrity
             $service->update(['is_active' => false]);
             return back()->with('info', 'Service has order history and was deactivated instead of deleted.');
         }
@@ -159,5 +153,92 @@ class LaundryServiceController extends Controller
         $service->delete();
 
         return back()->with('success', 'Laundry service deleted successfully.');
+    }
+
+    /**
+     * Store a new laundry category.
+     */
+    public function storeCategory(Request $request)
+    {
+        $this->authorizeManage();
+
+        $branch = current_branch();
+
+        $validated = $request->validate([
+            'name'        => ['required', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'sort_order'  => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $exists = LaundryCategory::forBranch($branch->id)->where('name', $validated['name'])->exists();
+        if ($exists) {
+            return back()->withErrors(['name' => 'A category with this name already exists in this branch.']);
+        }
+
+        $validated['branch_id'] = $branch->id;
+        $validated['sort_order'] = $validated['sort_order'] ?? 0;
+        $validated['is_active'] = true;
+
+        LaundryCategory::create($validated);
+
+        return back()->with('success', 'Laundry category created successfully.');
+    }
+
+    /**
+     * Update an existing laundry category.
+     */
+    public function updateCategory(Request $request, $branch, $id)
+    {
+        $this->authorizeManage();
+
+        $branchModel = current_branch();
+        $category = LaundryCategory::where('branch_id', $branchModel->id)->findOrFail($id);
+
+        $validated = $request->validate([
+            'name'        => ['required', 'string', 'max:100'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'sort_order'  => ['nullable', 'integer', 'min:0'],
+            'is_active'   => ['nullable', 'boolean'],
+        ]);
+
+        $exists = LaundryCategory::forBranch($branchModel->id)
+            ->where('name', $validated['name'])
+            ->where('id', '!=', $category->id)
+            ->exists();
+
+        if ($exists) {
+            return back()->withErrors(['name' => 'Another category with this name already exists.']);
+        }
+
+        $category->update($validated);
+
+        return back()->with('success', 'Laundry category updated successfully.');
+    }
+
+    /**
+     * Delete an existing laundry category if no services are assigned to it.
+     */
+    public function destroyCategory(Request $request, $branch, $id)
+    {
+        $this->authorizeManage();
+
+        $branchModel = current_branch();
+        $category = LaundryCategory::where('branch_id', $branchModel->id)->findOrFail($id);
+
+        if ($category->services()->exists()) {
+            return back()->withErrors(['error' => 'Cannot delete category with active services. Please reassign or delete its services first.']);
+        }
+
+        $category->delete();
+
+        return back()->with('success', 'Laundry category deleted successfully.');
+    }
+
+    protected function authorizeManage(): void
+    {
+        $user = auth()->user();
+        if (!$user->isBranchAdmin() && !$user->isSuperAdmin() && !$user->hasPermissionTo('laundry.manage_services')) {
+            abort(403, 'Unauthorized to manage laundry services.');
+        }
     }
 }

@@ -29,6 +29,7 @@ class LaundryOrder extends Model
         'subtotal',
         'discount_amount',
         'discount_type',
+        'laundry_discount_id',
         'tax_amount',
         'total',
         'amount_paid',
@@ -117,15 +118,35 @@ class LaundryOrder extends Model
             return false;
         }
 
-        return $this->due_at->isPast();
+        return $this->due_at ? $this->due_at->isPast() : false;
     }
 
     public function isUnclaimed(int $unclaimedDays = 14): bool
     {
-        if ($this->status !== 'ready') {
+        if ($this->status !== 'ready' || !$this->due_at) {
             return false;
         }
 
-        return $this->due_at->addDays($unclaimedDays)->isPast();
+        return $this->due_at->copy()->addDays($unclaimedDays)->isPast();
+    }
+
+    public function scopeForBranch($query, $branchId)
+    {
+        return $query->where('branch_id', $branchId);
+    }
+
+    public function generalDiscount(): BelongsTo
+    {
+        return $this->belongsTo(LaundryDiscount::class, 'laundry_discount_id');
+    }
+
+    public function discount(): BelongsTo
+    {
+        return $this->belongsTo(LaundryDiscount::class, 'laundry_discount_id');
+    }
+
+    public function getBalanceDueAttribute(): float
+    {
+        return (float) $this->balance;
     }
 }

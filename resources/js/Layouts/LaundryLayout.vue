@@ -211,7 +211,24 @@ const isActive = (match) => {
                     <span v-show="!isCollapsed" class="truncate font-semibold">New Intake Order</span>
                 </Link>
 
-                <!-- 4. Orders (Board & List) -->
+                <!-- 4. Workflow Board (Kanban) -->
+                <Link
+                    :href="safeRoute('laundry.board.index')"
+                    :class="[
+                        'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition group',
+                        isActive('Laundry/Orders/Board')
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                    ]"
+                    :title="isCollapsed ? 'Workflow Board' : undefined"
+                >
+                    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z" />
+                    </svg>
+                    <span v-show="!isCollapsed" class="truncate">Workflow Board</span>
+                </Link>
+
+                <!-- 5. All Orders (Data Table) -->
                 <Link
                     :href="safeRoute('laundry.orders.index')"
                     :class="[
@@ -220,12 +237,12 @@ const isActive = (match) => {
                             ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                             : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60'
                     ]"
-                    :title="isCollapsed ? 'Orders' : undefined"
+                    :title="isCollapsed ? 'All Orders' : undefined"
                 >
                     <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
-                    <span v-show="!isCollapsed" class="truncate">Orders & Board</span>
+                    <span v-show="!isCollapsed" class="truncate">All Orders</span>
                 </Link>
 
                 <!-- 5. Customers (Shared) -->
@@ -262,7 +279,25 @@ const isActive = (match) => {
                     <span v-show="!isCollapsed" class="truncate">Services & Prices</span>
                 </Link>
 
-                <!-- 7. Reports -->
+                <!-- 7. Discounts & Promos -->
+                <Link
+                    v-if="perms.isBranchAdmin || perms.isSuperAdmin || perms['laundry.manage_discounts'] || perms['laundry.manage_services']"
+                    :href="safeRoute('laundry.discounts.index')"
+                    :class="[
+                        'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition group',
+                        isActive('Laundry/Discounts/Index')
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                    ]"
+                    :title="isCollapsed ? 'Discounts' : undefined"
+                >
+                    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2v16z" />
+                    </svg>
+                    <span v-show="!isCollapsed" class="truncate">Discounts & Promos</span>
+                </Link>
+
+                <!-- 8. Reports -->
                 <Link
                     :href="safeRoute('laundry.reports.index')"
                     :class="[

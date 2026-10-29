@@ -11,12 +11,28 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 1. Laundry Services (Price List Catalogue per Branch)
-        Schema::create('laundry_services', function (Blueprint $table) {
+        // 1. Laundry Categories (Price List Groups per Branch)
+        Schema::create('laundry_categories', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('branch_id')->index();
             $table->string('name');
-            $table->string('category')->nullable()->index();
+            $table->string('slug')->nullable();
+            $table->text('description')->nullable();
+            $table->integer('sort_order')->default(0);
+            $table->boolean('is_active')->default(true);
+            $table->timestamps();
+
+            $table->foreign('branch_id')->references('id')->on('branches')->onDelete('cascade');
+            $table->unique(['branch_id', 'name']);
+            $table->index(['branch_id', 'sort_order']);
+        });
+
+        // 2. Laundry Services (Price List Catalogue per Branch)
+        Schema::create('laundry_services', function (Blueprint $table) {
+            $table->id();
+            $table->unsignedBigInteger('branch_id')->index();
+            $table->unsignedBigInteger('category_id')->nullable()->index();
+            $table->string('name');
             $table->string('pricing_type', 20)->default('per_piece'); // per_piece, per_kg
             $table->decimal('price', 12, 2)->default(0);
             $table->boolean('is_active')->default(true);
@@ -24,11 +40,12 @@ return new class extends Migration
             $table->timestamps();
 
             $table->foreign('branch_id')->references('id')->on('branches')->onDelete('cascade');
+            $table->foreign('category_id')->references('id')->on('laundry_categories')->onDelete('set null');
             $table->index(['branch_id', 'is_active']);
             $table->index(['branch_id', 'sort_order']);
         });
 
-        // 2. Laundry Orders
+        // 3. Laundry Orders
         Schema::create('laundry_orders', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('branch_id')->index();
@@ -147,5 +164,6 @@ return new class extends Migration
         Schema::dropIfExists('laundry_order_items');
         Schema::dropIfExists('laundry_orders');
         Schema::dropIfExists('laundry_services');
+        Schema::dropIfExists('laundry_categories');
     }
 };

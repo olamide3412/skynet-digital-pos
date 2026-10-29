@@ -257,6 +257,7 @@ class SaleService
                         'customer_id'    => $customerId,
                         'user_id'        => $user->id,
                         'sale_id'        => $sale->id,
+                        'source'         => 'pos',
                         'amount'         => $debtAmt,
                         'balance_before' => $balBefore,
                         'balance_after'  => $balAfter,

@@ -1,7 +1,6 @@
 <script setup>
 import { ref } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
-import LaundryLayout from '@/Layouts/LaundryLayout.vue'
 
 const props = defineProps({
     settings: {
@@ -49,21 +48,32 @@ const saveSettings = () => {
 </script>
 
 <template>
-    <LaundryLayout title="Laundry Settings">
-        <div class="max-w-4xl mx-auto space-y-6">
-
-            <!-- Header -->
-            <div class="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
-                <h2 class="text-xl font-black text-slate-900 dark:text-white">
-                    Laundry Module Configuration
-                </h2>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
-                    Configure operational policies, WhatsApp alerts, order numbering, and ticket footers.
-                </p>
+    <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
+        <!-- Header -->
+        <div class="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+            <div>
+                <h1 class="text-lg font-bold text-slate-900 dark:text-white">Laundry Module Settings</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400">Configure operational turnaround, WhatsApp alerts, order numbering, and ticket footers</p>
             </div>
+            <div v-if="can_manage" class="flex items-center gap-2.5">
+                <button
+                    type="submit"
+                    form="laundry-settings-form"
+                    :disabled="isSaving"
+                    class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-md shadow-indigo-900/20 cursor-pointer disabled:opacity-50"
+                >
+                    <svg v-if="isSaving" class="w-3.5 h-3.5 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                    <span>{{ isSaving ? 'Saving...' : 'Save Settings' }}</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+            <div class="max-w-4xl mx-auto space-y-6">
 
             <!-- Settings Form Card -->
-            <form @submit.prevent="saveSettings" class="p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-6">
+            <form id="laundry-settings-form" @submit.prevent="saveSettings" class="p-6 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-6">
 
                 <!-- 1. General Turnaround & Prefixes -->
                 <div class="space-y-4">
@@ -224,9 +234,9 @@ const saveSettings = () => {
                         <span>{{ isSaving ? 'Saving Settings...' : 'Save Configuration' }}</span>
                     </button>
                 </div>
-
             </form>
 
+            </div>
         </div>
-    </LaundryLayout>
+    </div>
 </template>

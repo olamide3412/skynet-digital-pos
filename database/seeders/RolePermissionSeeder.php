@@ -42,6 +42,18 @@ class RolePermissionSeeder extends Seeder
         'canManageChartOfAccounts',
         'canManageJournalEntries',
         'canCloseFinancialPeriods',
+        'laundry.access',
+        'laundry.create_order',
+        'laundry.update_status',
+        'laundry.record_payment',
+        'laundry.cancel_order',
+        'laundry.refund',
+        'laundry.release_unpaid',
+        'laundry.override_price',
+        'laundry.manage_services',
+        'laundry.manage_discounts',
+        'laundry.view_reports',
+        'laundry.manage_settings',
     ];
 
     public function run(): void
@@ -71,12 +83,28 @@ class RolePermissionSeeder extends Seeder
         $cashierRole = Role::firstOrCreate(
             ['name' => 'cashier', 'guard_name' => 'web', 'team_id' => null],
         );
-        // Cashiers can only use POS, view EOD, process returns, manage customers
+        // Cashiers can use POS, laundry front desk, view EOD, process returns, manage customers
         $cashierRole->givePermissionTo([
             'canAccessPos',
             'canViewEndOfDay',
             'canProcessReturn',
             'canManageCustomers',
+            'laundry.access',
+            'laundry.create_order',
+            'laundry.update_status',
+            'laundry.record_payment',
+        ]);
+
+        $laundryStaffRole = Role::firstOrCreate(
+            ['name' => 'laundry-staff', 'guard_name' => 'web', 'team_id' => null],
+        );
+        $laundryStaffRole->givePermissionTo([
+            'laundry.access',
+            'laundry.create_order',
+            'laundry.update_status',
+            'laundry.record_payment',
+            'canManageCustomers',
+            'canViewEndOfDay',
         ]);
 
         $this->command->info('Permissions and default roles seeded.');

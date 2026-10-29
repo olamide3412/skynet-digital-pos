@@ -32,22 +32,29 @@ class LaundryHomeController extends Controller
             ->where('due_at', '<', Carbon::now())
             ->count();
 
+        $user = $request->user();
+        $userId = $user?->id;
+
         $cashCollectedToday = (float) LaundryPayment::where('branch_id', $branch->id)
+            ->where('recorded_by', $userId)
             ->whereDate('paid_at', Carbon::today())
             ->where('type', 'payment')
-            ->where('method', 'Cash')
+            ->whereRaw('LOWER(method) = ?', ['cash'])
             ->sum('amount')
             - (float) LaundryPayment::where('branch_id', $branch->id)
+            ->where('recorded_by', $userId)
             ->whereDate('paid_at', Carbon::today())
             ->where('type', 'refund')
-            ->where('method', 'Cash')
+            ->whereRaw('LOWER(method) = ?', ['cash'])
             ->sum('amount');
 
         $totalCollectedToday = (float) LaundryPayment::where('branch_id', $branch->id)
+            ->where('recorded_by', $userId)
             ->whereDate('paid_at', Carbon::today())
             ->where('type', 'payment')
             ->sum('amount')
             - (float) LaundryPayment::where('branch_id', $branch->id)
+            ->where('recorded_by', $userId)
             ->whereDate('paid_at', Carbon::today())
             ->where('type', 'refund')
             ->sum('amount');

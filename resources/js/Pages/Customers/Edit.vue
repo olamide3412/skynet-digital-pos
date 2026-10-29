@@ -11,9 +11,14 @@ const props = defineProps({
 
 const { format } = useCurrency()
 
+const isSameAsPhone = !props.customer?.whatsapp_number || props.customer.whatsapp_number === props.customer?.phone
+
 const form = useForm({
     name:            props.customer?.name ?? '',
     phone:           props.customer?.phone ?? '',
+    same_as_phone:   isSameAsPhone,
+    whatsapp_number: props.customer?.whatsapp_number ?? props.customer?.phone ?? '',
+    email:           props.customer?.email ?? '',
     address:         props.customer?.address === 'NA' ? '' : (props.customer?.address ?? ''),
     gender:          props.customer?.gender ?? '',
     dob:             props.customer?.dob ? props.customer.dob.split('T')[0] : '',
@@ -25,6 +30,9 @@ const form = useForm({
 })
 
 function submit() {
+    if (form.same_as_phone) {
+        form.whatsapp_number = form.phone
+    }
     form.put(route('pos.customers.update', props.customer.id))
 }
 </script>
@@ -88,6 +96,41 @@ function submit() {
                             <input v-model="form.phone" type="text" required
                                 class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition font-mono" />
                             <p v-if="form.errors.phone" class="text-red-500 text-xs mt-1">{{ form.errors.phone }}</p>
+
+                            <!-- WhatsApp Checkbox & Distinct Input -->
+                            <div class="mt-2 flex items-center gap-2">
+                                <input
+                                    id="same_whatsapp_edit"
+                                    v-model="form.same_as_phone"
+                                    type="checkbox"
+                                    class="rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                                />
+                                <label for="same_whatsapp_edit" class="text-xs text-slate-600 dark:text-slate-400 select-none cursor-pointer">
+                                    Same Phone and WhatsApp number
+                                </label>
+                            </div>
+
+                            <div v-if="!form.same_as_phone" class="mt-2.5">
+                                <label class="block text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 mb-1">
+                                    WhatsApp Number (Different from Phone)
+                                </label>
+                                <input
+                                    v-model="form.whatsapp_number"
+                                    type="text"
+                                    placeholder="080... or +234..."
+                                    class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-emerald-400 dark:border-emerald-600 focus:border-emerald-500 outline-none text-sm transition font-mono"
+                                />
+                                <p v-if="form.errors.whatsapp_number" class="text-red-500 text-xs mt-1">{{ form.errors.whatsapp_number }}</p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                Email Address <span class="text-slate-400 font-normal text-[11px]">(Optional)</span>
+                            </label>
+                            <input v-model="form.email" type="email" placeholder="customer@example.com"
+                                class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
+                            <p v-if="form.errors.email" class="text-red-500 text-xs mt-1">{{ form.errors.email }}</p>
                         </div>
 
                         <div>

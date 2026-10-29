@@ -27,6 +27,7 @@ const formatRoleName = (name) => {
         'cashier': 'Cashier / Sales Staff',
         'manager': 'Store Manager',
         'inventory-manager': 'Inventory / Stock Manager',
+        'laundry-staff': 'Laundry Staff / Cashier',
     }
     if (map[name]) return map[name]
     return name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -60,6 +61,18 @@ watch(() => form.role, (newRole) => {
             'canViewEndOfDay',
             'canProcessReturn',
             'canManageCustomers',
+            'laundry.access',
+            'laundry.create_order',
+            'laundry.update_status',
+            'laundry.record_payment',
+        ]
+    } else if (newRole === 'laundry-staff' && !isEditing.value) {
+        form.permissions = [
+            'laundry.access',
+            'laundry.create_order',
+            'laundry.update_status',
+            'laundry.record_payment',
+            'canManageCustomers',
         ]
     }
 })
@@ -79,6 +92,10 @@ function openCreateModal() {
         'canViewEndOfDay',
         'canProcessReturn',
         'canManageCustomers',
+        'laundry.access',
+        'laundry.create_order',
+        'laundry.update_status',
+        'laundry.record_payment',
     ]
     document.getElementById('user-modal').showModal()
 }

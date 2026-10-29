@@ -802,10 +802,21 @@ class ReportController extends Controller
     {
         $branch = current_branch();
 
-        // Only customers who have made purchases or debts in this branch
-        $branchCustomerIds = Sale::where('branch_id', $branch->id)
+        // Customers who have made purchases, placed laundry orders, or registered at this branch
+        $saleCustomerIds = Sale::where('branch_id', $branch->id)
             ->whereNotNull('customer_id')
-            ->pluck('customer_id')
+            ->pluck('customer_id');
+
+        $laundryCustomerIds = \App\Modules\Laundry\Models\LaundryOrder::where('branch_id', $branch->id)
+            ->whereNotNull('customer_id')
+            ->pluck('customer_id');
+
+        $directBranchCustomerIds = PosCustomer::where('branch_id', $branch->id)
+            ->pluck('id');
+
+        $branchCustomerIds = $saleCustomerIds
+            ->concat($laundryCustomerIds)
+            ->concat($directBranchCustomerIds)
             ->unique();
 
         $query = PosCustomer::whereIn('id', $branchCustomerIds)
@@ -853,9 +864,20 @@ class ReportController extends Controller
     {
         $branch = current_branch();
 
-        $branchCustomerIds = Sale::where('branch_id', $branch->id)
+        $saleCustomerIds = Sale::where('branch_id', $branch->id)
             ->whereNotNull('customer_id')
-            ->pluck('customer_id')
+            ->pluck('customer_id');
+
+        $laundryCustomerIds = \App\Modules\Laundry\Models\LaundryOrder::where('branch_id', $branch->id)
+            ->whereNotNull('customer_id')
+            ->pluck('customer_id');
+
+        $directBranchCustomerIds = PosCustomer::where('branch_id', $branch->id)
+            ->pluck('id');
+
+        $branchCustomerIds = $saleCustomerIds
+            ->concat($laundryCustomerIds)
+            ->concat($directBranchCustomerIds)
             ->unique();
 
         $customers = PosCustomer::whereIn('id', $branchCustomerIds)
@@ -950,6 +972,17 @@ class ReportController extends Controller
             ->where('type', 'credit')
             ->where('branch_id', $branch->id)
             ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
+            ->where(function ($q) {
+                $q->where('source', 'pos')
+                  ->orWhereNull('source');
+            })
+            ->sum('amount');
+
+        $laundryDebtRecovered = \App\Models\DebtPayment::whereBetween('created_at', [$startDate, $endDate])
+            ->where('type', 'credit')
+            ->where('branch_id', $branch->id)
+            ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
+            ->where('source', 'laundry')
             ->sum('amount');
 
         $allReturnsToday = SaleReturnItem::whereHas('item', fn ($q) => $q->where('branch_id', $branch->id))
@@ -958,16 +991,17 @@ class ReportController extends Controller
             ->get(['qty', 'refund_amount']);
 
         $summary = [
-            'total_sales'        => $allSalesToday->count(),
-            'total_revenue'      => (float) $allSalesToday->sum('final_total'),
-            'total_discount'     => (float) $allSalesToday->sum('discount_amount'),
-            'cash_collected'     => (float) $allSalesToday->sum('cash'),
-            'bank_collected'     => (float) $allSalesToday->sum('bank_transfer'),
-            'debt_recorded'      => (float) $allSalesToday->where('is_debt', true)->sum('final_total'),
-            'debt_recovered'     => (float) $debtRecovered,
-            'total_return_count' => $allReturnsToday->count(),
-            'total_return_qty'   => (int) $allReturnsToday->sum('qty'),
-            'total_return_worth' => (float) $allReturnsToday->sum('refund_amount'),
+            'total_sales'            => $allSalesToday->count(),
+            'total_revenue'          => (float) $allSalesToday->sum('final_total'),
+            'total_discount'         => (float) $allSalesToday->sum('discount_amount'),
+            'cash_collected'         => (float) $allSalesToday->sum('cash'),
+            'bank_collected'         => (float) $allSalesToday->sum('bank_transfer'),
+            'debt_recorded'          => (float) $allSalesToday->where('is_debt', true)->sum('final_total'),
+            'debt_recovered'         => (float) $debtRecovered,
+            'laundry_debt_recovered' => (float) $laundryDebtRecovered,
+            'total_return_count'     => $allReturnsToday->count(),
+            'total_return_qty'       => (int) $allReturnsToday->sum('qty'),
+            'total_return_worth'     => (float) $allReturnsToday->sum('refund_amount'),
         ];
 
         // Item level sales breakdown for selected user / all users today
@@ -995,7 +1029,7 @@ class ReportController extends Controller
             ->withQueryString();
 
         // ── Paginated debt payments ────────────────────────────────────────────
-        $debtPayments = \App\Models\DebtPayment::with(['customer', 'user'])
+        $debtPayments = \App\Models\DebtPayment::with(['customer', 'user', 'sale', 'laundryOrder'])
             ->whereBetween('created_at', [$startDate, $endDate])
             ->where('type', 'credit')
             ->where('branch_id', $branch->id)

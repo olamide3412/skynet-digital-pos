@@ -24,7 +24,7 @@ class RoleService
         return Auth::guard('web')->user();
     }
 
-    protected static function can(string $permission): bool
+    public static function can(string $permission): bool
     {
         $user = static::getUser();
         if (!$user) return false;
@@ -68,7 +68,16 @@ class RoleService
 
     public static function canViewEndOfDay(): bool
     {
-        return static::canAccessPos() || static::canViewReports();
+        $user = static::getUser();
+        if ($user && ($user->isSuperAdmin() || $user->isBranchAdmin() || $user->hasRole(['cashier', 'laundry-staff', 'manager']))) {
+            return true;
+        }
+
+        return static::can('canViewEndOfDay')
+            || static::canAccessPos()
+            || static::canViewReports()
+            || static::can('laundry.view_reports')
+            || static::can('laundry.record_payment');
     }
 
     public static function canDeleteSale(): bool
@@ -245,6 +254,18 @@ class RoleService
             'canManageChartOfAccounts' => static::canManageChartOfAccounts(),
             'canManageJournalEntries'  => static::canManageJournalEntries(),
             'canCloseFinancialPeriods' => static::canCloseFinancialPeriods(),
+            'laundry.access'           => static::can('laundry.access'),
+            'laundry.create_order'     => static::can('laundry.create_order'),
+            'laundry.update_status'    => static::can('laundry.update_status'),
+            'laundry.cancel_order'     => static::can('laundry.cancel_order'),
+            'laundry.record_payment'   => static::can('laundry.record_payment'),
+            'laundry.refund'           => static::can('laundry.refund'),
+            'laundry.release_unpaid'   => static::can('laundry.release_unpaid'),
+            'laundry.override_price'   => static::can('laundry.override_price'),
+            'laundry.manage_services'  => static::can('laundry.manage_services'),
+            'laundry.manage_discounts' => static::can('laundry.manage_discounts'),
+            'laundry.view_reports'     => static::can('laundry.view_reports'),
+            'laundry.manage_settings'  => static::can('laundry.manage_settings'),
             'isBranchAdmin'            => $user?->isBranchAdmin() ?? false,
             'isSuperAdmin'             => $user?->isSuperAdmin() ?? false,
         ];

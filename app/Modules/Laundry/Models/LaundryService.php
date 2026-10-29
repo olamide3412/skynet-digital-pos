@@ -13,20 +13,25 @@ class LaundryService extends Model
 
     protected $fillable = [
         'branch_id',
+        'category_id',
         'name',
-        'category',
         'pricing_type',
         'price',
         'is_active',
         'sort_order',
     ];
 
+    protected $appends = [
+        'category_name',
+    ];
+
     protected function casts(): array
     {
         return [
-            'price'      => 'decimal:2',
-            'is_active'  => 'boolean',
-            'sort_order' => 'integer',
+            'category_id' => 'integer',
+            'price'       => 'decimal:2',
+            'is_active'   => 'boolean',
+            'sort_order'  => 'integer',
         ];
     }
 
@@ -35,8 +40,39 @@ class LaundryService extends Model
         return $this->belongsTo(Branch::class);
     }
 
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(LaundryCategory::class, 'category_id');
+    }
+
     public function orderItems(): HasMany
     {
         return $this->hasMany(LaundryOrderItem::class, 'service_id');
     }
+
+    public function getCategoryNameAttribute(): ?string
+    {
+        return $this->category?->name;
+    }
+
+    public function discounts(): HasMany
+    {
+        return $this->hasMany(LaundryDiscount::class, 'service_id');
+    }
+
+    public function activeDiscount(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(LaundryDiscount::class, 'service_id')
+            ->where('scope', 'service')
+            ->where('is_active', true)
+            ->where('starts_at', '<=', now())
+            ->where('ends_at', '>=', now())
+            ->latest('id');
+    }
+
+    public function scopeForBranch($query, $branchId)
+    {
+        return $query->where('branch_id', $branchId);
+    }
 }
+

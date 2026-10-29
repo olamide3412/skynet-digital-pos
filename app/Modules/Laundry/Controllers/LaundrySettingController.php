@@ -64,7 +64,7 @@ class LaundrySettingController extends Controller
 
         $settings = LaundrySetting::getForBranch($branch->id);
         $settings->update([
-            'default_turnaround_hours' => $validated['default_turnaround_hours'],
+            'default_turnaround_days'  => max(1, (int) round(($validated['default_turnaround_hours'] ?? 48) / 24)),
             'unclaimed_after_days'     => $validated['unclaimed_after_days'],
             'order_prefix'             => strtoupper(trim($validated['order_prefix'])),
             'whatsapp_template'        => $validated['whatsapp_template'],

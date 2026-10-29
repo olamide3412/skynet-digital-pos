@@ -47,7 +47,17 @@ function fmtTime(val) {
                 </svg>
             </Link>
             <h1 class="text-lg font-bold text-slate-900 dark:text-white">End of Day Report</h1>
-            <span class="ml-auto text-xs text-slate-500 dark:text-slate-400 font-mono">{{ dayjs().format('dddd, DD MMM YYYY') }}</span>
+            <div class="ml-auto flex items-center gap-3">
+                <Link
+                    v-if="$page.props.pos_settings?.laundry_enabled"
+                    :href="route('laundry.reports.end-of-day')"
+                    class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-purple-300 dark:border-purple-700/50 text-xs font-semibold text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/40 transition"
+                    title="Switch to Laundry End of Day"
+                >
+                    <span>🧺 Switch to Laundry End of Day</span>
+                </Link>
+                <span class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ dayjs().format('dddd, DD MMM YYYY') }}</span>
+            </div>
         </div>
 
         <!-- Filter Bar -->
@@ -133,13 +143,16 @@ function fmtTime(val) {
 
                     <div class="bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-700/40 rounded-xl p-4 shadow-xs">
                         <div class="flex items-center justify-between mb-1.5">
-                            <p class="text-xs text-emerald-700 dark:text-emerald-400 font-semibold">Debt Recovered</p>
+                            <p class="text-xs text-emerald-700 dark:text-emerald-400 font-semibold">POS Debt Recovered</p>
                             <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-medium">
                                 {{ debtPayments.total ?? 0 }} {{ (debtPayments.total ?? 0) === 1 ? 'pmt' : 'pmts' }}
                             </span>
                         </div>
                         <p class="text-xl sm:text-2xl font-bold text-emerald-600 dark:text-emerald-300 font-mono truncate" :title="format(summary.debt_recovered)">
                             {{ format(summary.debt_recovered) }}
+                        </p>
+                        <p v-if="summary.laundry_debt_recovered > 0" class="text-[11px] text-purple-600 dark:text-purple-400 font-mono mt-1">
+                            + 🧺 Laundry: {{ format(summary.laundry_debt_recovered) }}
                         </p>
                     </div>
 
@@ -330,9 +343,14 @@ function fmtTime(val) {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                     </svg>
                     Debt Recoveries Today ({{ debtPayments.total ?? 0 }})
-                    <span v-if="debtPayments.total" class="ml-auto text-emerald-600 dark:text-emerald-400 font-bold text-sm font-mono">
-                        Total: {{ format(summary.debt_recovered) }}
-                    </span>
+                    <div v-if="debtPayments.total" class="ml-auto flex items-center gap-2 text-xs font-mono">
+                        <span class="text-emerald-600 dark:text-emerald-400 font-bold">
+                            POS: {{ format(summary.debt_recovered) }}
+                        </span>
+                        <span v-if="summary.laundry_debt_recovered > 0" class="text-purple-600 dark:text-purple-400 font-bold">
+                            · 🧺 Laundry: {{ format(summary.laundry_debt_recovered) }}
+                        </span>
+                    </div>
                 </h2>
                 <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-emerald-700/30 overflow-hidden shadow-xs">
                     <div class="overflow-x-auto">
@@ -360,7 +378,20 @@ function fmtTime(val) {
                                     <td class="px-5 py-3 text-slate-600 dark:text-slate-400 text-xs font-medium">
                                         {{ dp.user?.full_name || dp.user?.name || dp.user?.username || '—' }}
                                     </td>
-                                    <td class="px-5 py-3 text-slate-600 dark:text-slate-400 text-xs max-w-[200px] truncate">{{ dp.narration }}</td>
+                                    <td class="px-5 py-3 text-slate-600 dark:text-slate-400 text-xs max-w-[260px]">
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <span v-if="dp.source === 'laundry'" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                                                🧺 Laundry
+                                            </span>
+                                            <span v-else-if="dp.source === 'pos'" class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                                                🛒 POS
+                                            </span>
+                                            <span v-else class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                                                📝 General
+                                            </span>
+                                            <span class="truncate">{{ dp.narration }}</span>
+                                        </div>
+                                    </td>
                                     <td class="px-5 py-3 text-emerald-600 dark:text-emerald-400 font-bold font-mono text-right">{{ format(dp.amount) }}</td>
                                     <td class="px-5 py-3 text-right">
                                         <span :class="['text-xs font-mono font-bold', dp.balance_after > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-emerald-600 dark:text-emerald-400']">

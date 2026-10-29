@@ -263,6 +263,12 @@
             visibility: hidden !important;
             pointer-events: none !important;
         }
+
+        @media print {
+            #pre-login-splash {
+                display: none !important;
+            }
+        }
     </style>
 
     @inertiaHead()

@@ -52,4 +52,9 @@ class LaundryPayment extends Model
     {
         return $this->belongsTo(User::class, 'recorded_by');
     }
+
+    public function scopeForBranch($query, $branchId)
+    {
+        return $query->where('branch_id', $branchId);
+    }
 }

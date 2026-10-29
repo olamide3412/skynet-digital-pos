@@ -246,7 +246,6 @@ createInertiaApp({
                     name.startsWith('Auth/') ||
                     name.startsWith('Notifications/') ||
                     name.startsWith('Printer/') ||
-                    name.startsWith('Laundry/') ||
                     name === 'Home' ||
                     name === 'Error' ||
                     name === 'BranchUnavailable'
@@ -257,6 +256,7 @@ createInertiaApp({
 
                 if (
                     name.startsWith('Pos/') ||
+                    name.startsWith('Laundry/') ||
                     name.startsWith('Items/') ||
                     name.startsWith('Categories/') ||
                     name.startsWith('Customers/') ||

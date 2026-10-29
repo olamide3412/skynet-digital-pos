@@ -312,6 +312,16 @@ class Branch extends Model
                     'canViewExpenseReports',
                     'canViewExpiryReport',
                     'canViewBatchExpiryReport',
+                    'laundry.access',
+                    'laundry.create_order',
+                    'laundry.update_status',
+                    'laundry.record_payment',
+                    'laundry.cancel_order',
+                    'laundry.refund',
+                    'laundry.release_unpaid',
+                    'laundry.manage_services',
+                    'laundry.manage_discounts',
+                    'laundry.view_reports',
                 ])->get();
             if ($managerPerms->isNotEmpty()) {
                 $managerRole->syncPermissions($managerPerms);
@@ -339,6 +349,27 @@ class Branch extends Model
                 ])->get();
             if ($inventoryPerms->isNotEmpty()) {
                 $inventoryRole->syncPermissions($inventoryPerms);
+            }
+        }
+
+        // 5. Laundry Staff / Cashier Role
+        $laundryStaffRole = Role::firstOrCreate([
+            'name'       => 'laundry-staff',
+            'guard_name' => 'web',
+            'team_id'    => $this->id,
+        ]);
+        if ($laundryStaffRole->wasRecentlyCreated || $laundryStaffRole->permissions()->count() === 0) {
+            $laundryPerms = Permission::where('guard_name', 'web')
+                ->whereIn('name', [
+                    'laundry.access',
+                    'laundry.create_order',
+                    'laundry.update_status',
+                    'laundry.record_payment',
+                    'canManageCustomers',
+                    'canViewEndOfDay',
+                ])->get();
+            if ($laundryPerms->isNotEmpty()) {
+                $laundryStaffRole->syncPermissions($laundryPerms);
             }
         }
     }

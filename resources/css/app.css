@@ -381,3 +381,33 @@ input[type="number"] {
     -moz-appearance: textfield !important;
     appearance: textfield !important;
 }
+
+/* ── Universal Print Resets ──────────────────────────────────────────────── */
+@media print {
+    html, body {
+        overflow: visible !important;
+        overflow-x: visible !important;
+        overflow-y: visible !important;
+        height: auto !important;
+        min-height: 100% !important;
+        width: 100% !important;
+        background-color: #ffffff !important;
+        color: #000000 !important;
+    }
+
+    #pre-login-splash,
+    .print-hidden,
+    .no-print {
+        display: none !important;
+    }
+
+    #app,
+    main,
+    [data-page] {
+        overflow: visible !important;
+        height: auto !important;
+        max-height: none !important;
+        display: block !important;
+    }
+}
+

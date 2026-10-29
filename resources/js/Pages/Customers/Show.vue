@@ -37,10 +37,18 @@ function destroyCustomer() {
                             ⚠️ Watchlist Flag
                         </span>
                     </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ customer.phone }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                        {{ customer.phone }}
+                        <span v-if="customer.email" class="text-slate-400 font-sans ml-2">• {{ customer.email }}</span>
+                    </p>
                 </div>
             </div>
             <div class="flex items-center gap-2">
+                <a :href="`https://wa.me/${(customer.whatsapp_number || customer.phone).replace(/[^0-9]/g, '')}`"
+                    target="_blank"
+                    class="px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold rounded-lg transition flex items-center gap-1.5">
+                    <span>💬 WhatsApp</span>
+                </a>
                 <Link :href="route('pos.customers.debt-ledger', customer.id)"
                     class="px-3 py-1.5 bg-orange-50 dark:bg-orange-950/40 hover:bg-orange-100 dark:hover:bg-orange-900/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800 text-xs font-bold rounded-lg transition flex items-center gap-1.5">
                     <span>💳 Debt Ledger</span>
@@ -96,6 +104,18 @@ function destroyCustomer() {
                         <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-700/50">
                             <span class="text-slate-500 dark:text-slate-400 text-xs">Phone</span>
                             <span class="font-mono font-medium text-slate-900 dark:text-white">{{ customer.phone }}</span>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-700/50">
+                            <span class="text-slate-500 dark:text-slate-400 text-xs">WhatsApp</span>
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono font-medium text-slate-900 dark:text-white">{{ customer.whatsapp_number || customer.phone }}</span>
+                                <span v-if="!customer.whatsapp_number || customer.whatsapp_number === customer.phone" class="text-[10px] text-slate-400 font-sans">(Same as phone)</span>
+                                <a :href="`https://wa.me/${(customer.whatsapp_number || customer.phone).replace(/[^0-9]/g, '')}`" target="_blank" class="text-emerald-600 hover:text-emerald-500 text-xs font-bold" title="Chat on WhatsApp">↗</a>
+                            </div>
+                        </div>
+                        <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-700/50">
+                            <span class="text-slate-500 dark:text-slate-400 text-xs">Email</span>
+                            <span class="font-medium text-slate-900 dark:text-white">{{ customer.email || 'Not specified' }}</span>
                         </div>
                         <div class="flex justify-between py-1 border-b border-slate-100 dark:border-slate-700/50">
                             <span class="text-slate-500 dark:text-slate-400 text-xs">Gender</span>

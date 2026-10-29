@@ -149,7 +149,7 @@ function destroyCustomer(customer) {
                     v-model="search"
                     @keydown.enter="doSearch"
                     type="text"
-                    placeholder="Search name or phone…"
+                    placeholder="Search name, phone, or email…"
                     class="w-full bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 px-3 py-1.5 rounded-lg text-xs outline-none border border-slate-300 dark:border-slate-600 focus:border-emerald-500 transition"
                 />
                 <button
@@ -168,7 +168,7 @@ function destroyCustomer(customer) {
                     <thead class="bg-slate-100 dark:bg-slate-700/50 border-b border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400">
                         <tr>
                             <th class="text-left px-4 py-3 font-semibold">Customer</th>
-                            <th class="text-left px-4 py-3 font-semibold">Phone</th>
+                            <th class="text-left px-4 py-3 font-semibold">Phone & Email</th>
                             <th class="text-left px-4 py-3 font-semibold">Watchlist Status</th>
                             <th class="text-left px-4 py-3 font-semibold">Internal Note</th>
                             <th class="text-right px-4 py-3 font-semibold">Debt Balance</th>
@@ -190,9 +190,14 @@ function destroyCustomer(customer) {
                                 </div>
                             </td>
 
-                            <!-- Phone -->
-                            <td class="px-4 py-3 text-slate-600 dark:text-slate-300 font-mono">
-                                {{ customer.phone }}
+                            <!-- Phone & Email & WhatsApp -->
+                            <td class="px-4 py-3">
+                                <div class="text-slate-600 dark:text-slate-300 font-mono">{{ customer.phone }}</div>
+                                <div v-if="customer.whatsapp_number && customer.whatsapp_number !== customer.phone" class="text-[11px] text-emerald-600 dark:text-emerald-400 font-mono flex items-center gap-1 mt-0.5">
+                                    <span>💬</span>
+                                    <span>WA: {{ customer.whatsapp_number }}</span>
+                                </div>
+                                <div v-if="customer.email" class="text-[11px] text-slate-400 dark:text-slate-500 truncate max-w-[180px]">{{ customer.email }}</div>
                             </td>
 
                             <!-- Watchlist Toggle Button / Badge -->

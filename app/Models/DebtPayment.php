@@ -12,7 +12,7 @@ class DebtPayment extends Model
     protected $fillable = [
         'branch_id', 'customer_id', 'user_id', 'sale_id',
         'reference', 'amount', 'type', 'narration',
-        'balance_before', 'balance_after',
+        'balance_before', 'balance_after', 'source', 'laundry_order_id',
     ];
 
     const CREATED_AT = 'created_at';
@@ -50,5 +50,10 @@ class DebtPayment extends Model
     public function sale(): BelongsTo
     {
         return $this->belongsTo(Sale::class);
+    }
+
+    public function laundryOrder(): BelongsTo
+    {
+        return $this->belongsTo(\App\Modules\Laundry\Models\LaundryOrder::class, 'laundry_order_id');
     }
 }

@@ -14,12 +14,14 @@ use App\Modules\Laundry\Models\LaundrySetting;
 use App\Modules\Laundry\Services\BranchLandingService;
 use App\Modules\Laundry\Services\LaundryOrderService;
 use Carbon\Carbon;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 class LaundryModuleComprehensiveTest extends TestCase
 {
+    use DatabaseTransactions;
+
     protected \App\Models\Organization $org;
     protected Branch $branch;
     protected User $branchAdmin;
@@ -509,4 +511,468 @@ class LaundryModuleComprehensiveTest extends TestCase
 
         $response->assertSessionHasErrors('laundry_enabled');
     }
+
+    /**
+     * 12. Customer Search & Quick Creation for Laundry Intake.
+     */
+    public function test_customer_search_and_quick_create_for_intake(): void
+    {
+        $this->posSettings->update(['laundry_enabled' => true]);
+        $this->actingAs($this->branchAdmin);
+
+        $customer = PosCustomer::create([
+            'branch_id' => $this->branch->id,
+            'name'      => 'Amina Bello',
+            'phone'     => '08055667788',
+            'address'   => '10 Victoria Island, Lagos',
+            'debt_bal'  => 0,
+        ]);
+
+        // Search by name
+        $searchRes = $this->getJson(route('laundry.customers.search', [
+            'branch' => $this->branch->slug,
+            'query'  => 'Amina',
+        ]));
+        $searchRes->assertOk();
+        $searchRes->assertJsonFragment([
+            'id'    => $customer->id,
+            'name'  => 'Amina Bello',
+            'phone' => '08055667788',
+        ]);
+
+        // Search by phone
+        $searchPhoneRes = $this->getJson(route('laundry.customers.search', [
+            'branch' => $this->branch->slug,
+            'query'  => '5566',
+        ]));
+        $searchPhoneRes->assertOk();
+        $searchPhoneRes->assertJsonFragment([
+            'id'    => $customer->id,
+            'name'  => 'Amina Bello',
+        ]);
+
+        // Quick create new customer
+        $quickRes = $this->postJson(route('laundry.customers.quick', [
+            'branch' => $this->branch->slug,
+        ]), [
+            'name'    => 'Chinedu Eze',
+            'phone'   => '08123456789',
+            'address' => '45 Lekki Phase 1',
+        ]);
+        $quickRes->assertStatus(201);
+        $quickRes->assertJsonPath('duplicate', false);
+        $quickRes->assertJsonPath('customer.name', 'Chinedu Eze');
+
+        // Quick create customer with optional fields omitted/null (no address)
+        $quickNoAddress = $this->postJson(route('laundry.customers.quick', [
+            'branch' => $this->branch->slug,
+        ]), [
+            'name'          => 'Johnson Isaiah',
+            'phone'         => '08024004029',
+            'email'         => 'johnson@hotmail.com',
+            'same_as_phone' => true,
+        ]);
+        $quickNoAddress->assertStatus(201);
+        $quickNoAddress->assertJsonPath('duplicate', false);
+        $quickNoAddress->assertJsonPath('customer.name', 'Johnson Isaiah');
+        $this->assertNotNull($quickNoAddress->json('customer.id'));
+    }
+
+    /**
+     * 13. Category Management and Normalized Service Assignment.
+     */
+    public function test_category_management_and_normalized_service_assignment(): void
+    {
+        $this->posSettings->update(['laundry_enabled' => true]);
+        $this->actingAs($this->branchAdmin, 'web');
+
+        // 1. Create a Category
+        $res = $this->post(route('laundry.services.categories.store', ['branch' => $this->branch->slug]), [
+            'name'        => 'Suits & Blazers',
+            'description' => 'Formal corporate wear',
+            'sort_order'  => 1,
+        ]);
+        $res->assertSessionHas('success');
+
+        $category = \App\Modules\Laundry\Models\LaundryCategory::where('branch_id', $this->branch->id)
+            ->where('name', 'Suits & Blazers')
+            ->first();
+        $this->assertNotNull($category);
+
+        // 2. Create Service with category_id
+        $serviceRes = $this->post(route('laundry.services.store', ['branch' => $this->branch->slug]), [
+            'name'         => '2-Piece Suit Steam Clean',
+            'category_id'  => $category->id,
+            'pricing_type' => 'per_piece',
+            'price'        => 3500,
+            'is_active'    => true,
+            'sort_order'   => 1,
+        ]);
+        $serviceRes->assertSessionHas('success');
+
+        $service = \App\Modules\Laundry\Models\LaundryService::where('name', '2-Piece Suit Steam Clean')->first();
+        $this->assertEquals($category->id, $service->category_id);
+        $this->assertEquals('Suits & Blazers', $service->category_name);
+
+        // 3. Rename Category
+        $updateCatRes = $this->put(route('laundry.services.categories.update', [
+            'branch' => $this->branch->slug,
+            'id'     => $category->id,
+        ]), [
+            'name' => 'Suits, Blazers & Tuxedos',
+        ]);
+        $updateCatRes->assertSessionHas('success');
+
+        $category->refresh();
+        $this->assertEquals('Suits, Blazers & Tuxedos', $category->name);
+
+        // 4. Service category_name updates dynamically without modifying the service record!
+        $service->refresh();
+        $this->assertEquals('Suits, Blazers & Tuxedos', $service->category_name);
+    }
+
+    /**
+     * 24. Dedicated Orders Table View renders Inertia Laundry/Orders/Index with paginated orders.
+     */
+    public function test_laundry_orders_index_renders_clean_table_view(): void
+    {
+        $this->posSettings->update(['laundry_enabled' => true]);
+        $this->actingAs($this->branchAdmin, 'web');
+
+        $response = $this->get(route('laundry.orders.index', ['branch' => $this->branch->slug]));
+        $response->assertOk();
+        $response->assertInertia(fn($page) => $page
+            ->component('Laundry/Orders/Index')
+            ->has('orders')
+            ->has('counts')
+            ->has('filters')
+        );
+    }
+
+    /**
+     * 25. Orders index redirects to board when view=board query param is present.
+     */
+    public function test_laundry_orders_index_redirects_to_board_when_view_board_requested(): void
+    {
+        $this->posSettings->update(['laundry_enabled' => true]);
+        $this->actingAs($this->branchAdmin, 'web');
+
+        $response = $this->get(route('laundry.orders.index', [
+            'branch' => $this->branch->slug,
+            'view'   => 'board',
+        ]));
+
+        $response->assertRedirect(route('laundry.board.index', ['branch' => $this->branch->slug]));
+    }
+
+    /**
+     * 26. Dedicated Workflow Board renders Inertia Laundry/Orders/Board with board columns and counts.
+     */
+    public function test_laundry_board_renders_kanban_board_view(): void
+    {
+        $this->posSettings->update(['laundry_enabled' => true]);
+        $this->actingAs($this->branchAdmin, 'web');
+
+        $response = $this->get(route('laundry.board.index', ['branch' => $this->branch->slug]));
+        $response->assertOk();
+        $response->assertInertia(fn($page) => $page
+            ->component('Laundry/Orders/Board')
+            ->has('board_orders')
+            ->has('board_counts')
+            ->has('filters')
+        );
+    }
+
+    /**
+     * 27. Workflow Board redirects to orders when view=list query param is present.
+     */
+    public function test_laundry_board_redirects_to_orders_when_view_list_requested(): void
+    {
+        $this->posSettings->update(['laundry_enabled' => true]);
+        $this->actingAs($this->branchAdmin, 'web');
+
+        $response = $this->get(route('laundry.board.index', [
+            'branch' => $this->branch->slug,
+            'view'   => 'list',
+        ]));
+
+        $response->assertRedirect(route('laundry.orders.index', ['branch' => $this->branch->slug]));
+    }
+
+    /**
+     * 28. Async Column Orders endpoint works on both /orders/column-orders and /board/column-orders.
+     */
+    public function test_laundry_column_orders_endpoint_returns_json(): void
+    {
+        $this->posSettings->update(['laundry_enabled' => true]);
+        $this->actingAs($this->branchAdmin, 'web');
+
+        $resBoard = $this->getJson(route('laundry.board.column-orders', [
+            'branch' => $this->branch->slug,
+            'status' => 'received',
+            'page'   => 1,
+        ]));
+        $resBoard->assertOk();
+        $resBoard->assertJsonStructure(['orders', 'status', 'page']);
+
+        $resOrders = $this->getJson(route('laundry.orders.column-orders', [
+            'branch' => $this->branch->slug,
+            'status' => 'received',
+            'page'   => 1,
+        ]));
+        $resOrders->assertOk();
+        $resOrders->assertJsonStructure(['orders', 'status', 'page']);
+    }
+
+    /**
+     * 29. Laundry End of Day report requires authentication and permission.
+     */
+    public function test_laundry_end_of_day_requires_permission(): void
+    {
+        $this->posSettings->update(['laundry_enabled' => true]);
+
+        // Unauthenticated request should redirect to login
+        $resGuest = $this->get(route('laundry.reports.end-of-day', ['branch' => $this->branch->slug]));
+        $resGuest->assertRedirect();
+
+        // Branch admin can access
+        $this->actingAs($this->branchAdmin, 'web');
+        $resAdmin = $this->get(route('laundry.reports.end-of-day', ['branch' => $this->branch->slug]));
+        $resAdmin->assertOk();
+        $resAdmin->assertInertia(fn ($page) => $page
+            ->component('Laundry/Reports/EndOfDay')
+            ->has('summary')
+            ->has('serviceBreakdown')
+            ->has('tillSessions')
+            ->has('orders')
+            ->has('payments')
+            ->has('debtPayments')
+            ->has('users')
+            ->where('canSeeAll', true)
+        );
+
+        // Laundry cashier / staff can also access their own End of Day
+        $this->actingAs($this->cashier, 'web');
+        $resCashier = $this->get(route('laundry.reports.end-of-day', ['branch' => $this->branch->slug]));
+        $resCashier->assertOk();
+        $resCashier->assertInertia(fn ($page) => $page
+            ->component('Laundry/Reports/EndOfDay')
+            ->where('canSeeAll', false)
+            ->where('filters.user_id', $this->cashier->id)
+        );
+    }
+
+    /**
+     * 30. Laundry End of Day accurately computes daily collections, intake, and debt recoveries.
+     */
+    public function test_laundry_end_of_day_computes_metrics_accurately(): void
+    {
+        $this->posSettings->update(['laundry_enabled' => true]);
+        $this->actingAs($this->branchAdmin, 'web');
+
+        $customer = PosCustomer::create([
+            'branch_id' => $this->branch->id,
+            'name'      => 'EOD Test Customer ' . uniqid(),
+            'phone'     => '08099887766',
+        ]);
+
+        $service = LaundryService::create([
+            'branch_id'     => $this->branch->id,
+            'name'          => 'EOD Wash & Iron ' . uniqid(),
+            'pricing_type'  => 'per_piece',
+            'price'         => 500,
+            'is_active'     => true,
+        ]);
+
+        // Open a Till Session
+        $till = TillSession::create([
+            'branch_id'      => $this->branch->id,
+            'cashier_id'     => $this->branchAdmin->id,
+            'opened_at'      => Carbon::now(),
+            'opening_amount' => 5000,
+            'status'         => 'open',
+        ]);
+
+        // Create an order via service
+        $orderService = app(LaundryOrderService::class);
+        $order = $orderService->createOrder($this->branch, $this->branchAdmin, [
+            'customer_id'    => $customer->id,
+            'payment_method' => 'Cash',
+            'deposit_amount' => 1000,
+            'items'          => [
+                [
+                    'service_id' => $service->id,
+                    'quantity'   => 4,
+                ],
+            ],
+        ]);
+
+        // Record a customer debt payment
+        \App\Models\DebtPayment::create([
+            'branch_id'        => $this->branch->id,
+            'customer_id'      => $customer->id,
+            'user_id'          => $this->branchAdmin->id,
+            'amount'           => 300,
+            'type'             => 'credit',
+            'narration'        => 'Laundry debt recovery settlement',
+            'balance_before'   => 500,
+            'balance_after'    => 200,
+            'source'           => 'laundry',
+            'laundry_order_id' => $order->id,
+        ]);
+
+        $res = $this->get(route('laundry.reports.end-of-day', ['branch' => $this->branch->slug]));
+        $res->assertOk();
+        $res->assertInertia(fn ($page) => $page
+            ->component('Laundry/Reports/EndOfDay')
+            ->where('summary.total_orders', 1)
+            ->where('summary.cash_collected', 1000)
+            ->where('summary.laundry_debt_recovered', 300)
+            ->has('serviceBreakdown.0', fn ($srv) => $srv
+                ->where('service_name', $service->name)
+                ->where('total_qty', 4)
+                ->etc()
+            )
+            ->has('tillSessions.0')
+        );
+    }
+
+    /**
+     * 21. Laundry Operations Overview cash collected today is scoped to the current logged-in user.
+     */
+    public function test_laundry_overview_cash_today_only_includes_current_user_cash(): void
+    {
+        $this->posSettings->update(['laundry_enabled' => true]);
+
+        $customer = PosCustomer::create([
+            'branch_id' => $this->branch->id,
+            'name'      => 'Home Overview Customer',
+            'phone'     => '08099998888',
+        ]);
+
+        $order = LaundryOrder::create([
+            'branch_id'       => $this->branch->id,
+            'customer_id'     => $customer->id,
+            'order_number'    => 'LND-TEST-HOME-' . uniqid(),
+            'customer_name'   => 'Home Overview Customer',
+            'customer_phone'  => '08099998888',
+            'subtotal'        => 10000,
+            'total'           => 10000,
+            'amount_paid'     => 10000,
+            'balance'         => 0,
+            'status'          => 'received',
+            'received_at'     => Carbon::now(),
+            'due_at'          => Carbon::now()->addDays(2),
+            'created_by'      => $this->branchAdmin->id,
+        ]);
+
+        // Branch admin: 3,000 cash payment, 500 cash refund => net 2,500
+        LaundryPayment::create([
+            'order_id'    => $order->id,
+            'branch_id'   => $this->branch->id,
+            'type'        => 'payment',
+            'amount'      => 3000,
+            'method'      => 'Cash',
+            'recorded_by' => $this->branchAdmin->id,
+            'paid_at'     => Carbon::now(),
+            'reference'   => 'PAY-ADMIN-1',
+        ]);
+        LaundryPayment::create([
+            'order_id'    => $order->id,
+            'branch_id'   => $this->branch->id,
+            'type'        => 'refund',
+            'amount'      => 500,
+            'method'      => 'Cash',
+            'recorded_by' => $this->branchAdmin->id,
+            'paid_at'     => Carbon::now(),
+            'reference'   => 'REF-ADMIN-1',
+        ]);
+
+        // Cashier user: 7,000 cash payment
+        LaundryPayment::create([
+            'order_id'    => $order->id,
+            'branch_id'   => $this->branch->id,
+            'type'        => 'payment',
+            'amount'      => 7000,
+            'method'      => 'cash',
+            'recorded_by' => $this->cashier->id,
+            'paid_at'     => Carbon::now(),
+            'reference'   => 'PAY-CASHIER-1',
+        ]);
+
+        // 1. Logged in as branch admin -> cash_today should be exactly 2500 (not 9500)
+        $this->actingAs($this->branchAdmin, 'web');
+        $resAdmin = $this->get(route('laundry.home', ['branch' => $this->branch->slug]));
+        $resAdmin->assertOk();
+        $resAdmin->assertInertia(fn ($page) => $page
+            ->component('Laundry/Home')
+            ->where('stats.cash_today', 2500)
+        );
+
+        // 2. Logged in as cashier -> cash_today should be exactly 7000 (not 9500)
+        $this->actingAs($this->cashier, 'web');
+        $resCashier = $this->get(route('laundry.home', ['branch' => $this->branch->slug]));
+        $resCashier->assertOk();
+        $resCashier->assertInertia(fn ($page) => $page
+            ->component('Laundry/Home')
+            ->where('stats.cash_today', 7000)
+        );
+    }
+
+    public function test_laundry_orders_can_be_exported_to_xlsx_and_csv(): void
+    {
+        $this->posSettings->update(['laundry_enabled' => true]);
+
+        $customer = PosCustomer::create([
+            'branch_id' => $this->branch->id,
+            'name'      => 'Export Customer',
+            'phone'     => '08099887766',
+        ]);
+
+        $order = LaundryOrder::create([
+            'branch_id'       => $this->branch->id,
+            'order_number'    => 'LND-EXP-001',
+            'customer_id'     => $customer->id,
+            'customer_name'   => 'Export Customer',
+            'customer_phone'  => '08099887766',
+            'status'          => 'ready',
+            'received_at'     => Carbon::now()->subDays(1),
+            'due_at'          => Carbon::now()->addDays(2),
+            'created_by'      => $this->branchAdmin->id,
+            'subtotal'        => 5000,
+            'discount_amount' => 0,
+            'tax_amount'      => 0,
+            'total'           => 5000,
+            'amount_paid'     => 2000,
+            'balance'         => 3000,
+            'note'            => 'Dry clean suit',
+        ]);
+
+        $this->actingAs($this->branchAdmin, 'web');
+
+        // Test XLSX export
+        $xlsxResponse = $this->get(route('laundry.orders.export', [
+            'branch' => $this->branch->slug,
+            'format' => 'xlsx',
+        ]));
+
+        $xlsxResponse->assertOk();
+        $this->assertStringContainsString('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', (string)$xlsxResponse->headers->get('Content-Type'));
+        $this->assertStringContainsString('laundry_orders_' . $this->branch->slug, (string)$xlsxResponse->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('.xlsx', (string)$xlsxResponse->headers->get('Content-Disposition'));
+
+        // Test CSV export with filter
+        $csvResponse = $this->get(route('laundry.orders.export', [
+            'branch' => $this->branch->slug,
+            'format' => 'csv',
+            'search' => 'Export Customer',
+        ]));
+
+        $csvResponse->assertOk();
+        $this->assertStringContainsString('text/csv', (string)$csvResponse->headers->get('Content-Type'));
+        $this->assertStringContainsString('laundry_orders_' . $this->branch->slug, (string)$csvResponse->headers->get('Content-Disposition'));
+        $this->assertStringContainsString('.csv', (string)$csvResponse->headers->get('Content-Disposition'));
+    }
 }
+
+

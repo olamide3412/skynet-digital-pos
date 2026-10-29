@@ -12,7 +12,7 @@ use Spatie\Permission\Models\Role;
 class BranchRoleController extends Controller
 {
     /** All POS permission names (must match RolePermissionSeeder::PERMISSIONS) */
-    private const ALL_PERMISSIONS = [
+    public const ALL_PERMISSIONS = [
         'canAccessPos'       => 'Access POS Terminal',
         'canViewSales'       => 'View Sales History',
         'canDeleteSale'      => 'Delete / Void Sale',
@@ -41,6 +41,23 @@ class BranchRoleController extends Controller
         'canViewExpiryReport'  => 'View Item Expiry Report',
         'canViewBatchExpiryReport' => 'View Batch Expiry Report',
         'view_ecommerce_activity'  => 'View Ecommerce Activity',
+        'canViewAccounting'        => 'View Accounting & Reports',
+        'canManageChartOfAccounts' => 'Manage Chart of Accounts',
+        'canManageJournalEntries'  => 'Create & Reverse Journal Entries',
+        'canCloseFinancialPeriods' => 'Close & Reopen Financial Periods',
+        // ── Laundry Module Permissions ──────────────────────────────
+        'laundry.access'           => 'Access Laundry Module',
+        'laundry.create_order'     => 'Create Laundry Orders',
+        'laundry.update_status'    => 'Update Order Workflow / Status',
+        'laundry.record_payment'   => 'Record Laundry Payments',
+        'laundry.cancel_order'     => 'Cancel Laundry Orders',
+        'laundry.refund'           => 'Process Laundry Refunds',
+        'laundry.release_unpaid'   => 'Release Unpaid Garments on Collection',
+        'laundry.override_price'   => 'Override Laundry Service Prices',
+        'laundry.manage_services'  => 'Manage Services & Price Catalog',
+        'laundry.manage_discounts' => 'Manage Laundry Discounts & Promos',
+        'laundry.view_reports'     => 'View Laundry Analytics & Reports',
+        'laundry.manage_settings'  => 'Manage Laundry Branch Settings',
     ];
 
     public function index(Branch $branch)

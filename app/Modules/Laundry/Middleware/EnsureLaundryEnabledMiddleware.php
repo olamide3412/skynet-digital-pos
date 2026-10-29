@@ -27,8 +27,12 @@ class EnsureLaundryEnabledMiddleware
 
         // Check user permission
         $user = $request->user('web');
-        if ($user && !$user->isSuperAdmin() && !$user->isOrganizationAdmin() && !$user->isBranchAdmin() && !$user->hasPermissionTo('laundry.access')) {
-            abort(403, 'You do not have permission to access the Laundry interface.');
+        if ($user && !$user->isSuperAdmin() && !$user->isOrganizationAdmin() && !$user->isBranchAdmin()) {
+            $hasAccess = $user->hasRole(['cashier', 'laundry-staff', 'manager'])
+                || \App\Services\RoleService::can('laundry.access');
+            if (!$hasAccess) {
+                abort(403, 'You do not have permission to access the Laundry interface.');
+            }
         }
 
         return $next($request);

@@ -1,7 +1,6 @@
 <script setup>
 import { computed } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
-import LaundryLayout from '@/Layouts/LaundryLayout.vue'
 
 const props = defineProps({
     stats: {
@@ -55,8 +54,44 @@ const statusLabel = (status) => {
 </script>
 
 <template>
-    <LaundryLayout title="Laundry Overview">
-        <div class="max-w-7xl mx-auto space-y-6">
+    <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
+        <!-- Header -->
+        <div class="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+            <div>
+                <h1 class="text-lg font-bold text-slate-900 dark:text-white">Laundry Operations Overview</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400">
+                    Branch: <span class="font-medium text-slate-700 dark:text-slate-300">{{ page.props.current_branch?.name }}</span> • Garment intake, live stages pipeline, and pickup collections
+                </p>
+            </div>
+            <div class="flex items-center gap-2.5">
+                <Link
+                    v-if="$page.props.auth?.permissions?.canViewEndOfDay"
+                    :href="safeRoute('laundry.reports.end-of-day')"
+                    class="px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 border border-emerald-200 dark:border-emerald-800/40"
+                    title="View Cashier End of Day Reconciliation"
+                >
+                    <span>🧾 End of Day</span>
+                </Link>
+                <Link
+                    :href="safeRoute('laundry.orders.create')"
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-1.5 shadow-md shadow-indigo-900/20"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <span>New Intake Order</span>
+                </Link>
+                <Link
+                    :href="safeRoute('laundry.board.index')"
+                    class="px-3.5 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold rounded-lg transition flex items-center gap-1.5 border border-slate-200 dark:border-slate-600"
+                >
+                    <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z"/></svg>
+                    <span>Workflow Board</span>
+                </Link>
+            </div>
+        </div>
+
+        <!-- Scrollable Body -->
+        <div class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+            <div class="max-w-7xl mx-auto space-y-6">
 
             <!-- Welcome / Quick Action Bar -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-indigo-700 via-indigo-600 to-cyan-600 text-white shadow-xl shadow-indigo-600/10">
@@ -81,13 +116,23 @@ const statusLabel = (status) => {
                     </Link>
 
                     <Link
-                        :href="safeRoute('laundry.orders.index')"
+                        :href="safeRoute('laundry.board.index')"
                         class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-800/60 hover:bg-indigo-800/80 text-white font-medium text-xs sm:text-sm backdrop-blur-xs border border-white/20 transition"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z" />
                         </svg>
-                        <span>Order Board</span>
+                        <span>Workflow Board</span>
+                    </Link>
+
+                    <Link
+                        :href="safeRoute('laundry.orders.index')"
+                        class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-medium text-xs sm:text-sm backdrop-blur-xs border border-white/20 transition"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        <span>All Orders</span>
                     </Link>
                 </div>
             </div>
@@ -159,7 +204,10 @@ const statusLabel = (status) => {
                 <!-- Cash Collected Today -->
                 <div class="col-span-2 sm:col-span-1 p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-xs flex flex-col justify-between">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Cash Collected Today</span>
+                        <div>
+                            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Cash Collected Today</span>
+                            <span class="block text-[10px] text-cyan-600 dark:text-cyan-400 font-medium">My Cash Intake</span>
+                        </div>
                         <div class="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -273,6 +321,7 @@ const statusLabel = (status) => {
                 </div>
             </div>
 
+            </div>
         </div>
-    </LaundryLayout>
+    </div>
 </template>

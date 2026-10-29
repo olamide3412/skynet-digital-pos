@@ -26,6 +26,7 @@ const formatRoleName = (name) => {
         'cashier': 'Cashier / Sales Staff',
         'manager': 'Store Manager',
         'inventory-manager': 'Inventory / Stock Manager',
+        'laundry-staff': 'Laundry Staff / Cashier',
     }
     if (map[name]) return map[name]
     return name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
@@ -59,6 +60,18 @@ watch(() => form.role, (newRole) => {
             'canViewEndOfDay',
             'canProcessReturn',
             'canManageCustomers',
+            'laundry.access',
+            'laundry.create_order',
+            'laundry.update_status',
+            'laundry.record_payment',
+        ]
+    } else if (newRole === 'laundry-staff') {
+        form.permissions = [
+            'laundry.access',
+            'laundry.create_order',
+            'laundry.update_status',
+            'laundry.record_payment',
+            'canManageCustomers',
         ]
     } else if (newRole === 'manager') {
         form.permissions = [
@@ -87,6 +100,16 @@ watch(() => form.role, (newRole) => {
             'canViewExpenseReports',
             'canViewExpiryReport',
             'canViewBatchExpiryReport',
+            'laundry.access',
+            'laundry.create_order',
+            'laundry.update_status',
+            'laundry.record_payment',
+            'laundry.cancel_order',
+            'laundry.refund',
+            'laundry.release_unpaid',
+            'laundry.manage_services',
+            'laundry.manage_discounts',
+            'laundry.view_reports',
         ]
     } else if (newRole === 'inventory-manager') {
         form.permissions = [

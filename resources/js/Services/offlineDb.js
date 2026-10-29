@@ -197,11 +197,43 @@ export async function getLocalItemByBarcode(barcode, purchaseType = 'Consumer') 
 export async function searchLocalCustomers(query = '') {
     const q = String(query).trim().toLowerCase()
     if (!q) return []
+    const cleanDigits = q.replace(/[^0-9]/g, '')
+    const noZero = cleanDigits.replace(/^0+/, '')
+    const no234 = cleanDigits.replace(/^234/, '')
     const allCustomers = await db.customers.toArray()
+
     return allCustomers.filter(c => {
-        const nameMatch = (c.name || '').toLowerCase().includes(q)
-        const phoneMatch = (c.phone || '').toLowerCase().includes(q)
-        return nameMatch || phoneMatch
+        const name = (c.name || '').toLowerCase()
+        const email = (c.email || '').toLowerCase()
+        const phone = (c.phone || '').toLowerCase()
+        const whatsapp = (c.whatsapp_number || '').toLowerCase()
+
+        if (name.includes(q) || email.includes(q)) {
+            return true
+        }
+
+        if (phone.includes(q) || whatsapp.includes(q)) {
+            return true
+        }
+
+        if (cleanDigits.length >= 3) {
+            const cPhoneDigits = phone.replace(/[^0-9]/g, '')
+            const cWaDigits = whatsapp.replace(/[^0-9]/g, '')
+
+            const matchPhone = cPhoneDigits.includes(cleanDigits) ||
+                (noZero.length >= 3 && cPhoneDigits.includes(noZero)) ||
+                (no234.length >= 3 && cPhoneDigits.includes(no234))
+
+            const matchWa = cWaDigits.includes(cleanDigits) ||
+                (noZero.length >= 3 && cWaDigits.includes(noZero)) ||
+                (no234.length >= 3 && cWaDigits.includes(no234))
+
+            if (matchPhone || matchWa) {
+                return true
+            }
+        }
+
+        return false
     }).slice(0, 20)
 }
 

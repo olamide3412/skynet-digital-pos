@@ -14,8 +14,11 @@ class LaundryOrderItem extends Model
         'service_id',
         'service_name',
         'pricing_type',
+        'original_price',
         'unit_price',
         'quantity',
+        'discount_amount',
+        'laundry_discount_id',
         'line_total',
         'note',
     ];
@@ -23,10 +26,18 @@ class LaundryOrderItem extends Model
     protected function casts(): array
     {
         return [
-            'unit_price' => 'decimal:2',
-            'quantity'   => 'decimal:2',
-            'line_total' => 'decimal:2',
+            'original_price'  => 'decimal:2',
+            'unit_price'       => 'decimal:2',
+            'quantity'         => 'float',
+            'discount_amount'  => 'decimal:2',
+            'line_total'       => 'decimal:2',
         ];
+    }
+
+    public function getFormattedQuantityAttribute(): string
+    {
+        $q = (float) $this->quantity;
+        return ($q == (int) $q) ? (string) (int) $q : (string) $q;
     }
 
     public function order(): BelongsTo
@@ -37,5 +48,10 @@ class LaundryOrderItem extends Model
     public function service(): BelongsTo
     {
         return $this->belongsTo(LaundryService::class, 'service_id');
+    }
+
+    public function discount(): BelongsTo
+    {
+        return $this->belongsTo(LaundryDiscount::class, 'laundry_discount_id');
     }
 }

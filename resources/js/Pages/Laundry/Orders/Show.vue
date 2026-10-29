@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
-import LaundryLayout from '@/Layouts/LaundryLayout.vue'
+import LaundryTicketModal from '@/Components/Laundry/LaundryTicketModal.vue'
 
 const props = defineProps({
     order: {
@@ -32,12 +32,21 @@ const formatMoney = (val) => {
     return currencySymbol.value + ' ' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+const formatQty = (val) => {
+    const num = Number(val || 0)
+    return num % 1 === 0 ? num.toString() : num.toString()
+}
+
 // ── Modals & Actions ────────────────────────────────────────────────────────
-const showPaymentModal = ref(false)
-const showStatusModal  = ref(false)
-const showCollectModal = ref(false)
-const showCancelModal  = ref(false)
-const showPrintModal   = ref(false)
+const isItemsExpanded    = ref(false)
+const isPaymentsExpanded = ref(true)
+const isOtherDetailsExpanded = ref(false)
+const showPaymentModal   = ref(false)
+const showStatusModal    = ref(false)
+const showCollectModal   = ref(false)
+const showCancelModal    = ref(false)
+const showPrintModal     = ref(false)
+const showUnpaidWarningModal = ref(false)
 
 const paymentForm = ref({
     amount: props.order.balance || 0,
@@ -62,7 +71,63 @@ const cancelForm = ref({
     refund_method: 'Cash',
 })
 
+const paymentErrors = ref('')
+const collectErrors = ref('')
+const isSubmittingCollect = ref(false)
+
+const handleMarkPickedUpClick = () => {
+    collectErrors.value = ''
+    if (Number(props.order.balance || 0) > 0.01) {
+        showUnpaidWarningModal.value = true
+    } else {
+        showCollectModal.value = true
+    }
+}
+
+const proceedToPaymentFromWarning = () => {
+    showUnpaidWarningModal.value = false
+    openPaymentModal()
+}
+
+const proceedToHandoverFromWarning = () => {
+    showUnpaidWarningModal.value = false
+    showCollectModal.value = true
+}
+
+const openPaymentModal = () => {
+    paymentForm.value = {
+        amount: props.order.balance || 0,
+        method: 'Cash',
+        reference: '',
+        note: '',
+    }
+    paymentErrors.value = ''
+    showPaymentModal.value = true
+}
+
+const setPaymentPreset = (fraction) => {
+    const bal = Number(props.order.balance || 0)
+    if (fraction === 1) {
+        paymentForm.value.amount = bal
+    } else if (fraction === 0.5) {
+        paymentForm.value.amount = Math.round((bal / 2) * 100) / 100
+    } else {
+        paymentForm.value.amount = ''
+    }
+}
+
 const submitPayment = () => {
+    paymentErrors.value = ''
+    const amt = Number(paymentForm.value.amount || 0)
+    if (amt <= 0) {
+        paymentErrors.value = 'Please enter a valid payment amount greater than zero.'
+        return
+    }
+    if (amt > props.order.balance + 0.001) {
+        paymentErrors.value = `Payment amount cannot exceed the order balance (${formatMoney(props.order.balance)}).`
+        return
+    }
+
     router.post(
         safeRoute('laundry.orders.record-payment', { order: props.order.id }),
         paymentForm.value,
@@ -70,6 +135,9 @@ const submitPayment = () => {
             preserveScroll: true,
             onSuccess: () => {
                 showPaymentModal.value = false
+            },
+            onError: (errs) => {
+                paymentErrors.value = Object.values(errs).flat().join(' ')
             },
         }
     )
@@ -89,6 +157,8 @@ const submitStatusChange = () => {
 }
 
 const submitCollect = () => {
+    collectErrors.value = ''
+    isSubmittingCollect.value = true
     router.post(
         safeRoute('laundry.orders.collect', { order: props.order.id }),
         collectForm.value,
@@ -96,6 +166,14 @@ const submitCollect = () => {
             preserveScroll: true,
             onSuccess: () => {
                 showCollectModal.value = false
+                isSubmittingCollect.value = false
+            },
+            onError: (errs) => {
+                isSubmittingCollect.value = false
+                collectErrors.value = Object.values(errs).flat().join(' ')
+            },
+            onFinish: () => {
+                isSubmittingCollect.value = false
             },
         }
     )
@@ -114,10 +192,6 @@ const submitCancel = () => {
     )
 }
 
-const printDirect = () => {
-    window.print()
-}
-
 const statusBadgeClass = (status) => {
     switch (status) {
         case 'received': return 'bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800'
@@ -131,14 +205,50 @@ const statusBadgeClass = (status) => {
 </script>
 
 <template>
-    <LaundryLayout :title="`Order #${order.order_number}`">
-        <div class="max-w-6xl mx-auto space-y-6">
+    <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
+        <!-- Header -->
+        <div class="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+            <div class="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                <Link
+                    :href="safeRoute('laundry.orders.index')"
+                    class="p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 text-xs font-semibold transition flex-shrink-0"
+                    title="Back to Orders"
+                >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+                </Link>
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-tight truncate">Order {{ order.order_number }}</h1>
+                        <span :class="['px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase border', statusBadgeClass(order.status)]">
+                            {{ order.status }}
+                        </span>
+                        <span v-if="order.is_overdue" class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
+                            OVERDUE
+                        </span>
+                    </div>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 truncate">Customer: <strong class="text-slate-700 dark:text-slate-300">{{ order.customer_name }}</strong> • Due: {{ order.due_at || '—' }}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button
+                    @click="printDirect"
+                    class="px-3 sm:px-3.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5 border border-slate-200 dark:border-slate-600"
+                >
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                    <span>Print Ticket</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Scrollable Content -->
+        <div class="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
+            <div class="max-w-6xl mx-auto space-y-4 sm:space-y-6">
 
             <!-- Top Header & Workflow Actions -->
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs">
                 <div class="space-y-1">
-                    <div class="flex items-center gap-3">
-                        <h2 class="text-2xl font-black text-slate-900 dark:text-white">
+                    <div class="flex items-center gap-2.5 sm:gap-3 flex-wrap">
+                        <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                             {{ order.order_number }}
                         </h2>
                         <span :class="['px-3 py-1 rounded-full text-xs font-extrabold uppercase border', statusBadgeClass(order.status)]">
@@ -185,7 +295,7 @@ const statusBadgeClass = (status) => {
                     <!-- Add Payment / Settle Balance -->
                     <button
                         v-if="order.balance > 0 && order.status !== 'cancelled'"
-                        @click="showPaymentModal = true"
+                        @click="openPaymentModal"
                         type="button"
                         class="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition"
                     >
@@ -198,7 +308,7 @@ const statusBadgeClass = (status) => {
                     <!-- Mark Collected Pickup -->
                     <button
                         v-if="order.status === 'ready'"
-                        @click="showCollectModal = true"
+                        @click="handleMarkPickedUpClick"
                         type="button"
                         class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition"
                     >
@@ -234,124 +344,363 @@ const statusBadgeClass = (status) => {
                 </div>
             </div>
 
+            <!-- Handover Status Alert Banner if Collected -->
+            <div v-if="order.status === 'collected'" class="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/40 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800/80 flex flex-wrap items-center justify-between gap-3 shadow-xs">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg shadow-sm flex-shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h4 class="font-extrabold text-sm text-emerald-950 dark:text-emerald-100">Order Collected & Handed Over</h4>
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-600 text-white">Collected</span>
+                        </div>
+                        <p class="text-xs text-emerald-900 dark:text-emerald-200 mt-0.5">
+                            Collected / Picked up by: <strong class="font-black text-slate-900 dark:text-white underline decoration-emerald-500">{{ order.collected_by_name || order.customer_name }}</strong>
+                            <span v-if="order.collected_by_name && order.collected_by_name !== order.customer_name" class="text-slate-600 dark:text-slate-300 font-medium"> (on behalf of {{ order.customer_name }})</span>
+                            • Handed over on: <strong>{{ order.collected_at }}</strong>
+                            <span v-if="order.collected_by_staff_name"> • Staff: <strong>{{ order.collected_by_staff_name }}</strong></span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
 
                 <!-- LEFT COLUMN: Items & Payments (8 Cols) -->
                 <div class="lg:col-span-8 space-y-6">
 
-                    <!-- Garment Items Snapshot Table -->
-                    <div class="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-4">
-                        <h3 class="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
-                            Order Items & Services
-                        </h3>
+                    <!-- Garment Items Snapshot Table (Collapsible) -->
+                    <div class="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-4">
+                        <div 
+                            @click="isItemsExpanded = !isItemsExpanded"
+                            class="flex items-center justify-between cursor-pointer select-none group gap-2"
+                        >
+                            <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                                <h3 class="font-bold text-xs sm:text-sm text-slate-900 dark:text-white uppercase tracking-wider group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition flex items-center gap-2">
+                                    <span>Order Items & Services</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                        {{ order.items.length }}
+                                    </span>
+                                </h3>
+                                <span v-if="!isItemsExpanded" class="text-xs text-slate-500 dark:text-slate-400 font-mono font-semibold">
+                                    • Total: {{ formatMoney(order.total) }}
+                                </span>
+                            </div>
 
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-500 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
-                                    <tr>
-                                        <th class="px-4 py-2.5">Service Item</th>
-                                        <th class="px-4 py-2.5 text-center">Pricing</th>
-                                        <th class="px-4 py-2.5 text-right">Unit Price</th>
-                                        <th class="px-4 py-2.5 text-center">Quantity / Weight</th>
-                                        <th class="px-4 py-2.5 text-right">Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                                    <tr v-for="item in order.items" :key="item.id" class="hover:bg-slate-50/50">
-                                        <td class="px-4 py-3">
-                                            <p class="font-bold text-slate-900 dark:text-white">{{ item.service_name }}</p>
-                                            <p v-if="item.note" class="text-[11px] text-slate-400 italic">"{{ item.note }}"</p>
-                                        </td>
-                                        <td class="px-4 py-3 text-center capitalize text-slate-500">
-                                            {{ item.pricing_type === 'per_kg' ? 'Per KG' : 'Per Piece' }}
-                                        </td>
-                                        <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300">
-                                            {{ formatMoney(item.unit_price) }}
-                                        </td>
-                                        <td class="px-4 py-3 text-center font-bold text-slate-900 dark:text-white">
-                                            {{ item.quantity }} {{ item.pricing_type === 'per_kg' ? 'kg' : 'pcs' }}
-                                        </td>
-                                        <td class="px-4 py-3 text-right font-black text-slate-900 dark:text-white">
-                                            {{ formatMoney(item.line_total) }}
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                            <div class="flex items-center gap-1.5 sm:gap-2 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition flex-shrink-0">
+                                <span class="text-[11px] font-medium hidden sm:inline">{{ isItemsExpanded ? 'Collapse' : 'Expand' }}</span>
+                                <svg 
+                                    class="w-4 h-4 transition-transform duration-200"
+                                    :class="{ 'rotate-180': isItemsExpanded }"
+                                    fill="none" 
+                                    stroke="currentColor" 
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
                         </div>
 
-                        <!-- Subtotal & Taxes Breakdown -->
-                        <div class="pt-3 border-t border-slate-200 dark:border-slate-700 space-y-1.5 text-xs text-right max-w-xs ml-auto">
-                            <div class="flex justify-between text-slate-500">
-                                <span>Subtotal:</span>
-                                <span class="font-bold text-slate-800 dark:text-slate-200">{{ formatMoney(order.subtotal) }}</span>
+                        <div v-show="isItemsExpanded" class="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                            <!-- Mobile Cards View (< sm) -->
+                            <div class="sm:hidden space-y-2.5">
+                                <div
+                                    v-for="item in order.items"
+                                    :key="item.id"
+                                    class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2"
+                                >
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="space-y-0.5">
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <p class="font-bold text-slate-900 dark:text-white text-sm leading-snug">
+                                                    {{ item.service_name }}
+                                                </p>
+                                                <span v-if="item.has_discount || item.discount_amount > 0" class="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                                                    🏷️ {{ item.discount_name || 'Promo' }}
+                                                </span>
+                                            </div>
+                                            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-200/70 dark:bg-slate-700/80 text-slate-600 dark:text-slate-300 capitalize">
+                                                {{ item.pricing_type === 'per_kg' ? 'Per KG' : 'Per Piece' }}
+                                            </span>
+                                        </div>
+                                        <span class="text-base font-black text-slate-900 dark:text-white font-mono flex-shrink-0">
+                                            {{ formatMoney(item.line_total) }}
+                                        </span>
+                                    </div>
+
+                                    <div v-if="item.note" class="text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200/80 dark:border-amber-800/60 flex items-start gap-1.5">
+                                        <span class="font-bold flex-shrink-0">🏷️ Garment Note:</span>
+                                        <span class="italic font-medium">"{{ item.note }}"</span>
+                                    </div>
+
+                                    <div class="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-700/60 text-xs text-slate-500">
+                                        <span>Qty: <strong class="text-slate-800 dark:text-slate-200 font-bold">{{ formatQty(item.quantity) }} {{ item.pricing_type === 'per_kg' ? 'kg' : 'pcs' }}</strong></span>
+                                        <span class="flex items-center gap-1.5 font-mono">
+                                            <span v-if="item.discount_amount > 0" class="line-through text-slate-400 text-[11px]">
+                                                {{ formatMoney(item.original_price) }}
+                                            </span>
+                                            <span :class="item.discount_amount > 0 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : ''">
+                                                {{ formatMoney(item.unit_price) }}
+                                            </span>
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
-                            <div v-if="order.discount_amount > 0" class="flex justify-between text-emerald-600 font-semibold">
-                                <span>Discount:</span>
-                                <span>-{{ formatMoney(order.discount_amount) }}</span>
+
+                            <!-- Desktop & Tablet Table View (sm+) -->
+                            <div class="hidden sm:block overflow-x-auto">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-500 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+                                        <tr>
+                                            <th class="px-4 py-2.5">Service Item</th>
+                                            <th class="px-3 py-2.5 text-center">Pricing</th>
+                                            <th class="px-4 py-2.5 text-right whitespace-nowrap">Unit Price</th>
+                                            <th class="px-3 py-2.5 text-center whitespace-nowrap">Quantity / Weight</th>
+                                            <th class="px-4 py-2.5 text-right whitespace-nowrap">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                                        <tr v-for="item in order.items" :key="item.id" class="hover:bg-slate-50/50">
+                                            <td class="px-4 py-3">
+                                                <div class="flex items-center gap-2 flex-wrap">
+                                                    <p class="font-bold text-slate-900 dark:text-white">{{ item.service_name }}</p>
+                                                    <span v-if="item.has_discount || item.discount_amount > 0" class="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                                                        🏷️ {{ item.discount_name || 'Promo' }}
+                                                    </span>
+                                                </div>
+                                                <div v-if="item.note" class="mt-1 flex items-center gap-1.5 text-[11px] text-amber-800 dark:text-amber-300 bg-amber-50/80 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200/80 dark:border-amber-800/60 w-fit">
+                                                    <span class="font-bold">🏷️ Note:</span>
+                                                    <span class="italic font-medium">"{{ item.note }}"</span>
+                                                </div>
+                                            </td>
+                                            <td class="px-3 py-3 text-center capitalize text-slate-500 whitespace-nowrap">
+                                                {{ item.pricing_type === 'per_kg' ? 'Per KG' : 'Per Piece' }}
+                                            </td>
+                                            <td class="px-4 py-3 text-right text-slate-700 dark:text-slate-300 whitespace-nowrap font-mono">
+                                                <div v-if="item.discount_amount > 0" class="flex flex-col items-end">
+                                                    <span class="line-through text-slate-400 text-[10px]">{{ formatMoney(item.original_price) }}</span>
+                                                    <span class="text-emerald-600 dark:text-emerald-400 font-bold">{{ formatMoney(item.unit_price) }}</span>
+                                                </div>
+                                                <span v-else>{{ formatMoney(item.unit_price) }}</span>
+                                            </td>
+                                            <td class="px-3 py-3 text-center font-bold text-slate-900 dark:text-white whitespace-nowrap">
+                                                {{ formatQty(item.quantity) }} {{ item.pricing_type === 'per_kg' ? 'kg' : 'pcs' }}
+                                            </td>
+                                            <td class="px-4 py-3 text-right font-black text-slate-900 dark:text-white whitespace-nowrap font-mono">
+                                                {{ formatMoney(item.line_total) }}
+                                                <div v-if="item.discount_amount > 0" class="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                                    Saved {{ formatMoney(item.discount_amount * item.quantity) }}
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
                             </div>
-                            <div v-if="order.tax_amount > 0" class="flex justify-between text-slate-500">
-                                <span>VAT / Tax:</span>
-                                <span class="font-bold text-slate-800 dark:text-slate-200">{{ formatMoney(order.tax_amount) }}</span>
+
+                            <!-- Order Overall Intake Notes / Special Instructions -->
+                            <div v-if="order.note" class="p-3.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/60 text-xs flex items-start gap-2.5">
+                                <span class="text-base flex-shrink-0">📝</span>
+                                <div class="space-y-0.5">
+                                    <span class="font-black text-amber-900 dark:text-amber-200 uppercase tracking-wide text-[10px] block">Order Instructions & Attendant Remarks</span>
+                                    <p class="text-slate-800 dark:text-slate-200 italic font-medium">"{{ order.note }}"</p>
+                                </div>
                             </div>
-                            <div class="flex justify-between pt-2 border-t border-slate-200 dark:border-slate-700 text-sm font-black text-slate-900 dark:text-white">
-                                <span>Total:</span>
-                                <span class="text-indigo-600 text-base">{{ formatMoney(order.total) }}</span>
+
+                            <!-- Subtotal & Taxes Breakdown -->
+                            <div class="pt-3 border-t border-slate-200 dark:border-slate-700 space-y-1.5 text-xs text-right w-full sm:max-w-xs ml-auto">
+                                <div class="flex justify-between text-slate-500">
+                                    <span>Subtotal:</span>
+                                    <span class="font-bold text-slate-800 dark:text-slate-200">{{ formatMoney(order.subtotal) }}</span>
+                                </div>
+                                <div v-if="order.discount_amount > 0" class="flex justify-between text-emerald-600 font-semibold">
+                                    <span>Discount:</span>
+                                    <span>-{{ formatMoney(order.discount_amount) }}</span>
+                                </div>
+                                <div v-if="order.tax_amount > 0" class="flex justify-between text-slate-500">
+                                    <span>VAT / Tax:</span>
+                                    <span class="font-bold text-slate-800 dark:text-slate-200">{{ formatMoney(order.tax_amount) }}</span>
+                                </div>
+                                <div class="flex justify-between pt-2 border-t border-slate-200 dark:border-slate-700 text-sm font-black text-slate-900 dark:text-white">
+                                    <span>Total:</span>
+                                    <span class="text-indigo-600 text-base">{{ formatMoney(order.total) }}</span>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Payments History Ledger -->
-                    <div class="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-4">
-                        <div class="flex items-center justify-between">
-                            <h3 class="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
-                                Payments & Deposits ({{ order.payments.length }})
-                            </h3>
+                    <!-- Payments History Ledger (Collapsible) -->
+                    <div class="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-4">
+                        <div class="flex items-center justify-between gap-3">
+                            <div 
+                                @click="isPaymentsExpanded = !isPaymentsExpanded"
+                                class="flex items-center gap-2 sm:gap-2.5 cursor-pointer select-none group flex-1 flex-wrap"
+                            >
+                                <h3 class="font-bold text-xs sm:text-sm text-slate-900 dark:text-white uppercase tracking-wider group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition flex items-center gap-2">
+                                    <span>Payments & Deposits</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                        {{ order.payments.length }}
+                                    </span>
+                                </h3>
+                                <span v-if="!isPaymentsExpanded" class="text-xs font-mono font-semibold" :class="order.balance > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'">
+                                    • Paid: {{ formatMoney(order.amount_paid) }} | Bal: {{ order.balance > 0 ? formatMoney(order.balance) : '₦0.00' }}
+                                </span>
+                                <div class="flex items-center gap-1 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-200 transition ml-1 flex-shrink-0">
+                                    <span class="text-[11px] font-medium hidden sm:inline">{{ isPaymentsExpanded ? 'Collapse' : 'Expand' }}</span>
+                                    <svg 
+                                        class="w-4 h-4 transition-transform duration-200"
+                                        :class="{ 'rotate-180': isPaymentsExpanded }"
+                                        fill="none" 
+                                        stroke="currentColor" 
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </div>
+                            </div>
+
                             <button
                                 v-if="order.balance > 0 && order.status !== 'cancelled'"
-                                @click="showPaymentModal = true"
-                                class="text-xs font-bold text-indigo-600 hover:underline"
+                                @click.stop="openPaymentModal"
+                                class="text-xs font-bold text-indigo-600 hover:underline flex-shrink-0"
                             >
                                 + Add Payment
                             </button>
                         </div>
 
-                        <div v-if="order.payments.length === 0" class="py-6 text-center text-xs text-slate-400 border border-dashed rounded-xl">
-                            No payments recorded yet for this order.
-                        </div>
+                        <div v-show="isPaymentsExpanded" class="space-y-4 pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                            <div v-if="order.payments.length === 0" class="py-6 text-center text-xs text-slate-400 border border-dashed rounded-xl">
+                                No payments recorded yet for this order.
+                            </div>
 
-                        <div v-else class="overflow-x-auto">
-                            <table class="w-full text-left text-xs">
-                                <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-500 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
-                                    <tr>
-                                        <th class="px-4 py-2.5">Date & Time</th>
-                                        <th class="px-4 py-2.5">Type</th>
-                                        <th class="px-4 py-2.5">Method</th>
-                                        <th class="px-4 py-2.5">Recorded By</th>
-                                        <th class="px-4 py-2.5 text-right">Amount</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
-                                    <tr v-for="p in order.payments" :key="p.id">
-                                        <td class="px-4 py-2.5 text-slate-600 dark:text-slate-300">{{ p.paid_at }}</td>
-                                        <td class="px-4 py-2.5">
-                                            <span :class="p.type === 'payment' ? 'text-emerald-700 font-bold' : 'text-rose-700 font-bold'">
-                                                {{ p.type === 'payment' ? 'Payment' : 'Refund' }}
+                            <div v-else class="space-y-4">
+                                <!-- Mobile Cards View (< sm) -->
+                                <div class="sm:hidden space-y-2.5">
+                                    <div
+                                        v-for="p in order.payments"
+                                        :key="p.id"
+                                        class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-700/80 space-y-2.5"
+                                    >
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-2">
+                                                <span
+                                                    :class="p.type === 'payment' ? 'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800' : 'px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800'"
+                                                >
+                                                    {{ p.type === 'payment' ? 'Payment' : 'Refund' }}
+                                                </span>
+                                                <span class="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                    {{ p.method }}
+                                                </span>
+                                            </div>
+                                            <span
+                                                class="text-base font-black font-mono flex-shrink-0"
+                                                :class="p.type === 'payment' ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
+                                            >
+                                                {{ p.type === 'payment' ? '+' : '-' }}{{ formatMoney(p.amount) }}
                                             </span>
-                                        </td>
-                                        <td class="px-4 py-2.5 font-medium">{{ p.method }}</td>
-                                        <td class="px-4 py-2.5 text-slate-500">{{ p.recorded_by_name }}</td>
-                                        <td class="px-4 py-2.5 text-right font-black" :class="p.type === 'payment' ? 'text-emerald-600' : 'text-rose-600'">
-                                            {{ p.type === 'payment' ? '+' : '-' }}{{ formatMoney(p.amount) }}
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                                        </div>
+
+                                        <div class="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
+                                            <span>{{ p.paid_at }}</span>
+                                            <span>By: <strong class="text-slate-700 dark:text-slate-300 font-semibold">{{ p.recorded_by_name }}</strong></span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Desktop & Tablet Table View (sm+) -->
+                                <div class="hidden sm:block overflow-x-auto">
+                                    <table class="w-full text-left text-xs">
+                                        <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-500 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
+                                            <tr>
+                                                <th class="px-4 py-2.5">Date & Time</th>
+                                                <th class="px-3 py-2.5 text-center">Type</th>
+                                                <th class="px-4 py-2.5">Method</th>
+                                                <th class="px-4 py-2.5">Recorded By</th>
+                                                <th class="px-4 py-2.5 text-right whitespace-nowrap">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                                            <tr v-for="p in order.payments" :key="p.id">
+                                                <td class="px-4 py-2.5 text-slate-600 dark:text-slate-300 whitespace-nowrap">{{ p.paid_at }}</td>
+                                                <td class="px-3 py-2.5 text-center">
+                                                    <span :class="p.type === 'payment' ? 'text-emerald-700 font-bold' : 'text-rose-700 font-bold'">
+                                                        {{ p.type === 'payment' ? 'Payment' : 'Refund' }}
+                                                    </span>
+                                                </td>
+                                                <td class="px-4 py-2.5 font-medium whitespace-nowrap">{{ p.method }}</td>
+                                                <td class="px-4 py-2.5 text-slate-500">{{ p.recorded_by_name }}</td>
+                                                <td class="px-4 py-2.5 text-right font-black whitespace-nowrap" :class="p.type === 'payment' ? 'text-emerald-600' : 'text-rose-600'">
+                                                    {{ p.type === 'payment' ? '+' : '-' }}{{ formatMoney(p.amount) }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                        <tfoot class="border-t-2 border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 text-xs">
+                                            <tr>
+                                                <td colspan="5" class="px-4 py-2.5">
+                                                    <div class="flex items-center justify-end gap-6">
+                                                        <span class="font-bold text-slate-700 dark:text-slate-300">Total Payment Made:</span>
+                                                        <span class="font-black text-emerald-600 dark:text-emerald-400 font-mono text-sm whitespace-nowrap">
+                                                            {{ formatMoney(order.amount_paid) }}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td colspan="5" class="px-4 py-2.5 border-t border-slate-200/50 dark:border-slate-700/50">
+                                                    <div class="flex items-center justify-end gap-6">
+                                                        <span class="font-bold text-slate-700 dark:text-slate-300">Balance Left:</span>
+                                                        <span class="font-black font-mono text-sm whitespace-nowrap" :class="order.balance > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'">
+                                                            {{ order.balance > 0 ? formatMoney(order.balance) : (formatMoney(0) + ' (Fully Paid)') }}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Summary Cards Below Payments & Deposits Table -->
+                            <div class="pt-3 border-t border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 text-xs">
+                                <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/80">
+                                    <span class="text-slate-500 dark:text-slate-400 text-[11px] font-semibold block uppercase tracking-wider">Total Order Amount</span>
+                                    <span class="text-base font-black text-slate-900 dark:text-white font-mono mt-0.5 block whitespace-nowrap">
+                                        {{ formatMoney(order.total) }}
+                                    </span>
+                                </div>
+
+                                <div class="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/80">
+                                    <span class="text-emerald-700 dark:text-emerald-400 text-[11px] font-bold block uppercase tracking-wider">Total Payment Made</span>
+                                    <span class="text-base font-black text-emerald-700 dark:text-emerald-300 font-mono mt-0.5 block whitespace-nowrap">
+                                        {{ formatMoney(order.amount_paid) }}
+                                    </span>
+                                </div>
+
+                                <div class="p-3.5 rounded-xl border" :class="order.balance > 0 ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/80' : 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800/80'">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-[11px] font-bold uppercase tracking-wider block" :class="order.balance > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'">
+                                            Balance Left
+                                        </span>
+                                        <span v-if="order.balance <= 0" class="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-800 dark:bg-emerald-800 dark:text-emerald-200">
+                                            CLEARED
+                                        </span>
+                                        <span v-else class="text-[10px] font-extrabold px-1.5 py-0.2 rounded bg-amber-200 text-amber-800 dark:bg-amber-800 dark:text-amber-200">
+                                            DUE
+                                        </span>
+                                    </div>
+                                    <span class="text-base font-black font-mono mt-0.5 block whitespace-nowrap" :class="order.balance > 0 ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300'">
+                                        {{ order.balance > 0 ? formatMoney(order.balance) : (formatMoney(0) + ' (Fully Paid)') }}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     <!-- Workflow Status Audit History -->
-                    <div class="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-4">
-                        <h3 class="font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wider">
+                    <div class="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-4">
+                        <h3 class="font-bold text-xs sm:text-sm text-slate-900 dark:text-white uppercase tracking-wider">
                             Lifecycle History
                         </h3>
 
@@ -364,7 +713,128 @@ const statusBadgeClass = (status) => {
                                     </p>
                                     <p class="text-slate-400 text-[11px]">{{ h.changed_at }} by {{ h.changed_by_name }}</p>
                                     <p v-if="h.note" class="text-slate-500 italic mt-0.5">"{{ h.note }}"</p>
+
+                                    <!-- Prominently show who collected it! -->
+                                    <div v-if="h.to_status === 'collected' && (h.collected_by_name || order.collected_by_name)" class="mt-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200 space-y-0.5">
+                                        <div class="flex items-center gap-1.5 font-bold text-xs">
+                                            <svg class="w-4 h-4 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                            </svg>
+                                            <span>Collected / Picked up by:</span>
+                                            <span class="font-black text-emerald-700 dark:text-emerald-300 underline decoration-emerald-400 decoration-2">{{ h.collected_by_name || order.collected_by_name }}</span>
+                                        </div>
+                                        <p v-if="order.customer_name && (h.collected_by_name || order.collected_by_name) !== order.customer_name" class="text-[11px] text-slate-500 dark:text-slate-400 pl-5.5">
+                                            (Collected on behalf of customer: <strong>{{ order.customer_name }}</strong>)
+                                        </p>
+                                    </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Other Details (Collapsible) -->
+                    <div class="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-4">
+                        <div
+                            @click="isOtherDetailsExpanded = !isOtherDetailsExpanded"
+                            class="flex items-center justify-between cursor-pointer select-none group gap-2"
+                        >
+                            <div class="flex items-center gap-2 sm:gap-2.5 flex-wrap">
+                                <h3 class="font-bold text-xs sm:text-sm text-slate-900 dark:text-white uppercase tracking-wider group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition flex items-center gap-2">
+                                    <span>Other Details</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                        Order #{{ order.order_number }}
+                                    </span>
+                                </h3>
+                            </div>
+
+                            <div class="flex items-center gap-2">
+                                <span class="text-[11px] font-medium text-slate-400 group-hover:text-indigo-600 transition hidden sm:inline">
+                                    {{ isOtherDetailsExpanded ? 'Collapse' : 'Expand' }}
+                                </span>
+                                <svg
+                                    class="w-4 h-4 text-slate-400 group-hover:text-indigo-600 transition-transform duration-200"
+                                    :class="{ 'rotate-180': isOtherDetailsExpanded }"
+                                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                >
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </div>
+                        </div>
+
+                        <div v-show="isOtherDetailsExpanded" class="pt-3 border-t border-slate-100 dark:border-slate-700/60 space-y-4">
+                            <!-- Grid of all details -->
+                            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+                                <!-- 1. Order Number & Status -->
+                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/60 space-y-1">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Order Number</span>
+                                    <p class="font-black text-sm text-slate-900 dark:text-white font-mono">{{ order.order_number }}</p>
+                                    <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300">
+                                        {{ order.status }}
+                                    </span>
+                                </div>
+
+                                <!-- 2. Intake Attendant & Date -->
+                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/60 space-y-1">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Intake Registration</span>
+                                    <p class="font-bold text-slate-900 dark:text-white">{{ order.received_at || '—' }}</p>
+                                    <p class="text-[11px] text-slate-500">By: <strong class="text-slate-700 dark:text-slate-300">{{ order.created_by_name }}</strong></p>
+                                </div>
+
+                                <!-- 3. Promised Turnaround -->
+                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/60 space-y-1">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Promised Turnaround Due</span>
+                                    <p class="font-bold text-slate-900 dark:text-white">{{ order.due_at || '—' }}</p>
+                                    <span v-if="order.is_overdue" class="text-[10px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/40 px-1.5 py-0.5 rounded">⚠️ Overdue</span>
+                                    <span v-else-if="order.status !== 'collected'" class="text-[10px] font-medium text-emerald-600">On Track</span>
+                                    <span v-else class="text-[10px] font-medium text-slate-400">Completed</span>
+                                </div>
+
+                                <!-- 4. Customer Info -->
+                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/60 space-y-1">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Customer Information</span>
+                                    <p class="font-bold text-slate-900 dark:text-white">{{ order.customer_name }}</p>
+                                    <p class="text-[11px] text-indigo-600 font-semibold">{{ order.customer_phone || 'No phone' }}</p>
+                                    <p v-if="order.customer_debt > 0" class="text-[10px] text-amber-600 font-semibold">Store Debt: {{ formatMoney(order.customer_debt) }}</p>
+                                </div>
+
+                                <!-- 5. Collection / Pickup Info -->
+                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/60 space-y-1">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Collection / Pickup</span>
+                                    <p class="font-bold text-slate-900 dark:text-white">
+                                        {{ order.collected_at ? order.collected_at : 'Pending Pickup' }}
+                                    </p>
+                                    <div v-if="order.collected_by_name" class="text-[11px] space-y-0.5">
+                                        <p class="text-slate-600 dark:text-slate-300">
+                                            Picked up by: <strong class="text-emerald-700 dark:text-emerald-400 font-black">{{ order.collected_by_name }}</strong>
+                                        </p>
+                                        <p v-if="order.collected_by_name !== order.customer_name" class="text-[10px] text-slate-400 italic">
+                                            (On behalf of {{ order.customer_name }})
+                                        </p>
+                                        <p v-if="order.collected_by_staff_name" class="text-[10px] text-slate-500">
+                                            Released by staff: {{ order.collected_by_staff_name }}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- 6. Financial Summary -->
+                                <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-700/60 space-y-1">
+                                    <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Financial Summary</span>
+                                    <p class="text-slate-700 dark:text-slate-300 text-[11px]">Subtotal: <strong class="font-mono">{{ formatMoney(order.subtotal) }}</strong></p>
+                                    <p v-if="order.discount_amount > 0" class="text-emerald-600 dark:text-emerald-400 text-[11px]">
+                                        Discount <span v-if="order.general_discount_name">({{ order.general_discount_name }})</span>:
+                                        <strong class="font-mono">-{{ formatMoney(order.discount_amount) }}</strong>
+                                    </p>
+                                    <p v-if="order.tax_amount > 0" class="text-slate-500 text-[11px]">Tax: <strong class="font-mono">+{{ formatMoney(order.tax_amount) }}</strong></p>
+                                    <p class="font-bold text-slate-900 dark:text-white">Total: <span class="font-mono">{{ formatMoney(order.total) }}</span></p>
+                                    <p class="text-emerald-600 font-semibold text-[11px]">Paid: <span class="font-mono">{{ formatMoney(order.amount_paid) }}</span></p>
+                                    <p class="font-bold" :class="order.balance > 0 ? 'text-amber-600' : 'text-emerald-600'">Balance: <span class="font-mono">{{ formatMoney(order.balance) }}</span></p>
+                                </div>
+                            </div>
+
+                            <!-- Garment Special Instructions / Notes -->
+                            <div v-if="order.note" class="p-3 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-xs">
+                                <span class="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase block mb-0.5">Garment Intake Instructions & Care Notes</span>
+                                <p class="text-slate-700 dark:text-slate-200 italic font-medium">"{{ order.note }}"</p>
                             </div>
                         </div>
                     </div>
@@ -372,10 +842,10 @@ const statusBadgeClass = (status) => {
                 </div>
 
                 <!-- RIGHT COLUMN: Customer Details & Timeline (4 Cols) -->
-                <div class="lg:col-span-4 space-y-6">
+                <div class="lg:col-span-4 space-y-4 sm:space-y-6">
 
                     <!-- Customer Snapshot Card -->
-                    <div class="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3">
+                    <div class="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3">
                         <h3 class="font-bold text-xs uppercase tracking-wider text-slate-400">
                             Customer Profile
                         </h3>
@@ -392,7 +862,7 @@ const statusBadgeClass = (status) => {
                     </div>
 
                     <!-- Due & Collection Information -->
-                    <div class="p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3 text-xs">
+                    <div class="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs space-y-3 text-xs">
                         <h3 class="font-bold uppercase tracking-wider text-slate-400">
                             Schedule & Pickup
                         </h3>
@@ -402,10 +872,25 @@ const statusBadgeClass = (status) => {
                             <span class="font-bold text-slate-800 dark:text-slate-200 text-sm">{{ order.due_at || '—' }}</span>
                         </div>
 
-                        <div v-if="order.collected_at">
-                            <span class="text-slate-400 block text-[11px]">Collected At</span>
-                            <span class="font-bold text-emerald-600 text-sm">{{ order.collected_at }}</span>
-                            <span v-if="order.collected_by_name" class="text-slate-400 block text-[10px]">Picked up by: {{ order.collected_by_name }}</span>
+                        <div v-if="order.collected_at" class="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 space-y-1.5">
+                            <span class="text-emerald-800 dark:text-emerald-300 font-bold block text-[11px] uppercase tracking-wide">Pickup & Handover Details</span>
+                            <div class="text-xs space-y-1">
+                                <div>
+                                    <span class="text-slate-500 dark:text-slate-400 block text-[10px]">Collected At</span>
+                                    <span class="font-bold text-emerald-700 dark:text-emerald-300">{{ order.collected_at }}</span>
+                                </div>
+                                <div v-if="order.collected_by_name">
+                                    <span class="text-slate-500 dark:text-slate-400 block text-[10px]">Picked Up By</span>
+                                    <span class="font-extrabold text-slate-900 dark:text-white text-xs">{{ order.collected_by_name }}</span>
+                                    <span v-if="order.collected_by_name !== order.customer_name" class="text-[10px] text-slate-500 block">
+                                        (on behalf of {{ order.customer_name }})
+                                    </span>
+                                </div>
+                                <div v-if="order.collected_by_staff_name">
+                                    <span class="text-slate-500 dark:text-slate-400 block text-[10px]">Staff Attendant</span>
+                                    <span class="font-medium text-slate-700 dark:text-slate-300">{{ order.collected_by_staff_name }}</span>
+                                </div>
+                            </div>
                         </div>
 
                         <div v-if="order.note">
@@ -419,46 +904,107 @@ const statusBadgeClass = (status) => {
             </div>
 
         </div>
+        </div>
 
         <!-- 1. RECORD PAYMENT MODAL -->
         <div v-if="showPaymentModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-            <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4">
+            <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-700">
                     <h3 class="font-bold text-slate-900 dark:text-white">Record Balance Payment</h3>
-                    <button @click="showPaymentModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+                    <button @click="showPaymentModal = false" class="text-slate-400 hover:text-slate-600 text-base font-bold">✕</button>
                 </div>
 
-                <div class="space-y-3 text-xs">
+                <!-- Balance Summary Banner -->
+                <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 flex items-center justify-between text-xs">
                     <div>
-                        <label class="block font-semibold mb-1">Amount to Pay (Balance: {{ formatMoney(order.balance) }})</label>
-                        <input v-model.number="paymentForm.amount" type="number" min="0.01" :max="order.balance" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 font-bold text-sm bg-slate-50 dark:bg-slate-900/50" />
+                        <span class="text-[11px] font-semibold text-amber-800 dark:text-amber-300 block">Outstanding Order Balance</span>
+                        <span class="text-xs text-slate-500">Total Order: {{ formatMoney(order.total) }}</span>
+                    </div>
+                    <span class="font-black text-base text-amber-700 dark:text-amber-400 font-mono">
+                        {{ formatMoney(order.balance) }}
+                    </span>
+                </div>
+
+                <!-- Error Alert if any -->
+                <div v-if="paymentErrors" class="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 text-rose-700 dark:text-rose-300 text-xs font-medium">
+                    {{ paymentErrors }}
+                </div>
+
+                <div class="space-y-3.5 text-xs">
+                    <!-- Amount Input with auto-select on click -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block font-bold text-slate-800 dark:text-slate-200">Payment Amount (₦)</label>
+                            <span class="text-[11px] text-slate-400">Max: {{ formatMoney(order.balance) }}</span>
+                        </div>
+                        <input
+                            v-model.number="paymentForm.amount"
+                            @focus="$event.target.select()"
+                            type="number"
+                            step="any"
+                            min="0.01"
+                            :max="order.balance"
+                            placeholder="Enter amount to pay..."
+                            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 font-extrabold text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition"
+                        />
+                        <!-- Preset Quick Buttons -->
+                        <div class="flex items-center gap-1.5 mt-1.5">
+                            <button
+                                type="button"
+                                @click="setPaymentPreset(1)"
+                                class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition"
+                            >
+                                Pay Full ({{ formatMoney(order.balance) }})
+                            </button>
+                            <button
+                                type="button"
+                                @click="setPaymentPreset(0.5)"
+                                class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition"
+                            >
+                                50% ({{ formatMoney(order.balance / 2) }})
+                            </button>
+                            <button
+                                type="button"
+                                @click="setPaymentPreset(0)"
+                                class="px-2 py-0.5 rounded-md text-[11px] font-semibold text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                            >
+                                Clear
+                            </button>
+                        </div>
                     </div>
 
+                    <!-- Payment Method -->
                     <div>
-                        <label class="block font-semibold mb-1">Payment Method</label>
-                        <select v-model="paymentForm.method" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                        <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Payment Method</label>
+                        <select v-model="paymentForm.method" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium">
                             <option value="Cash">Cash</option>
                             <option value="Card / POS">Card / POS</option>
                             <option value="Bank Transfer">Bank Transfer</option>
                         </select>
                     </div>
 
+                    <!-- Reference clearly distinct from amount -->
                     <div>
-                        <label class="block font-semibold mb-1">Reference / Note (Optional)</label>
-                        <input v-model="paymentForm.reference" type="text" placeholder="e.g. transfer ref" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50" />
+                        <label class="block font-semibold mb-1 text-slate-700 dark:text-slate-300">Bank / POS Slip Reference (Optional)</label>
+                        <input
+                            v-model="paymentForm.reference"
+                            type="text"
+                            placeholder="e.g. POS Auth Code, Transfer Ref..."
+                            class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                        />
                     </div>
                 </div>
 
-                <div class="flex justify-end gap-2 pt-2">
-                    <button @click="showPaymentModal = false" class="px-4 py-2 rounded-xl text-slate-600 font-semibold text-xs">Cancel</button>
-                    <button @click="submitPayment" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700">Save Payment</button>
+                <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                    <button @click="showPaymentModal = false" class="px-4 py-2 rounded-xl text-slate-600 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-700 transition">Cancel</button>
+                    <button @click="submitPayment" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-sm transition">Save Payment</button>
                 </div>
             </div>
         </div>
 
         <!-- 2. STATUS UPDATE MODAL -->
         <div v-if="showStatusModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-            <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4">
+            <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-700">
                     <h3 class="font-bold text-slate-900 dark:text-white">Update Workflow Stage</h3>
                     <button @click="showStatusModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
@@ -487,17 +1033,124 @@ const statusBadgeClass = (status) => {
             </div>
         </div>
 
-        <!-- 3. MARK COLLECTED MODAL -->
+        <!-- 3. UNPAID BALANCE PROMPT MODAL -->
+        <div v-if="showUnpaidWarningModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs transition-opacity animate-in fade-in duration-150">
+            <div class="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl border border-amber-200 dark:border-amber-800/60 shadow-2xl overflow-hidden p-6 text-center space-y-5">
+                <!-- Icon Header -->
+                <div class="w-16 h-16 mx-auto rounded-2xl bg-amber-100 dark:bg-amber-950/60 border-2 border-amber-300 dark:border-amber-700/60 text-amber-600 dark:text-amber-400 flex items-center justify-center shadow-inner">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+
+                <!-- Text Headings -->
+                <div class="space-y-1">
+                    <h3 class="text-xl font-black text-slate-900 dark:text-white">
+                        Unpaid Balance Notice
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        This order has an outstanding pending balance remaining.
+                    </p>
+                </div>
+
+                <!-- Breakdown Alert Card -->
+                <div class="p-4 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/80 dark:border-amber-800/50 text-left space-y-3">
+                    <div class="flex items-center justify-between pb-2 border-b border-amber-200/60 dark:border-amber-800/40 text-xs">
+                        <span class="font-bold text-slate-700 dark:text-slate-300">Order #{{ order.order_number }}</span>
+                        <span class="font-semibold text-slate-600 dark:text-slate-400 truncate max-w-[180px]">{{ order.customer_name }}</span>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2 text-center">
+                        <div class="p-2 rounded-xl bg-white/70 dark:bg-slate-900/50 border border-amber-100 dark:border-amber-900/30">
+                            <span class="block text-[10px] text-slate-400 uppercase font-bold">Total Bill</span>
+                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200">{{ formatMoney(order.total) }}</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-white/70 dark:bg-slate-900/50 border border-amber-100 dark:border-amber-900/30">
+                            <span class="block text-[10px] text-slate-400 uppercase font-bold">Paid</span>
+                            <span class="text-xs font-bold text-emerald-600 dark:text-emerald-400">{{ formatMoney(order.amount_paid) }}</span>
+                        </div>
+                        <div class="p-2 rounded-xl bg-amber-100/70 dark:bg-amber-900/40 border border-amber-300/80 dark:border-amber-700/60">
+                            <span class="block text-[10px] text-amber-800 dark:text-amber-300 uppercase font-black">Unpaid Due</span>
+                            <span class="text-xs font-black text-rose-600 dark:text-rose-400">{{ formatMoney(order.balance) }}</span>
+                        </div>
+                    </div>
+
+                    <div class="p-2.5 rounded-xl bg-amber-100/60 dark:bg-amber-900/30 border border-amber-200/80 dark:border-amber-800/40 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed flex items-start gap-2">
+                        <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>
+                            Marking as picked up will release garments and transfer the remaining balance of <strong class="font-black text-rose-700 dark:text-rose-300">{{ formatMoney(order.balance) }}</strong> directly to the customer's store debt ledger.
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="space-y-2 pt-1">
+                    <button
+                        @click="proceedToPaymentFromWarning"
+                        type="button"
+                        class="w-full py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition"
+                    >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span>Record Payment First ({{ formatMoney(order.balance) }})</span>
+                    </button>
+
+                    <button
+                        @click="proceedToHandoverFromWarning"
+                        type="button"
+                        class="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 active:scale-[0.99] text-slate-800 dark:text-slate-200 font-semibold text-xs border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2 transition"
+                    >
+                        <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                        </svg>
+                        <span>Proceed to Pickup & Transfer to Debt</span>
+                    </button>
+
+                    <button
+                        @click="showUnpaidWarningModal = false"
+                        type="button"
+                        class="w-full py-2 text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition"
+                    >
+                        Cancel & Keep Pending
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. MARK COLLECTED MODAL -->
         <div v-if="showCollectModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-            <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4">
+            <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-700">
                     <h3 class="font-bold text-slate-900 dark:text-white">Customer Pickup & Handover</h3>
                     <button @click="showCollectModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
                 </div>
 
-                <div v-if="order.balance > 0" class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 text-amber-800 text-xs space-y-1">
-                    <p class="font-bold">Notice: Unpaid Balance Remaining ({{ formatMoney(order.balance) }})</p>
-                    <p class="text-[11px]">Releasing an unpaid order will record the balance against the customer's store debt ledger.</p>
+                <!-- Error alert if validation failed -->
+                <div v-if="collectErrors" class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs">
+                    <p class="font-bold mb-0.5">Pickup Release Warning</p>
+                    <p>{{ collectErrors }}</p>
+                </div>
+
+                <div v-if="order.balance > 0" class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-amber-900 dark:text-amber-200 text-xs space-y-2">
+                    <div class="flex items-center justify-between font-bold">
+                        <span class="flex items-center gap-1.5">
+                            <span class="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                            Unpaid Balance: {{ formatMoney(order.balance) }}
+                        </span>
+                        <button
+                            type="button"
+                            @click="showCollectModal = false; openPaymentModal()"
+                            class="px-2 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] transition shadow-xs"
+                        >
+                            Pay Balance Instead
+                        </button>
+                    </div>
+                    <p class="text-[11px] text-amber-800 dark:text-amber-300">
+                        Confirming pickup will release garments and transfer <strong>{{ formatMoney(order.balance) }}</strong> to <strong>{{ order.customer_name }}</strong>'s store debt balance.
+                    </p>
                 </div>
 
                 <div class="space-y-3 text-xs">
@@ -513,15 +1166,18 @@ const statusBadgeClass = (status) => {
                 </div>
 
                 <div class="flex justify-end gap-2 pt-2">
-                    <button @click="showCollectModal = false" class="px-4 py-2 rounded-xl text-slate-600 font-semibold text-xs">Cancel</button>
-                    <button @click="submitCollect" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700">Confirm Handover</button>
+                    <button @click="showCollectModal = false" :disabled="isSubmittingCollect" class="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-700 transition">Cancel</button>
+                    <button @click="submitCollect" :disabled="isSubmittingCollect" class="px-4 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs hover:bg-emerald-700 shadow-sm transition disabled:opacity-50 flex items-center gap-1.5">
+                        <svg v-if="isSubmittingCollect" class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                        <span>{{ order.balance > 0 ? 'Confirm Pickup & Transfer to Debt' : 'Confirm Handover' }}</span>
+                    </button>
                 </div>
             </div>
         </div>
 
         <!-- 4. CANCEL ORDER MODAL -->
         <div v-if="showCancelModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-            <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4">
+            <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
                 <div class="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-700">
                     <h3 class="font-bold text-rose-600">Cancel Laundry Order</h3>
                     <button @click="showCancelModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
@@ -559,88 +1215,13 @@ const statusBadgeClass = (status) => {
             </div>
         </div>
 
-        <!-- 5. PRINT DIRECT THERMAL TICKET MODAL -->
-        <div v-if="showPrintModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-            <div class="w-full max-w-sm bg-white text-slate-900 rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-                <div class="text-center space-y-1 pb-3 border-b border-dashed border-slate-300">
-                    <h3 class="font-black text-lg uppercase tracking-wider">{{ branch.name }}</h3>
-                    <p class="text-[11px] text-slate-500">{{ branch.address }}</p>
-                    <p class="text-[11px] text-slate-500">Tel: {{ branch.phone }}</p>
-                    <div class="pt-2">
-                        <span class="px-3 py-1 rounded-md bg-slate-100 font-extrabold text-sm border border-slate-300 inline-block">
-                            {{ order.order_number }}
-                        </span>
-                    </div>
-                </div>
-
-                <div class="text-xs space-y-1 pb-2 border-b border-dashed border-slate-300">
-                    <div class="flex justify-between">
-                        <span class="text-slate-500">Customer:</span>
-                        <span class="font-bold">{{ order.customer_name }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-slate-500">Phone:</span>
-                        <span class="font-medium">{{ order.customer_phone }}</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span class="text-slate-500">Received:</span>
-                        <span>{{ order.received_at }}</span>
-                    </div>
-                    <div class="flex justify-between font-bold">
-                        <span>Due Date:</span>
-                        <span>{{ order.due_at }}</span>
-                    </div>
-                </div>
-
-                <!-- Ticket Line Items -->
-                <div class="text-xs space-y-1.5 pb-2 border-b border-dashed border-slate-300">
-                    <div v-for="item in order.items" :key="item.id" class="flex justify-between">
-                        <div>
-                            <p class="font-bold">{{ item.quantity }}x {{ item.service_name }}</p>
-                            <p v-if="item.note" class="text-[10px] text-slate-400 italic">({{ item.note }})</p>
-                        </div>
-                        <span class="font-black">{{ formatMoney(item.line_total) }}</span>
-                    </div>
-                </div>
-
-                <!-- Ticket Totals -->
-                <div class="text-xs space-y-1 pb-3 border-b border-dashed border-slate-300 text-right">
-                    <div class="flex justify-between text-slate-600">
-                        <span>Subtotal:</span>
-                        <span>{{ formatMoney(order.subtotal) }}</span>
-                    </div>
-                    <div class="flex justify-between text-base font-black">
-                        <span>Total:</span>
-                        <span>{{ formatMoney(order.total) }}</span>
-                    </div>
-                    <div class="flex justify-between font-bold text-slate-700">
-                        <span>Paid:</span>
-                        <span>{{ formatMoney(order.amount_paid) }}</span>
-                    </div>
-                    <div class="flex justify-between text-sm font-black text-rose-600">
-                        <span>Balance Due:</span>
-                        <span>{{ formatMoney(order.balance) }}</span>
-                    </div>
-                </div>
-
-                <!-- Footer Disclaimer -->
-                <div class="text-center text-[10px] text-slate-500 space-y-1">
-                    <p class="font-semibold">{{ settings.receipt_footer || 'Thank you for choosing us! Please present this ticket at pickup.' }}</p>
-                </div>
-
-                <div class="flex items-center justify-between pt-3 gap-2">
-                    <button @click="showPrintModal = false" class="px-4 py-2 rounded-xl bg-slate-100 text-slate-600 font-semibold text-xs">
-                        Close
-                    </button>
-                    <button @click="printDirect" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 flex items-center gap-1.5">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                        </svg>
-                        <span>Print Receipt</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-    </LaundryLayout>
+        <!-- 5. POS-STYLE LAUNDRY TICKET MODAL (80mm & A4 + PDF Download) -->
+        <LaundryTicketModal
+            v-if="showPrintModal"
+            :order="order"
+            :branch="branch"
+            :settings="settings"
+            @close="showPrintModal = false"
+        />
+    </div>
 </template>
