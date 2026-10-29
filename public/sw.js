@@ -47,7 +47,7 @@ self.addEventListener('fetch', (event) => {
                 if (response && response.status === 200 && response.type === 'basic') {
                     const responseToCache = response.clone();
                     caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseToCache).catch(() => {});
+                        cache.put(event.request, responseToCache).catch(() => { });
                     });
                 }
                 return response;

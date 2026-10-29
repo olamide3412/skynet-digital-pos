@@ -21,7 +21,7 @@ class LaundryTestDataSeeder extends Seeder
 {
     public function run(): void
     {
-        $branch = Branch::where('slug', 'test-branch')->first();
+        $branch = Branch::where('slug', 'monty-laundry')->first();
         if (!$branch) {
             $branch = Branch::first();
         }
@@ -54,12 +54,12 @@ class LaundryTestDataSeeder extends Seeder
         // ── 1. Ensure Categories & Services Exist ───────────────────────────────
         $categoriesMap = [];
         $uniqueCategories = [
-            'Dry Cleaning'  => 'Suits, formal evening wear, delicate fabrics',
-            'Traditional'   => 'Native agbada, kaftans, caps and traditional attire',
-            'Wash & Fold'   => 'Everyday shirts, casual laundry, bulk wash by KG',
-            'Ironing'       => 'Steam pressing and crisp ironing',
-            'Bedding'       => 'Duvets, blankets, bedsheets and pillowcases',
-            'Household'     => 'Curtains, drapes and heavy household fabrics',
+            'Dry Cleaning' => 'Suits, formal evening wear, delicate fabrics',
+            'Traditional' => 'Native agbada, kaftans, caps and traditional attire',
+            'Wash & Fold' => 'Everyday shirts, casual laundry, bulk wash by KG',
+            'Ironing' => 'Steam pressing and crisp ironing',
+            'Bedding' => 'Duvets, blankets, bedsheets and pillowcases',
+            'Household' => 'Curtains, drapes and heavy household fabrics',
         ];
 
         $sort = 1;
@@ -68,37 +68,37 @@ class LaundryTestDataSeeder extends Seeder
                 ['branch_id' => $branch->id, 'name' => $catName],
                 [
                     'description' => $desc,
-                    'sort_order'  => $sort++,
-                    'is_active'   => true,
+                    'sort_order' => $sort++,
+                    'is_active' => true,
                 ]
             );
             $categoriesMap[$catName] = $cat->id;
         }
 
         $defaultServices = [
-            ['name' => 'Suit 2-Piece Dry Clean',    'category' => 'Dry Cleaning', 'pricing_type' => 'per_piece', 'price' => 3500.00],
-            ['name' => 'Suit 3-Piece Dry Clean',    'category' => 'Dry Cleaning', 'pricing_type' => 'per_piece', 'price' => 5000.00],
-            ['name' => 'Native Agbada Complete',    'category' => 'Traditional',  'pricing_type' => 'per_piece', 'price' => 4000.00],
-            ['name' => 'Kaftan / Senator Wear',     'category' => 'Traditional',  'pricing_type' => 'per_piece', 'price' => 2500.00],
-            ['name' => 'Office Shirt (Wash & Iron)','category' => 'Wash & Fold',  'pricing_type' => 'per_piece', 'price' => 1200.00],
-            ['name' => 'Trousers / Chinos Press',   'category' => 'Ironing',      'pricing_type' => 'per_piece', 'price' => 900.00],
-            ['name' => 'Evening Gown / Dress',      'category' => 'Dry Cleaning', 'pricing_type' => 'per_piece', 'price' => 4500.00],
-            ['name' => 'Duvet / Bedspread (Large)', 'category' => 'Bedding',      'pricing_type' => 'per_piece', 'price' => 6000.00],
-            ['name' => 'Bedsheets & Pillowcases',   'category' => 'Bedding',      'pricing_type' => 'per_piece', 'price' => 3000.00],
-            ['name' => 'Casual Clothes (Bulk/KG)',  'category' => 'Wash & Fold',  'pricing_type' => 'per_kg',    'price' => 1500.00],
-            ['name' => 'Heavy Curtains (Per KG)',   'category' => 'Household',    'pricing_type' => 'per_kg',    'price' => 1800.00],
-            ['name' => 'Jeans / Denim Wash',        'category' => 'Wash & Fold',  'pricing_type' => 'per_piece', 'price' => 1400.00],
+            ['name' => 'Suit 2-Piece Dry Clean', 'category' => 'Dry Cleaning', 'pricing_type' => 'per_piece', 'price' => 3500.00],
+            ['name' => 'Suit 3-Piece Dry Clean', 'category' => 'Dry Cleaning', 'pricing_type' => 'per_piece', 'price' => 5000.00],
+            ['name' => 'Native Agbada Complete', 'category' => 'Traditional', 'pricing_type' => 'per_piece', 'price' => 4000.00],
+            ['name' => 'Kaftan / Senator Wear', 'category' => 'Traditional', 'pricing_type' => 'per_piece', 'price' => 2500.00],
+            ['name' => 'Office Shirt (Wash & Iron)', 'category' => 'Wash & Fold', 'pricing_type' => 'per_piece', 'price' => 1200.00],
+            ['name' => 'Trousers / Chinos Press', 'category' => 'Ironing', 'pricing_type' => 'per_piece', 'price' => 900.00],
+            ['name' => 'Evening Gown / Dress', 'category' => 'Dry Cleaning', 'pricing_type' => 'per_piece', 'price' => 4500.00],
+            ['name' => 'Duvet / Bedspread (Large)', 'category' => 'Bedding', 'pricing_type' => 'per_piece', 'price' => 6000.00],
+            ['name' => 'Bedsheets & Pillowcases', 'category' => 'Bedding', 'pricing_type' => 'per_piece', 'price' => 3000.00],
+            ['name' => 'Casual Clothes (Bulk/KG)', 'category' => 'Wash & Fold', 'pricing_type' => 'per_kg', 'price' => 1500.00],
+            ['name' => 'Heavy Curtains (Per KG)', 'category' => 'Household', 'pricing_type' => 'per_kg', 'price' => 1800.00],
+            ['name' => 'Jeans / Denim Wash', 'category' => 'Wash & Fold', 'pricing_type' => 'per_piece', 'price' => 1400.00],
         ];
 
         foreach ($defaultServices as $idx => $srv) {
             LaundryService::updateOrCreate(
                 ['branch_id' => $branch->id, 'name' => $srv['name']],
                 [
-                    'category_id'  => $categoriesMap[$srv['category']] ?? null,
+                    'category_id' => $categoriesMap[$srv['category']] ?? null,
                     'pricing_type' => $srv['pricing_type'],
-                    'price'        => $srv['price'],
-                    'is_active'    => true,
-                    'sort_order'   => $idx + 1,
+                    'price' => $srv['price'],
+                    'is_active' => true,
+                    'sort_order' => $idx + 1,
                 ]
             );
         }
@@ -107,42 +107,42 @@ class LaundryTestDataSeeder extends Seeder
 
         // ── 2. Seed 25 Fresh Customers ──────────────────────────────────────────
         $customerList = [
-            ['name' => 'Chief Adebayo Alabi',      'phone' => '08031234561', 'address' => '15 Admiralty Way, Lekki'],
-            ['name' => 'Dr. Ngozi Okonjo',         'phone' => '08023456782', 'address' => '42 Victoria Island, Lagos'],
-            ['name' => 'Alhaji Ibrahim Danjuma',   'phone' => '08145678903', 'address' => '8 Gana Street, Maitama, Abuja'],
-            ['name' => 'Engr. Femi Otedola',       'phone' => '07056789014', 'address' => '12 Bourdillon Rd, Ikoyi'],
-            ['name' => 'Barrister Chioma Eze',     'phone' => '08067890125', 'address' => '7 Wuse Zone 2, Abuja'],
-            ['name' => 'Pastor Tunde Bakare',      'phone' => '08178901236', 'address' => '22 Allen Ave, Ikeja'],
-            ['name' => 'Hajiya Aisha Bello',      'phone' => '08089012347', 'address' => '19 Bompai Rd, Kano'],
-            ['name' => 'Mr. Kenneth Nnamdi',       'phone' => '07090123458', 'address' => '31 New Market Rd, Onitsha'],
-            ['name' => 'Mrs. Folake Solanke',      'phone' => '08012345679', 'address' => '14 Bodija, Ibadan'],
-            ['name' => 'Capt. Babatunde Raji',     'phone' => '08123456780', 'address' => '5 GRA Phase 2, Port Harcourt'],
-            ['name' => 'Hon. Ahmed Lawan',         'phone' => '08034567891', 'address' => '9 Asokoro Hill, Abuja'],
-            ['name' => 'Engr. Emeka Nwosu',        'phone' => '08145678902', 'address' => '11 Ogui Rd, Enugu'],
-            ['name' => 'Mrs. Zainab Ahmed',        'phone' => '07056789013', 'address' => '26 Ahmadu Bello Way, Kaduna'],
-            ['name' => 'Senator Victor Umeh',      'phone' => '08067890124', 'address' => '18 Nza Street, Independence Layout'],
-            ['name' => 'Dr. Kemi Olunloyo',        'phone' => '08178901235', 'address' => '3 Maryland Crescent, Lagos'],
-            ['name' => 'Mr. Segun Arinze',         'phone' => '08089012346', 'address' => '17 Surulere Way, Lagos'],
-            ['name' => 'Mrs. Halima Dangote',      'phone' => '07090123457', 'address' => '5 Bompai Crescent, Kano'],
-            ['name' => 'Prof. Wole Soyinka',       'phone' => '08012345688', 'address' => '10 Kemta Estate, Abeokuta'],
-            ['name' => 'Mr. Kunle Afolayan',       'phone' => '08123456799', 'address' => '8 Magodo Phase 2, Lagos'],
-            ['name' => 'Miss Tiwa Savage',         'phone' => '08034567800', 'address' => '14 Banana Island, Ikoyi'],
-            ['name' => 'Alhaja Sinatu Ojikutu',    'phone' => '08022334455', 'address' => '3 Bishop Kale Close, Victoria Island'],
-            ['name' => 'Pastor Enoch Adeboye',     'phone' => '08033445566', 'address' => 'Camp Ground, Km 46 Lagos-Ibadan Exp'],
-            ['name' => 'Mrs. Ibukun Awosika',      'phone' => '08055667788', 'address' => '21 Olosa Street, Victoria Island'],
-            ['name' => 'Mr. Tony Elumelu',         'phone' => '08077889900', 'address' => '1 Marina Street, Lagos Island'],
+            ['name' => 'Chief Adebayo Alabi', 'phone' => '08031234561', 'address' => '15 Admiralty Way, Lekki'],
+            ['name' => 'Dr. Ngozi Okonjo', 'phone' => '08023456782', 'address' => '42 Victoria Island, Lagos'],
+            ['name' => 'Alhaji Ibrahim Danjuma', 'phone' => '08145678903', 'address' => '8 Gana Street, Maitama, Abuja'],
+            ['name' => 'Engr. Femi Otedola', 'phone' => '07056789014', 'address' => '12 Bourdillon Rd, Ikoyi'],
+            ['name' => 'Barrister Chioma Eze', 'phone' => '08067890125', 'address' => '7 Wuse Zone 2, Abuja'],
+            ['name' => 'Pastor Tunde Bakare', 'phone' => '08178901236', 'address' => '22 Allen Ave, Ikeja'],
+            ['name' => 'Hajiya Aisha Bello', 'phone' => '08089012347', 'address' => '19 Bompai Rd, Kano'],
+            ['name' => 'Mr. Kenneth Nnamdi', 'phone' => '07090123458', 'address' => '31 New Market Rd, Onitsha'],
+            ['name' => 'Mrs. Folake Solanke', 'phone' => '08012345679', 'address' => '14 Bodija, Ibadan'],
+            ['name' => 'Capt. Babatunde Raji', 'phone' => '08123456780', 'address' => '5 GRA Phase 2, Port Harcourt'],
+            ['name' => 'Hon. Ahmed Lawan', 'phone' => '08034567891', 'address' => '9 Asokoro Hill, Abuja'],
+            ['name' => 'Engr. Emeka Nwosu', 'phone' => '08145678902', 'address' => '11 Ogui Rd, Enugu'],
+            ['name' => 'Mrs. Zainab Ahmed', 'phone' => '07056789013', 'address' => '26 Ahmadu Bello Way, Kaduna'],
+            ['name' => 'Senator Victor Umeh', 'phone' => '08067890124', 'address' => '18 Nza Street, Independence Layout'],
+            ['name' => 'Dr. Kemi Olunloyo', 'phone' => '08178901235', 'address' => '3 Maryland Crescent, Lagos'],
+            ['name' => 'Mr. Segun Arinze', 'phone' => '08089012346', 'address' => '17 Surulere Way, Lagos'],
+            ['name' => 'Mrs. Halima Dangote', 'phone' => '07090123457', 'address' => '5 Bompai Crescent, Kano'],
+            ['name' => 'Prof. Wole Soyinka', 'phone' => '08012345688', 'address' => '10 Kemta Estate, Abeokuta'],
+            ['name' => 'Mr. Kunle Afolayan', 'phone' => '08123456799', 'address' => '8 Magodo Phase 2, Lagos'],
+            ['name' => 'Miss Tiwa Savage', 'phone' => '08034567800', 'address' => '14 Banana Island, Ikoyi'],
+            ['name' => 'Alhaja Sinatu Ojikutu', 'phone' => '08022334455', 'address' => '3 Bishop Kale Close, Victoria Island'],
+            ['name' => 'Pastor Enoch Adeboye', 'phone' => '08033445566', 'address' => 'Camp Ground, Km 46 Lagos-Ibadan Exp'],
+            ['name' => 'Mrs. Ibukun Awosika', 'phone' => '08055667788', 'address' => '21 Olosa Street, Victoria Island'],
+            ['name' => 'Mr. Tony Elumelu', 'phone' => '08077889900', 'address' => '1 Marina Street, Lagos Island'],
             ['name' => 'Chief Gabriel Igbinedion', 'phone' => '08099001122', 'address' => '4 Airport Road, GRA, Benin City'],
         ];
 
         $customers = [];
         foreach ($customerList as $custData) {
             $c = PosCustomer::create([
-                'branch_id'        => $branch->id,
-                'name'             => $custData['name'],
-                'phone'            => $custData['phone'],
-                'address'          => $custData['address'],
-                'whatsapp_number'  => $custData['phone'],
-                'debt_bal'         => 0,
+                'branch_id' => $branch->id,
+                'name' => $custData['name'],
+                'phone' => $custData['phone'],
+                'address' => $custData['address'],
+                'whatsapp_number' => $custData['phone'],
+                'debt_bal' => 0,
             ]);
             $customers[] = $c;
         }
@@ -182,12 +182,12 @@ class LaundryTestDataSeeder extends Seeder
             $daysAgo = rand(1, 7);
             $receivedDaysAgo = $daysAgo + rand(1, 4);
             $orderConfigs[] = [
-                'group'        => 'overdue',
-                'status'       => $i < 8 ? 'received' : 'in_progress',
-                'received_at'  => $now->copy()->subDays($receivedDaysAgo)->setTime(rand(9, 14), rand(10, 50)),
-                'due_at'       => $now->copy()->subDays($daysAgo)->setTime(rand(14, 18), 0),
-                'has_balance'  => ($i % 4 !== 0), // 75% have balance due
-                'collected'    => false,
+                'group' => 'overdue',
+                'status' => $i < 8 ? 'received' : 'in_progress',
+                'received_at' => $now->copy()->subDays($receivedDaysAgo)->setTime(rand(9, 14), rand(10, 50)),
+                'due_at' => $now->copy()->subDays($daysAgo)->setTime(rand(14, 18), 0),
+                'has_balance' => ($i % 4 !== 0), // 75% have balance due
+                'collected' => false,
             ];
         }
 
@@ -196,12 +196,12 @@ class LaundryTestDataSeeder extends Seeder
             $receivedDaysAgo = rand(1, 3);
             $statusPool = ['received', 'in_progress', 'in_progress', 'ready'];
             $orderConfigs[] = [
-                'group'        => 'due_today',
-                'status'       => $statusPool[$i % count($statusPool)],
-                'received_at'  => $now->copy()->subDays($receivedDaysAgo)->setTime(rand(8, 12), rand(0, 59)),
-                'due_at'       => $now->copy()->setTime(rand(13, 19), rand(0, 3) * 15),
-                'has_balance'  => ($i % 3 !== 0), // 67% have balance due
-                'collected'    => false,
+                'group' => 'due_today',
+                'status' => $statusPool[$i % count($statusPool)],
+                'received_at' => $now->copy()->subDays($receivedDaysAgo)->setTime(rand(8, 12), rand(0, 59)),
+                'due_at' => $now->copy()->setTime(rand(13, 19), rand(0, 3) * 15),
+                'has_balance' => ($i % 3 !== 0), // 67% have balance due
+                'collected' => false,
             ];
         }
 
@@ -210,12 +210,12 @@ class LaundryTestDataSeeder extends Seeder
             $unclaimedDays = rand(16, 40);
             $receivedDays = $unclaimedDays + rand(2, 4);
             $orderConfigs[] = [
-                'group'        => 'unclaimed',
-                'status'       => 'ready',
-                'received_at'  => $now->copy()->subDays($receivedDays)->setTime(rand(9, 16), 0),
-                'due_at'       => $now->copy()->subDays($unclaimedDays)->setTime(rand(14, 18), 0),
-                'has_balance'  => ($i % 3 !== 1), // 67% have balance due
-                'collected'    => false,
+                'group' => 'unclaimed',
+                'status' => 'ready',
+                'received_at' => $now->copy()->subDays($receivedDays)->setTime(rand(9, 16), 0),
+                'due_at' => $now->copy()->subDays($unclaimedDays)->setTime(rand(14, 18), 0),
+                'has_balance' => ($i % 3 !== 1), // 67% have balance due
+                'collected' => false,
             ];
         }
 
@@ -223,12 +223,12 @@ class LaundryTestDataSeeder extends Seeder
         for ($i = 0; $i < 15; $i++) {
             $receivedDays = rand(2, 4);
             $orderConfigs[] = [
-                'group'        => 'fresh_ready',
-                'status'       => 'ready',
-                'received_at'  => $now->copy()->subDays($receivedDays)->setTime(rand(9, 14), 0),
-                'due_at'       => $now->copy()->addDays(rand(0, 2))->setTime(rand(14, 18), 0),
-                'has_balance'  => ($i % 2 === 1), // 50% have balance
-                'collected'    => false,
+                'group' => 'fresh_ready',
+                'status' => 'ready',
+                'received_at' => $now->copy()->subDays($receivedDays)->setTime(rand(9, 14), 0),
+                'due_at' => $now->copy()->addDays(rand(0, 2))->setTime(rand(14, 18), 0),
+                'has_balance' => ($i % 2 === 1), // 50% have balance
+                'collected' => false,
             ];
         }
 
@@ -236,12 +236,12 @@ class LaundryTestDataSeeder extends Seeder
         for ($i = 0; $i < 15; $i++) {
             $receivedHours = rand(4, 36);
             $orderConfigs[] = [
-                'group'        => 'fresh_in_progress',
-                'status'       => 'in_progress',
-                'received_at'  => $now->copy()->subHours($receivedHours),
-                'due_at'       => $now->copy()->addDays(rand(2, 5))->setTime(rand(14, 18), 0),
-                'has_balance'  => ($i % 3 !== 0), // 67% have balance
-                'collected'    => false,
+                'group' => 'fresh_in_progress',
+                'status' => 'in_progress',
+                'received_at' => $now->copy()->subHours($receivedHours),
+                'due_at' => $now->copy()->addDays(rand(2, 5))->setTime(rand(14, 18), 0),
+                'has_balance' => ($i % 3 !== 0), // 67% have balance
+                'collected' => false,
             ];
         }
 
@@ -252,14 +252,14 @@ class LaundryTestDataSeeder extends Seeder
             // 5 collected orders were picked up with unpaid balance released to customer debt
             $hasBalance = ($i < 5);
             $orderConfigs[] = [
-                'group'        => 'collected',
-                'status'       => 'collected',
-                'received_at'  => $now->copy()->subDays($receivedDays)->setTime(rand(9, 12), 0),
-                'due_at'       => $now->copy()->subDays($collectedDays + 1)->setTime(16, 0),
-                'has_balance'  => $hasBalance,
-                'collected'    => true,
+                'group' => 'collected',
+                'status' => 'collected',
+                'received_at' => $now->copy()->subDays($receivedDays)->setTime(rand(9, 12), 0),
+                'due_at' => $now->copy()->subDays($collectedDays + 1)->setTime(16, 0),
+                'has_balance' => $hasBalance,
+                'collected' => true,
                 'collected_at' => $now->copy()->subDays($collectedDays)->setTime(rand(14, 18), rand(10, 50)),
-                'paid_split'   => ($i >= 5 && $i % 2 === 1), // deposit + pickup payment history
+                'paid_split' => ($i >= 5 && $i % 2 === 1), // deposit + pickup payment history
             ];
         }
 
@@ -289,13 +289,13 @@ class LaundryTestDataSeeder extends Seeder
                     $note = $sampleGarmentNotes[array_rand($sampleGarmentNotes)];
 
                     $lineItems[] = [
-                        'service_id'   => $srv->id,
+                        'service_id' => $srv->id,
                         'service_name' => $srv->name,
                         'pricing_type' => $srv->pricing_type,
-                        'unit_price'   => $price,
-                        'quantity'     => $qty,
-                        'line_total'   => $lineTotal,
-                        'note'         => $note ?: null,
+                        'unit_price' => $price,
+                        'quantity' => $qty,
+                        'line_total' => $lineTotal,
+                        'note' => $note ?: null,
                     ];
                 }
 
@@ -330,45 +330,45 @@ class LaundryTestDataSeeder extends Seeder
 
                 // Create Order
                 $order = LaundryOrder::create([
-                    'branch_id'            => $branch->id,
-                    'order_number'         => $orderNumber,
-                    'customer_id'          => $customer->id,
-                    'customer_name'        => $customer->name,
-                    'customer_phone'       => $customer->phone,
-                    'status'               => $cfg['status'],
-                    'received_at'          => $cfg['received_at'],
-                    'due_at'               => $cfg['due_at'],
-                    'collected_at'         => $cfg['collected'] ? ($cfg['collected_at'] ?? $now) : null,
+                    'branch_id' => $branch->id,
+                    'order_number' => $orderNumber,
+                    'customer_id' => $customer->id,
+                    'customer_name' => $customer->name,
+                    'customer_phone' => $customer->phone,
+                    'status' => $cfg['status'],
+                    'received_at' => $cfg['received_at'],
+                    'due_at' => $cfg['due_at'],
+                    'collected_at' => $cfg['collected'] ? ($cfg['collected_at'] ?? $now) : null,
                     'collected_by_user_id' => $cfg['collected'] ? $user->id : null,
-                    'collected_by_name'    => $cfg['collected'] ? $user->name : null,
-                    'created_by'           => $user->id,
-                    'subtotal'             => $subtotal,
-                    'discount_amount'      => 0,
-                    'discount_type'        => 'fixed',
-                    'tax_amount'           => $taxAmount,
-                    'total'                => $total,
-                    'amount_paid'          => $amountPaid,
-                    'balance'              => $balance,
-                    'note'                 => rand(0, 3) === 1 ? 'Customer requested SMS notification when ready.' : null,
+                    'collected_by_name' => $cfg['collected'] ? $user->name : null,
+                    'created_by' => $user->id,
+                    'subtotal' => $subtotal,
+                    'discount_amount' => 0,
+                    'discount_type' => 'fixed',
+                    'tax_amount' => $taxAmount,
+                    'total' => $total,
+                    'amount_paid' => $amountPaid,
+                    'balance' => $balance,
+                    'note' => rand(0, 3) === 1 ? 'Customer requested SMS notification when ready.' : null,
                 ]);
 
                 // If order was collected with an outstanding balance, record debit to customer's debt ledger
                 if ($cfg['status'] === 'collected' && $balance > 0.01) {
                     $balanceBefore = (float) $customer->debt_bal;
-                    $balanceAfter  = round($balanceBefore + $balance, 2);
+                    $balanceAfter = round($balanceBefore + $balance, 2);
 
                     DebtPayment::create([
-                        'branch_id'        => $branch->id,
-                        'customer_id'      => $customer->id,
-                        'user_id'          => $user->id,
+                        'branch_id' => $branch->id,
+                        'customer_id' => $customer->id,
+                        'user_id' => $user->id,
                         'laundry_order_id' => $order->id,
-                        'source'           => 'laundry',
-                        'amount'           => $balance,
-                        'type'             => 'debit',
-                        'narration'        => "Unpaid balance released on laundry order #{$order->order_number}",
-                        'balance_before'   => $balanceBefore,
-                        'balance_after'    => $balanceAfter,
-                        'created_at'       => $cfg['collected_at'] ?? $now,
+                        'source' => 'laundry',
+                        'amount' => $balance,
+                        'type' => 'debit',
+                        'narration' => "Unpaid balance released on laundry order #{$order->order_number}",
+                        'balance_before' => $balanceBefore,
+                        'balance_after' => $balanceAfter,
+                        'created_at' => $cfg['collected_at'] ?? $now,
                     ]);
 
                     $customer->update(['debt_bal' => $balanceAfter]);
@@ -382,19 +382,19 @@ class LaundryTestDataSeeder extends Seeder
                 // Create Status History
                 $order->statusHistory()->create([
                     'from_status' => null,
-                    'to_status'   => 'received',
-                    'changed_by'  => $user->id,
-                    'changed_at'  => $cfg['received_at'],
-                    'note'        => 'Order intake created',
+                    'to_status' => 'received',
+                    'changed_by' => $user->id,
+                    'changed_at' => $cfg['received_at'],
+                    'note' => 'Order intake created',
                 ]);
 
                 if (in_array($cfg['status'], ['in_progress', 'ready', 'collected'])) {
                     $order->statusHistory()->create([
                         'from_status' => 'received',
-                        'to_status'   => 'in_progress',
-                        'changed_by'  => $user->id,
-                        'changed_at'  => $cfg['received_at']->copy()->addHours(rand(2, 6)),
-                        'note'        => 'Sorting, tagging and washing in progress',
+                        'to_status' => 'in_progress',
+                        'changed_by' => $user->id,
+                        'changed_at' => $cfg['received_at']->copy()->addHours(rand(2, 6)),
+                        'note' => 'Sorting, tagging and washing in progress',
                     ]);
                 }
 
@@ -405,20 +405,20 @@ class LaundryTestDataSeeder extends Seeder
 
                     $order->statusHistory()->create([
                         'from_status' => 'in_progress',
-                        'to_status'   => 'ready',
-                        'changed_by'  => $user->id,
-                        'changed_at'  => $readyAt,
-                        'note'        => 'Garments pressed, bagged and moved to pickup rack',
+                        'to_status' => 'ready',
+                        'changed_by' => $user->id,
+                        'changed_at' => $readyAt,
+                        'note' => 'Garments pressed, bagged and moved to pickup rack',
                     ]);
                 }
 
                 if ($cfg['status'] === 'collected') {
                     $order->statusHistory()->create([
                         'from_status' => 'ready',
-                        'to_status'   => 'collected',
-                        'changed_by'  => $user->id,
-                        'changed_at'  => $cfg['collected_at'] ?? $now,
-                        'note'        => 'Customer inspected and picked up all garments in good condition',
+                        'to_status' => 'collected',
+                        'changed_by' => $user->id,
+                        'changed_at' => $cfg['collected_at'] ?? $now,
+                        'note' => 'Customer inspected and picked up all garments in good condition',
                     ]);
                 }
 
@@ -426,42 +426,42 @@ class LaundryTestDataSeeder extends Seeder
                 if (!empty($cfg['paid_split'])) {
                     // Split payment: deposit at intake + balance at pickup
                     $depositAmt = round($total * 0.4, 2);
-                    $pickupAmt  = round($total - $depositAmt, 2);
+                    $pickupAmt = round($total - $depositAmt, 2);
 
                     $method1 = $paymentMethods[array_rand($paymentMethods)];
                     $order->payments()->create([
-                        'branch_id'   => $branch->id,
-                        'type'        => 'payment',
-                        'amount'      => $depositAmt,
-                        'method'      => $method1,
-                        'reference'   => $method1 === 'Cash' ? null : 'TXN-' . strtoupper(substr(md5(uniqid()), 0, 8)),
+                        'branch_id' => $branch->id,
+                        'type' => 'payment',
+                        'amount' => $depositAmt,
+                        'method' => $method1,
+                        'reference' => $method1 === 'Cash' ? null : 'TXN-' . strtoupper(substr(md5(uniqid()), 0, 8)),
                         'recorded_by' => $user->id,
-                        'paid_at'     => $cfg['received_at'],
-                        'note'        => 'Initial 40% deposit received at intake',
+                        'paid_at' => $cfg['received_at'],
+                        'note' => 'Initial 40% deposit received at intake',
                     ]);
 
                     $method2 = $paymentMethods[array_rand($paymentMethods)];
                     $order->payments()->create([
-                        'branch_id'   => $branch->id,
-                        'type'        => 'payment',
-                        'amount'      => $pickupAmt,
-                        'method'      => $method2,
-                        'reference'   => $method2 === 'Cash' ? null : 'TXN-' . strtoupper(substr(md5(uniqid()), 0, 8)),
+                        'branch_id' => $branch->id,
+                        'type' => 'payment',
+                        'amount' => $pickupAmt,
+                        'method' => $method2,
+                        'reference' => $method2 === 'Cash' ? null : 'TXN-' . strtoupper(substr(md5(uniqid()), 0, 8)),
                         'recorded_by' => $user->id,
-                        'paid_at'     => $cfg['collected_at'] ?? $now,
-                        'note'        => 'Final balance payment completed upon pickup',
+                        'paid_at' => $cfg['collected_at'] ?? $now,
+                        'note' => 'Final balance payment completed upon pickup',
                     ]);
                 } elseif ($amountPaid > 0) {
                     $method = $paymentMethods[array_rand($paymentMethods)];
                     $order->payments()->create([
-                        'branch_id'   => $branch->id,
-                        'type'        => 'payment',
-                        'amount'      => $amountPaid,
-                        'method'      => $method,
-                        'reference'   => $method === 'Cash' ? null : 'TXN-' . strtoupper(substr(md5(uniqid()), 0, 8)),
+                        'branch_id' => $branch->id,
+                        'type' => 'payment',
+                        'amount' => $amountPaid,
+                        'method' => $method,
+                        'reference' => $method === 'Cash' ? null : 'TXN-' . strtoupper(substr(md5(uniqid()), 0, 8)),
                         'recorded_by' => $user->id,
-                        'paid_at'     => $cfg['received_at'],
-                        'note'        => $amountPaid == $total ? 'Full payment received at intake' : 'Initial deposit payment',
+                        'paid_at' => $cfg['received_at'],
+                        'note' => $amountPaid == $total ? 'Full payment received at intake' : 'Initial deposit payment',
                     ]);
                 }
             }
