@@ -61,6 +61,11 @@ class RoleService
         return static::can('canEditPrice');
     }
 
+    public static function canOverrideLaundryPrice(): bool
+    {
+        return static::can('laundry.override_price') || static::can('canEditPrice');
+    }
+
     public static function canAccessPos(): bool
     {
         return static::can('canAccessPos');
@@ -104,7 +109,7 @@ class RoleService
 
     public static function canEditSettings(): bool
     {
-        return static::can('canEditSettings');
+        return static::can('canEditSettings') || static::can('laundry.manage_settings');
     }
 
     public static function canManagePurchases(): bool

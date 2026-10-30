@@ -72,7 +72,7 @@ const allNavLinks = [
             { label: 'Discounts & Promos', route: 'laundry.discounts.index', match: 'Laundry/Discounts/Index', perm: 'laundry.manage_discounts' },
             { label: 'End of Day',         route: 'laundry.reports.end-of-day', match: 'Laundry/Reports/EndOfDay', perm: 'canViewEndOfDay' },
             { label: 'Laundry Reports',    route: 'laundry.reports.index',  match: 'Laundry/Reports/Index', perm: 'laundry.view_reports' },
-            { label: 'Laundry Settings',   route: 'laundry.settings.index', match: 'Laundry/Settings/Index', perm: 'laundry.manage_settings' },
+            { label: 'Laundry Settings',   route: 'pos.settings.index',     params: { tab: 'laundry' }, match: 'Settings/Index', perm: 'laundry.manage_settings' },
         ],
     },
     {
@@ -306,10 +306,10 @@ const currentBranchSlug = computed(() => {
     return route().params?.branch || ''
 })
 
-const safeRoute = (routeName) => {
+const safeRoute = (routeName, params = {}) => {
     const target = typeof routeName === 'function' ? routeName() : routeName
     if (!target) return '#'
-    return route(target, { branch: currentBranchSlug.value })
+    return route(target, { branch: currentBranchSlug.value, ...params })
 }
 
 const toggleCollapse = () => {
@@ -459,7 +459,7 @@ onUnmounted(() => {
                                 <Link
                                     v-for="child in link.children"
                                     :key="child.label"
-                                    :href="safeRoute(child.route)"
+                                    :href="safeRoute(child.route, child.params)"
                                     :class="[
                                         'block px-2.5 py-1.5 rounded-lg text-xs font-medium transition',
                                         isChildActive(child)
@@ -475,7 +475,7 @@ onUnmounted(() => {
                         <!-- Children (When Expanded) -->
                         <div v-show="link.children && (!isCollapsed || isMobileOpen) && expandedMenus.includes(link.label)" class="pl-7 pr-2 mt-1 space-y-0.5 border-l-2 border-slate-200 dark:border-slate-700 ml-4">
                             <Link v-for="child in link.children" :key="child.label"
-                                :href="safeRoute(child.route)"
+                                :href="safeRoute(child.route, child.params)"
                                 @click="isMobileOpen = false"
                                 :class="[
                                     'block px-3 py-1.5 rounded-lg text-xs transition',

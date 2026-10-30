@@ -203,7 +203,19 @@ class HandleInertiaRequests extends Middleware
                 'laundry_enabled'        => (bool) $branch->laundryEnabled(),
                 'pos_enabled'            => (bool) $branch->posEnabled(),
                 'default_interface'      => (string) $branch->defaultInterface(),
+                'require_till_opening'   => (bool) (\App\Models\PosSettings::forBranch($branch->id)->require_till_opening ?? false),
             ] : null,
+
+            'active_till_session' => fn() => ($user && $branch) ? (function() use ($user, $branch) {
+                $session = \App\Services\TillSessionService::getActiveSession($user->id, $branch->id);
+                if ($session) {
+                    $session->load('cashMovements.performer:id,name');
+                    return array_merge($session->toArray(), [
+                        'summary' => $session->calculateSummary(),
+                    ]);
+                }
+                return null;
+            })() : null,
 
             'cart_count'     => fn() => 0,
             'compare_count'  => fn() => 0,

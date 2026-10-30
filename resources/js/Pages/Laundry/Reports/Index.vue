@@ -84,6 +84,11 @@ const range  = ref(props.filters?.range || 'this_month')
 const from   = ref(props.filters?.from || props.filters?.start_date || '')
 const to     = ref(props.filters?.to || props.filters?.end_date || '')
 const userId = ref(props.filters?.user_id || '')
+const showMobileFilters = ref(Boolean(props.filters?.user_id || props.filters?.range === 'custom' || props.filters?.start_date || props.filters?.from))
+
+const hasAdvancedFilters = computed(() => {
+    return Boolean(userId.value || range.value === 'custom')
+})
 
 watch(() => props.filters, (newFilters) => {
     if (newFilters) {
@@ -91,6 +96,9 @@ watch(() => props.filters, (newFilters) => {
         from.value   = newFilters.from || newFilters.start_date || ''
         to.value     = newFilters.to || newFilters.end_date || ''
         userId.value = newFilters.user_id ? String(newFilters.user_id) : ''
+        if (newFilters.user_id || newFilters.range === 'custom' || newFilters.start_date || newFilters.from) {
+            showMobileFilters.value = true
+        }
     }
 }, { deep: true })
 
@@ -234,202 +242,252 @@ const userActivitiesList = computed(() => {
 
 <template>
     <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
-        <!-- ── Top Header ──────────────────────────────────────────────────────── -->
-        <div class="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+        <!-- ── Top Header (Slim & Touch-Friendly) ──────────────────────────────── -->
+        <div class="flex-shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 sm:px-6 py-3 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
             <div>
-                <h1 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <h1 class="text-base sm:text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <span>🧺</span>
                     <span>Laundry Analytics & Staff Reports</span>
                 </h1>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="hidden sm:block text-xs text-slate-500 dark:text-slate-400">
                     Query revenue, order volume, cashier shift collections, and staff productivity by date range
                 </p>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5 sm:gap-2">
                 <Link
                     :href="safeRoute('laundry.reports.end-of-day')"
-                    class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 transition flex items-center gap-1.5"
+                    class="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 transition flex items-center gap-1 shrink-0"
                 >
-                    <span>🧾 End of Day</span>
+                    <span>🧾</span>
+                    <span>End of Day</span>
                 </Link>
                 <Link
                     :href="safeRoute('laundry.orders.index')"
-                    class="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition"
+                    class="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition shrink-0"
                 >
                     Orders Board
                 </Link>
                 <Link
                     :href="safeRoute('laundry.orders.create')"
-                    class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition"
+                    class="px-2.5 sm:px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition shrink-0"
                 >
                     + Intake Order
                 </Link>
             </div>
         </div>
 
-        <!-- ── Filter Toolbar (Matching POS Sales Report Style) ──────────────── -->
-        <div class="px-4 sm:px-6 py-3 bg-slate-100/90 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700 flex-shrink-0">
-            <div class="flex flex-col gap-2.5">
-                <!-- Primary Row: Date Preset Pills + Action Buttons -->
-                <div class="flex flex-wrap items-center justify-between gap-2">
-                    <!-- Date Preset Pills -->
-                    <div class="flex flex-wrap items-center gap-1.5">
-                        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 mr-1 hidden sm:inline">Period:</span>
-                        <button
-                            type="button"
-                            @click="applyPreset('today')"
-                            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer"
-                            :class="activeDatePreset === 'today'
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                                : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
-                        >
-                            Today
-                        </button>
-                        <button
-                            type="button"
-                            @click="applyPreset('yesterday')"
-                            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer"
-                            :class="activeDatePreset === 'yesterday'
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                                : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
-                        >
-                            Yesterday
-                        </button>
-                        <button
-                            type="button"
-                            @click="applyPreset('this_week')"
-                            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer"
-                            :class="activeDatePreset === 'this_week'
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                                : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
-                        >
-                            This Week
-                        </button>
-                        <button
-                            type="button"
-                            @click="applyPreset('this_month')"
-                            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer"
-                            :class="activeDatePreset === 'this_month'
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                                : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
-                        >
-                            This Month
-                        </button>
-                        <button
-                            type="button"
-                            @click="applyPreset('last_month')"
-                            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer"
-                            :class="activeDatePreset === 'last_month'
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
-                                : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
-                        >
-                            Last Month
-                        </button>
-                        <button
-                            type="button"
-                            @click="applyPreset('all')"
-                            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer"
-                            :class="activeDatePreset === 'all'
-                                ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border-slate-900 dark:border-slate-100 shadow-xs'
-                                : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
-                        >
-                            All Time
-                        </button>
+        <!-- ── Scrollable Body (Filters + Banner + Analytics Content) ────────── -->
+        <div class="flex-1 overflow-y-auto">
+            <!-- ── Filter Toolbar ──────────────────────────────────────────────── -->
+            <div class="px-4 sm:px-6 py-2.5 sm:py-3 bg-slate-100/90 dark:bg-slate-800/60 border-b border-slate-200 dark:border-slate-700">
+                <div class="flex flex-col gap-2.5">
+                    <!-- Primary Row: Date Preset Pills + Action Buttons -->
+                    <div class="flex items-center justify-between gap-2">
+                        <!-- Date Preset Pills (Single-Row Horizontal Scroll on Mobile) -->
+                        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 -mx-1 px-1 flex-nowrap w-full sm:w-auto">
+                            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 mr-1 hidden sm:inline shrink-0">Period:</span>
+                            <button
+                                type="button"
+                                @click="applyPreset('today')"
+                                class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+                                :class="activeDatePreset === 'today'
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                    : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
+                            >
+                                Today
+                            </button>
+                            <button
+                                type="button"
+                                @click="applyPreset('yesterday')"
+                                class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+                                :class="activeDatePreset === 'yesterday'
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                    : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
+                            >
+                                Yesterday
+                            </button>
+                            <button
+                                type="button"
+                                @click="applyPreset('this_week')"
+                                class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+                                :class="activeDatePreset === 'this_week'
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                    : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
+                            >
+                                This Week
+                            </button>
+                            <button
+                                type="button"
+                                @click="applyPreset('this_month')"
+                                class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+                                :class="activeDatePreset === 'this_month'
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                    : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
+                            >
+                                This Month
+                            </button>
+                            <button
+                                type="button"
+                                @click="applyPreset('last_month')"
+                                class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+                                :class="activeDatePreset === 'last_month'
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                    : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
+                            >
+                                Last Month
+                            </button>
+                            <button
+                                type="button"
+                                @click="applyPreset('all')"
+                                class="px-3 py-1.5 rounded-lg text-xs font-semibold transition border cursor-pointer whitespace-nowrap shrink-0 active:scale-95"
+                                :class="activeDatePreset === 'all'
+                                    ? 'bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 border-slate-900 dark:border-slate-100 shadow-xs'
+                                    : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'"
+                            >
+                                All Time
+                            </button>
+                        </div>
+
+                        <!-- Desktop Apply & Reset Buttons -->
+                        <div class="hidden sm:flex items-center gap-2 ml-auto shrink-0">
+                            <button
+                                type="button"
+                                @click="doFilter"
+                                class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                            >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                                </svg>
+                                <span>Filter</span>
+                            </button>
+                            <button
+                                v-if="activeFilterCount > 0"
+                                type="button"
+                                @click="resetFilters"
+                                class="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-semibold rounded-lg transition cursor-pointer"
+                                title="Reset all filters"
+                            >
+                                Reset
+                            </button>
+                        </div>
                     </div>
 
-                    <!-- Apply & Reset Buttons -->
-                    <div class="flex items-center gap-2 ml-auto">
+                    <!-- Mobile Sub-Toolbar (Filter Toggle + Actions) -->
+                    <div class="flex items-center justify-between gap-2 sm:hidden pt-2 border-t border-slate-200/80 dark:border-slate-700/60">
                         <button
                             type="button"
-                            @click="doFilter"
-                            class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                            @click="showMobileFilters = !showMobileFilters"
+                            class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition cursor-pointer"
+                            :class="hasAdvancedFilters
+                                ? 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300'
+                                : 'bg-white dark:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200'"
                         >
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
                             </svg>
-                            <span>Filter</span>
+                            <span>Staff & Custom Range</span>
+                            <span v-if="hasAdvancedFilters" class="w-2 h-2 rounded-full bg-indigo-600 dark:bg-indigo-400"></span>
+                            <svg class="w-3.5 h-3.5 transition-transform duration-200" :class="{ 'rotate-180': showMobileFilters }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
                         </button>
-                        <button
-                            v-if="activeFilterCount > 0"
-                            type="button"
-                            @click="resetFilters"
-                            class="px-3 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-semibold rounded-lg transition cursor-pointer"
-                            title="Reset all filters"
-                        >
-                            Reset
-                        </button>
+
+                        <div class="flex items-center gap-1.5">
+                            <button
+                                v-if="activeFilterCount > 0"
+                                type="button"
+                                @click="resetFilters"
+                                class="px-2.5 py-1.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-semibold rounded-lg transition cursor-pointer"
+                            >
+                                Reset
+                            </button>
+                            <button
+                                type="button"
+                                @click="doFilter"
+                                class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                            >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                                </svg>
+                                <span>Filter</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Secondary Row: Staff Selector + Custom Date Range Inputs (Collapsible on mobile) -->
+                    <div
+                        :class="showMobileFilters ? 'flex' : 'hidden sm:flex'"
+                        class="flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between gap-3 pt-2 sm:pt-2 border-t border-slate-200/80 dark:border-slate-700/60"
+                    >
+                        <!-- Staff / Cashier Query Dropdown -->
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+                            <span class="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1">
+                                <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                </svg>
+                                <span>Staff / Cashier:</span>
+                            </span>
+                            <select
+                                v-model="userId"
+                                @change="doFilter"
+                                class="w-full sm:w-auto bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 outline-none focus:border-indigo-500 font-medium sm:min-w-[220px]"
+                            >
+                                <option value="">All Cashiers & Staff</option>
+                                <option v-for="u in users" :key="u.id" :value="u.id">
+                                    {{ u.name }} ({{ u.role }})
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Custom Range Date Pickers -->
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+                            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Custom Range:</span>
+                            <div class="grid grid-cols-2 sm:flex sm:items-center gap-2">
+                                <input
+                                    v-model="from"
+                                    @input="range = 'custom'"
+                                    type="date"
+                                    class="w-full sm:w-auto bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-2.5 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 outline-none focus:border-indigo-500"
+                                />
+                                <span class="hidden sm:inline text-slate-400 text-xs font-semibold">to</span>
+                                <input
+                                    v-model="to"
+                                    @input="range = 'custom'"
+                                    type="date"
+                                    class="w-full sm:w-auto bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-2.5 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 outline-none focus:border-indigo-500"
+                                />
+                            </div>
+                        </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Secondary Row: Staff Selector + Custom Date Range Inputs -->
-                <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200/80 dark:border-slate-700/60">
-                    <!-- Staff / Cashier Query Dropdown -->
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center gap-1">
-                            <svg class="w-3.5 h-3.5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                            </svg>
-                            <span>Staff / Cashier:</span>
-                        </span>
-                        <select
-                            v-model="userId"
-                            @change="doFilter"
-                            class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 outline-none focus:border-indigo-500 font-medium min-w-[220px]"
-                        >
-                            <option value="">All Cashiers & Staff</option>
-                            <option v-for="u in users" :key="u.id" :value="u.id">
-                                {{ u.name }} ({{ u.role }})
-                            </option>
-                        </select>
-                    </div>
+            <!-- ── Filter Results Narrative Banner ────────────────────────────── -->
+            <div class="px-4 sm:px-6 py-2.5 bg-indigo-50/70 dark:bg-slate-900/90 border-b border-indigo-100 dark:border-slate-700/80 text-xs text-slate-700 dark:text-slate-300 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+                    <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 text-xs font-bold flex-shrink-0">
+                        📈
+                    </span>
+                    <p class="leading-relaxed text-xs">
+                        Laundry report <span class="font-bold text-indigo-700 dark:text-indigo-400">{{ filterDescription.timeText }}</span>
+                        &bull; <span class="font-semibold text-slate-900 dark:text-white">{{ filterDescription.userText }}</span>
+                    </p>
+                </div>
 
-                    <!-- Custom Range Date Pickers -->
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Custom Range:</span>
-                        <input
-                            v-model="from"
-                            @input="range = 'custom'"
-                            type="date"
-                            class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-2.5 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 outline-none focus:border-indigo-500"
-                        />
-                        <span class="text-slate-400 text-xs font-semibold">to</span>
-                        <input
-                            v-model="to"
-                            @input="range = 'custom'"
-                            type="date"
-                            class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-2.5 py-1.5 rounded-lg text-xs border border-slate-300 dark:border-slate-600 outline-none focus:border-indigo-500"
-                        />
-                    </div>
+                <div class="flex items-center gap-2 ml-auto">
+                    <span v-if="selected_user" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 text-[11px] font-semibold border border-indigo-200 dark:border-indigo-800">
+                        <span>Filtering: {{ selected_user.name }}</span>
+                        <button @click="filterByUser('')" class="hover:text-red-500 transition font-bold cursor-pointer" title="Clear Staff Filter">&times;</button>
+                    </span>
+                    <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                        {{ filterDescription.ordersCount }} orders logged
+                    </span>
                 </div>
             </div>
-        </div>
 
-        <!-- ── Filter Results Narrative Banner ────────────────────────────────── -->
-        <div class="px-4 sm:px-6 py-2.5 bg-indigo-50/70 dark:bg-slate-900/90 border-b border-indigo-100 dark:border-slate-700/80 text-xs text-slate-700 dark:text-slate-300 flex flex-wrap items-center justify-between gap-3 flex-shrink-0">
-            <div class="flex items-center gap-2 flex-1 min-w-[280px]">
-                <span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 text-xs font-bold flex-shrink-0">
-                    📈
-                </span>
-                <p class="leading-relaxed text-xs">
-                    Laundry report <span class="font-bold text-indigo-700 dark:text-indigo-400">{{ filterDescription.timeText }}</span>
-                    &bull; <span class="font-semibold text-slate-900 dark:text-white">{{ filterDescription.userText }}</span>
-                </p>
-            </div>
-
-            <div class="flex items-center gap-3">
-                <span v-if="selected_user" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 text-[11px] font-semibold border border-indigo-200 dark:border-indigo-800">
-                    <span>Filtering: {{ selected_user.name }}</span>
-                    <button @click="filterByUser('')" class="hover:text-red-500 transition font-bold" title="Clear Staff Filter">&times;</button>
-                </span>
-                <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                    {{ filterDescription.ordersCount }} orders logged
-                </span>
-            </div>
-        </div>
-
-        <!-- ── Scrollable Body ────────────────────────────────────────────────── -->
-        <div class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
-            <div class="max-w-7xl mx-auto space-y-6">
+            <!-- ── Scrollable Body Content ────────────────────────────────────── -->
+            <div class="p-4 sm:p-6 lg:p-8 space-y-6">
+                <div class="max-w-7xl mx-auto space-y-6">
 
                 <!-- ── Dynamic Key Metrics Cards (User-Friendly Executive Layout) ──────────────── -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4">
@@ -1181,4 +1239,15 @@ const userActivitiesList = computed(() => {
             </div>
         </div>
     </div>
+</div>
 </template>
+
+<style scoped>
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+.no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+</style>

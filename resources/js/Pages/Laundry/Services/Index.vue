@@ -237,42 +237,46 @@ const deleteCategory = (cat) => {
 <template>
     <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
         <!-- Header -->
-        <div class="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
-            <div>
-                <h1 class="text-lg font-bold text-slate-900 dark:text-white">Laundry Service Catalogue</h1>
-                <p class="text-xs text-slate-500 dark:text-slate-400">Manage service offerings, organized categories, pricing models (piece / kg), and rates</p>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+            <div class="min-w-0">
+                <h1 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">Laundry Service Catalogue</h1>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1 sm:line-clamp-none">Manage service offerings, organized categories, pricing models (piece / kg), and rates</p>
             </div>
-            <div v-if="can_manage" class="flex items-center gap-2.5">
-                <!-- Manage Discounts & Promos Button -->
-                <Link
-                    :href="safeRoute('laundry.discounts.index')"
-                    class="px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/80 text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                >
-                    <span>🏷️ Promos & Discounts</span>
-                </Link>
-
-                <!-- Manage Categories Button -->
-                <button
-                    type="button"
-                    @click="openManageCategories"
-                    class="px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold rounded-xl transition flex items-center gap-2 shadow-2xs cursor-pointer"
-                >
-                    <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
-                    <span>Categories</span>
-                    <span class="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900">
-                        {{ categories.length }}
-                    </span>
-                </button>
-
-                <!-- Add New Service Button -->
+            <div v-if="can_manage" class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+                <!-- Add New Service Button (Primary Action on Mobile: Prominent full-width button on top) -->
                 <button
                     type="button"
                     @click="openCreate"
-                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-md shadow-indigo-900/20 cursor-pointer"
+                    class="order-1 sm:order-3 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 active:scale-[0.99] cursor-pointer whitespace-nowrap"
                 >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     <span>Add New Service</span>
                 </button>
+
+                <!-- Secondary Actions: 2-Column Grid on Mobile, Inline on Desktop -->
+                <div class="order-2 grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+                    <!-- Manage Discounts & Promos Button -->
+                    <Link
+                        :href="safeRoute('laundry.discounts.index')"
+                        class="w-full sm:w-auto px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/80 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap"
+                    >
+                        <span>🏷️</span>
+                        <span>Promos & Discounts</span>
+                    </Link>
+
+                    <!-- Manage Categories Button -->
+                    <button
+                        type="button"
+                        @click="openManageCategories"
+                        class="w-full sm:w-auto px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer active:scale-95 whitespace-nowrap"
+                    >
+                        <svg class="w-4 h-4 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                        <span>Categories</span>
+                        <span class="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-900 shrink-0">
+                            {{ categories.length }}
+                        </span>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -324,7 +328,8 @@ const deleteCategory = (cat) => {
                     No services found matching filters.
                 </div>
 
-                <div v-else class="overflow-x-auto">
+                <!-- Desktop Table View (Visible on screens >= md) -->
+                <div v-else class="hidden md:block overflow-x-auto">
                     <table class="w-full text-left text-xs">
                         <thead class="bg-slate-50 dark:bg-slate-900/60 text-slate-500 uppercase font-semibold border-b border-slate-200 dark:border-slate-700">
                             <tr>
@@ -390,20 +395,20 @@ const deleteCategory = (cat) => {
                                     <div class="flex items-center justify-end gap-2">
                                         <button
                                             @click="toggleActive(srv)"
-                                            class="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                            class="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                                             :title="srv.is_active ? 'Deactivate' : 'Activate'"
                                         >
                                             <span class="text-[11px] font-semibold">{{ srv.is_active ? 'Pause' : 'Enable' }}</span>
                                         </button>
                                         <button
                                             @click="openEdit(srv)"
-                                            class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-xs transition"
+                                            class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold text-xs transition cursor-pointer"
                                         >
                                             Edit
                                         </button>
                                         <button
                                             @click="deleteService(srv)"
-                                            class="p-1 text-slate-400 hover:text-rose-600 rounded transition"
+                                            class="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
                                             title="Delete"
                                         >
                                             ✕
@@ -413,6 +418,92 @@ const deleteCategory = (cat) => {
                             </tr>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Custom Mobile Card List View (Visible on screens < md) -->
+                <div v-if="services.data.length > 0" class="md:hidden p-3 space-y-3 bg-slate-50/50 dark:bg-slate-900/40">
+                    <div
+                        v-for="srv in services.data"
+                        :key="'mob-' + srv.id"
+                        class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-xs space-y-2.5 transition"
+                    >
+                        <!-- Top Row: Service Name & Status Badge -->
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0 flex-1">
+                                <h3 class="font-bold text-sm text-slate-900 dark:text-white leading-snug">
+                                    {{ srv.name }}
+                                </h3>
+                                <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                                    <span v-if="srv.category?.name || srv.category_name" class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900">
+                                        {{ srv.category?.name || srv.category_name }}
+                                    </span>
+                                    <span v-else class="text-slate-400 italic text-[10px]">
+                                        Uncategorized
+                                    </span>
+                                    <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
+                                        {{ srv.pricing_type === 'per_kg' ? 'Per KG' : 'Per Piece' }}
+                                    </span>
+                                </div>
+                            </div>
+                            <span :class="[
+                                'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border shrink-0',
+                                srv.is_active
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300'
+                                    : 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-700 dark:text-slate-400'
+                            ]">
+                                {{ srv.is_active ? 'Active' : 'Inactive' }}
+                            </span>
+                        </div>
+
+                        <!-- Price Section -->
+                        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/60 text-xs">
+                            <span class="text-slate-500 dark:text-slate-400 font-medium text-[11px]">Price:</span>
+                            <template v-if="srv.active_discount">
+                                <div class="flex items-center gap-2">
+                                    <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-800">
+                                        🏷️ {{ srv.active_discount.discount_type === 'percentage' ? `${srv.active_discount.discount_value}% OFF` : `-${formatMoney(srv.active_discount.discount_value)}` }}
+                                    </span>
+                                    <span class="line-through text-slate-400 text-[11px] font-mono">
+                                        {{ formatMoney(srv.price) }}
+                                    </span>
+                                    <span class="font-black text-emerald-600 dark:text-emerald-400 text-sm font-mono">
+                                        {{ formatMoney(getDiscountedPrice(srv)) }}
+                                    </span>
+                                </div>
+                            </template>
+                            <template v-else>
+                                <span class="font-black text-indigo-600 dark:text-indigo-400 text-sm font-mono">
+                                    {{ formatMoney(srv.price) }}
+                                </span>
+                            </template>
+                        </div>
+
+                        <!-- Actions Row -->
+                        <div v-if="can_manage" class="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-700/60 text-xs">
+                            <button
+                                @click="toggleActive(srv)"
+                                class="px-2.5 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 font-semibold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                            >
+                                <span class="w-2 h-2 rounded-full" :class="srv.is_active ? 'bg-emerald-500' : 'bg-slate-400'"></span>
+                                <span>{{ srv.is_active ? 'Pause Service' : 'Activate' }}</span>
+                            </button>
+                            <div class="flex items-center gap-1.5">
+                                <button
+                                    @click="openEdit(srv)"
+                                    class="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-bold text-xs transition cursor-pointer active:scale-95"
+                                >
+                                    Edit
+                                </button>
+                                <button
+                                    @click="deleteService(srv)"
+                                    class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                    title="Delete Service"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div v-if="services.links && services.links.length > 3" class="px-5 py-4 border-t border-slate-200 dark:border-slate-700 flex justify-end">

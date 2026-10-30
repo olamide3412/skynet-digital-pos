@@ -316,10 +316,10 @@ const isActive = (match) => {
 
                 <!-- 8. Settings -->
                 <Link
-                    :href="safeRoute('laundry.settings.index')"
+                    :href="safeRoute('pos.settings.index', { tab: 'laundry' })"
                     :class="[
                         'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition group',
-                        isActive('Laundry/Settings/Index')
+                        isActive('Settings/Index')
                             ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
                             : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60'
                     ]"

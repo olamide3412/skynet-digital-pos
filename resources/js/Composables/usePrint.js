@@ -1,4 +1,92 @@
 export function usePrint() {
+    function isMobileDevice() {
+        if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
+        const ua = navigator.userAgent || ''
+        const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(ua)
+        const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0)
+        const isSmallScreen = window.innerWidth <= 1024
+        return isMobileUA || (hasTouch && isSmallScreen)
+    }
+
+    function printDirectToWindow(fullHtml, pageStyles) {
+        // Clean up any existing direct print elements
+        const oldContainer = document.getElementById('pos-direct-print-container')
+        if (oldContainer) oldContainer.remove()
+        const oldStyle = document.getElementById('pos-direct-print-style')
+        if (oldStyle) oldStyle.remove()
+
+        // 1. Create a dedicated container attached directly to body
+        const container = document.createElement('div')
+        container.id = 'pos-direct-print-container'
+        container.innerHTML = fullHtml
+        document.body.appendChild(container)
+
+        // 2. Inject print stylesheet targeting only the direct print container
+        const styleEl = document.createElement('style')
+        styleEl.id = 'pos-direct-print-style'
+        styleEl.textContent = `
+            #pos-direct-print-container {
+                display: none !important;
+            }
+            @media print {
+                html, body {
+                    background: #ffffff !important;
+                    color: #000000 !important;
+                    margin: 0 !important;
+                    padding: 0 !important;
+                    width: 100% !important;
+                    height: auto !important;
+                    overflow: visible !important;
+                    -webkit-print-color-adjust: exact !important;
+                    print-color-adjust: exact !important;
+                }
+                body > *:not(#pos-direct-print-container) {
+                    display: none !important;
+                }
+                #pos-direct-print-container {
+                    display: block !important;
+                    position: static !important;
+                    width: 100% !important;
+                    margin: 0 auto !important;
+                    padding: 0 !important;
+                    background: #ffffff !important;
+                    color: #000000 !important;
+                    visibility: visible !important;
+                    z-index: 99999999 !important;
+                }
+                #pos-direct-print-container * {
+                    visibility: visible !important;
+                    color: #000000 !important;
+                }
+                table { width: 100%; border-collapse: collapse; }
+                td, th { vertical-align: top; color: #000000 !important; }
+                svg { display: block; margin: 0 auto; max-width: 100%; }
+                .no-print {
+                    display: none !important;
+                }
+                ${pageStyles}
+            }
+        `
+        document.head.appendChild(styleEl)
+
+        const cleanup = () => {
+            if (container.parentNode) container.remove()
+            if (styleEl.parentNode) styleEl.remove()
+            window.removeEventListener('afterprint', cleanup)
+        }
+        window.addEventListener('afterprint', cleanup)
+
+        setTimeout(() => {
+            try {
+                window.focus()
+                window.print()
+            } catch (err) {
+                console.error('Window print failed:', err)
+            }
+            setTimeout(cleanup, 3000)
+        }, 150)
+    }
+
     async function printElement(selector = '.receipt-print-area', options = {}) {
         const el = document.querySelector(selector)
         if (!el) { window.print(); return }
@@ -38,7 +126,7 @@ export function usePrint() {
                     return true
                 }
             } catch (err) {
-                console.warn('Local print agent unreachable, falling back to direct background iframe print:', err)
+                console.warn('Local print agent unreachable, falling back to direct print:', err)
             }
         }
 
@@ -71,7 +159,7 @@ export function usePrint() {
             }
             table { width: 100%; border-collapse: collapse; }
             th, td { padding: 4px 2px; }
-            .receipt-print-area { max-height: none !important; overflow: visible !important; }
+            .receipt-print-area, .laundry-ticket-print-area { max-height: none !important; overflow: visible !important; }
             .receipt-single-copy { page-break-inside: avoid; break-inside: avoid; }
         ` : `
             @page {
@@ -90,11 +178,18 @@ export function usePrint() {
                 padding: 4mm 2mm 10mm;
             }
             table { width: 100%; border-collapse: collapse; }
-            .receipt-print-area { max-height: none !important; overflow: visible !important; }
+            .receipt-print-area, .laundry-ticket-print-area { max-height: none !important; overflow: visible !important; }
             .receipt-single-copy { page-break-inside: avoid; break-inside: avoid; }
         `
 
-        // Use a hidden iframe for direct silent printing without popup windows
+        // Mobile browsers (iOS Safari, Android Chrome) block or silently ignore hidden 0x0 iframes.
+        // Use direct window printing with isolated print container on mobile devices.
+        if (isMobileDevice()) {
+            printDirectToWindow(fullHtml, pageStyles)
+            return true
+        }
+
+        // On desktop, use a hidden iframe for silent background printing
         let iframe = document.getElementById('pos-receipt-print-frame')
         if (!iframe) {
             iframe = document.createElement('iframe')
@@ -151,8 +246,8 @@ ${fullHtml}
                 iframe.contentWindow.focus()
                 iframe.contentWindow.print()
             } catch (e) {
-                console.error('Direct print failed, falling back to window.print', e)
-                window.print()
+                console.error('Direct iframe print failed, falling back to window print container:', e)
+                printDirectToWindow(fullHtml, pageStyles)
             }
         }, 250)
     }

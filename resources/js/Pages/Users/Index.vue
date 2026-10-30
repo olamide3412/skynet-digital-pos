@@ -346,7 +346,7 @@ function submitResetPassword() {
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-900/60 rounded-lg border border-slate-200 dark:border-slate-700">
                                 <label v-for="perm in all_permissions" :key="perm.name"
                                     class="flex items-center gap-2.5 p-2 rounded cursor-pointer text-xs transition select-none"
                                     :class="form.permissions.includes(perm.name) ? 'bg-emerald-50 dark:bg-emerald-500/10 text-slate-900 dark:text-white font-medium' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'"

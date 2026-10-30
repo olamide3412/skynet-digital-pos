@@ -1,7 +1,10 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import LaundryTicketModal from '@/Components/Laundry/LaundryTicketModal.vue'
+import OpenTillModal from '@/Components/POS/OpenTillModal.vue'
+import TillManagementModal from '@/Components/POS/TillManagementModal.vue'
+import TillSlipModal from '@/Components/POS/TillSlipModal.vue'
 
 const props = defineProps({
     order: {
@@ -20,9 +23,69 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    canReleaseUnpaid: {
+        type: Boolean,
+        default: false,
+    },
+    activeTillSession: {
+        type: Object,
+        default: null,
+    },
+    canManageTillCashMovements: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 const page = usePage()
+
+// ── Till Session State & Modals ──────────────────────────────────────────────
+const activeTill = ref(props.activeTillSession || page.props.active_till_session || null)
+watch(() => props.activeTillSession, (val) => { activeTill.value = val })
+watch(() => page.props.active_till_session, (val) => { if (!activeTill.value) activeTill.value = val })
+
+const isTillMandatory = computed(() => {
+    const req = props.settings?.require_till_opening ?? page.props.pos_settings?.require_till_opening ?? false
+    return Boolean(req && !activeTill.value)
+})
+
+const canReleaseUnpaid = computed(() => {
+    return Boolean(
+        props.canReleaseUnpaid ||
+        props.settings?.allow_unpaid_pickup ||
+        page.props.auth?.user?.is_super_admin ||
+        page.props.auth?.user?.is_branch_admin
+    )
+})
+
+const showOpenTillModal = ref(false)
+const showTillManagementModal = ref(false)
+const showTillSlipModal = ref(false)
+const slipSession = ref(null)
+const pendingPaymentModalAfterTill = ref(false)
+
+function onTillOpened(session) {
+    activeTill.value = session
+    showOpenTillModal.value = false
+    paymentErrors.value = ''
+    if (pendingPaymentModalAfterTill.value) {
+        pendingPaymentModalAfterTill.value = false
+        openPaymentModal()
+    }
+}
+
+function onTillUpdated(updatedSession) {
+    activeTill.value = updatedSession
+}
+
+function onTillClosed(closedSession) {
+    activeTill.value = null
+    showTillManagementModal.value = false
+    if (props.settings?.print_till_slip) {
+        slipSession.value = closedSession
+        showTillSlipModal.value = true
+    }
+}
 const currencySymbol = computed(() => page.props.system_config?.currency_symbol || '₦')
 const branchSlug = computed(() => page.props.current_branch?.slug || '')
 const safeRoute = (name, params = {}) => route(name, { branch: branchSlug.value, ...params })
@@ -48,12 +111,85 @@ const showCancelModal    = ref(false)
 const showPrintModal     = ref(false)
 const showUnpaidWarningModal = ref(false)
 
+const printDirect = () => {
+    showPrintModal.value = true
+}
+
+onMounted(() => {
+    if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('print') === '1' || params.get('print') === 'true') {
+            showPrintModal.value = true
+        }
+    }
+})
+
 const paymentForm = ref({
     amount: props.order.balance || 0,
     method: 'Cash',
     reference: '',
     note: '',
 })
+
+const paymentDisplayAmount = ref('')
+
+const formatWithCommas = (val) => {
+    if (val === null || val === undefined || val === '') return ''
+    const str = String(val).replace(/[^0-9.]/g, '')
+    const parts = str.split('.')
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    if (parts.length > 1) {
+        return parts[0] + '.' + parts.slice(1).join('').slice(0, 2)
+    }
+    return parts[0]
+}
+
+const parseMoney = (val) => {
+    if (!val) return 0
+    const clean = String(val).replace(/[^0-9.]/g, '')
+    const parts = clean.split('.')
+    const normalized = parts[0] + (parts.length > 1 ? '.' + parts.slice(1).join('') : '')
+    const num = parseFloat(normalized)
+    return isNaN(num) ? 0 : Math.round(num * 100) / 100
+}
+
+const formatNumberWithDecimals = (val) => {
+    const num = parseMoney(val)
+    if (num <= 0) return ''
+    return num.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })
+}
+
+const onPaymentAmountInput = (event) => {
+    const input = event.target
+    const origVal = input.value
+    const origCursor = input.selectionStart || 0
+    const commasBefore = (origVal.slice(0, origCursor).match(/,/g) || []).length
+
+    const formatted = formatWithCommas(origVal)
+    paymentDisplayAmount.value = formatted
+    paymentForm.value.amount = parseMoney(formatted)
+
+    nextTick(() => {
+        const newCommasBefore = (formatted.slice(0, origCursor).match(/,/g) || []).length
+        const shift = newCommasBefore - commasBefore
+        const newCursor = Math.max(0, Math.min(formatted.length, origCursor + shift))
+        input.setSelectionRange(newCursor, newCursor)
+    })
+}
+
+const onPaymentAmountBlur = () => {
+    const num = parseMoney(paymentDisplayAmount.value)
+    if (num > 0) {
+        paymentForm.value.amount = num
+        paymentDisplayAmount.value = formatNumberWithDecimals(num)
+    } else {
+        paymentForm.value.amount = 0
+        paymentDisplayAmount.value = ''
+    }
+}
 
 const statusForm = ref({
     status: props.order.status,
@@ -95,12 +231,19 @@ const proceedToHandoverFromWarning = () => {
 }
 
 const openPaymentModal = () => {
+    if (isTillMandatory.value) {
+        pendingPaymentModalAfterTill.value = true
+        showOpenTillModal.value = true
+        return
+    }
+    const bal = Number(props.order.balance || 0)
     paymentForm.value = {
-        amount: props.order.balance || 0,
+        amount: bal,
         method: 'Cash',
         reference: '',
         note: '',
     }
+    paymentDisplayAmount.value = formatNumberWithDecimals(bal)
     paymentErrors.value = ''
     showPaymentModal.value = true
 }
@@ -109,16 +252,25 @@ const setPaymentPreset = (fraction) => {
     const bal = Number(props.order.balance || 0)
     if (fraction === 1) {
         paymentForm.value.amount = bal
+        paymentDisplayAmount.value = formatNumberWithDecimals(bal)
     } else if (fraction === 0.5) {
-        paymentForm.value.amount = Math.round((bal / 2) * 100) / 100
+        const half = Math.round((bal / 2) * 100) / 100
+        paymentForm.value.amount = half
+        paymentDisplayAmount.value = formatNumberWithDecimals(half)
     } else {
-        paymentForm.value.amount = ''
+        paymentForm.value.amount = 0
+        paymentDisplayAmount.value = ''
     }
 }
 
 const submitPayment = () => {
     paymentErrors.value = ''
-    const amt = Number(paymentForm.value.amount || 0)
+    const amt = parseMoney(paymentDisplayAmount.value)
+    paymentForm.value.amount = amt
+    if (amt > 0) {
+        paymentDisplayAmount.value = formatNumberWithDecimals(amt)
+    }
+
     if (amt <= 0) {
         paymentErrors.value = 'Please enter a valid payment amount greater than zero.'
         return
@@ -128,9 +280,17 @@ const submitPayment = () => {
         return
     }
 
+    if (isTillMandatory.value) {
+        showOpenTillModal.value = true
+        return
+    }
+
     router.post(
         safeRoute('laundry.orders.record-payment', { order: props.order.id }),
-        paymentForm.value,
+        {
+            ...paymentForm.value,
+            amount: amt,
+        },
         {
             preserveScroll: true,
             onSuccess: () => {
@@ -138,6 +298,9 @@ const submitPayment = () => {
             },
             onError: (errs) => {
                 paymentErrors.value = Object.values(errs).flat().join(' ')
+                if (errs.till || paymentErrors.value.toLowerCase().includes('till')) {
+                    showOpenTillModal.value = true
+                }
             },
         }
     )
@@ -180,6 +343,10 @@ const submitCollect = () => {
 }
 
 const submitCancel = () => {
+    if (Number(cancelForm.value.refund_amount || 0) > 0 && isTillMandatory.value) {
+        showOpenTillModal.value = true
+        return
+    }
     router.post(
         safeRoute('laundry.orders.cancel', { order: props.order.id }),
         cancelForm.value,
@@ -230,9 +397,33 @@ const statusBadgeClass = (status) => {
                 </div>
             </div>
             <div class="flex items-center gap-2">
+                <!-- Till Session Status Badge / Open Till Trigger -->
+                <button
+                    v-if="activeTill"
+                    @click="showTillManagementModal = true"
+                    type="button"
+                    class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer hover:bg-emerald-100"
+                    title="Click to view till shift details, add/remove cash, or close till"
+                >
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="hidden sm:inline">Till:</span>
+                    <span class="font-mono">{{ formatMoney(activeTill.summary?.expected_cash ?? activeTill.opening_amount ?? 0) }}</span>
+                </button>
+                <button
+                    v-else-if="props.settings?.require_till_opening || isTillMandatory"
+                    @click="showOpenTillModal = true"
+                    type="button"
+                    class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                    title="Click to declare starting float and open till session"
+                >
+                    <span>⚠️</span>
+                    <span>Open Till</span>
+                </button>
+
                 <button
                     @click="printDirect"
-                    class="px-3 sm:px-3.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5 border border-slate-200 dark:border-slate-600"
+                    type="button"
+                    class="px-3 sm:px-3.5 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5 border border-slate-200 dark:border-slate-600 cursor-pointer active:scale-95"
                 >
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                     <span>Print Ticket</span>
@@ -925,48 +1116,86 @@ const statusBadgeClass = (status) => {
                     </span>
                 </div>
 
+                <!-- Active Till Required Warning -->
+                <div v-if="isTillMandatory" class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-2 text-xs">
+                    <div class="flex items-center gap-2">
+                        <span class="text-amber-600 font-bold">⚠️</span>
+                        <span class="text-amber-800 dark:text-amber-200 font-medium text-[11px]">Active till session required to process payments.</span>
+                    </div>
+                    <button
+                        type="button"
+                        @click="showOpenTillModal = true"
+                        class="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-[11px] shrink-0 cursor-pointer shadow-xs active:scale-95"
+                    >
+                        Open Till
+                    </button>
+                </div>
+
                 <!-- Error Alert if any -->
-                <div v-if="paymentErrors" class="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 text-rose-700 dark:text-rose-300 text-xs font-medium">
-                    {{ paymentErrors }}
+                <div v-if="paymentErrors" class="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 text-rose-700 dark:text-rose-300 text-xs font-medium flex items-center justify-between gap-2">
+                    <span>{{ paymentErrors }}</span>
+                    <button
+                        v-if="paymentErrors.toLowerCase().includes('till')"
+                        type="button"
+                        @click="showOpenTillModal = true"
+                        class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[11px] shrink-0 cursor-pointer"
+                    >
+                        Open Till Now
+                    </button>
                 </div>
 
                 <div class="space-y-3.5 text-xs">
-                    <!-- Amount Input with auto-select on click -->
+                    <!-- Amount Input with auto-select on click and formatted currency -->
                     <div>
                         <div class="flex items-center justify-between mb-1">
                             <label class="block font-bold text-slate-800 dark:text-slate-200">Payment Amount (₦)</label>
                             <span class="text-[11px] text-slate-400">Max: {{ formatMoney(order.balance) }}</span>
                         </div>
-                        <input
-                            v-model.number="paymentForm.amount"
-                            @focus="$event.target.select()"
-                            type="number"
-                            step="any"
-                            min="0.01"
-                            :max="order.balance"
-                            placeholder="Enter amount to pay..."
-                            class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 font-extrabold text-base bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition"
-                        />
+                        <div class="relative">
+                            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-base pointer-events-none select-none">
+                                ₦
+                            </span>
+                            <input
+                                v-model="paymentDisplayAmount"
+                                @input="onPaymentAmountInput"
+                                @blur="onPaymentAmountBlur"
+                                @focus="$event.target.select()"
+                                type="text"
+                                inputmode="decimal"
+                                placeholder="0.00"
+                                class="w-full pl-8 pr-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 font-extrabold text-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition font-mono tracking-wide"
+                            />
+                        </div>
+                        <!-- Live helper feedback -->
+                        <div v-if="paymentForm.amount > 0" class="flex items-center justify-between mt-1.5 px-1 text-[11px] text-slate-500 dark:text-slate-400">
+                            <span>Paying: <strong class="text-indigo-600 dark:text-indigo-400 font-mono font-bold">{{ formatMoney(paymentForm.amount) }}</strong></span>
+                            <span v-if="order.balance - paymentForm.amount > 0.009" class="text-amber-600 dark:text-amber-400 font-semibold">
+                                Remaining: {{ formatMoney(order.balance - paymentForm.amount) }}
+                            </span>
+                            <span v-else class="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                                <span>✓</span> Fully Settled
+                            </span>
+                        </div>
                         <!-- Preset Quick Buttons -->
-                        <div class="flex items-center gap-1.5 mt-1.5">
+                        <div class="flex items-center gap-1.5 mt-2">
                             <button
                                 type="button"
                                 @click="setPaymentPreset(1)"
-                                class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition"
+                                class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition cursor-pointer"
                             >
                                 Pay Full ({{ formatMoney(order.balance) }})
                             </button>
                             <button
                                 type="button"
                                 @click="setPaymentPreset(0.5)"
-                                class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition"
+                                class="px-2.5 py-1 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition cursor-pointer"
                             >
                                 50% ({{ formatMoney(order.balance / 2) }})
                             </button>
                             <button
                                 type="button"
                                 @click="setPaymentPreset(0)"
-                                class="px-2 py-0.5 rounded-md text-[11px] font-semibold text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                                class="px-2.5 py-1 rounded-md text-[11px] font-semibold text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer"
                             >
                                 Clear
                             </button>
@@ -1075,12 +1304,20 @@ const statusBadgeClass = (status) => {
                         </div>
                     </div>
 
-                    <div class="p-2.5 rounded-xl bg-amber-100/60 dark:bg-amber-900/30 border border-amber-200/80 dark:border-amber-800/40 text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed flex items-start gap-2">
-                        <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    <div v-if="canReleaseUnpaid" class="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/40 text-[11px] text-emerald-900 dark:text-emerald-200 leading-relaxed flex items-start gap-2">
+                        <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <span>
-                            Marking as picked up will release garments and transfer the remaining balance of <strong class="font-black text-rose-700 dark:text-rose-300">{{ formatMoney(order.balance) }}</strong> directly to the customer's store debt ledger.
+                            <strong>Unpaid Pickup Policy Active:</strong> Garments can be released without settling now. Confirming handover will automatically post the remaining balance of <strong class="font-black text-rose-700 dark:text-rose-300">{{ formatMoney(order.balance) }}</strong> directly to <strong>{{ order.customer_name }}</strong>'s customer debt ledger.
+                        </span>
+                    </div>
+                    <div v-else class="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-800/40 text-[11px] text-rose-900 dark:text-rose-200 leading-relaxed flex items-start gap-2">
+                        <svg class="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <span>
+                            <strong>Unpaid Pickup Disabled:</strong> Branch policy requires full payment before garments can be released. Please record the balance payment of <strong class="font-black text-rose-700 dark:text-rose-300">{{ formatMoney(order.balance) }}</strong> below, or obtain supervisor authorization.
                         </span>
                     </div>
                 </div>
@@ -1090,7 +1327,7 @@ const statusBadgeClass = (status) => {
                     <button
                         @click="proceedToPaymentFromWarning"
                         type="button"
-                        class="w-full py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition"
+                        class="w-full py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 active:scale-[0.99] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition cursor-pointer"
                     >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -1099,20 +1336,28 @@ const statusBadgeClass = (status) => {
                     </button>
 
                     <button
+                        v-if="canReleaseUnpaid"
                         @click="proceedToHandoverFromWarning"
                         type="button"
-                        class="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 active:scale-[0.99] text-slate-800 dark:text-slate-200 font-semibold text-xs border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2 transition"
+                        class="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 active:scale-[0.99] text-slate-800 dark:text-slate-200 font-semibold text-xs border border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2 transition cursor-pointer"
                     >
                         <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                         </svg>
                         <span>Proceed to Pickup & Transfer to Debt</span>
                     </button>
+                    <div
+                        v-else
+                        class="w-full py-2.5 px-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 text-slate-400 text-center text-[11px] font-medium border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center gap-1.5"
+                    >
+                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        <span>Unpaid pickup transfer restricted (Disabled in Settings)</span>
+                    </div>
 
                     <button
                         @click="showUnpaidWarningModal = false"
                         type="button"
-                        class="w-full py-2 text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition"
+                        class="w-full py-2 text-xs font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition cursor-pointer"
                     >
                         Cancel & Keep Pending
                     </button>
@@ -1222,6 +1467,37 @@ const statusBadgeClass = (status) => {
             :branch="branch"
             :settings="settings"
             @close="showPrintModal = false"
+        />
+
+        <!-- Till Opening Modal -->
+        <OpenTillModal
+            v-if="showOpenTillModal"
+            :show="showOpenTillModal"
+            :mandatory="isTillMandatory"
+            :settings="settings"
+            @close="showOpenTillModal = false"
+            @opened="onTillOpened"
+        />
+
+        <!-- Till Management Modal (Dashboard, Cash Movements, Close Till) -->
+        <TillManagementModal
+            v-if="showTillManagementModal && activeTill"
+            :show="showTillManagementModal"
+            :session="activeTill"
+            :settings="settings"
+            :can-manage-cash-movements="canManageTillCashMovements"
+            @close="showTillManagementModal = false"
+            @updated="onTillUpdated"
+            @closed="onTillClosed"
+        />
+
+        <!-- Till Slip Printable Modal -->
+        <TillSlipModal
+            v-if="showTillSlipModal && slipSession"
+            :session="slipSession"
+            :summary="slipSession.summary"
+            :settings="settings"
+            @close="showTillSlipModal = false; slipSession = null"
         />
     </div>
 </template>

@@ -161,84 +161,92 @@ const statusLabel = (status) => {
 <template>
     <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
         <!-- Header -->
-        <div class="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
-            <div>
-                <h1 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4 px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+            <div class="min-w-0">
+                <h1 class="text-lg sm:text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <span>All Laundry Orders</span>
                     <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
                         {{ counts.all || 0 }} Total
                     </span>
                 </h1>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1 sm:line-clamp-none">
                     Comprehensive searchable database of intake, active, ready, and collected laundry orders
                 </p>
             </div>
-            <div class="flex items-center gap-2.5">
-                <!-- Export Dropdown -->
-                <div class="relative" ref="exportDropdownRef">
-                    <button
-                        type="button"
-                        @click="exportMenuOpen = !exportMenuOpen"
-                        class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition inline-flex items-center gap-1.5 shadow-xs cursor-pointer"
-                        title="Export laundry orders"
-                    >
-                        <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        <span>Export</span>
-                        <svg class="w-3.5 h-3.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                        </svg>
-                    </button>
 
-                    <!-- Dropdown Menu -->
-                    <div
-                        v-if="exportMenuOpen"
-                        class="absolute right-0 mt-1.5 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100"
-                    >
-                        <div class="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                            Export Laundry Orders
-                        </div>
-                        <button
-                            type="button"
-                            @click="downloadExport('xlsx')"
-                            class="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-2 transition cursor-pointer font-medium"
-                        >
-                            <span class="w-5 h-5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-[10px]">
-                                XLS
-                            </span>
-                            Excel (.xlsx)
-                        </button>
-                        <button
-                            type="button"
-                            @click="downloadExport('csv')"
-                            class="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-2 transition cursor-pointer font-medium"
-                        >
-                            <span class="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px]">
-                                CSV
-                            </span>
-                            CSV Document (.csv)
-                        </button>
-                    </div>
-                </div>
-
-                <Link
-                    :href="safeRoute('laundry.board.index')"
-                    class="px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center gap-1.5 border border-slate-200 dark:border-slate-600"
-                >
-                    <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z" />
-                    </svg>
-                    <span>Open Workflow Board</span>
-                </Link>
-
+            <!-- Action Buttons: Responsive Mobile-Friendly Layout -->
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+                <!-- Primary Action: New Intake Order (Full-width prominent button on mobile) -->
                 <Link
                     :href="safeRoute('laundry.orders.create')"
-                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl transition flex items-center gap-1.5 shadow-md shadow-indigo-900/20"
+                    class="order-1 sm:order-3 w-full sm:w-auto px-4 py-2.5 sm:py-2 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 active:scale-[0.99] cursor-pointer whitespace-nowrap"
                 >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     <span>New Intake Order</span>
                 </Link>
+
+                <!-- Secondary Actions: 2-Column Grid on Mobile, Inline on Desktop -->
+                <div class="order-2 grid grid-cols-2 sm:flex sm:items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+                    <!-- Workflow Board -->
+                    <Link
+                        :href="safeRoute('laundry.board.index')"
+                        class="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-xs font-semibold transition flex items-center justify-center gap-1.5 border border-slate-200 dark:border-slate-600 active:scale-95"
+                    >
+                        <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v12a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z" />
+                        </svg>
+                        <span class="sm:hidden whitespace-nowrap">Workflow Board</span>
+                        <span class="hidden sm:inline whitespace-nowrap">Open Workflow Board</span>
+                    </Link>
+
+                    <!-- Export Dropdown -->
+                    <div class="relative w-full sm:w-auto" ref="exportDropdownRef">
+                        <button
+                            type="button"
+                            @click="exportMenuOpen = !exportMenuOpen"
+                            class="w-full sm:w-auto px-3.5 py-2 rounded-xl text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                            title="Export laundry orders"
+                        >
+                            <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span>Export</span>
+                            <svg class="w-3.5 h-3.5 opacity-60 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </button>
+
+                        <!-- Dropdown Menu -->
+                        <div
+                            v-if="exportMenuOpen"
+                            class="absolute right-0 mt-1.5 w-48 bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 py-1.5 z-50 text-xs animate-in fade-in zoom-in-95 duration-100"
+                        >
+                            <div class="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                                Export Laundry Orders
+                            </div>
+                            <button
+                                type="button"
+                                @click="downloadExport('xlsx')"
+                                class="w-full text-left px-3 py-2 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-200 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                            >
+                                <span class="w-5 h-5 rounded bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 flex items-center justify-center font-bold text-[10px]">
+                                    XLS
+                                </span>
+                                Excel (.xlsx)
+                            </button>
+                            <button
+                                type="button"
+                                @click="downloadExport('csv')"
+                                class="w-full text-left px-3 py-2 hover:bg-blue-50 dark:hover:bg-blue-950/40 text-slate-700 dark:text-slate-200 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-2 transition cursor-pointer font-medium"
+                            >
+                                <span class="w-5 h-5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-[10px]">
+                                    CSV
+                                </span>
+                                CSV Document (.csv)
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -273,8 +281,8 @@ const statusLabel = (status) => {
                             </button>
                         </div>
 
-                        <!-- Right Control: Link to Workflow Board -->
-                        <div class="flex items-center gap-2 justify-end">
+                        <!-- Right Control: Link to Workflow Board (Desktop shortcut) -->
+                        <div class="hidden md:flex items-center gap-2 justify-end">
                             <Link
                                 :href="safeRoute('laundry.board.index')"
                                 class="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-slate-900 border-slate-200 dark:border-slate-700"
@@ -412,8 +420,8 @@ const statusLabel = (status) => {
                         </button>
                     </div>
 
-                    <!-- Orders Data Table with Sticky Header -->
-                    <div v-else class="overflow-auto max-h-[calc(100vh-270px)] min-h-[420px] scrollbar-thin relative">
+                    <!-- Orders Data Table with Sticky Header (Desktop View: md and up) -->
+                    <div v-else class="hidden md:block overflow-auto max-h-[calc(100vh-270px)] min-h-[420px] scrollbar-thin relative">
                         <table class="w-full text-left text-xs border-collapse">
                             <thead class="sticky top-0 z-20 bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 shadow-xs">
                                 <tr>
@@ -480,6 +488,128 @@ const statusLabel = (status) => {
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+
+                    <!-- Custom Mobile Card List View (Visible on Mobile: screens < md) -->
+                    <div v-if="ordersList.length > 0" class="md:hidden p-3 space-y-3 bg-slate-50/50 dark:bg-slate-900/40">
+                        <div
+                            v-for="order in ordersList"
+                            :key="'mob-' + order.id"
+                            class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-4 shadow-xs relative overflow-hidden transition"
+                        >
+                            <!-- Status color stripe at top -->
+                            <div
+                                class="absolute top-0 left-0 right-0 h-1"
+                                :class="{
+                                    'bg-rose-500': order.is_overdue || order.status === 'cancelled',
+                                    'bg-purple-500': order.is_unclaimed,
+                                    'bg-emerald-500': order.status === 'ready' && !order.is_overdue && !order.is_unclaimed,
+                                    'bg-slate-400': order.status === 'collected',
+                                    'bg-amber-500': order.status === 'in_progress',
+                                    'bg-blue-500': order.status === 'received',
+                                }"
+                            />
+
+                            <!-- Top Row: Order Number, Status Badge, Due/Overdue Tag -->
+                            <div class="flex items-start justify-between gap-2 mb-2.5 pt-0.5">
+                                <div class="min-w-0">
+                                    <Link
+                                        :href="safeRoute('laundry.orders.show', { order: order.id })"
+                                        class="font-black text-sm text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1.5"
+                                    >
+                                        <span>#{{ order.order_number }}</span>
+                                    </Link>
+                                    <span class="text-[10px] text-slate-400 block mt-0.5">
+                                        Received: {{ order.received_at || '—' }}
+                                    </span>
+                                </div>
+                                <div class="flex flex-col items-end gap-1 shrink-0">
+                                    <span :class="['px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase border', statusBadgeClass(order.status)]">
+                                        {{ statusLabel(order.status) }}
+                                    </span>
+                                    <span v-if="order.is_overdue" class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+                                        OVERDUE
+                                    </span>
+                                    <span v-else-if="order.is_unclaimed" class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300">
+                                        UNCLAIMED
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Customer Info Row with 1-Tap Call -->
+                            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/60 flex items-center justify-between gap-2 mb-2.5 text-xs">
+                                <div class="min-w-0 flex items-center gap-2">
+                                    <div class="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center shrink-0">
+                                        {{ (order.customer_name || 'C').charAt(0).toUpperCase() }}
+                                    </div>
+                                    <div class="min-w-0">
+                                        <p class="font-bold text-slate-900 dark:text-white truncate text-xs">{{ order.customer_name }}</p>
+                                        <p v-if="order.customer_phone" class="text-[11px] text-slate-400 truncate">{{ order.customer_phone }}</p>
+                                    </div>
+                                </div>
+                                <a
+                                    v-if="order.customer_phone"
+                                    :href="`tel:${order.customer_phone}`"
+                                    class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-slate-700 transition shrink-0 shadow-xs active:scale-95"
+                                    title="Call Customer"
+                                >
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                                </a>
+                            </div>
+
+                            <!-- Items Summary -->
+                            <div class="mb-3 text-xs">
+                                <div class="flex items-start gap-1.5 text-slate-600 dark:text-slate-300">
+                                    <span class="text-sm shrink-0">🧺</span>
+                                    <span class="font-medium line-clamp-2 text-[11px] leading-relaxed">
+                                        {{ order.items_summary || `${order.items_count} items` }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Financials & Turnaround Grid -->
+                            <div class="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/60 mb-3 text-[11px]">
+                                <div>
+                                    <span class="text-slate-400 block text-[10px]">Total Order</span>
+                                    <span class="font-extrabold text-slate-900 dark:text-white font-mono text-xs">
+                                        {{ formatMoney(order.total) }}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block text-[10px]">Balance Due</span>
+                                    <span
+                                        :class="order.balance > 0 ? 'text-amber-600 dark:text-amber-400 font-extrabold font-mono text-xs' : 'text-emerald-600 font-bold text-xs'"
+                                    >
+                                        {{ order.balance > 0 ? formatMoney(order.balance) : 'Paid' }}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block text-[10px]">Due Date</span>
+                                    <span class="font-semibold text-slate-700 dark:text-slate-300 text-[10px] truncate block" :title="order.due_at || '—'">
+                                        {{ order.due_at || '—' }}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- Action Button Row -->
+                            <div class="flex items-center gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/60">
+                                <Link
+                                    :href="safeRoute('laundry.orders.show', { order: order.id })"
+                                    class="flex-1 py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+                                >
+                                    <span>Manage Order</span>
+                                    <span>→</span>
+                                </Link>
+                                <Link
+                                    :href="`${safeRoute('laundry.orders.show', { order: order.id })}?print=1`"
+                                    class="py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold flex items-center gap-1 transition active:scale-95 shrink-0"
+                                    title="Quick Print Ticket"
+                                >
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                                    <span>Print</span>
+                                </Link>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Pagination -->

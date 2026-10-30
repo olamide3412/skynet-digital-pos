@@ -8,60 +8,157 @@ import { BrowserQRCodeSvgWriter, EncodeHintType } from '@zxing/library'
 defineOptions({ layout: PosLayout })
 
 const props = defineProps({
-    settings:    Object,
-    branchItems: { type: Array, default: () => [] },
-    categories:  { type: Array, default: () => [] },
+    settings:              { type: Object, required: true },
+    laundry_settings:      { type: Object, default: () => ({}) },
+    branchItems:           { type: Array, default: () => [] },
+    categories:            { type: Array, default: () => [] },
     is_accounting_enabled: { type: Boolean, default: false },
+    initial_tab:           { type: String, default: 'general' },
+    can_manage_laundry:    { type: Boolean, default: true },
+    can_manage_pos:        { type: Boolean, default: true },
 })
 
 const { format } = useCurrency()
 
+const isLaundryEnabled = computed(() => Boolean(props.settings?.laundry_enabled))
+const isPosEnabled = computed(() => props.settings?.pos_enabled !== false && props.settings?.pos_enabled !== 0)
+const isMixedStore = computed(() => isLaundryEnabled.value && isPosEnabled.value)
+
+// ── Tab Management ─────────────────────────────────────────────────────────────
+const availableTabs = computed(() => {
+    const tabs = [
+        {
+            id: 'general',
+            name: 'General Settings',
+            shortName: 'General',
+            icon: 'building',
+            description: 'Store identity, branding, logo, cash till accountability, and core interface',
+        },
+    ]
+
+    if (isPosEnabled.value) {
+        tabs.push({
+            id: 'pos',
+            name: 'Retail & POS Settings',
+            shortName: 'Retail & POS',
+            icon: 'shopping-cart',
+            description: 'Terminal layout, barcode scanning, item shortcuts, margin rules, and hardware',
+        })
+    }
+
+    if (isLaundryEnabled.value) {
+        tabs.push({
+            id: 'laundry',
+            name: 'Laundry Module Settings',
+            shortName: 'Laundry',
+            icon: 'sparkles',
+            description: 'Turnaround periods, ticket footer, WhatsApp message alerts, and staff policies',
+        })
+    }
+
+    if (props.is_accounting_enabled) {
+        tabs.push({
+            id: 'accounting',
+            name: 'Accounting & VAT',
+            shortName: 'Accounting',
+            icon: 'calculator',
+            description: 'Automated VAT rates, ledger synchronization, and tax calculations',
+        })
+    }
+
+    return tabs
+})
+
+// Initialize active tab from URL query param, prop, or fallback
+const getInitialTab = () => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const paramTab = urlParams.get('tab')
+    if (paramTab && availableTabs.value.some(t => t.id === paramTab)) {
+        return paramTab
+    }
+    if (props.initial_tab && availableTabs.value.some(t => t.id === props.initial_tab)) {
+        return props.initial_tab
+    }
+    return 'general'
+}
+
+const activeTab = ref(getInitialTab())
+
+const selectTab = (tabId) => {
+    activeTab.value = tabId
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tabId)
+    window.history.replaceState({}, '', url.toString())
+}
+
+// ── Form State ────────────────────────────────────────────────────────────────
 const form = useForm({
     _method:                       'PUT',
+    active_tab:                    activeTab.value,
+
+    // ── General / Shared ──
     business_name:                 props.settings.business_name ?? '',
     business_address:              props.settings.business_address ?? '',
     business_contact_number:       props.settings.business_contact_number ?? '',
     business_email:                props.settings.business_email ?? '',
     logo:                          null,
+    business_sector:               props.settings.business_sector ?? 'commerce',
+    default_interface:             props.settings.default_interface ?? 'pos',
+    require_till_opening:          props.settings.require_till_opening !== false && props.settings.require_till_opening !== 0,
+    print_till_slip:               Boolean(props.settings.print_till_slip),
+
+    // ── POS Terminal & Selling ──
     sell_interface:                props.settings.sell_interface ?? 'classic',
     quick_access_mode:             props.settings.quick_access_mode ?? 'top_sellers',
     pinned_quick_access_items:     Array.isArray(props.settings.pinned_quick_access_items) ? [...props.settings.pinned_quick_access_items] : [],
     quick_access_category_ids:     Array.isArray(props.settings.quick_access_category_ids) ? [...props.settings.quick_access_category_ids] : [],
-    is_price_editable:             !!props.settings.is_price_editable,
-    is_qty_deduction:              !!props.settings.is_qty_deduction,
-    is_offline_qty_deduction:      !!props.settings.is_offline_qty_deduction,
-    out_of_stock:                  props.settings.out_of_stock ?? 25,
-    is_check_expiration:           !!props.settings.is_check_expiration,
-    batch_tracking_enabled:        !!props.settings.batch_tracking_enabled,
-    expiry_alert_days:             props.settings.expiry_alert_days ?? 30,
-    is_imei_enabled:               !!props.settings.is_imei_enabled,
-    is_camera_scanner_enabled:     props.settings.is_camera_scanner_enabled !== false && props.settings.is_camera_scanner_enabled !== 0,
-    is_grid_separate_rows:         !!props.settings.is_grid_separate_rows,
+    is_grid_separate_rows:         Boolean(props.settings.is_grid_separate_rows),
     is_cart_auto_scroll_highlight: props.settings.is_cart_auto_scroll_highlight !== false && props.settings.is_cart_auto_scroll_highlight !== 0,
-    is_show_buy_price:             !!props.settings.is_show_buy_price,
-    is_use_profit_percentage:      !!props.settings.is_use_profit_percentage,
-    is_tax_enabled:                !!props.settings.is_tax_enabled,
-    tax_percentage:                props.settings.tax_percentage ?? 7.5,
-    is_accounting_vat_enabled:     !!props.settings.is_accounting_vat_enabled,
+    is_camera_scanner_enabled:     props.settings.is_camera_scanner_enabled !== false && props.settings.is_camera_scanner_enabled !== 0,
+
+    // ── Pricing & Margins ──
+    is_price_editable:             Boolean(props.settings.is_price_editable),
+    is_show_buy_price:             Boolean(props.settings.is_show_buy_price),
+    is_qty_deduction:              Boolean(props.settings.is_qty_deduction),
+    is_offline_qty_deduction:      Boolean(props.settings.is_offline_qty_deduction),
+    out_of_stock:                  props.settings.out_of_stock ?? 25,
+    is_use_profit_percentage:      Boolean(props.settings.is_use_profit_percentage),
     wholesale_profit_percent:      props.settings.wholesale_profit_percent ?? 10,
     consumer_profit_percent:       props.settings.consumer_profit_percent ?? 15,
-    business_sector:               props.settings.business_sector ?? 'commerce',
+
+    // ── Expiry & Tracking ──
+    is_check_expiration:           Boolean(props.settings.is_check_expiration),
+    batch_tracking_enabled:        Boolean(props.settings.batch_tracking_enabled),
+    expiry_alert_days:             props.settings.expiry_alert_days ?? 30,
+    is_imei_enabled:               Boolean(props.settings.is_imei_enabled),
+
+    // ── Hardware & Receipts ──
     receipt_paper_size:            props.settings.receipt_paper_size ?? '80mm',
     receipt_printer_name:          props.settings.receipt_printer_name ?? 'Default POS Printer',
     printer_type:                  props.settings.printer_type ?? 'thermal_80mm',
     printer_connection:            props.settings.printer_connection ?? 'kiosk_direct',
     printer_ip_address:            props.settings.printer_ip_address ?? '',
-    auto_print_receipt:            !!props.settings.auto_print_receipt,
+    auto_print_receipt:            Boolean(props.settings.auto_print_receipt),
     show_receipt_preview:          props.settings.show_receipt_preview !== false && props.settings.show_receipt_preview !== 0,
-    require_till_opening:          props.settings.require_till_opening !== false && props.settings.require_till_opening !== 0,
-    print_till_slip:               !!props.settings.print_till_slip,
-    public_catalog_enabled:        !!props.settings.public_catalog_enabled,
-    default_interface:             props.settings.default_interface ?? 'pos',
-})
 
-const isLaundryEnabled = computed(() => !!props.settings.laundry_enabled)
-const isPosEnabled = computed(() => props.settings.pos_enabled !== false && props.settings.pos_enabled !== 0)
-const isMixedStore = computed(() => isLaundryEnabled.value && isPosEnabled.value)
+    // ── Public Storefront Catalog ──
+    public_catalog_enabled:        Boolean(props.settings.public_catalog_enabled),
+
+    // ── Laundry Settings ──
+    default_turnaround_hours:      props.laundry_settings?.default_turnaround_hours ?? 48,
+    unclaimed_after_days:          props.laundry_settings?.unclaimed_after_days ?? 14,
+    order_prefix:                  props.laundry_settings?.order_prefix ?? 'LDY-',
+    whatsapp_template:             props.laundry_settings?.whatsapp_template ?? 'Hello {customer_name}, your laundry order #{order_number} is ready for pickup at {branch_name}! Outstanding balance: {balance}. Thank you!',
+    default_country_code:          props.laundry_settings?.default_country_code ?? '234',
+    receipt_footer:                props.laundry_settings?.receipt_footer ?? 'Thank you for choosing us! Please present this ticket at pickup.',
+    allow_price_override:          Boolean(props.laundry_settings?.allow_price_override),
+    allow_unpaid_pickup:           Boolean(props.laundry_settings?.allow_unpaid_pickup),
+
+    // ── Accounting & Tax ──
+    is_tax_enabled:                Boolean(props.settings.is_tax_enabled),
+    tax_percentage:                props.settings.tax_percentage ?? 7.5,
+    is_accounting_vat_enabled:     Boolean(props.settings.is_accounting_vat_enabled),
+})
 
 // Pinned Items Search State
 const itemSearchQuery = ref('')
@@ -100,32 +197,19 @@ function unpinItem(id) {
     form.pinned_quick_access_items = form.pinned_quick_access_items.filter(itemId => itemId !== id)
 }
 
-function movePinnedItem(index, direction) {
-    const newIndex = index + direction
-    if (newIndex < 0 || newIndex >= form.pinned_quick_access_items.length) return
-    const arr = [...form.pinned_quick_access_items]
-    const temp = arr[index]
-    arr[index] = arr[newIndex]
-    arr[newIndex] = temp
-    form.pinned_quick_access_items = arr
-}
-
-function toggleCategory(catId) {
-    const exists = form.quick_access_category_ids.includes(catId)
-    if (exists) {
-        form.quick_access_category_ids = form.quick_access_category_ids.filter(id => id !== catId)
-    } else if (form.quick_access_category_ids.length < 6) {
-        form.quick_access_category_ids.push(catId)
+function toggleCategory(categoryId) {
+    const idx = form.quick_access_category_ids.indexOf(categoryId)
+    if (idx >= 0) {
+        form.quick_access_category_ids.splice(idx, 1)
+    } else {
+        if (form.quick_access_category_ids.length >= 6) return
+        form.quick_access_category_ids.push(categoryId)
     }
 }
 
-// ── Public Catalog & QR Code Handlers ─────────────────────────────────────────
+// ── Public Storefront Catalog QR Code ──────────────────────────────────────────
 const publicCatalogUrl = computed(() => {
-    if (props.settings.public_catalog_url) return props.settings.public_catalog_url
-    if (typeof window !== 'undefined' && props.settings.branch_slug) {
-        return `${window.location.origin}/catalog/${props.settings.branch_slug}`
-    }
-    return ''
+    return props.settings.public_catalog_url || (window.location.origin + '/catalog/' + (props.settings.branch_slug || ''))
 })
 
 const qrContainerRef = ref(null)
@@ -157,14 +241,14 @@ function renderQr() {
     }
 }
 
-watch(() => [form.public_catalog_enabled, publicCatalogUrl.value], () => {
-    if (form.public_catalog_enabled) {
+watch(() => [form.public_catalog_enabled, publicCatalogUrl.value, activeTab.value], () => {
+    if (form.public_catalog_enabled && activeTab.value === 'pos') {
         nextTick(() => renderQr())
     }
 })
 
 onMounted(() => {
-    if (form.public_catalog_enabled) {
+    if (form.public_catalog_enabled && activeTab.value === 'pos') {
         nextTick(() => renderQr())
     }
 })
@@ -218,15 +302,13 @@ function printQrPoster() {
                     padding: 30px 15px;
                     color: #0f172a;
                     margin: 0;
-                    background: #ffffff;
                 }
                 .card {
-                    max-width: 440px;
-                    margin: 0 auto;
-                    border: 3px solid #10b981;
+                    border: 2px dashed #cbd5e1;
                     border-radius: 28px;
-                    padding: 36px 28px;
-                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+                    padding: 40px 30px;
+                    max-width: 520px;
+                    margin: 0 auto;
                 }
                 h1 { font-size: 24px; margin: 0 0 6px; font-weight: 800; color: #0f172a; }
                 p.sub { font-size: 13px; color: #475569; margin: 0 0 24px; line-height: 1.4; }
@@ -265,878 +347,842 @@ function printQrPoster() {
     printWindow.document.close()
 }
 
-function submit() {
+// ── Save Function ─────────────────────────────────────────────────────────────
+const submitTab = (tabId) => {
+    form.active_tab = tabId || activeTab.value
     form.post(route('pos.settings.update'), {
         forceFormData: true,
+        preserveScroll: true,
+        preserveState: true,
     })
 }
+
+// Sample live preview for Laundry WhatsApp Template
+const liveWhatsAppPreview = computed(() => {
+    const raw = form.whatsapp_template || ''
+    return raw
+        .replace('{customer_name}', 'John Doe')
+        .replace('{order_number}', `${form.order_prefix || 'LDY-'}0042`)
+        .replace('{branch_name}', form.business_name || 'Our Branch')
+        .replace('{balance}', '₦0.00')
+})
 </script>
 
 <template>
     <div class="flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 transition-colors">
-        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
-            <h1 class="text-lg font-bold text-slate-900 dark:text-white">POS Settings</h1>
-        </div>
-        <div class="flex-1 overflow-y-auto p-6">
-            <form @submit.prevent="submit" class="max-w-2xl mx-auto space-y-5">
-
-                <!-- Business Info -->
-                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
-                    <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b border-slate-200 dark:border-slate-700 pb-2">Business & Branch Branding</h2>
-                    
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Business Name *</label>
-                        <input v-model="form.business_name" type="text" required maxlength="100"
-                            class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
-                        <p v-if="form.errors.business_name" class="text-red-500 text-xs mt-1">{{ form.errors.business_name }}</p>
-                    </div>
-
-                    <!-- Branch Logo Upload -->
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Branch Logo (Displays on Login Page & Receipts)</label>
-                        <div class="flex items-center gap-4">
-                            <div v-if="settings.logo_url" class="w-14 h-14 rounded-lg bg-slate-100 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 overflow-hidden flex items-center justify-center flex-shrink-0">
-                                <img :src="settings.logo_url" class="w-full h-full object-contain" alt="Branch Logo" />
-                            </div>
-                            <div class="flex-1">
-                                <input
-                                    type="file"
-                                    accept="image/*"
-                                    @input="form.logo = $event.target.files[0]"
-                                    class="w-full text-slate-600 dark:text-slate-300 file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-200 dark:file:bg-slate-700 file:text-slate-800 dark:file:text-white hover:file:bg-slate-300 dark:hover:file:bg-slate-600 outline-none text-xs transition cursor-pointer"
-                                />
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Uploaded logo will automatically customize your branch login screen and receipts.</p>
-                                <p v-if="form.errors.logo" class="text-red-500 text-xs mt-1">{{ form.errors.logo }}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Number</label>
-                            <input v-model="form.business_contact_number" type="text"
-                                class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition font-mono" />
-                        </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Email</label>
-                            <input v-model="form.business_email" type="email"
-                                class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Address</label>
-                        <input v-model="form.business_address" type="text" maxlength="255"
-                            class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
-                    </div>
+        
+        <!-- Header -->
+        <div class="px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 max-w-5xl mx-auto">
+                <div>
+                    <h1 class="text-lg font-black text-slate-900 dark:text-white flex items-center gap-2">
+                        <span>⚙️</span>
+                        <span>Branch & System Settings</span>
+                    </h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Configure business profile, cash drawer accountability, POS terminal, and operational modules.
+                    </p>
                 </div>
 
-                <!-- ══ OPERATIONAL MODULES & BRANCH INTERFACES (POS & LAUNDRY) ════════════════ -->
-                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
-                    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700 gap-2">
+                <!-- Active tab save indicator button -->
+                <div class="flex items-center gap-2 self-end sm:self-auto">
+                    <button
+                        @click="submitTab(activeTab)"
+                        :disabled="form.processing"
+                        type="button"
+                        class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition flex items-center gap-1.5 shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50 active:scale-95"
+                    >
+                        <svg v-if="form.processing" class="w-3.5 h-3.5 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                        <svg v-else class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        <span>{{ form.processing ? 'Saving...' : 'Save ' + (availableTabs.find(t => t.id === activeTab)?.shortName || 'Settings') }}</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tab Navigation Bar (Scrollable on Mobile) -->
+            <div class="max-w-5xl mx-auto mt-4 pt-2 border-t border-slate-100 dark:border-slate-700/60 flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                <button
+                    v-for="tab in availableTabs"
+                    :key="tab.id"
+                    @click="selectTab(tab.id)"
+                    type="button"
+                    :class="[
+                        'px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center gap-2 cursor-pointer shrink-0 border select-none',
+                        activeTab === tab.id
+                            ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm shadow-emerald-600/25'
+                            : 'bg-slate-100 dark:bg-slate-700/50 hover:bg-slate-200/80 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200/80 dark:border-slate-700'
+                    ]"
+                >
+                    <!-- Tab Icons -->
+                    <span v-if="tab.id === 'general'">🏢</span>
+                    <span v-else-if="tab.id === 'pos'">🛒</span>
+                    <span v-else-if="tab.id === 'laundry'">🧺</span>
+                    <span v-else-if="tab.id === 'accounting'">🧾</span>
+
+                    <span>{{ tab.name }}</span>
+
+                    <!-- Mixed store / badge indicators -->
+                    <span v-if="tab.id === 'laundry' && isLaundryEnabled" class="text-[9px] px-1.5 py-0.2 rounded-full font-black uppercase tracking-wider bg-white/20 text-white">
+                        Active
+                    </span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Scrollable Tab Content Container -->
+        <div class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+            <div class="max-w-4xl mx-auto">
+
+                <!-- ════════════════════════════════════════════════════════════════
+                     TAB 1: GENERAL SETTINGS (Shared Business, Branding & Till)
+                     ════════════════════════════════════════════════════════════════ -->
+                <div v-show="activeTab === 'general'" class="space-y-6">
+
+                    <!-- Business Profile & Logo Card -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-5 shadow-xs">
+                        <div class="border-b border-slate-200 dark:border-slate-700 pb-3 flex items-center justify-between">
+                            <div>
+                                <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                    <span>🏢</span>
+                                    <span>Business Profile & Branch Branding</span>
+                                </h2>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Shared location details used across customer receipts, login screens, and reports.
+                                </p>
+                            </div>
+                        </div>
+
                         <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Business / Branch Name *</label>
+                            <input v-model="form.business_name" type="text" required maxlength="100"
+                                class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition font-bold" />
+                            <p v-if="form.errors.business_name" class="text-red-500 text-xs mt-1">{{ form.errors.business_name }}</p>
+                        </div>
+
+                        <!-- Branch Logo Upload & Preview -->
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Branch Logo (Displays on Login, POS & Laundry Receipts)</label>
+                            <div class="flex items-center gap-4 p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700">
+                                <div v-if="settings.logo_url" class="w-16 h-16 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 overflow-hidden flex items-center justify-center flex-shrink-0 p-1 shadow-2xs">
+                                    <img :src="settings.logo_url" class="w-full h-full object-contain" alt="Branch Logo" />
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        @input="form.logo = $event.target.files[0]"
+                                        class="w-full text-slate-600 dark:text-slate-300 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-slate-200 dark:file:bg-slate-700 file:text-slate-800 dark:file:text-white hover:file:bg-slate-300 dark:hover:file:bg-slate-600 outline-none text-xs transition cursor-pointer"
+                                    />
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Recommended format: Square or landscape transparent PNG / JPG under 2MB.</p>
+                                    <p v-if="form.errors.logo" class="text-red-500 text-xs mt-1">{{ form.errors.logo }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Official Contact Phone</label>
+                                <input v-model="form.business_contact_number" type="text"
+                                    class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition font-mono" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Official Contact Email</label>
+                                <input v-model="form.business_email" type="email"
+                                    class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Physical Business Address</label>
+                            <input v-model="form.business_address" type="text" maxlength="255"
+                                class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition" />
+                        </div>
+                    </div>
+
+                    <!-- Cash Till Shift & Cash Drawer Accountability (Affects all sales & laundry) -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-4 shadow-xs">
+                        <div class="flex items-start gap-3 border-b border-slate-200 dark:border-slate-700 pb-3">
+                            <span class="text-2xl">💰</span>
+                            <div>
+                                <h2 class="text-sm font-bold text-slate-900 dark:text-white">Till Shift & Cash Drawer Accountability</h2>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Control mandatory opening float declaration, cash drawer audit, and shift reconciliation across POS sales and Laundry intake deposits.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="space-y-3 pt-1">
+                            <label class="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 hover:bg-slate-50 dark:hover:bg-slate-900/60 transition cursor-pointer">
+                                <input type="checkbox" v-model="form.require_till_opening" class="w-4 h-4 mt-0.5 accent-emerald-500 rounded cursor-pointer shrink-0" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Require Cash Float Before Ringing Sales or Laundry Orders</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                        When enabled, cashiers must declare their opening drawer balance before processing transactions. Prevents unaccounted register shortages.
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 hover:bg-slate-50 dark:hover:bg-slate-900/60 transition cursor-pointer">
+                                <input type="checkbox" v-model="form.print_till_slip" class="w-4 h-4 mt-0.5 accent-emerald-500 rounded cursor-pointer shrink-0" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Print Shift Balancing Slip on Till Close</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                        Generates a printable 80mm cash drawer reconciliation slip when a shift ends showing expected cash, actual declared cash, and variances.
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Store Mode & Landing Interface Preference -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-4 shadow-xs">
+                        <div class="border-b border-slate-200 dark:border-slate-700 pb-3">
                             <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
                                 <span>⚙️</span>
-                                <span>Operational Modules & Branch Interfaces</span>
+                                <span>Branch Operating Sector & Interface Preference</span>
                             </h2>
                             <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                Operating mode and active modules for this location.
+                                Set business sector classification and choose default landing interface after staff sign in.
                             </p>
                         </div>
-                        <div>
-                            <span v-if="isMixedStore" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
-                                <span>🏪</span> Mixed Store (POS & Laundry)
-                            </span>
-                            <span v-else-if="isPosEnabled && !isLaundryEnabled" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                                <span>💻</span> POS Only (Standard Retail)
-                            </span>
-                            <span v-else class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800">
-                                <span>🧺</span> Laundry Only
-                            </span>
-                        </div>
-                    </div>
 
-                    <!-- Module Status Cards -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <!-- POS Module Info -->
-                        <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-2">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-lg">💻</span>
-                                    <span class="text-xs font-bold text-slate-800 dark:text-white">Retail POS Interface</span>
-                                </div>
-                                <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
-                                    :class="isPosEnabled
-                                        ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'">
-                                    {{ isPosEnabled ? 'Active' : 'Disabled' }}
-                                </span>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Business Sector</label>
+                                <select v-model="form.business_sector" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-xs font-semibold transition">
+                                    <option value="commerce">General Commerce / Retail Store</option>
+                                    <option value="health">Pharmacy / Healthcare & Chemist</option>
+                                </select>
+                                <p class="text-[11px] text-slate-400 mt-1">Health mode optimizes expiry warnings and batch tracking.</p>
                             </div>
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                                Cash register, item catalogs, barcode scanning, stock tracking, and till sessions.
-                            </p>
-                        </div>
 
-                        <!-- Laundry Module Info -->
-                        <div class="p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 space-y-2">
-                            <div class="flex items-center justify-between">
-                                <div class="flex items-center gap-2">
-                                    <span class="text-lg">🧺</span>
-                                    <span class="text-xs font-bold text-slate-800 dark:text-white">Laundry Management</span>
-                                </div>
-                                <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
-                                    :class="isLaundryEnabled
-                                        ? 'bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800'
-                                        : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'">
-                                    {{ isLaundryEnabled ? 'Active' : 'Inactive' }}
-                                </span>
+                            <div v-if="isMixedStore">
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Default Staff Landing Interface</label>
+                                <select v-model="form.default_interface" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-xs font-semibold transition">
+                                    <option value="pos">Retail POS Terminal</option>
+                                    <option value="laundry">Laundry Operations Hub</option>
+                                </select>
+                                <p class="text-[11px] text-slate-400 mt-1">Attendants land on this screen after logging in (they can switch anytime from the sidebar).</p>
                             </div>
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                                Order intake, garment status pipeline (Received, In Progress, Ready), ticket printing, and WhatsApp pickup notifications.
-                            </p>
-                            <p v-if="!isLaundryEnabled" class="text-[10px] text-slate-400 dark:text-slate-500 italic">
-                                Note: To activate the Laundry module for this branch, please request activation from your Platform Super Admin.
-                            </p>
                         </div>
                     </div>
 
-                    <!-- Default Landing Interface Selection (Shown when both modules are on) -->
-                    <div v-if="isMixedStore" class="pt-3 border-t border-slate-200 dark:border-slate-700 space-y-2.5">
-                        <label class="block text-xs font-bold text-slate-800 dark:text-white">
-                            Default Interface After Staff Login
-                        </label>
-                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                            Because this branch has both Retail POS and Laundry enabled, choose which interface staff will land on right after logging in. Staff can switch seamlessly between systems at any time from the navigation menu.
-                        </p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                            <label
-                                :class="[
-                                    'p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-3',
-                                    form.default_interface === 'pos'
-                                        ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-500 ring-1 ring-emerald-500/20'
-                                        : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                                ]"
-                            >
-                                <input
-                                    type="radio"
-                                    value="pos"
-                                    v-model="form.default_interface"
-                                    class="mt-0.5 text-emerald-600 focus:ring-emerald-500"
-                                />
-                                <div>
-                                    <div class="font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
-                                        <span>💻</span> Retail POS Interface
-                                    </div>
-                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                        Land on checkout screen and product catalogs.
-                                    </div>
-                                </div>
-                            </label>
-
-                            <label
-                                :class="[
-                                    'p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-3',
-                                    form.default_interface === 'laundry'
-                                        ? 'bg-purple-50/50 dark:bg-purple-950/30 border-purple-500 dark:border-purple-500 ring-1 ring-purple-500/20'
-                                        : 'bg-white dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                                ]"
-                            >
-                                <input
-                                    type="radio"
-                                    value="laundry"
-                                    v-model="form.default_interface"
-                                    class="mt-0.5 text-purple-600 focus:ring-purple-500"
-                                />
-                                <div>
-                                    <div class="font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
-                                        <span>🧺</span> Laundry Operations Hub
-                                    </div>
-                                    <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                        Land on laundry intake, order pipeline & pickup dashboard.
-                                    </div>
-                                </div>
-                            </label>
-                        </div>
-                    </div>
-
-                    <!-- Direct Links to Laundry Settings when active -->
-                    <div v-if="isLaundryEnabled" class="pt-3 border-t border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-3">
-                        <Link
-                            :href="route('laundry.settings.index', { branch: settings.branch_slug })"
-                            class="px-3.5 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-xs font-semibold flex items-center gap-1.5 transition"
+                    <!-- Bottom Action Bar for General Settings -->
+                    <div class="flex items-center justify-end gap-3 pt-2">
+                        <button
+                            @click="submitTab('general')"
+                            :disabled="form.processing"
+                            type="button"
+                            class="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs transition flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
                         >
-                            <span>⚙️</span>
-                            <span>Laundry Operational Settings</span>
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                        </Link>
-                        <Link
-                            :href="route('laundry.services.index', { branch: settings.branch_slug })"
-                            class="px-3.5 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-semibold flex items-center gap-1.5 transition"
-                        >
-                            <span>🏷️</span>
-                            <span>Laundry Services & Pricing</span>
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                        </Link>
+                            <svg v-if="form.processing" class="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                            <span>{{ form.processing ? 'Saving...' : 'Save General Settings' }}</span>
+                        </button>
                     </div>
                 </div>
 
-                <!-- ══ RECEIPT & PRINTER SETTINGS BANNER ═════════════════════ -->
-                <div class="bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-300 dark:border-emerald-700/60 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
-                    <div class="flex items-center gap-3.5">
-                        <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg flex-shrink-0 shadow-sm">
-                            🖨️
-                        </div>
-                        <div>
-                            <h3 class="text-sm font-bold text-slate-900 dark:text-white">Terminal & Printer Configuration</h3>
-                            <p class="text-xs text-slate-600 dark:text-slate-400">
-                                Configure local thermal 80mm / A4 receipt printers, network IP addresses, and test zero-dialogue printing.
-                            </p>
-                        </div>
-                    </div>
-                    <Link :href="route('pos.printer-setup')"
-                        class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer">
-                        <span>Open Printer Setup</span>
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
-                    </Link>
-                </div>
 
-                <!-- ══ QUICK ACCESS WIDGET (CHECKOUT EMPTY SCREEN) ═══════════════ -->
-                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
-                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
-                        <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                            <span>⚡</span>
-                            <span>Quick Access Shortcut Panel (Checkout Screen)</span>
+                <!-- ════════════════════════════════════════════════════════════════
+                     TAB 2: RETAIL & POS SETTINGS (Terminal, Scanning, Hardware, Margins)
+                     ════════════════════════════════════════════════════════════════ -->
+                <div v-show="activeTab === 'pos'" class="space-y-6">
+
+                    <!-- Receipt Printer Banner -->
+                    <div class="bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-300 dark:border-emerald-700/60 p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+                        <div class="flex items-center gap-3.5">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-lg flex-shrink-0 shadow-sm">
+                                🖨️
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Printer Setup & Zero-Dialogue Printing</h3>
+                                <p class="text-xs text-slate-600 dark:text-slate-400">
+                                    Configure 80mm/58mm thermal receipt printers, network IP addresses, and test thermal slips.
+                                </p>
+                            </div>
+                        </div>
+                        <Link :href="route('pos.printer-setup')"
+                            class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-sm transition-all flex items-center gap-1.5 flex-shrink-0 cursor-pointer">
+                            <span>Open Printer Setup</span>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                        </Link>
+                    </div>
+
+                    <!-- POS Terminal Behaviour & Screen Mode -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-4 shadow-xs">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b border-slate-200 dark:border-slate-700 pb-2">
+                            POS Terminal Screen & Barcode Scanning
                         </h2>
-                        <span class="text-[10px] font-bold text-slate-400 dark:text-slate-500">Max 10 Items Cap</span>
-                    </div>
 
-                    <p class="text-xs text-slate-600 dark:text-slate-400">
-                        Populates the checkout screen with a fast, capped list of shortcut items before any search/barcode scan happens. Choose only one active mode for this branch:
-                    </p>
-
-                    <!-- Mode Select Grid -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <!-- Mode 1: Top Sellers (Default) -->
-                        <label
-                            @click="form.quick_access_mode = 'top_sellers'"
-                            :class="[
-                                'p-3 rounded-xl border transition cursor-pointer flex items-start gap-2.5',
-                                form.quick_access_mode === 'top_sellers'
-                                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-400'
-                                    : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                            ]"
-                        >
-                            <input type="radio" v-model="form.quick_access_mode" value="top_sellers" class="mt-0.5 accent-emerald-600" />
-                            <div class="min-w-0">
-                                <span class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
-                                    <span>⚡</span> Top Sellers (Rolling 7 Days)
-                                    <span class="text-[9px] bg-emerald-500 text-white font-bold px-1.5 py-0.2 rounded-full">Default</span>
-                                </span>
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Automatically ranks and shows this branch's most purchased items over the past 7 days.
-                                </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Selling Interface</label>
+                                <select v-model="form.sell_interface" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-xs font-semibold">
+                                    <option value="classic">Classic Table View</option>
+                                    <option value="gallery">Touch Gallery / Grid View</option>
+                                </select>
                             </div>
-                        </label>
-
-                        <!-- Mode 2: Recently Sold -->
-                        <label
-                            @click="form.quick_access_mode = 'recently_sold'"
-                            :class="[
-                                'p-3 rounded-xl border transition cursor-pointer flex items-start gap-2.5',
-                                form.quick_access_mode === 'recently_sold'
-                                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-400'
-                                    : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                            ]"
-                        >
-                            <input type="radio" v-model="form.quick_access_mode" value="recently_sold" class="mt-0.5 accent-emerald-600" />
-                            <div class="min-w-0">
-                                <span class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
-                                    <span>🕒</span> Recently Sold Items
-                                </span>
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Live chronological stream of the latest items checked out at this branch.
-                                </p>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Low Stock Warning Threshold</label>
+                                <input v-model.number="form.out_of_stock" type="number" min="0"
+                                    class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-xs font-bold" />
                             </div>
-                        </label>
-
-                        <!-- Mode 3: Pinned Items -->
-                        <label
-                            @click="form.quick_access_mode = 'pinned_items'"
-                            :class="[
-                                'p-3 rounded-xl border transition cursor-pointer flex items-start gap-2.5',
-                                form.quick_access_mode === 'pinned_items'
-                                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-400'
-                                    : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                            ]"
-                        >
-                            <input type="radio" v-model="form.quick_access_mode" value="pinned_items" class="mt-0.5 accent-emerald-600" />
-                            <div class="min-w-0">
-                                <span class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
-                                    <span>📌</span> Branch Pinned Items
-                                </span>
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Curate and arrange a custom hand-picked list of high-speed items (up to 10).
-                                </p>
-                            </div>
-                        </label>
-
-                        <!-- Mode 4: Category Shortcuts -->
-                        <label
-                            @click="form.quick_access_mode = 'category_shortcuts'"
-                            :class="[
-                                'p-3 rounded-xl border transition cursor-pointer flex items-start gap-2.5',
-                                form.quick_access_mode === 'category_shortcuts'
-                                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-400'
-                                    : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                            ]"
-                        >
-                            <input type="radio" v-model="form.quick_access_mode" value="category_shortcuts" class="mt-0.5 accent-emerald-600" />
-                            <div class="min-w-0">
-                                <span class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
-                                    <span>🏷️</span> Category Shortcuts
-                                </span>
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Shows category shortcut pills with mini quick-item grids for each category.
-                                </p>
-                            </div>
-                        </label>
-
-                        <!-- Mode 5: None / Disabled -->
-                        <label
-                            @click="form.quick_access_mode = 'none'"
-                            :class="[
-                                'p-3 rounded-xl border transition cursor-pointer flex items-start gap-2.5 sm:col-span-2',
-                                form.quick_access_mode === 'none'
-                                    ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-500 dark:border-emerald-400'
-                                    : 'bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                            ]"
-                        >
-                            <input type="radio" v-model="form.quick_access_mode" value="none" class="mt-0.5 accent-emerald-600" />
-                            <div class="min-w-0">
-                                <span class="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
-                                    <span>🚫</span> Disabled (Classic Search-Only Placeholder)
-                                </span>
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                    Shows the clean standard search prompt without shortcut items.
-                                </p>
-                            </div>
-                        </label>
-                    </div>
-
-                    <!-- ── Pinned Items Manager Sub-panel ── -->
-                    <div v-if="form.quick_access_mode === 'pinned_items'" class="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                <span>📌</span> Manage Pinned Shortcut Items
-                            </span>
-                            <span
-                                :class="form.pinned_quick_access_items.length >= 10 ? 'text-amber-600 dark:text-amber-400 font-black' : 'text-slate-500 dark:text-slate-400'"
-                                class="text-xs font-mono"
-                            >
-                                {{ form.pinned_quick_access_items.length }} / 10 Pinned (Max 10)
-                            </span>
                         </div>
 
-                        <!-- Item Search Input to Add -->
-                        <div v-if="form.pinned_quick_access_items.length < 10" class="relative">
-                            <input
-                                v-model="itemSearchQuery"
-                                @focus="isSearchDropdownOpen = true"
-                                type="text"
-                                placeholder="Type item name or barcode to add to shortcuts..."
-                                class="w-full bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 text-xs rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none transition"
-                            />
-                            
-                            <!-- Search Dropdown Results -->
-                            <div
-                                v-if="isSearchDropdownOpen && filteredBranchItems.length > 0"
-                                class="absolute top-full left-0 right-0 mt-1 z-30 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl max-h-48 overflow-y-auto p-1 divide-y divide-slate-100 dark:divide-slate-700/60"
-                            >
-                                <button
-                                    v-for="item in filteredBranchItems"
-                                    :key="item.id"
-                                    type="button"
-                                    @click="pinItem(item)"
-                                    class="w-full p-2 text-left hover:bg-slate-100 dark:hover:bg-slate-700/70 rounded-lg transition flex items-center justify-between cursor-pointer"
+                        <div class="space-y-3 pt-2">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.is_camera_scanner_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Enable Camera Barcode Scanner on Checkout</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Shows a camera scan button on the POS selling page for cashiers using phones or tablets.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.is_grid_separate_rows" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Separate Cart Rows for Scanned Items</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Add identical scanned items as individual cart rows instead of stacking quantity.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.is_cart_auto_scroll_highlight" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Auto-Scroll Cart to Scanned Item</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Smoothly scrolls to and pulses the active cart row whenever a barcode is scanned.</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Quick Access Shortcuts Panel -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-4 shadow-xs">
+                        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                <span>⚡</span>
+                                <span>Quick Access Shortcut Panel (Checkout Screen)</span>
+                            </h2>
+                            <span class="text-[10px] font-bold text-slate-400">Max 10 Items</span>
+                        </div>
+
+                        <p class="text-xs text-slate-600 dark:text-slate-400">
+                            Populates the checkout screen with a fast, capped list of shortcut items before any search/barcode scan happens:
+                        </p>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <label :class="['p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-2.5', form.quick_access_mode === 'top_sellers' ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-500' : 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700']">
+                                <input type="radio" value="top_sellers" v-model="form.quick_access_mode" class="mt-0.5 text-emerald-600" />
+                                <div>
+                                    <div class="font-bold text-slate-900 dark:text-white">🔥 Top Sellers (Auto)</div>
+                                    <div class="text-[11px] text-slate-500 mt-0.5">Top 10 most frequently purchased items across last 30 days.</div>
+                                </div>
+                            </label>
+
+                            <label :class="['p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-2.5', form.quick_access_mode === 'recently_sold' ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-500' : 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700']">
+                                <input type="radio" value="recently_sold" v-model="form.quick_access_mode" class="mt-0.5 text-emerald-600" />
+                                <div>
+                                    <div class="font-bold text-slate-900 dark:text-white">⏱️ Recently Sold (Dynamic)</div>
+                                    <div class="text-[11px] text-slate-500 mt-0.5">Last 10 unique products sold in this branch.</div>
+                                </div>
+                            </label>
+
+                            <label :class="['p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-2.5', form.quick_access_mode === 'pinned_items' ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-500' : 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700']">
+                                <input type="radio" value="pinned_items" v-model="form.quick_access_mode" class="mt-0.5 text-emerald-600" />
+                                <div>
+                                    <div class="font-bold text-slate-900 dark:text-white">📌 Custom Pinned Items</div>
+                                    <div class="text-[11px] text-slate-500 mt-0.5">Hand-pick up to 10 specific products for cashiers.</div>
+                                </div>
+                            </label>
+
+                            <label :class="['p-3 rounded-xl border text-xs cursor-pointer transition flex items-start gap-2.5', form.quick_access_mode === 'category_shortcuts' ? 'bg-emerald-50/50 dark:bg-emerald-950/30 border-emerald-500' : 'bg-slate-50 dark:bg-slate-900/40 border-slate-200 dark:border-slate-700']">
+                                <input type="radio" value="category_shortcuts" v-model="form.quick_access_mode" class="mt-0.5 text-emerald-600" />
+                                <div>
+                                    <div class="font-bold text-slate-900 dark:text-white">🏷️ Category Shortcut Tabs</div>
+                                    <div class="text-[11px] text-slate-500 mt-0.5">Display quick-filter category pills at the top of checkout.</div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Pinned Items Sub-Picker -->
+                        <div v-if="form.quick_access_mode === 'pinned_items'" class="pt-3 border-t border-slate-100 dark:border-slate-700/60 space-y-3">
+                            <div class="relative">
+                                <input
+                                    v-model="itemSearchQuery"
+                                    type="text"
+                                    placeholder="Search products to pin by name or barcode..."
+                                    class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-xs outline-none"
+                                    @focus="isSearchDropdownOpen = true"
+                                />
+                                <div v-if="isSearchDropdownOpen && filteredBranchItems.length > 0" class="absolute z-20 left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg p-1 space-y-1">
+                                    <button
+                                        v-for="item in filteredBranchItems"
+                                        :key="item.id"
+                                        type="button"
+                                        @click="pinItem(item)"
+                                        class="w-full text-left px-3 py-1.5 rounded-lg text-xs hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-between"
+                                    >
+                                        <span class="font-medium text-slate-800 dark:text-white truncate">{{ item.item_name }}</span>
+                                        <span class="text-slate-400 font-mono">{{ format(item.price) }}</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Pinned Badges -->
+                            <div class="flex flex-wrap gap-2">
+                                <div
+                                    v-for="itemId in form.pinned_quick_access_items"
+                                    :key="itemId"
+                                    class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-xs font-semibold text-emerald-800 dark:text-emerald-300"
                                 >
-                                    <div class="min-w-0 pr-2">
-                                        <div class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{{ item.item_name }}</div>
-                                        <div class="text-[10px] text-slate-400 font-mono">#{{ item.barcode_number || 'No Barcode' }} • Stock: {{ item.front_store_qty }}</div>
-                                    </div>
-                                    <div class="flex items-center gap-2 flex-shrink-0">
-                                        <span class="text-xs font-black text-emerald-600 dark:text-emerald-400">{{ format(item.price) }}</span>
-                                        <span class="px-2 py-0.5 bg-emerald-600 text-white rounded text-[10px] font-bold">+ Pin</span>
-                                    </div>
+                                    <span>{{ getItemById(itemId).item_name }}</span>
+                                    <button type="button" @click="unpinItem(itemId)" class="text-emerald-600 hover:text-red-500 font-bold ml-1">×</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Category Shortcuts Sub-Picker -->
+                        <div v-if="form.quick_access_mode === 'category_shortcuts'" class="pt-3 border-t border-slate-100 dark:border-slate-700/60 space-y-2">
+                            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Select Up to 6 Shortcut Categories:</span>
+                            <div class="flex flex-wrap gap-2">
+                                <button
+                                    v-for="cat in categories"
+                                    :key="cat.id"
+                                    type="button"
+                                    @click="toggleCategory(cat.id)"
+                                    :class="[
+                                        'px-2.5 py-1 rounded-lg text-xs font-semibold border transition',
+                                        form.quick_access_category_ids.includes(cat.id)
+                                            ? 'bg-emerald-600 text-white border-emerald-600'
+                                            : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600'
+                                    ]"
+                                >
+                                    {{ cat.name }}
                                 </button>
                             </div>
                         </div>
+                    </div>
 
-                        <!-- Pinned Items List -->
-                        <div v-if="form.pinned_quick_access_items.length > 0" class="space-y-1.5">
-                            <div
-                                v-for="(itemId, idx) in form.pinned_quick_access_items"
-                                :key="itemId"
-                                class="flex items-center justify-between p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs"
-                            >
-                                <div class="flex items-center gap-2.5 min-w-0">
-                                    <span class="w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 text-[10px] font-bold flex items-center justify-center font-mono">
-                                        {{ idx + 1 }}
-                                    </span>
-                                    <div class="min-w-0">
-                                        <div class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate leading-tight">
-                                            {{ getItemById(itemId).item_name }}
-                                        </div>
-                                        <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                                            {{ format(getItemById(itemId).price) }}
-                                        </div>
-                                    </div>
+                    <!-- Pricing, Inventory Deduction & Profit Margins -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-4 shadow-xs">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b border-slate-200 dark:border-slate-700 pb-2">
+                            Pricing, Inventory Deduction & Margins
+                        </h2>
+
+                        <div class="space-y-3">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.is_price_editable" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Allow POS Line Price Overrides</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Permit authorized cashiers with permission to adjust selling prices on the POS cart.</div>
                                 </div>
+                            </label>
 
-                                <div class="flex items-center gap-1 flex-shrink-0">
-                                    <!-- Move Up -->
-                                    <button
-                                        type="button"
-                                        :disabled="idx === 0"
-                                        @click="movePinnedItem(idx, -1)"
-                                        class="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 cursor-pointer"
-                                        title="Move Up"
-                                    >
-                                        ▲
-                                    </button>
-                                    <!-- Move Down -->
-                                    <button
-                                        type="button"
-                                        :disabled="idx === form.pinned_quick_access_items.length - 1"
-                                        @click="movePinnedItem(idx, 1)"
-                                        class="p-1 rounded text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 disabled:opacity-30 cursor-pointer"
-                                        title="Move Down"
-                                    >
-                                        ▼
-                                    </button>
-                                    <!-- Remove -->
-                                    <button
-                                        type="button"
-                                        @click="unpinItem(itemId)"
-                                        class="p-1 rounded text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/50 transition cursor-pointer ml-1"
-                                        title="Remove shortcut"
-                                    >
-                                        ✕
-                                    </button>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.is_show_buy_price" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Show Buy / Cost Price to Authorized Staff</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Displays unit cost in product lookup dialogs for managers and admins.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.is_qty_deduction" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Automatic Front-Store Stock Deduction</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Instantly decrements inventory counts when POS sales are concluded.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.is_offline_qty_deduction" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Deduct Stock on Offline Sales</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Syncs local offline queue sales and adjusts inventory once internet reconnects.</div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <!-- Auto Profit Margins -->
+                        <div class="pt-3 border-t border-slate-100 dark:border-slate-700/60 space-y-3">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.is_use_profit_percentage" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Automatic Markup Pricing from Cost Price</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Auto-calculates consumer and wholesale prices based on set margin percentages.</div>
+                                </div>
+                            </label>
+
+                            <div v-if="form.is_use_profit_percentage" class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Consumer Markup %</label>
+                                    <input v-model.number="form.consumer_profit_percent" type="number" min="0" step="0.5"
+                                        class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Wholesale Markup %</label>
+                                    <input v-model.number="form.wholesale_profit_percent" type="number" min="0" step="0.5"
+                                        class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold" />
                                 </div>
                             </div>
                         </div>
-                        <p v-else class="text-xs text-slate-400 dark:text-slate-500 text-center py-2">
-                            No shortcut items pinned yet. Use the search bar above to pin items.
-                        </p>
                     </div>
 
-                    <!-- ── Category Shortcuts Picker Sub-panel ── -->
-                    <div v-if="form.quick_access_mode === 'category_shortcuts'" class="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-3">
-                        <div class="flex items-center justify-between">
-                            <span class="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                                <span>🏷️</span> Select Categories for Shortcut Tabs
-                            </span>
-                            <span class="text-xs font-mono text-slate-500 dark:text-slate-400">
-                                {{ form.quick_access_category_ids.length }} / 6 Selected (Max 6)
-                            </span>
+                    <!-- Expiration, Batch & Serial Tracking -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-4 shadow-xs">
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b border-slate-200 dark:border-slate-700 pb-2">
+                            Product Expiration & Device Tracking
+                        </h2>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.is_check_expiration" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Track Item Expiration Dates</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Enables expiry date logging on intake and checkout.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.batch_tracking_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Batch / Lot Tracking</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Track shipments and batch numbers for medicines and perishables.</div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.is_imei_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">IMEI & Serial Number Tracking</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Prompt for device IMEI on sale (electronics & phones).</div>
+                                </div>
+                            </label>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Expiry Alert Warning (Days)</label>
+                                <input v-model.number="form.expiry_alert_days" type="number" min="1"
+                                    class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold" />
+                            </div>
                         </div>
-                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                            Leave empty to automatically display top categories with available stock.
-                        </p>
-                        <div class="flex flex-wrap gap-2">
-                            <button
-                                v-for="cat in categories"
-                                :key="cat.id"
-                                type="button"
-                                @click="toggleCategory(cat.id)"
-                                :class="[
-                                    'px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5',
-                                    form.quick_access_category_ids.includes(cat.id)
-                                        ? 'bg-emerald-600 text-white shadow-xs'
-                                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                ]"
-                            >
-                                <span>{{ cat.name }}</span>
-                                <span v-if="form.quick_access_category_ids.includes(cat.id)" class="text-[10px]">✓</span>
-                            </button>
+                    </div>
+
+                    <!-- Public Counter Catalog & QR Code Poster -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-4 shadow-xs">
+                        <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                            <div>
+                                <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                    <span>📲</span>
+                                    <span>Public Counter Catalog & QR Code Price List</span>
+                                </h2>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Allow walk-in customers to scan a counter QR code to browse live inventory and prices on their phones.
+                                </p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" v-model="form.public_catalog_enabled" class="sr-only peer" />
+                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-emerald-600"></div>
+                            </label>
                         </div>
+
+                        <div v-if="form.public_catalog_enabled" class="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                            <div class="md:col-span-2 space-y-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Public Shareable Link</label>
+                                    <div class="flex items-center gap-2">
+                                        <input :value="publicCatalogUrl" readonly
+                                            class="w-full bg-slate-50 dark:bg-slate-700/60 text-slate-700 dark:text-slate-300 px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-mono select-all" />
+                                        <button type="button" @click="copyCatalogLink" class="px-3 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 text-xs font-bold transition shrink-0">
+                                            {{ copySuccess ? 'Copied!' : 'Copy' }}
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="flex flex-wrap gap-2 pt-2">
+                                    <button type="button" @click="downloadQrPng" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center gap-1.5 transition">
+                                        <span>📥</span> Download QR (PNG)
+                                    </button>
+                                    <button type="button" @click="printQrPoster" class="px-3 py-1.5 rounded-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white text-xs font-bold flex items-center gap-1.5 transition">
+                                        <span>🖨️</span> Print Counter Poster
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="flex flex-col items-center justify-center p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700">
+                                <div ref="qrContainerRef" class="w-36 h-36 flex items-center justify-center bg-white p-2 rounded-lg shadow-2xs"></div>
+                                <span class="text-[10px] text-slate-400 mt-2 font-mono">Scan with Phone Camera</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Action Bar for POS Settings -->
+                    <div class="flex items-center justify-end gap-3 pt-2">
+                        <button
+                            @click="submitTab('pos')"
+                            :disabled="form.processing"
+                            type="button"
+                            class="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs transition flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                        >
+                            <svg v-if="form.processing" class="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                            <span>{{ form.processing ? 'Saving...' : 'Save POS Settings' }}</span>
+                        </button>
                     </div>
                 </div>
 
-                <!-- POS Behaviour -->
-                <div class="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-5 space-y-4 shadow-xs">
-                    <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b border-slate-200 dark:border-slate-700 pb-2">POS Behaviour & Pricing Automation</h2>
 
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">POS Interface Style</label>
-                            <select v-model="form.sell_interface"
-                                class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition">
-                                <option value="classic" class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white">Classic Table View</option>
-                                <option value="gallery" class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white">Visual Grid View</option>
-                            </select>
+                <!-- ════════════════════════════════════════════════════════════════
+                     TAB 3: LAUNDRY MODULE SETTINGS (Turnaround, Prefix, Alerts, Policies)
+                     ════════════════════════════════════════════════════════════════ -->
+                <div v-show="activeTab === 'laundry'" class="space-y-6">
+
+                    <!-- Direct Shortcuts Banner -->
+                    <div class="bg-indigo-50 dark:bg-indigo-950/40 rounded-2xl border border-indigo-200 dark:border-indigo-800/60 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">🧺</span>
+                            <div>
+                                <h3 class="text-sm font-bold text-slate-900 dark:text-white">Laundry Services & Promotional Discounts</h3>
+                                <p class="text-xs text-slate-600 dark:text-slate-400">
+                                    Manage dry cleaning categories, item service pricing (per piece / per kg), and active promo campaigns.
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Out of Stock Alert Threshold</label>
-                            <input v-model.number="form.out_of_stock" type="number" min="0" required
-                                class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition font-mono" />
+                        <div class="flex items-center gap-2 shrink-0">
+                            <Link :href="route('laundry.services.index', { branch: settings.branch_slug })"
+                                class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition flex items-center gap-1 shadow-xs">
+                                <span>🏷️ Services Catalog</span>
+                            </Link>
+                            <Link :href="route('laundry.discounts.index', { branch: settings.branch_slug })"
+                                class="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 text-xs font-bold transition flex items-center gap-1 shadow-xs">
+                                <span>🎟️ Promos & Rules</span>
+                            </Link>
                         </div>
                     </div>
 
-                    <!-- Automation Toggles -->
-                    <div class="space-y-3 pt-2">
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" v-model="form.is_use_profit_percentage" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Auto-Calculate Selling Prices from Cost</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Automatically computes retail & wholesale prices whenever buy price changes</p>
-                            </div>
-                        </label>
-
-                        <div v-if="form.is_use_profit_percentage" class="grid grid-cols-2 gap-4 p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Consumer Retail Margin (%)</label>
-                                <input v-model.number="form.consumer_profit_percent" type="number" min="0" step="0.1" required
-                                    class="w-full bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition font-mono" />
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Wholesale Margin (%)</label>
-                                <input v-model.number="form.wholesale_profit_percent" type="number" min="0" step="0.1" required
-                                    class="w-full bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition font-mono" />
-                            </div>
-                        </div>
-
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" v-model="form.is_price_editable" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Allow Cashier Price Override</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Cashiers can edit unit selling price directly on the checkout cart</p>
-                            </div>
-                        </label>
-
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" v-model="form.is_qty_deduction" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Auto Stock Deduction</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Deducts inventory levels automatically when sales are completed</p>
-                            </div>
-                        </label>
-
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" v-model="form.is_offline_qty_deduction" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Local Quantity Deduction when Offline</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Validate available stock on Payment Modal and deduct local inventory when offline (uncheck to skip offline stock blocking)</p>
-                            </div>
-                        </label>
-
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" v-model="form.is_check_expiration" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Expiry Date Alerts</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Warns cashiers if an item is expiring soon during checkout</p>
-                            </div>
-                        </label>
-
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" v-model="form.is_imei_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable IMEI / Device ID Tracking</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Allows unit-level serial & IMEI tracking for gadgets, phones, laptops, and electronics</p>
-                            </div>
-                        </label>
-
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" v-model="form.is_camera_scanner_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Camera Barcode Scanner</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Shows a camera scan button on the POS selling page for cashiers using phones, tablets, or webcams</p>
-                            </div>
-                        </label>
-
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" v-model="form.batch_tracking_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Item Expiry & Batch Tracking</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Enables batch/lot recording, FEFO checkout deduction, and expiry alert overview for this branch</p>
-                            </div>
-                        </label>
-
-                        <div v-if="form.batch_tracking_enabled" class="p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700">
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                                Expiry Alert Threshold (Days before expiry)
-                            </label>
-                            <input
-                                v-model.number="form.expiry_alert_days"
-                                type="number"
-                                min="1"
-                                max="365"
-                                required
-                                class="w-full sm:w-48 bg-white dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition font-mono"
-                            />
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                                Batches expiring within this number of days (default 30) will trigger notifications and appear in the Expiring Soon filter.
+                    <!-- Turnaround & Order Numbering -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-5 shadow-xs">
+                        <div class="border-b border-slate-200 dark:border-slate-700 pb-3">
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                                <span>⏱️</span>
+                                <span>Operational Turnaround & Order Numbering</span>
+                            </h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Set default turnaround deadlines and order identifier prefix format.
                             </p>
                         </div>
 
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" v-model="form.is_grid_separate_rows" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Separate Rows for Grid View Selections (Eateries & Restaurants)</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">When clicking an item in Grid View, add it as a new separate line in the cart instead of incrementing existing quantity (e.g. for individual portions/diners)</p>
-                            </div>
-                        </label>
-
-                        <label class="flex items-center gap-3 cursor-pointer">
-                            <input type="checkbox" v-model="form.is_cart_auto_scroll_highlight" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Auto-Scroll & 1-Second Highlight on Added Cart Items</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Automatically scroll down to focus on added/updated cart items and flash a 1-second pulse animation (from search bar, barcode, or grid)</p>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Dedicated Till Sessions & Cash Drawer Card -->
-                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/60 p-6 space-y-4 shadow-xs">
-                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
-                        <div class="flex items-center gap-2">
-                            <span class="text-xl">💼</span>
-                            <div>
-                                <h2 class="text-base font-bold text-slate-900 dark:text-white">Till Shift & Cash Drawer Accountability</h2>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Control mandatory opening float declaration, cash management, and shift reconciliation.</p>
-                            </div>
-                        </div>
-                        <span
-                            :class="form.require_till_opening
-                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                                : 'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800'"
-                            class="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider"
-                        >
-                            {{ form.require_till_opening ? 'Active (Till Opening Required)' : 'Disabled (Direct Checkout)' }}
-                        </span>
-                    </div>
-
-                    <div class="space-y-4 pt-1">
-                        <label class="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700/80 cursor-pointer transition hover:border-slate-300 dark:hover:border-slate-600">
-                            <input type="checkbox" v-model="form.require_till_opening" class="w-4 h-4 mt-0.5 accent-emerald-500 rounded cursor-pointer shrink-0" />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Require Opening Cash Float Before Checkout</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                                    When enabled, cashiers must declare their opening drawer cash float before checking out customers. Sales are linked to their till session for complete cash drawer auditing. If disabled, cashiers can sell directly without opening float prompts.
-                                </p>
-                            </div>
-                        </label>
-
-                        <label class="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700/80 cursor-pointer transition hover:border-slate-300 dark:hover:border-slate-600">
-                            <input type="checkbox" v-model="form.print_till_slip" class="w-4 h-4 mt-0.5 accent-emerald-500 rounded cursor-pointer shrink-0" />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Print Till Reconciliation Slip on Shift Close</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                                    Automatically generates and displays the thermal till summary slip modal whenever a till session is closed, ready for instant printing or physical drawer filing.
-                                </p>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Dedicated Accounting & VAT Card (§9) -->
-                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/60 p-6 space-y-4 shadow-xs">
-                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
-                        <div class="flex items-center gap-2">
-                            <span class="text-xl">📊</span>
-                            <div>
-                                <h2 class="text-base font-bold text-slate-900 dark:text-white">Double-Entry Accounting & VAT</h2>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Automated financial books, journal entries, and VAT ledger reporting.</p>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <span
-                                v-if="is_accounting_enabled"
-                                class="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider"
-                            >
-                                Active on Plan
-                            </span>
-                            <span
-                                v-else
-                                class="bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wider"
-                            >
-                                Silver+ Plan Feature
-                            </span>
-                        </div>
-                    </div>
-
-                    <div class="space-y-4 pt-1">
-                        <!-- VAT Toggle (§9) -->
-                        <label
-                            :class="[!is_accounting_enabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer']"
-                            class="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700/80 transition hover:border-slate-300 dark:hover:border-slate-600"
-                        >
-                            <input
-                                type="checkbox"
-                                v-model="form.is_accounting_vat_enabled"
-                                :disabled="!is_accounting_enabled"
-                                class="w-4 h-4 mt-0.5 accent-emerald-500 rounded cursor-pointer shrink-0"
-                            />
-                            <div>
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Track VAT / Tax in General Ledger</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                                    When enabled, tax collected from sales and returns is posted to the dedicated VAT/Tax Payable liability account (2100) and unlocks the period VAT report. If disabled, full sale values flow directly into Sales Revenue.
-                                </p>
-                            </div>
-                        </label>
-
-                        <!-- Books Start Date (§9) -->
-                        <div v-if="settings.accounting_started_at" class="p-3 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-200/80 dark:border-slate-700/60 flex items-center justify-between text-xs">
-                            <span class="text-slate-600 dark:text-slate-400">Branch Books Start Date:</span>
-                            <span class="font-mono font-semibold text-slate-900 dark:text-white">
-                                {{ new Date(settings.accounting_started_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}
-                            </span>
-                        </div>
-                        <div v-else-if="!is_accounting_enabled" class="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                            <span>ℹ️</span> Accounting is available for organizations on the Silver plan and above. Upgrade your subscription to enable automatic double-entry books.
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ══ PUBLIC BRANCH CATALOG & SHAREABLE PRICE LIST CARD ═══════════ -->
-                <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700/60 p-6 space-y-4 shadow-xs">
-                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
-                        <div class="flex items-center gap-2">
-                            <span class="text-xl">🌐</span>
-                            <div>
-                                <h2 class="text-base font-bold text-slate-900 dark:text-white">Public Branch Catalog & Shareable Price List</h2>
-                                <p class="text-xs text-slate-500 dark:text-slate-400">Share your current front-store items and live selling prices with customers via a public link or QR code.</p>
-                            </div>
-                        </div>
-                        <span
-                            :class="form.public_catalog_enabled
-                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
-                                : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400 border border-slate-200 dark:border-slate-600'"
-                            class="px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider"
-                        >
-                            {{ form.public_catalog_enabled ? 'Active (Live Link)' : 'Disabled (Off)' }}
-                        </span>
-                    </div>
-
-                    <div class="space-y-4 pt-1">
-                        <!-- On/Off Toggle -->
-                        <label class="flex items-start gap-3 p-3.5 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700/80 cursor-pointer transition hover:border-slate-300 dark:hover:border-slate-600">
-                            <input
-                                type="checkbox"
-                                v-model="form.public_catalog_enabled"
-                                class="w-4 h-4 mt-0.5 accent-emerald-500 rounded cursor-pointer shrink-0"
-                            />
-                            <div class="flex-1">
-                                <span class="text-sm font-semibold text-slate-900 dark:text-white">Enable Public Customer Catalog</span>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                                    When turned on, anyone with the link can view your branch's selling prices and available front-store items. It is strictly read-only (no orders, no cart, no checkout).
-                                </p>
-                            </div>
-                        </label>
-
-                        <!-- Expanded Section When Enabled -->
-                        <div v-if="form.public_catalog_enabled" class="space-y-4 pt-2">
-                            
-                            <!-- Shareable URL & Copy -->
-                            <div class="space-y-1.5">
-                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
-                                    Your Shareable Public Catalog Link
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                    Default Turnaround (Hours)
                                 </label>
-                                <div class="flex items-center gap-2">
-                                    <div class="relative flex-1">
-                                        <input
-                                            type="text"
-                                            readonly
-                                            :value="publicCatalogUrl"
-                                            class="w-full bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-300 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 font-mono text-xs select-all focus:outline-none"
-                                        />
-                                    </div>
-                                    <button
-                                        type="button"
-                                        @click="copyCatalogLink"
-                                        class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
-                                    >
-                                        <svg v-if="!copySuccess" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                        </svg>
-                                        <svg v-else class="w-4 h-4 text-emerald-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
-                                        </svg>
-                                        <span>{{ copySuccess ? 'Copied Link!' : 'Copy Link' }}</span>
-                                    </button>
-                                    <a
-                                        :href="publicCatalogUrl"
-                                        target="_blank"
-                                        class="px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 text-xs font-semibold transition shrink-0"
-                                        title="Preview in new tab"
-                                    >
-                                        Preview &rarr;
-                                    </a>
-                                </div>
+                                <input
+                                    v-model.number="form.default_turnaround_hours"
+                                    type="number"
+                                    min="1"
+                                    max="720"
+                                    class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white font-bold"
+                                />
+                                <p class="text-[11px] text-slate-400 mt-1">48 hours = 2 days turnaround</p>
                             </div>
 
-                            <!-- QR Code Stand & Download -->
-                            <div class="p-4 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row items-center gap-5">
-                                <div class="bg-white p-3 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xs shrink-0 flex items-center justify-center">
-                                    <div ref="qrContainerRef" class="w-36 h-36 flex items-center justify-center overflow-hidden">
-                                        <!-- SVG QR Code mounted here -->
-                                    </div>
-                                </div>
-
-                                <div class="space-y-3 text-center sm:text-left flex-1">
-                                    <div>
-                                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Shop Counter & Window QR Code</h3>
-                                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
-                                            Print this QR code to display at your shop counter, store window, or marketing banners. Customers can scan it with their phone camera to open your live catalog immediately without downloading an app.
-                                        </p>
-                                    </div>
-
-                                    <div class="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
-                                        <button
-                                            type="button"
-                                            @click="downloadQrPng"
-                                            class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-white text-white dark:text-slate-900 font-bold text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                        >
-                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                            </svg>
-                                            <span>Download PNG</span>
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            @click="printQrPoster"
-                                            class="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-white dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs transition flex items-center gap-1.5 shadow-xs cursor-pointer"
-                                        >
-                                            <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                            </svg>
-                                            <span>Print Counter Display Poster</span>
-                                        </button>
-                                    </div>
-                                </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                    Unclaimed After (Days)
+                                </label>
+                                <input
+                                    v-model.number="form.unclaimed_after_days"
+                                    type="number"
+                                    min="1"
+                                    max="365"
+                                    class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white font-bold"
+                                />
+                                <p class="text-[11px] text-slate-400 mt-1">Days left ready before marked unclaimed</p>
                             </div>
 
-                            <!-- Privacy & Security Guarantee Callout -->
-                            <div class="p-3 bg-emerald-50/60 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 flex items-start gap-2.5 text-xs text-emerald-900 dark:text-emerald-300">
-                                <span class="text-base shrink-0">🔒</span>
-                                <p class="leading-relaxed">
-                                    <strong>Privacy Guard Active:</strong> Your wholesale prices, cost prices, inventory quantities, barcodes, and IMEI records are completely protected and will never appear on the public catalog or in its source code.
-                                </p>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                    Order Number Prefix
+                                </label>
+                                <input
+                                    v-model="form.order_prefix"
+                                    type="text"
+                                    maxlength="10"
+                                    class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white font-black uppercase tracking-wider"
+                                />
+                                <p class="text-[11px] text-slate-400 mt-1">e.g. LDY- yields LDY-000123</p>
                             </div>
-
                         </div>
+                    </div>
+
+                    <!-- WhatsApp Ready Notifications -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-5 shadow-xs">
+                        <div class="border-b border-slate-200 dark:border-slate-700 pb-3">
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                                <span>💬</span>
+                                <span>WhatsApp Customer Notification Alert Template</span>
+                            </h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Custom message triggered when attendants click the WhatsApp notification icon on completed orders.
+                            </p>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                            <div class="sm:col-span-1">
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                    Country Dial Code
+                                </label>
+                                <input
+                                    v-model="form.default_country_code"
+                                    type="text"
+                                    placeholder="234"
+                                    class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white font-bold"
+                                />
+                                <p class="text-[10px] text-slate-400 mt-1">Prefix for local 080... mobile numbers</p>
+                            </div>
+
+                            <div class="sm:col-span-3">
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                    Message Template
+                                </label>
+                                <textarea
+                                    v-model="form.whatsapp_template"
+                                    rows="3"
+                                    class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white leading-relaxed"
+                                ></textarea>
+                                <div class="flex flex-wrap items-center gap-1.5 mt-1.5 text-[10px] text-slate-500">
+                                    <span>Placeholders:</span>
+                                    <code class="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-mono font-bold">{customer_name}</code>
+                                    <code class="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-mono font-bold">{order_number}</code>
+                                    <code class="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-mono font-bold">{branch_name}</code>
+                                    <code class="px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-mono font-bold">{balance}</code>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Live WhatsApp Message Preview Bubble -->
+                        <div class="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 space-y-1">
+                            <span class="text-[10px] uppercase font-bold text-emerald-700 dark:text-emerald-400 tracking-wider">Preview WhatsApp Chat Bubble:</span>
+                            <p class="text-xs text-slate-800 dark:text-slate-200 italic font-sans leading-relaxed">
+                                "{{ liveWhatsAppPreview }}"
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Operational Policies & Ticket Footer -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-5 shadow-xs">
+                        <div class="border-b border-slate-200 dark:border-slate-700 pb-3">
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+                                <span>📋</span>
+                                <span>Ticket Disclaimer & Staff Operational Policies</span>
+                            </h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Set thermal ticket disclaimers and branch-level permission bypass rules.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                Thermal Laundry Ticket Footer Disclaimer
+                            </label>
+                            <input
+                                v-model="form.receipt_footer"
+                                type="text"
+                                class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white"
+                                placeholder="Thank you for choosing us! Please present this ticket at pickup."
+                            />
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
+                            <label class="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 hover:bg-slate-50 dark:hover:bg-slate-900/60 transition cursor-pointer">
+                                <input v-model="form.allow_price_override" type="checkbox" class="w-4 h-4 mt-0.5 accent-indigo-600 rounded cursor-pointer shrink-0" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Allow Line Price Override</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                        Permit authorized attendants to modify line item unit prices on order intake. (Also requires the user to have the <span class="font-bold text-indigo-600 dark:text-indigo-400">Override Laundry Service Prices</span> permission).
+                                    </div>
+                                </div>
+                            </label>
+
+                            <label class="flex items-start gap-3 p-3.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-900/40 hover:bg-slate-50 dark:hover:bg-slate-900/60 transition cursor-pointer">
+                                <input v-model="form.allow_unpaid_pickup" type="checkbox" class="w-4 h-4 mt-0.5 accent-indigo-600 rounded cursor-pointer shrink-0" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Allow Unpaid Order Pickup</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                                        Allow releasing finished garments before full payment is settled, automatically posting the balance to customer debt ledger.
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Action Bar for Laundry Settings -->
+                    <div class="flex items-center justify-end gap-3 pt-2">
+                        <button
+                            @click="submitTab('laundry')"
+                            :disabled="form.processing"
+                            type="button"
+                            class="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs transition flex items-center gap-2 shadow-md shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
+                        >
+                            <svg v-if="form.processing" class="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                            <span>{{ form.processing ? 'Saving...' : 'Save Laundry Settings' }}</span>
+                        </button>
                     </div>
                 </div>
 
-                <div class="flex justify-end pt-2">
-                    <button type="submit" :disabled="form.processing"
-                        class="px-8 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm rounded-xl shadow-md shadow-emerald-900/20 transition disabled:opacity-40 cursor-pointer">
-                        {{ form.processing ? 'Saving Settings…' : 'Save POS Settings' }}
-                    </button>
+
+                <!-- ════════════════════════════════════════════════════════════════
+                     TAB 4: ACCOUNTING & VAT SETTINGS
+                     ════════════════════════════════════════════════════════════════ -->
+                <div v-show="activeTab === 'accounting'" class="space-y-6">
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-5 shadow-xs">
+                        <div class="border-b border-slate-200 dark:border-slate-700 pb-3">
+                            <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                <span>🧾</span>
+                                <span>Double-Entry Accounting & VAT Automation</span>
+                            </h2>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                Configure automated sales tax, journal entry creation, and ledger accounting.
+                            </p>
+                        </div>
+
+                        <div class="space-y-4">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="checkbox" v-model="form.is_tax_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Enable Sales Tax / VAT on Transactions</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Calculates and prints VAT breakdown on sales receipts and laundry tickets.</div>
+                                </div>
+                            </label>
+
+                            <div v-if="form.is_tax_enabled" class="w-full sm:w-64 pt-1">
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Tax Percentage (%)</label>
+                                <input v-model.number="form.tax_percentage" type="number" min="0" max="100" step="0.1"
+                                    class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 text-xs font-bold" />
+                            </div>
+
+                            <label class="flex items-center gap-3 cursor-pointer pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                                <input type="checkbox" v-model="form.is_accounting_vat_enabled" class="w-4 h-4 accent-emerald-500 rounded cursor-pointer" />
+                                <div>
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Post Tax Directly to Output VAT Liability Ledger</div>
+                                    <div class="text-xs text-slate-500 dark:text-slate-400">Synchronizes tax amounts into chart of accounts journal vouchers for balance sheet reporting.</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Action Bar for Accounting Settings -->
+                    <div class="flex items-center justify-end gap-3 pt-2">
+                        <button
+                            @click="submitTab('accounting')"
+                            :disabled="form.processing"
+                            type="button"
+                            class="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs transition flex items-center gap-2 shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50"
+                        >
+                            <svg v-if="form.processing" class="w-4 h-4 animate-spin text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+                            <span>{{ form.processing ? 'Saving...' : 'Save Accounting Settings' }}</span>
+                        </button>
+                    </div>
                 </div>
-            </form>
+
+            </div>
         </div>
+
     </div>
 </template>

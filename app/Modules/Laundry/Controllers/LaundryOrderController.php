@@ -500,6 +500,18 @@ class LaundryOrderController extends Controller
 
         $activeGeneralDiscount = LaundryDiscountService::getActiveGeneralDiscount($branch->id);
 
+        $activeTillSession = null;
+        $user = auth()->user();
+        if ($user && $branch) {
+            $session = \App\Services\TillSessionService::getActiveSession($user->id, $branch->id);
+            if ($session) {
+                $session->load('cashMovements.performer:id,name');
+                $activeTillSession = array_merge($session->toArray(), [
+                    'summary' => $session->calculateSummary(),
+                ]);
+            }
+        }
+
         return Inertia::render('Laundry/Orders/Create', [
             'services'              => $services,
             'categories'            => $categories,
@@ -511,13 +523,18 @@ class LaundryOrderController extends Controller
                 'starts_at'      => $activeGeneralDiscount->starts_at?->format('Y-m-d H:i'),
                 'ends_at'        => $activeGeneralDiscount->ends_at?->format('Y-m-d H:i'),
             ] : null,
-            'canApplyDiscount'      => RoleService::canApplyDiscount(),
+            'canApplyDiscount'          => RoleService::canApplyDiscount(),
+            'canOverridePrice'          => RoleService::canOverrideLaundryPrice() || ($user?->isBranchAdmin() ?? false) || ($user?->isSuperAdmin() ?? false),
+            'activeTillSession'         => $activeTillSession,
+            'canManageTillCashMovements' => RoleService::canManageTillCashMovements() || ($user?->isBranchAdmin() ?? false) || ($user?->isSuperAdmin() ?? false),
             'settings'              => [
                 'default_turnaround_days' => $laundrySettings->default_turnaround_days ?: 2,
                 'order_prefix'            => $laundrySettings->order_prefix ?: 'LDY-',
                 'is_tax_enabled'          => (bool) $posSettings->is_tax_enabled,
                 'tax_percentage'          => (float) ($posSettings->tax_percentage ?? 0),
                 'allow_price_override'    => (bool) $laundrySettings->allow_price_override,
+                'require_till_opening'    => (bool) ($posSettings->require_till_opening ?? false),
+                'print_till_slip'         => (bool) ($posSettings->print_till_slip ?? true),
             ],
         ]);
     }
@@ -528,6 +545,12 @@ class LaundryOrderController extends Controller
     public function store(Request $request)
     {
         $branch = current_branch();
+
+        if ($request->has('deposit_amount') && is_string($request->input('deposit_amount'))) {
+            $request->merge([
+                'deposit_amount' => (float) str_replace(',', '', $request->input('deposit_amount')),
+            ]);
+        }
 
         $validated = $request->validate([
             'customer_id'       => 'nullable|integer',
@@ -606,6 +629,19 @@ class LaundryOrderController extends Controller
             $whatsAppUrl = "https://wa.me/{$normalizedPhone}?text=" . urlencode($msg);
         }
 
+        $activeTillSession = null;
+        $user = auth()->user();
+        $posSettings = $branch->getSettings();
+        if ($user && $branch) {
+            $session = \App\Services\TillSessionService::getActiveSession($user->id, $branch->id);
+            if ($session) {
+                $session->load('cashMovements.performer:id,name');
+                $activeTillSession = array_merge($session->toArray(), [
+                    'summary' => $session->calculateSummary(),
+                ]);
+            }
+        }
+
         return Inertia::render('Laundry/Orders/Show', [
             'order'         => [
                 'id'                   => $order->id,
@@ -672,7 +708,15 @@ class LaundryOrderController extends Controller
                 'address' => $branch->address,
                 'phone'   => $branch->phone,
             ],
-            'settings'      => $settings,
+            'settings'      => array_merge($settings->toArray(), [
+                'require_till_opening' => (bool) ($posSettings->require_till_opening ?? false),
+                'print_till_slip'      => (bool) ($posSettings->print_till_slip ?? true),
+                'allow_unpaid_pickup'  => (bool) $settings->allow_unpaid_pickup,
+                'allow_price_override' => (bool) $settings->allow_price_override,
+            ]),
+            'canReleaseUnpaid'           => $user ? ($user->isSuperAdmin() || $user->isBranchAdmin() || $user->hasPermissionTo('laundry.release_unpaid') || (bool) $settings->allow_unpaid_pickup) : false,
+            'activeTillSession'          => $activeTillSession,
+            'canManageTillCashMovements' => RoleService::canManageTillCashMovements() || ($user?->isBranchAdmin() ?? false) || ($user?->isSuperAdmin() ?? false),
         ]);
     }
 
@@ -703,6 +747,12 @@ class LaundryOrderController extends Controller
      */
     public function recordPayment(Request $request, $branchParam, LaundryOrder $order)
     {
+        if ($request->has('amount') && is_string($request->input('amount'))) {
+            $request->merge([
+                'amount' => (float) str_replace(',', '', $request->input('amount')),
+            ]);
+        }
+
         $validated = $request->validate([
             'amount'    => 'required|numeric|min:0.01',
             'method'    => 'required|string|max:50',
@@ -746,6 +796,12 @@ class LaundryOrderController extends Controller
      */
     public function cancel(Request $request, $branchParam, LaundryOrder $order)
     {
+        if ($request->has('refund_amount') && is_string($request->input('refund_amount'))) {
+            $request->merge([
+                'refund_amount' => (float) str_replace(',', '', $request->input('refund_amount')),
+            ]);
+        }
+
         $validated = $request->validate([
             'reason'        => 'required|string|max:500',
             'refund_method' => 'nullable|string|max:50',

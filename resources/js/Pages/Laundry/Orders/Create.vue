@@ -3,6 +3,9 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { Link, usePage, router } from '@inertiajs/vue3'
 import axios from 'axios'
 import { searchLocalCustomers } from '@/Services/offlineDb'
+import OpenTillModal from '@/Components/POS/OpenTillModal.vue'
+import TillManagementModal from '@/Components/POS/TillManagementModal.vue'
+import TillSlipModal from '@/Components/POS/TillSlipModal.vue'
 
 const props = defineProps({
     services: {
@@ -21,13 +24,61 @@ const props = defineProps({
         type: Boolean,
         default: true,
     },
+    canOverridePrice: {
+        type: Boolean,
+        default: false,
+    },
     settings: {
         type: Object,
         required: true,
     },
+    activeTillSession: {
+        type: Object,
+        default: null,
+    },
+    canManageTillCashMovements: {
+        type: Boolean,
+        default: false,
+    },
 })
 
 const page = usePage()
+
+// ── Till Session State & Modals ──────────────────────────────────────────────
+const activeTill = ref(props.activeTillSession || page.props.active_till_session || null)
+watch(() => props.activeTillSession, (val) => { activeTill.value = val })
+watch(() => page.props.active_till_session, (val) => { if (!activeTill.value) activeTill.value = val })
+
+const isTillMandatory = computed(() => {
+    const req = props.settings?.require_till_opening ?? page.props.pos_settings?.require_till_opening ?? false
+    return Boolean(req && !activeTill.value)
+})
+
+const showOpenTillModal = ref(false)
+const showTillManagementModal = ref(false)
+const showTillSlipModal = ref(false)
+const slipSession = ref(null)
+
+function onTillOpened(session) {
+    activeTill.value = session
+    showOpenTillModal.value = false
+    if (submissionError.value.toLowerCase().includes('till')) {
+        submissionError.value = ''
+    }
+}
+
+function onTillUpdated(updatedSession) {
+    activeTill.value = updatedSession
+}
+
+function onTillClosed(closedSession) {
+    activeTill.value = null
+    showTillManagementModal.value = false
+    if (props.settings?.print_till_slip) {
+        slipSession.value = closedSession
+        showTillSlipModal.value = true
+    }
+}
 const currencySymbol = computed(() => page.props.system_config?.currency_symbol || '₦')
 const branchSlug = computed(() => {
     if (page.props.current_branch?.slug) return page.props.current_branch.slug
@@ -294,6 +345,9 @@ const addServiceToOrder = (service) => {
             quantity:            defaultQty,
             line_total:          round(unitPrice * defaultQty),
             note:                '',
+            is_editing_price:    false,
+            is_overridden:       false,
+            custom_price_input:  unitPrice,
         })
         keyToHighlight = lineKey
     }
@@ -301,6 +355,52 @@ const addServiceToOrder = (service) => {
     if (keyToHighlight) {
         scrollToLine(keyToHighlight)
     }
+}
+
+const canOverridePrice = computed(() => {
+    const settingAllowed = Boolean(props.settings?.allow_price_override)
+    const permissionGranted = Boolean(
+        props.canOverridePrice ||
+        page.props.pos_permissions?.['laundry.override_price'] ||
+        page.props.pos_permissions?.canEditPrice ||
+        page.props.pos_permissions?.isBranchAdmin ||
+        page.props.pos_permissions?.isSuperAdmin
+    )
+    return settingAllowed && permissionGranted
+})
+
+const startEditLinePrice = (line) => {
+    if (!canOverridePrice.value) return
+    line.custom_price_input = line.unit_price
+    line.is_editing_price = true
+    nextTick(() => {
+        const el = document.getElementById('price_input_' + (line.line_key || ''))
+        if (el) {
+            el.focus()
+            el.select()
+        }
+    })
+}
+
+const commitLinePrice = (line) => {
+    const val = Number(line.custom_price_input)
+    if (!isNaN(val) && val >= 0) {
+        line.unit_price = round(val)
+        line.is_overridden = Math.abs(line.unit_price - line.original_price) > 0.001
+        updateLineTotal(line)
+    }
+    line.is_editing_price = false
+}
+
+const cancelEditLinePrice = (line) => {
+    line.is_editing_price = false
+}
+
+const resetLinePrice = (line) => {
+    line.unit_price = line.original_price
+    line.is_overridden = false
+    line.is_editing_price = false
+    updateLineTotal(line)
 }
 
 const incrementQty = (line) => {
@@ -345,8 +445,84 @@ const manualDiscountValue = ref(0)
 const showManualDiscount = ref(false)
 
 const depositAmount = ref(0)
+const depositAmountDisplay = ref('')
 const paymentMethod = ref('Cash')
 const paymentReference = ref('')
+
+const formatWithCommas = (val) => {
+    if (val === null || val === undefined || val === '') return ''
+    const str = String(val).replace(/[^0-9.]/g, '')
+    const parts = str.split('.')
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    if (parts.length > 1) {
+        return parts[0] + '.' + parts.slice(1).join('').slice(0, 2)
+    }
+    return parts[0]
+}
+
+const parseMoney = (val) => {
+    if (!val) return 0
+    const clean = String(val).replace(/[^0-9.]/g, '')
+    const parts = clean.split('.')
+    const normalized = parts[0] + (parts.length > 1 ? '.' + parts.slice(1).join('') : '')
+    const num = parseFloat(normalized)
+    return isNaN(num) ? 0 : Math.round(num * 100) / 100
+}
+
+const formatNumberWithDecimals = (val) => {
+    const num = parseMoney(val)
+    if (num <= 0) return ''
+    return num.toLocaleString('en-US', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })
+}
+
+const onDepositInput = (event) => {
+    const input = event.target
+    const origVal = input.value
+    const origCursor = input.selectionStart || 0
+    const commasBefore = (origVal.slice(0, origCursor).match(/,/g) || []).length
+
+    const formatted = formatWithCommas(origVal)
+    depositAmountDisplay.value = formatted
+    depositAmount.value = parseMoney(formatted)
+
+    nextTick(() => {
+        const newCommasBefore = (formatted.slice(0, origCursor).match(/,/g) || []).length
+        const shift = newCommasBefore - commasBefore
+        const newCursor = Math.max(0, Math.min(formatted.length, origCursor + shift))
+        input.setSelectionRange(newCursor, newCursor)
+    })
+}
+
+const onDepositBlur = () => {
+    const val = parseMoney(depositAmountDisplay.value)
+    if (val > total.value) {
+        depositAmount.value = total.value
+        depositAmountDisplay.value = formatNumberWithDecimals(total.value)
+    } else if (val > 0) {
+        depositAmount.value = val
+        depositAmountDisplay.value = formatNumberWithDecimals(val)
+    } else {
+        depositAmount.value = 0
+        depositAmountDisplay.value = ''
+    }
+}
+
+const setDepositPreset = (ratio) => {
+    if (ratio === 0) {
+        depositAmount.value = 0
+        depositAmountDisplay.value = ''
+    } else if (ratio === 0.5) {
+        const val = round(total.value * 0.5)
+        depositAmount.value = val
+        depositAmountDisplay.value = formatNumberWithDecimals(val)
+    } else if (ratio === 1) {
+        depositAmount.value = total.value
+        depositAmountDisplay.value = formatNumberWithDecimals(total.value)
+    }
+}
 
 const subtotal = computed(() => {
     return round(orderItems.value.reduce((sum, item) => sum + (Number(item.line_total) || 0), 0))
@@ -431,6 +607,7 @@ const balanceDue = computed(() => {
 watch(total, (newTotal) => {
     if (depositAmount.value > newTotal) {
         depositAmount.value = newTotal
+        depositAmountDisplay.value = newTotal > 0 ? formatNumberWithDecimals(newTotal) : ''
     }
 })
 
@@ -458,6 +635,17 @@ const submitOrder = () => {
         return
     }
 
+    depositAmount.value = parseMoney(depositAmountDisplay.value)
+    if (depositAmount.value > 0) {
+        depositAmountDisplay.value = formatNumberWithDecimals(depositAmount.value)
+    }
+    const depositVal = Number(depositAmount.value) || 0
+    if (depositVal > 0 && isTillMandatory.value) {
+        showOpenTillModal.value = true
+        submissionError.value = 'An active till session is required to record deposits. Please open your till session first.'
+        return
+    }
+
     isSubmitting.value = true
 
     const payload = {
@@ -467,8 +655,8 @@ const submitOrder = () => {
         discount_amount:     discountAmount.value,
         discount_type:       finalDiscountType.value,
         laundry_discount_id: selectedDiscountId.value,
-        deposit_amount:      Number(depositAmount.value) || 0,
-        payment_method:      Number(depositAmount.value) > 0 ? paymentMethod.value : null,
+        deposit_amount:      depositVal,
+        payment_method:      depositVal > 0 ? paymentMethod.value : null,
         payment_reference:   paymentReference.value || null,
         note:                orderNote.value || null,
     }
@@ -476,6 +664,9 @@ const submitOrder = () => {
     router.post(safeRoute('laundry.orders.store'), payload, {
         onError: (errs) => {
             submissionError.value = Object.values(errs).flat().join(' ')
+            if (errs.till || submissionError.value.toLowerCase().includes('till')) {
+                showOpenTillModal.value = true
+            }
             isSubmitting.value = false
         },
         onFinish: () => {
@@ -494,6 +685,29 @@ const submitOrder = () => {
                 <p class="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">Select customer, add clothes/services, set turnaround time</p>
             </div>
             <div class="flex items-center gap-2 flex-shrink-0">
+                <!-- Till Session Status Badge / Open Till Trigger -->
+                <button
+                    v-if="activeTill"
+                    @click="showTillManagementModal = true"
+                    type="button"
+                    class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer hover:bg-emerald-100"
+                    title="Click to view till shift details, add/remove cash, or close till"
+                >
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span class="hidden sm:inline">Till:</span>
+                    <span class="font-mono">{{ formatMoney(activeTill.summary?.expected_cash ?? activeTill.opening_amount ?? 0) }}</span>
+                </button>
+                <button
+                    v-else-if="props.settings?.require_till_opening || isTillMandatory"
+                    @click="showOpenTillModal = true"
+                    type="button"
+                    class="px-2.5 sm:px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                    title="Click to declare starting float and open till session"
+                >
+                    <span>⚠️</span>
+                    <span>Open Till</span>
+                </button>
+
                 <Link
                     :href="safeRoute('laundry.orders.index')"
                     class="px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 text-xs font-semibold transition flex items-center gap-1"
@@ -932,13 +1146,19 @@ const submitOrder = () => {
                                 <span>Order Lines ({{ orderItems.length }})</span>
                             </h3>
 
-                            <button
-                                v-if="orderItems.length > 0"
-                                @click="orderItems = []"
-                                class="text-xs text-rose-500 font-semibold hover:underline cursor-pointer"
-                            >
-                                Clear All
-                            </button>
+                            <div class="flex items-center gap-2">
+                                <span v-if="canOverridePrice" class="inline-flex items-center gap-1 text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-full border border-indigo-200/80 dark:border-indigo-800/60" title="Line price override is active">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/></svg>
+                                    <span>Price Override Enabled</span>
+                                </span>
+                                <button
+                                    v-if="orderItems.length > 0"
+                                    @click="orderItems = []"
+                                    class="text-xs text-rose-500 font-semibold hover:underline cursor-pointer"
+                                >
+                                    Clear All
+                                </button>
+                            </div>
                         </div>
 
                         <div v-if="orderItems.length === 0" class="py-12 text-center text-xs text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl space-y-2">
@@ -983,14 +1203,83 @@ const submitOrder = () => {
                                                     🏷️ {{ line.discount_name || 'Promo' }}
                                                 </span>
                                             </div>
-                                            <div class="flex items-center gap-1 text-[10px] font-mono flex-wrap">
-                                                <span v-if="line.discount_amount > 0" class="line-through text-slate-400 font-medium">
+                                            <div class="flex items-center gap-1.5 text-[10px] font-mono flex-wrap pt-0.5">
+                                                <!-- If discounted from promo/rule and not custom overridden -->
+                                                <span v-if="line.discount_amount > 0 && !line.is_overridden" class="line-through text-slate-400 font-medium">
                                                     {{ formatMoney(line.original_price) }}
                                                 </span>
-                                                <span :class="line.discount_amount > 0 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400 font-medium'">
-                                                    {{ formatMoney(line.unit_price) }} / {{ line.pricing_type === 'per_kg' ? 'kg' : 'pc' }}
-                                                </span>
-                                                <span v-if="line.discount_amount > 0" class="text-emerald-700 dark:text-emerald-300 font-semibold text-[9px]">
+
+                                                <!-- When Price Override is enabled -->
+                                                <template v-if="canOverridePrice">
+                                                    <!-- Not editing state -->
+                                                    <div v-if="!line.is_editing_price" class="inline-flex items-center gap-1 flex-wrap">
+                                                        <button
+                                                            type="button"
+                                                            @click="startEditLinePrice(line)"
+                                                            class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-indigo-50/80 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 transition cursor-pointer font-bold shadow-2xs group/override"
+                                                            title="Click to override line price"
+                                                        >
+                                                            <span>{{ formatMoney(line.unit_price) }}</span>
+                                                            <span class="text-slate-400 dark:text-slate-400 font-normal">/ {{ line.pricing_type === 'per_kg' ? 'kg' : 'pc' }}</span>
+                                                            <svg class="w-3 h-3 text-indigo-500 group-hover/override:scale-110 transition shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                            </svg>
+                                                        </button>
+                                                        <span v-if="line.is_overridden" class="px-1.5 py-0.2 rounded text-[9px] font-black bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40">
+                                                            Custom Price
+                                                        </span>
+                                                        <button
+                                                            v-if="line.is_overridden"
+                                                            type="button"
+                                                            @click="resetLinePrice(line)"
+                                                            class="text-[9px] text-slate-400 hover:text-rose-500 underline ml-0.5 cursor-pointer"
+                                                            title="Reset to catalog price"
+                                                        >
+                                                            Reset
+                                                        </button>
+                                                    </div>
+
+                                                    <!-- Inline Price Editing Input -->
+                                                    <div v-else class="inline-flex items-center gap-1 bg-white dark:bg-slate-800 p-0.5 rounded-lg border-2 border-indigo-500 shadow-sm animate-in fade-in zoom-in-95 duration-100">
+                                                        <span class="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 pl-1">{{ currencySymbol }}</span>
+                                                        <input
+                                                            :id="'price_input_' + (line.line_key || idx)"
+                                                            v-model.number="line.custom_price_input"
+                                                            @keydown.enter.prevent="commitLinePrice(line)"
+                                                            @keydown.escape.prevent="cancelEditLinePrice(line)"
+                                                            type="number"
+                                                            min="0"
+                                                            step="any"
+                                                            class="w-20 px-1 py-0.5 text-xs font-mono font-bold bg-transparent text-slate-900 dark:text-white outline-none"
+                                                            placeholder="0.00"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            @click="commitLinePrice(line)"
+                                                            class="w-5 h-5 flex items-center justify-center rounded bg-emerald-600 hover:bg-emerald-700 text-white transition shadow-2xs cursor-pointer"
+                                                            title="Save price"
+                                                        >
+                                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            @click="cancelEditLinePrice(line)"
+                                                            class="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                                                            title="Cancel"
+                                                        >
+                                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                        </button>
+                                                    </div>
+                                                </template>
+
+                                                <!-- Standard Static View (Price Override Disabled) -->
+                                                <template v-else>
+                                                    <span :class="line.discount_amount > 0 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-slate-400 font-medium'">
+                                                        {{ formatMoney(line.unit_price) }} / {{ line.pricing_type === 'per_kg' ? 'kg' : 'pc' }}
+                                                    </span>
+                                                </template>
+
+                                                <span v-if="line.discount_amount > 0 && !line.is_overridden" class="text-emerald-700 dark:text-emerald-300 font-semibold text-[9px]">
                                                     (Saved {{ formatMoney(line.discount_amount * line.quantity) }})
                                                 </span>
                                             </div>
@@ -1224,14 +1513,20 @@ const submitOrder = () => {
 
                             <div class="grid grid-cols-2 gap-2">
                                 <div>
-                                    <label class="block text-[10px] text-slate-400 mb-0.5">Deposit Amount</label>
-                                    <input
-                                        v-model.number="depositAmount"
-                                        type="number"
-                                        min="0"
-                                        :max="total"
-                                        class="w-full px-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800"
-                                    />
+                                    <label class="block text-[10px] text-slate-400 mb-0.5">Deposit Amount (₦)</label>
+                                    <div class="relative">
+                                        <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs pointer-events-none select-none">₦</span>
+                                        <input
+                                            v-model="depositAmountDisplay"
+                                            @input="onDepositInput"
+                                            @blur="onDepositBlur"
+                                            @focus="$event.target.select()"
+                                            type="text"
+                                            inputmode="decimal"
+                                            placeholder="0.00"
+                                            class="w-full pl-6 pr-2.5 py-1.5 text-xs font-bold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono text-slate-900 dark:text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 outline-none"
+                                        />
+                                    </div>
                                 </div>
                                 <div>
                                     <label class="block text-[10px] text-slate-400 mb-0.5">Method</label>
@@ -1249,25 +1544,40 @@ const submitOrder = () => {
                             <!-- Quick Deposit Presets (Touch Friendly) -->
                             <div class="flex items-center gap-1.5 pt-0.5">
                                 <button
-                                    @click="depositAmount = 0"
+                                    @click="setDepositPreset(0)"
                                     type="button"
                                     class="flex-1 py-1 px-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[10px] font-bold hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition cursor-pointer"
                                 >
                                     No Deposit
                                 </button>
                                 <button
-                                    @click="depositAmount = round(total * 0.5)"
+                                    @click="setDepositPreset(0.5)"
                                     type="button"
                                     class="flex-1 py-1 px-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[10px] font-bold hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition cursor-pointer"
                                 >
                                     50%
                                 </button>
                                 <button
-                                    @click="depositAmount = total"
+                                    @click="setDepositPreset(1)"
                                     type="button"
                                     class="flex-1 py-1 px-1.5 rounded-md border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/40 text-[10px] font-bold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 transition cursor-pointer"
                                 >
                                     Full Pay
+                                </button>
+                            </div>
+
+                            <!-- Warning if Till is required but closed -->
+                            <div v-if="depositAmount > 0 && isTillMandatory" class="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-1.5 min-w-0">
+                                    <span class="text-sm">⚠️</span>
+                                    <span class="text-[11px] font-semibold leading-tight">Cash till is closed. Open till to process deposit.</span>
+                                </div>
+                                <button
+                                    @click="showOpenTillModal = true"
+                                    type="button"
+                                    class="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-[10px] whitespace-nowrap cursor-pointer shadow-xs active:scale-95 shrink-0"
+                                >
+                                    Open Till
                                 </button>
                             </div>
 
@@ -1325,6 +1635,37 @@ const submitOrder = () => {
                 </svg>
             </button>
         </div>
+
+        <!-- Till Opening Modal -->
+        <OpenTillModal
+            v-if="showOpenTillModal"
+            :show="showOpenTillModal"
+            :mandatory="isTillMandatory"
+            :settings="settings"
+            @close="showOpenTillModal = false"
+            @opened="onTillOpened"
+        />
+
+        <!-- Till Management Modal (Dashboard, Cash Movements, Close Till) -->
+        <TillManagementModal
+            v-if="showTillManagementModal && activeTill"
+            :show="showTillManagementModal"
+            :session="activeTill"
+            :settings="settings"
+            :can-manage-cash-movements="canManageTillCashMovements"
+            @close="showTillManagementModal = false"
+            @updated="onTillUpdated"
+            @closed="onTillClosed"
+        />
+
+        <!-- Till Slip Printable Modal -->
+        <TillSlipModal
+            v-if="showTillSlipModal && slipSession"
+            :session="slipSession"
+            :summary="slipSession.summary"
+            :settings="settings"
+            @close="showTillSlipModal = false; slipSession = null"
+        />
     </div>
 </template>
 

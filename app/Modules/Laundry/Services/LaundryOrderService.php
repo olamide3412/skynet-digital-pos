@@ -15,6 +15,7 @@ use App\Modules\Laundry\Models\LaundryPayment;
 use App\Modules\Laundry\Models\LaundryService;
 use App\Modules\Laundry\Models\LaundrySetting;
 use App\Modules\Laundry\Services\LaundryDiscountService;
+use App\Services\RoleService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -77,16 +78,37 @@ class LaundryOrderService
 
                 // Resolve service discount if applicable
                 $originalPrice = $service ? (float) $service->price : (isset($line['original_price']) ? (float) $line['original_price'] : (isset($line['unit_price']) ? (float) $line['unit_price'] : 0));
-                $unitPrice = isset($line['unit_price']) ? (float) $line['unit_price'] : $originalPrice;
+                $unitPrice = isset($line['unit_price']) && $line['unit_price'] !== '' ? (float) $line['unit_price'] : $originalPrice;
                 $serviceDiscountId = $line['laundry_discount_id'] ?? null;
                 $lineDiscountAmount = isset($line['discount_amount']) ? (float) $line['discount_amount'] : 0;
 
-                if ($service && empty($line['unit_price'])) {
-                    $discountInfo = LaundryDiscountService::resolveServiceDiscount($service);
-                    if ($discountInfo['has_discount']) {
-                        $unitPrice = $discountInfo['discounted_price'];
-                        $serviceDiscountId = $discountInfo['discount_id'];
-                        $lineDiscountAmount = $discountInfo['discount_amount'];
+                if ($service) {
+                    $canOverridePrice = (bool) $laundrySettings->allow_price_override && (
+                        $user->isSuperAdmin() ||
+                        $user->isBranchAdmin() ||
+                        RoleService::can('laundry.override_price') ||
+                        RoleService::can('canEditPrice')
+                    );
+
+                    if (!$canOverridePrice) {
+                        // Enforce catalog price or system discount when price override is disabled or user lacks permission
+                        $discountInfo = LaundryDiscountService::resolveServiceDiscount($service);
+                        if ($discountInfo['has_discount']) {
+                            $unitPrice = $discountInfo['discounted_price'];
+                            $serviceDiscountId = $discountInfo['discount_id'];
+                            $lineDiscountAmount = $discountInfo['discount_amount'];
+                        } else {
+                            $unitPrice = (float) $service->price;
+                            $serviceDiscountId = null;
+                            $lineDiscountAmount = 0;
+                        }
+                    } elseif (!isset($line['unit_price']) || $line['unit_price'] === '') {
+                        $discountInfo = LaundryDiscountService::resolveServiceDiscount($service);
+                        if ($discountInfo['has_discount']) {
+                            $unitPrice = $discountInfo['discounted_price'];
+                            $serviceDiscountId = $discountInfo['discount_id'];
+                            $lineDiscountAmount = $discountInfo['discount_amount'];
+                        }
                     }
                 }
 
@@ -342,7 +364,7 @@ class LaundryOrderService
                     $canReleaseUnpaid = $user->isSuperAdmin()
                         || $user->isBranchAdmin()
                         || $user->hasPermissionTo('laundry.release_unpaid')
-                        || $laundrySettings->allow_unpaid_pickup;
+                        || (bool) $laundrySettings->allow_unpaid_pickup;
 
                     if (!$canReleaseUnpaid) {
                         throw ValidationException::withMessages([
@@ -351,7 +373,24 @@ class LaundryOrderService
                     }
 
                     // Post outstanding balance to customer's debt ledger
-                    $customer = $order->customer;
+                    $customer = $order->customer ?: ($order->customer_id ? PosCustomer::find($order->customer_id) : null);
+                    if (!$customer && $order->customer_phone) {
+                        $customer = PosCustomer::where('branch_id', $order->branch_id)
+                            ->where('phone', $order->customer_phone)
+                            ->first();
+                        if (!$customer && $order->customer_name) {
+                            $customer = PosCustomer::create([
+                                'branch_id' => $order->branch_id,
+                                'name'      => $order->customer_name,
+                                'phone'     => $order->customer_phone,
+                                'debt_bal'  => 0,
+                            ]);
+                        }
+                        if ($customer) {
+                            $order->update(['customer_id' => $customer->id]);
+                        }
+                    }
+
                     if ($customer) {
                         $balanceBefore = (float) $customer->debt_bal;
                         $balanceAfter  = round($balanceBefore + $balance, 2);
