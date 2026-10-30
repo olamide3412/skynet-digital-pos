@@ -92,6 +92,14 @@ const selectTab = (tabId) => {
 }
 
 // ── Form State ────────────────────────────────────────────────────────────────
+const initialOperatingMode = () => {
+    const pos = props.settings?.pos_enabled !== false && props.settings?.pos_enabled !== 0
+    const ldy = Boolean(props.settings?.laundry_enabled)
+    if (pos && ldy) return 'both'
+    if (ldy && !pos) return 'laundry_only'
+    return 'pos_only'
+}
+
 const form = useForm({
     _method:                       'PUT',
     active_tab:                    activeTab.value,
@@ -103,6 +111,9 @@ const form = useForm({
     business_email:                props.settings.business_email ?? '',
     logo:                          null,
     business_sector:               props.settings.business_sector ?? 'commerce',
+    operating_mode:                initialOperatingMode(),
+    pos_enabled:                   props.settings?.pos_enabled !== false && props.settings?.pos_enabled !== 0,
+    laundry_enabled:               Boolean(props.settings?.laundry_enabled),
     default_interface:             props.settings.default_interface ?? 'pos',
     require_till_opening:          props.settings.require_till_opening !== false && props.settings.require_till_opening !== 0,
     print_till_slip:               Boolean(props.settings.print_till_slip),
@@ -158,6 +169,33 @@ const form = useForm({
     is_tax_enabled:                Boolean(props.settings.is_tax_enabled),
     tax_percentage:                props.settings.tax_percentage ?? 7.5,
     is_accounting_vat_enabled:     Boolean(props.settings.is_accounting_vat_enabled),
+})
+
+// ── Operational Mode Management ──
+const setOperatingMode = (mode) => {
+    form.operating_mode = mode
+    if (mode === 'pos_only') {
+        form.pos_enabled = true
+        form.laundry_enabled = false
+        form.default_interface = 'pos'
+    } else if (mode === 'laundry_only') {
+        form.pos_enabled = false
+        form.laundry_enabled = true
+        form.default_interface = 'laundry'
+    } else if (mode === 'both') {
+        form.pos_enabled = true
+        form.laundry_enabled = true
+        if (!form.default_interface || !['pos', 'laundry'].includes(form.default_interface)) {
+            form.default_interface = 'pos'
+        }
+    }
+}
+
+watch(() => [props.settings?.pos_enabled, props.settings?.laundry_enabled, props.settings?.default_interface], () => {
+    form.pos_enabled = props.settings?.pos_enabled !== false && props.settings?.pos_enabled !== 0
+    form.laundry_enabled = Boolean(props.settings?.laundry_enabled)
+    form.operating_mode = initialOperatingMode()
+    form.default_interface = props.settings?.default_interface ?? 'pos'
 })
 
 // Pinned Items Search State
@@ -534,35 +572,224 @@ const liveWhatsAppPreview = computed(() => {
                         </div>
                     </div>
 
-                    <!-- Store Mode & Landing Interface Preference -->
-                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-4 shadow-xs">
-                        <div class="border-b border-slate-200 dark:border-slate-700 pb-3">
-                            <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                                <span>⚙️</span>
-                                <span>Branch Operating Sector & Interface Preference</span>
-                            </h2>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                Set business sector classification and choose default landing interface after staff sign in.
-                            </p>
+                    <!-- ══ OPERATIONAL MODE & BRANCH INTERFACES (POS, LAUNDRY, BOTH) ════════════════ -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 sm:p-6 space-y-5 shadow-xs">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700 gap-2">
+                            <div>
+                                <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+                                    <span>⚙️</span>
+                                    <span>Branch Operating Mode & Interfaces</span>
+                                </h2>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Select which operational capabilities and interfaces are active for this branch location.
+                                </p>
+                            </div>
+                            <div>
+                                <span
+                                    class="text-[11px] px-2.5 py-1 rounded-full font-bold uppercase tracking-wider border inline-flex items-center gap-1.5"
+                                    :class="form.operating_mode === 'both'
+                                        ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800'
+                                        : (form.operating_mode === 'laundry_only'
+                                            ? 'bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-400 border-purple-200 dark:border-purple-800'
+                                            : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800')"
+                                >
+                                    <span>{{ form.operating_mode === 'both' ? '🏪' : (form.operating_mode === 'laundry_only' ? '🧺' : '💻') }}</span>
+                                    <span>Mode: {{ form.operating_mode === 'both' ? 'Mixed Store (POS & Laundry)' : (form.operating_mode === 'laundry_only' ? 'Laundry Only' : 'Retail POS Only') }}</span>
+                                </span>
+                            </div>
                         </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- 3 Selectable Operating Mode Cards -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                            <!-- Card 1: Retail POS Only -->
+                            <div
+                                @click="setOperatingMode('pos_only')"
+                                :class="[
+                                    'relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between text-left select-none',
+                                    form.operating_mode === 'pos_only'
+                                        ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-xs ring-2 ring-emerald-500/20'
+                                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/50 dark:bg-slate-900/40'
+                                ]"
+                            >
+                                <div>
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-lg font-bold">
+                                            💻
+                                        </div>
+                                        <div
+                                            class="w-5 h-5 rounded-full border flex items-center justify-center transition-colors"
+                                            :class="form.operating_mode === 'pos_only'
+                                                ? 'border-emerald-500 bg-emerald-500 text-white'
+                                                : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'"
+                                        >
+                                            <svg v-if="form.operating_mode === 'pos_only'" class="w-3 h-3 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div class="font-extrabold text-sm text-slate-900 dark:text-white">
+                                        Retail POS Only
+                                    </div>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                        Standard retail register, item barcode scanning, stock control, purchase orders, till cash shifts, and public catalog.
+                                    </p>
+                                </div>
+                                <div class="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                    <span>✓ Pure retail register</span>
+                                </div>
+                            </div>
+
+                            <!-- Card 2: Laundry Only -->
+                            <div
+                                @click="setOperatingMode('laundry_only')"
+                                :class="[
+                                    'relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between text-left select-none',
+                                    form.operating_mode === 'laundry_only'
+                                        ? 'border-purple-500 bg-purple-50/50 dark:bg-purple-950/20 shadow-xs ring-2 ring-purple-500/20'
+                                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/50 dark:bg-slate-900/40'
+                                ]"
+                            >
+                                <div>
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="w-9 h-9 rounded-lg bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center text-lg font-bold">
+                                            🧺
+                                        </div>
+                                        <div
+                                            class="w-5 h-5 rounded-full border flex items-center justify-center transition-colors"
+                                            :class="form.operating_mode === 'laundry_only'
+                                                ? 'border-purple-500 bg-purple-500 text-white'
+                                                : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'"
+                                        >
+                                            <svg v-if="form.operating_mode === 'laundry_only'" class="w-3 h-3 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div class="font-extrabold text-sm text-slate-900 dark:text-white">
+                                        Laundry Only
+                                    </div>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                        Garment drop-off intake, stage tracking (Received, In Progress, Ready, Collected), pickup tickets, and customer WhatsApp alerts.
+                                    </p>
+                                </div>
+                                <div class="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5 text-[11px] font-semibold text-purple-600 dark:text-purple-400">
+                                    <span>✓ Pure laundry operations</span>
+                                </div>
+                            </div>
+
+                            <!-- Card 3: Both / Mixed Store -->
+                            <div
+                                @click="setOperatingMode('both')"
+                                :class="[
+                                    'relative p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col justify-between text-left select-none',
+                                    form.operating_mode === 'both'
+                                        ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 shadow-xs ring-2 ring-indigo-500/20'
+                                        : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 bg-slate-50/50 dark:bg-slate-900/40'
+                                ]"
+                            >
+                                <div>
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div class="w-9 h-9 rounded-lg bg-indigo-100 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-lg font-bold">
+                                            🏪
+                                        </div>
+                                        <div
+                                            class="w-5 h-5 rounded-full border flex items-center justify-center transition-colors"
+                                            :class="form.operating_mode === 'both'
+                                                ? 'border-indigo-500 bg-indigo-500 text-white'
+                                                : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'"
+                                        >
+                                            <svg v-if="form.operating_mode === 'both'" class="w-3 h-3 stroke-[3]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        </div>
+                                    </div>
+                                    <div class="font-extrabold text-sm text-slate-900 dark:text-white">
+                                        Both / Mixed Store
+                                    </div>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                                        Combined hybrid environment. Staff have full access to both Retail POS and Laundry operations with seamless switching from the sidebar.
+                                    </p>
+                                </div>
+                                <div class="mt-3 pt-2.5 border-t border-slate-200/60 dark:border-slate-700/60 flex items-center gap-1.5 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+                                    <span>✓ Hybrid Retail & Laundry</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Interface Safety Validation Errors -->
+                        <div v-if="form.errors.operating_mode || form.errors.pos_enabled || form.errors.laundry_enabled || form.errors.interface" class="p-3 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 rounded-xl text-xs text-rose-700 dark:text-rose-300 font-semibold flex items-center gap-2">
+                            <span>⚠️</span>
+                            <span>{{ form.errors.operating_mode || form.errors.pos_enabled || form.errors.laundry_enabled || form.errors.interface }}</span>
+                        </div>
+
+                        <!-- Default Staff Landing Interface Selection (Shown when Both is selected) -->
+                        <div v-if="form.operating_mode === 'both'" class="p-4 bg-indigo-50/40 dark:bg-indigo-950/20 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 space-y-3">
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Business Sector</label>
-                                <select v-model="form.business_sector" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-xs font-semibold transition">
+                                <span class="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Default Interface After Staff Login</span>
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    In a mixed store, staff can use both systems. Choose which interface attendants will land on immediately upon logging in (they can switch anytime from the sidebar).
+                                </p>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <label
+                                    :class="[
+                                        'p-3.5 rounded-xl border text-xs cursor-pointer transition flex items-start gap-3',
+                                        form.default_interface === 'pos'
+                                            ? 'bg-white dark:bg-slate-900 border-indigo-600 dark:border-indigo-500 shadow-xs ring-1 ring-indigo-500/20'
+                                            : 'bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 opacity-80 hover:opacity-100'
+                                    ]"
+                                >
+                                    <input
+                                        type="radio"
+                                        value="pos"
+                                        v-model="form.default_interface"
+                                        class="mt-0.5 accent-indigo-600"
+                                    />
+                                    <div>
+                                        <div class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                            <span>💻</span> Retail POS Terminal
+                                        </div>
+                                        <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                            Staff land directly on the sales checkout register.
+                                        </div>
+                                    </div>
+                                </label>
+
+                                <label
+                                    :class="[
+                                        'p-3.5 rounded-xl border text-xs cursor-pointer transition flex items-start gap-3',
+                                        form.default_interface === 'laundry'
+                                            ? 'bg-white dark:bg-slate-900 border-indigo-600 dark:border-indigo-500 shadow-xs ring-1 ring-indigo-500/20'
+                                            : 'bg-white/60 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 opacity-80 hover:opacity-100'
+                                    ]"
+                                >
+                                    <input
+                                        type="radio"
+                                        value="laundry"
+                                        v-model="form.default_interface"
+                                        class="mt-0.5 accent-indigo-600"
+                                    />
+                                    <div>
+                                        <div class="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                            <span>🧺</span> Laundry Operations Hub
+                                        </div>
+                                        <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                            Staff land on laundry garment intake & order pipeline.
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Business Sector Preset Selection -->
+                        <div class="pt-3 border-t border-slate-200 dark:border-slate-700">
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Business Sector Preset</label>
+                            <div class="max-w-md">
+                                <select v-model="form.business_sector" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-xs font-semibold transition">
                                     <option value="commerce">General Commerce / Retail Store</option>
                                     <option value="health">Pharmacy / Healthcare & Chemist</option>
                                 </select>
                                 <p class="text-[11px] text-slate-400 mt-1">Health mode optimizes expiry warnings and batch tracking.</p>
-                            </div>
-
-                            <div v-if="isMixedStore">
-                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Default Staff Landing Interface</label>
-                                <select v-model="form.default_interface" class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-xs font-semibold transition">
-                                    <option value="pos">Retail POS Terminal</option>
-                                    <option value="laundry">Laundry Operations Hub</option>
-                                </select>
-                                <p class="text-[11px] text-slate-400 mt-1">Attendants land on this screen after logging in (they can switch anytime from the sidebar).</p>
                             </div>
                         </div>
                     </div>

@@ -19,6 +19,10 @@ const formatCurrency = (val) => {
         maximumFractionDigits: 2,
     })
 }
+
+const formatNumber = (val) => {
+    return Number(val || 0).toLocaleString('en-NG')
+}
 </script>
 
 <template>
@@ -56,7 +60,15 @@ const formatCurrency = (val) => {
                     class="flex-1 md:flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2"
                 >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                    <span>View Reports</span>
+                    <span>Sales & POS Reports</span>
+                </Link>
+                <Link
+                    v-if="kpis.has_laundry_branches"
+                    :href="route('org.reports.laundry')"
+                    class="flex-1 md:flex-none px-4 py-2.5 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2"
+                >
+                    <span>🧺</span>
+                    <span>Laundry Reports</span>
                 </Link>
                 <Link
                     :href="route('org.ai.chat')"
@@ -142,7 +154,17 @@ const formatCurrency = (val) => {
                 <div class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                     {{ formatCurrency(kpis.today_revenue) }}
                 </div>
-                <div class="text-xs text-slate-500">{{ kpis.today_orders }} completed sales today</div>
+                <div class="text-xs text-slate-500 truncate">
+                    <span v-if="kpis.has_pos_branches && kpis.has_laundry_branches">
+                        POS: {{ formatCurrency(kpis.today_pos_revenue) }} · Ldy: {{ formatCurrency(kpis.today_laundry_revenue) }}
+                    </span>
+                    <span v-else-if="kpis.has_laundry_branches">
+                        {{ kpis.today_orders }} laundry orders & collections
+                    </span>
+                    <span v-else>
+                        {{ kpis.today_orders }} completed sales today
+                    </span>
+                </div>
             </div>
 
             <!-- This Week Revenue -->
@@ -173,8 +195,79 @@ const formatCurrency = (val) => {
             </div>
         </div>
 
-        <!-- Secondary Alert Strip -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <!-- ── Adaptive Operational Indicators Strip ─────────────────────── -->
+        <!-- 1. Pure Laundry Organization Strip -->
+        <div v-if="kpis.has_laundry_branches && !kpis.has_pos_branches" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="bg-cyan-50/50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-900/40 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-bold text-cyan-800 dark:text-cyan-300">Processing Orders</div>
+                    <div class="text-[11px] text-cyan-700/80 dark:text-cyan-400/80">Active garment pipeline</div>
+                </div>
+                <span class="text-xl font-black text-cyan-600 dark:text-cyan-400">{{ kpis.active_laundry_orders }}</span>
+            </div>
+
+            <div class="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/40 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-bold text-emerald-800 dark:text-emerald-300">Ready for Pickup</div>
+                    <div class="text-[11px] text-emerald-700/80 dark:text-emerald-400/80">Awaiting customer retrieval</div>
+                </div>
+                <span class="text-xl font-black text-emerald-600 dark:text-emerald-400">{{ kpis.ready_laundry_orders }}</span>
+            </div>
+
+            <div class="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-bold text-rose-800 dark:text-rose-300">Overdue Deliveries</div>
+                    <div class="text-[11px] text-rose-700/80 dark:text-rose-400/80">Past scheduled delivery date</div>
+                </div>
+                <span class="text-xl font-black text-rose-600 dark:text-rose-400">{{ kpis.overdue_laundry_orders }}</span>
+            </div>
+
+            <div class="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-bold text-amber-800 dark:text-amber-300">Uncollected Receivables</div>
+                    <div class="text-[11px] text-amber-700/80 dark:text-amber-400/80">Total outstanding customer balance</div>
+                </div>
+                <span class="text-lg font-black text-amber-600 dark:text-amber-400">{{ formatCurrency(kpis.unpaid_laundry_debt) }}</span>
+            </div>
+        </div>
+
+        <!-- 2. Mixed Organization (Both POS & Laundry) Strip -->
+        <div v-else-if="kpis.has_laundry_branches && kpis.has_pos_branches" class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div class="bg-cyan-50/50 dark:bg-cyan-950/20 border border-cyan-200 dark:border-cyan-900/40 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-bold text-cyan-800 dark:text-cyan-300">Active Laundry Orders</div>
+                    <div class="text-[11px] text-cyan-700/80 dark:text-cyan-400/80">{{ kpis.ready_laundry_orders }} ready for pickup</div>
+                </div>
+                <span class="text-xl font-black text-cyan-600 dark:text-cyan-400">{{ kpis.active_laundry_orders }}</span>
+            </div>
+
+            <div class="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-bold text-amber-800 dark:text-amber-300">Retail Low Stock</div>
+                    <div class="text-[11px] text-amber-700/80 dark:text-amber-400/80">Items below reorder point</div>
+                </div>
+                <span class="text-xl font-black text-amber-600 dark:text-amber-400">{{ kpis.low_stock_count }}</span>
+            </div>
+
+            <div class="bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-bold text-rose-800 dark:text-rose-300">Overdue / Expiring</div>
+                    <div class="text-[11px] text-rose-700/80 dark:text-rose-400/80">{{ kpis.overdue_laundry_orders }} ldy · {{ kpis.expiring_count }} retail</div>
+                </div>
+                <span class="text-xl font-black text-rose-600 dark:text-rose-400">{{ kpis.overdue_laundry_orders + kpis.expiring_count }}</span>
+            </div>
+
+            <div class="bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-900/40 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                    <div class="text-xs font-bold text-purple-800 dark:text-purple-300">Unpaid Laundry Debt</div>
+                    <div class="text-[11px] text-purple-700/80 dark:text-purple-400/80">Pending customer balance</div>
+                </div>
+                <span class="text-lg font-black text-purple-600 dark:text-purple-400">{{ formatCurrency(kpis.unpaid_laundry_debt) }}</span>
+            </div>
+        </div>
+
+        <!-- 3. Retail Only Strip -->
+        <div v-else class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div class="bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 rounded-2xl p-4 flex items-center justify-between">
                 <div>
                     <div class="text-xs font-bold text-amber-800 dark:text-amber-300">Low Stock Alerts</div>
@@ -224,7 +317,28 @@ const formatCurrency = (val) => {
                                 </div>
                                 <div>
                                     <h3 class="text-sm font-bold text-slate-900 dark:text-white leading-tight">{{ branch.name }}</h3>
-                                    <span class="text-[11px] font-mono text-purple-600 dark:text-purple-400">/{{ branch.slug }}</span>
+                                    <div class="flex items-center gap-1.5 mt-0.5">
+                                        <span class="text-[11px] font-mono text-purple-600 dark:text-purple-400">/{{ branch.slug }}</span>
+                                        <!-- Operating Mode Badge -->
+                                        <span
+                                            v-if="branch.operating_mode === 'laundry_only'"
+                                            class="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800"
+                                        >
+                                            🧺 Laundry
+                                        </span>
+                                        <span
+                                            v-else-if="branch.operating_mode === 'pos_only'"
+                                            class="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                                        >
+                                            💻 POS
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                                        >
+                                            🏪 Mixed
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                             <span
@@ -243,24 +357,36 @@ const formatCurrency = (val) => {
                         <!-- Mini metrics -->
                         <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                             <div class="p-2 bg-slate-50 dark:bg-slate-950/60 rounded-xl">
-                                <div class="text-[10px] text-slate-400 uppercase font-semibold">Today's Sales</div>
+                                <div class="text-[10px] text-slate-400 uppercase font-semibold">
+                                    {{ branch.operating_mode === 'laundry_only' ? "Today's Intake" : "Today's Sales" }}
+                                </div>
                                 <div class="font-bold text-slate-900 dark:text-white mt-0.5">{{ formatCurrency(branch.today_revenue) }}</div>
                             </div>
                             <div class="p-2 bg-slate-50 dark:bg-slate-950/60 rounded-xl">
-                                <div class="text-[10px] text-slate-400 uppercase font-semibold">Catalog Items</div>
-                                <div class="font-bold text-slate-900 dark:text-white mt-0.5">{{ branch.items_count }} products</div>
+                                <template v-if="branch.operating_mode === 'laundry_only'">
+                                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Active Laundry</div>
+                                    <div class="font-bold text-cyan-600 dark:text-cyan-400 mt-0.5">{{ branch.active_laundry_count }} orders</div>
+                                </template>
+                                <template v-else-if="branch.operating_mode === 'both'">
+                                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Active Laundry</div>
+                                    <div class="font-bold text-indigo-600 dark:text-indigo-400 mt-0.5">{{ branch.active_laundry_count }} orders</div>
+                                </template>
+                                <template v-else>
+                                    <div class="text-[10px] text-slate-400 uppercase font-semibold">Catalog Items</div>
+                                    <div class="font-bold text-slate-900 dark:text-white mt-0.5">{{ branch.items_count }} products</div>
+                                </template>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Direct POS action -->
+                    <!-- Direct POS / Laundry Hub action -->
                     <div class="pt-2">
                         <a
                             :href="branch.pos_url"
                             target="_blank"
                             class="w-full py-2.5 px-3 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
                         >
-                            <span>Open Branch POS</span>
+                            <span>{{ branch.operating_mode === 'laundry_only' ? 'Open Laundry Hub' : 'Open Branch POS' }}</span>
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                         </a>
                     </div>
@@ -268,18 +394,18 @@ const formatCurrency = (val) => {
             </div>
         </div>
 
-        <!-- ── Recent Sales Transactions ─────────────────────────────────── -->
+        <!-- ── Recent Transactions Across Organization ─────────────────────── -->
         <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-4">
             <div class="flex items-center justify-between">
                 <div>
                     <h2 class="text-base font-bold text-slate-900 dark:text-white">Recent Transactions Across Organization</h2>
-                    <p class="text-xs text-slate-500">Live sales feed from your registered branches.</p>
+                    <p class="text-xs text-slate-500">Live operational feed across your registered retail and laundry branches.</p>
                 </div>
                 <Link
                     :href="route('org.reports')"
                     class="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline"
                 >
-                    Full Reports &rarr;
+                    Full Sales Reports &rarr;
                 </Link>
             </div>
 
@@ -287,32 +413,47 @@ const formatCurrency = (val) => {
                 <table class="w-full text-left text-xs">
                     <thead class="bg-slate-50 dark:bg-slate-800/60 uppercase font-semibold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                         <tr>
-                            <th class="px-4 py-3">Receipt</th>
+                            <th class="px-4 py-3">Type</th>
+                            <th class="px-4 py-3">Reference / Order</th>
                             <th class="px-4 py-3">Branch</th>
-                            <th class="px-4 py-3">Cashier</th>
+                            <th class="px-4 py-3">Handled By</th>
                             <th class="px-4 py-3">Customer</th>
                             <th class="px-4 py-3">Amount</th>
-                            <th class="px-4 py-3">Payment</th>
+                            <th class="px-4 py-3">Status / Payment</th>
                             <th class="px-4 py-3 text-right">Time</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         <tr v-for="sale in recent_sales" :key="sale.id" class="hover:bg-slate-50/50 dark:hover:bg-slate-850/50 transition">
-                            <td class="px-4 py-3 font-mono font-bold text-purple-600 dark:text-purple-400">{{ sale.receipt_number }}</td>
+                            <td class="px-4 py-3">
+                                <span
+                                    v-if="sale.type === 'laundry'"
+                                    class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800"
+                                >
+                                    🧺 Laundry
+                                </span>
+                                <span
+                                    v-else
+                                    class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                                >
+                                    🛒 Retail
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 font-mono font-bold text-slate-900 dark:text-white">{{ sale.receipt_number }}</td>
                             <td class="px-4 py-3 font-medium text-slate-900 dark:text-white">{{ sale.branch_name }}</td>
                             <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ sale.cashier_name }}</td>
                             <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ sale.customer_name }}</td>
                             <td class="px-4 py-3 font-bold text-slate-900 dark:text-white">{{ formatCurrency(sale.final_total) }}</td>
                             <td class="px-4 py-3">
                                 <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                                    {{ sale.payment_method }}
+                                    {{ sale.status || sale.payment_method }}
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-right text-slate-400">{{ sale.created_at }}</td>
                         </tr>
                         <tr v-if="!recent_sales.length">
-                            <td colspan="7" class="px-4 py-8 text-center text-slate-400">
-                                No recent sales recorded yet for this organization.
+                            <td colspan="8" class="px-4 py-8 text-center text-slate-400">
+                                No recent transactions recorded yet for this organization.
                             </td>
                         </tr>
                     </tbody>

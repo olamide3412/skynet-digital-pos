@@ -84,13 +84,13 @@ const branchNameLabel = computed(() => {
 
             <!-- Header Action Controls -->
             <div class="flex items-center gap-2 flex-wrap">
-                <!-- Tab: Switch to Analytics -->
+                <!-- Tab: Switch to Sales & POS Reports -->
                 <Link
                     :href="route('org.reports', { branch_id: selectedBranch || undefined })"
                     class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition flex items-center gap-1.5 shadow-xs"
                 >
                     <svg class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                    <span>Analytics Dashboard</span>
+                    <span>Sales & POS Reports</span>
                 </Link>
 
                 <!-- Active Z-Report Tab -->
@@ -98,6 +98,16 @@ const branchNameLabel = computed(() => {
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     <span>End of Day (Z-Report)</span>
                 </span>
+
+                <!-- Tab: Laundry Reports (Conditional) -->
+                <Link
+                    v-if="$page.props.org_has_laundry_branches"
+                    :href="route('org.reports.laundry', { branch_id: selectedBranch || undefined })"
+                    class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition flex items-center gap-1.5 shadow-xs"
+                >
+                    <span>🧺</span>
+                    <span>Laundry Reports</span>
+                </Link>
 
                 <!-- Print Z-Report Button -->
                 <button
@@ -230,9 +240,11 @@ const branchNameLabel = computed(() => {
             <!-- Cash Flow Formula Strip -->
             <div class="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 text-xs">
                 <div class="bg-white/5 rounded-xl p-3 border border-white/5">
-                    <span class="text-[10px] font-bold uppercase text-slate-400 block">1. Cash Sales</span>
+                    <span class="text-[10px] font-bold uppercase text-slate-400 block">1. Cash Collections</span>
                     <span class="text-base font-black text-emerald-400 block mt-0.5">{{ formatCurrency(reconciliation.cash_sales) }}</span>
-                    <span class="text-[10px] text-slate-400">{{ formatNumber(reconciliation.total_sales_count) }} completed sales</span>
+                    <span class="text-[10px] text-purple-200 block truncate">
+                        POS: {{ formatCurrency(reconciliation.pos_cash) }} · Ldy: {{ formatCurrency(reconciliation.laundry_cash) }}
+                    </span>
                 </div>
 
                 <div class="bg-white/5 rounded-xl p-3 border border-white/5">
@@ -244,7 +256,9 @@ const branchNameLabel = computed(() => {
                 <div class="bg-white/5 rounded-xl p-3 border border-white/5">
                     <span class="text-[10px] font-bold uppercase text-slate-400 block">3. Returns & Refunds</span>
                     <span class="text-base font-black text-rose-400 block mt-0.5">{{ formatCurrency(reconciliation.returns_worth) }}</span>
-                    <span class="text-[10px] text-slate-400">{{ reconciliation.returns_count }} items returned</span>
+                    <span class="text-[10px] text-purple-200 block truncate">
+                        POS: {{ formatCurrency(reconciliation.pos_returns) }} · Ldy: {{ formatCurrency(reconciliation.laundry_refunds) }}
+                    </span>
                 </div>
 
                 <div class="bg-white/5 rounded-xl p-3 border border-white/5">
@@ -258,21 +272,25 @@ const branchNameLabel = computed(() => {
         <!-- ── Daily Financial Breakdown Grid ───────────────────────────── -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
-                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Gross Sales Revenue</div>
+                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Gross Total Takings</div>
                 <div class="text-xl font-black text-slate-900 dark:text-white mt-1">{{ formatCurrency(reconciliation.total_sales_revenue) }}</div>
-                <div class="text-[11px] text-slate-500 mt-1">Discounts: {{ formatCurrency(reconciliation.total_discounts) }}</div>
+                <div class="text-[11px] text-slate-500 mt-1 truncate">
+                    POS: {{ formatCurrency(reconciliation.pos_revenue) }} · Ldy: {{ formatCurrency(reconciliation.laundry_revenue) }}
+                </div>
             </div>
 
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
                 <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Bank Transfer / Card</div>
                 <div class="text-xl font-black text-indigo-600 dark:text-indigo-400 mt-1">{{ formatCurrency(reconciliation.bank_transfer_sales) }}</div>
-                <div class="text-[11px] text-slate-500 mt-1">Digital payments collected</div>
+                <div class="text-[11px] text-slate-500 mt-1 truncate">
+                    POS: {{ formatCurrency(reconciliation.pos_bank) }} · Ldy: {{ formatCurrency(reconciliation.laundry_bank) }}
+                </div>
             </div>
 
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
-                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Unpaid Credit / Debt</div>
+                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Unpaid Credit / Balance</div>
                 <div class="text-xl font-black text-amber-600 dark:text-amber-400 mt-1">{{ formatCurrency(reconciliation.debt_recorded) }}</div>
-                <div class="text-[11px] text-slate-500 mt-1">Credit sales issued today</div>
+                <div class="text-[11px] text-slate-500 mt-1">Pending credit sales & laundry balances</div>
             </div>
 
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs">
@@ -287,7 +305,7 @@ const branchNameLabel = computed(() => {
             <div class="flex items-center justify-between">
                 <div>
                     <h2 class="text-base font-black text-slate-900 dark:text-white">Branch-by-Branch Daily Close-out</h2>
-                    <p class="text-xs text-slate-500">Summary of today's sales, cash collections, and expenses for each branch.</p>
+                    <p class="text-xs text-slate-500">Summary of today's retail sales, laundry collections, and net drawer balance for each branch.</p>
                 </div>
             </div>
 
@@ -296,7 +314,7 @@ const branchNameLabel = computed(() => {
                     <thead class="bg-slate-50 dark:bg-slate-850 uppercase font-bold text-slate-500 dark:text-slate-400 border-y border-slate-200 dark:border-slate-800">
                         <tr>
                             <th class="py-3 px-4">Branch</th>
-                            <th class="py-3 px-4 text-right">Orders</th>
+                            <th class="py-3 px-4 text-right">Orders / Intake</th>
                             <th class="py-3 px-4 text-right">Total Revenue</th>
                             <th class="py-3 px-4 text-right">Cash Collected</th>
                             <th class="py-3 px-4 text-right">Bank / Card</th>
@@ -307,11 +325,41 @@ const branchNameLabel = computed(() => {
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         <tr v-for="b in branch_breakdown" :key="b.branch_id" class="hover:bg-slate-50/50 dark:hover:bg-slate-850/50">
-                            <td class="py-3 px-4 font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                                <span>📍 {{ b.branch_name }}</span>
+                            <td class="py-3 px-4 font-bold text-slate-900 dark:text-white">
+                                <div class="flex items-center gap-1.5">
+                                    <span>📍 {{ b.branch_name }}</span>
+                                    <span
+                                        v-if="b.operating_mode === 'laundry_only'"
+                                        class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800"
+                                    >
+                                        🧺 Laundry
+                                    </span>
+                                    <span
+                                        v-else-if="b.operating_mode === 'pos_only'"
+                                        class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                                    >
+                                        💻 POS
+                                    </span>
+                                    <span
+                                        v-else
+                                        class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                                    >
+                                        🏪 Mixed
+                                    </span>
+                                </div>
                             </td>
-                            <td class="py-3 px-4 text-right font-semibold">{{ formatNumber(b.sales_count) }}</td>
-                            <td class="py-3 px-4 text-right font-bold text-slate-900 dark:text-white">{{ formatCurrency(b.revenue) }}</td>
+                            <td class="py-3 px-4 text-right font-semibold">
+                                <div>{{ formatNumber(b.sales_count) }}</div>
+                                <div v-if="b.operating_mode === 'both'" class="text-[10px] text-slate-400 font-normal">
+                                    POS: {{ b.pos_orders_count }} · Ldy: {{ b.laundry_orders_count }}
+                                </div>
+                            </td>
+                            <td class="py-3 px-4 text-right font-bold text-slate-900 dark:text-white">
+                                <div>{{ formatCurrency(b.revenue) }}</div>
+                                <div v-if="b.operating_mode === 'both'" class="text-[10px] text-slate-400 font-normal">
+                                    POS: {{ formatCurrency(b.pos_revenue) }} · Ldy: {{ formatCurrency(b.laundry_revenue) }}
+                                </div>
+                            </td>
                             <td class="py-3 px-4 text-right font-semibold text-emerald-600 dark:text-emerald-400">{{ formatCurrency(b.cash) }}</td>
                             <td class="py-3 px-4 text-right font-semibold text-indigo-600 dark:text-indigo-400">{{ formatCurrency(b.bank) }}</td>
                             <td class="py-3 px-4 text-right text-rose-500">{{ formatCurrency(b.returns) }}</td>
@@ -333,14 +381,14 @@ const branchNameLabel = computed(() => {
             <!-- Cashier / Staff Shift Performance -->
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs flex flex-col space-y-4">
                 <div>
-                    <h2 class="text-base font-black text-slate-900 dark:text-white">Cashier Shift Summary</h2>
-                    <p class="text-xs text-slate-500">Sales volume and cash collected per staff member today.</p>
+                    <h2 class="text-base font-black text-slate-900 dark:text-white">Staff / Shift Performance Summary</h2>
+                    <p class="text-xs text-slate-500">Sales volume and cash collected per retail cashier and laundry staff member today.</p>
                 </div>
                 <div class="overflow-x-auto flex-1">
                     <table class="w-full text-left text-xs">
                         <thead class="text-slate-400 uppercase font-semibold border-b border-slate-100 dark:border-slate-800 pb-2">
                             <tr>
-                                <th class="pb-2">Cashier</th>
+                                <th class="pb-2">Staff</th>
                                 <th class="pb-2 text-right">Orders</th>
                                 <th class="pb-2 text-right">Cash</th>
                                 <th class="pb-2 text-right">Bank / Card</th>
@@ -350,7 +398,12 @@ const branchNameLabel = computed(() => {
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                             <tr v-for="c in cashier_stats" :key="c.user_id" class="hover:bg-slate-50/50 dark:hover:bg-slate-850/50">
                                 <td class="py-2.5 font-bold text-slate-800 dark:text-slate-200">
-                                    <div>{{ c.name }}</div>
+                                    <div class="flex items-center gap-1.5">
+                                        <span>{{ c.name }}</span>
+                                        <span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                            {{ c.role_label }}
+                                        </span>
+                                    </div>
                                     <div class="text-[10px] text-slate-400">{{ c.branch_name }}</div>
                                 </td>
                                 <td class="py-2.5 text-right font-semibold">{{ formatNumber(c.orders_count) }}</td>
@@ -366,25 +419,33 @@ const branchNameLabel = computed(() => {
                 </div>
             </div>
 
-            <!-- Items Sold Today -->
+            <!-- Items & Services Sold Today -->
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs flex flex-col space-y-4">
                 <div>
-                    <h2 class="text-base font-black text-slate-900 dark:text-white">Daily Products Sold Breakdown</h2>
-                    <p class="text-xs text-slate-500">Top selling inventory items sold today.</p>
+                    <h2 class="text-base font-black text-slate-900 dark:text-white">Daily Products & Services Sold</h2>
+                    <p class="text-xs text-slate-500">Top selling inventory items and laundry services processed today.</p>
                 </div>
                 <div class="overflow-x-auto flex-1">
                     <table class="w-full text-left text-xs">
                         <thead class="text-slate-400 uppercase font-semibold border-b border-slate-100 dark:border-slate-800 pb-2">
                             <tr>
-                                <th class="pb-2">Item Name</th>
-                                <th class="pb-2 text-right">Qty Sold</th>
+                                <th class="pb-2">Item / Service</th>
+                                <th class="pb-2 text-right">Volume</th>
                                 <th class="pb-2 text-right">Total Revenue</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                             <tr v-for="(it, idx) in item_breakdown" :key="idx" class="hover:bg-slate-50/50 dark:hover:bg-slate-850/50">
-                                <td class="py-2.5 font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[200px]">
-                                    {{ it.name }}
+                                <td class="py-2.5 font-semibold text-slate-800 dark:text-slate-200">
+                                    <div class="flex items-center gap-1.5 truncate max-w-[220px]">
+                                        <span v-if="it.type === 'service'" class="text-[10px] px-1 py-0.2 rounded bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 font-bold">
+                                            🧺 Service
+                                        </span>
+                                        <span v-else class="text-[10px] px-1 py-0.2 rounded bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 font-bold">
+                                            🛒 Product
+                                        </span>
+                                        <span class="truncate">{{ it.name }}</span>
+                                    </div>
                                 </td>
                                 <td class="py-2.5 text-right font-bold text-slate-900 dark:text-white">
                                     {{ formatNumber(it.qty) }} {{ it.unit }}
@@ -394,7 +455,7 @@ const branchNameLabel = computed(() => {
                                 </td>
                             </tr>
                             <tr v-if="!item_breakdown.length">
-                                <td colspan="3" class="py-6 text-center text-slate-400">No items sold today.</td>
+                                <td colspan="3" class="py-6 text-center text-slate-400">No items or services recorded today.</td>
                             </tr>
                         </tbody>
                     </table>
@@ -445,9 +506,10 @@ const branchNameLabel = computed(() => {
                 <table class="w-full text-left text-xs">
                     <thead class="bg-slate-50 dark:bg-slate-850 uppercase font-bold text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                         <tr>
-                            <th class="px-4 py-3">Receipt ID</th>
+                            <th class="px-4 py-3">Type</th>
+                            <th class="px-4 py-3">Reference / Receipt</th>
                             <th class="px-4 py-3">Branch</th>
-                            <th class="px-4 py-3">Cashier</th>
+                            <th class="px-4 py-3">Staff</th>
                             <th class="px-4 py-3">Customer</th>
                             <th class="px-4 py-3 text-right">Cash</th>
                             <th class="px-4 py-3 text-right">Bank / Card</th>
@@ -457,6 +519,20 @@ const branchNameLabel = computed(() => {
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                         <tr v-for="s in sales.data" :key="s.id" class="hover:bg-slate-50/50 dark:hover:bg-slate-850/50">
+                            <td class="px-4 py-3">
+                                <span
+                                    v-if="s.type === 'laundry'"
+                                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800"
+                                >
+                                    🧺 Laundry
+                                </span>
+                                <span
+                                    v-else
+                                    class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                                >
+                                    🛒 Retail
+                                </span>
+                            </td>
                             <td class="px-4 py-3 font-mono font-bold text-purple-600 dark:text-purple-400">{{ s.receipt_number }}</td>
                             <td class="px-4 py-3 font-medium text-slate-900 dark:text-white">{{ s.branch_name }}</td>
                             <td class="px-4 py-3 text-slate-600 dark:text-slate-300">{{ s.cashier_name }}</td>
@@ -467,7 +543,7 @@ const branchNameLabel = computed(() => {
                             <td class="px-4 py-3 text-right text-slate-400">{{ s.created_at }}</td>
                         </tr>
                         <tr v-if="!sales.data.length">
-                            <td colspan="8" class="px-4 py-8 text-center text-slate-400">No transactions recorded for this day.</td>
+                            <td colspan="9" class="px-4 py-8 text-center text-slate-400">No transactions recorded for this day.</td>
                         </tr>
                     </tbody>
                 </table>

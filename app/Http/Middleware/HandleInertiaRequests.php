@@ -182,6 +182,30 @@ class HandleInertiaRequests extends Middleware
             'csrf_token' => csrf_token(),
             'turnstileSiteKey' => config('services.turnstile.site_key'),
             'organizations_enabled' => (bool) config('organizations.enabled'),
+            'org_has_laundry_branches' => function () use ($user) {
+                if (!$user) return false;
+                $orgId = $user->organization_id;
+                if (!$orgId && $user->isSuperAdmin()) {
+                    $orgId = \App\Models\Organization::first()?->id;
+                }
+                if (!$orgId) return false;
+                return \App\Models\Branch::where('organization_id', $orgId)
+                    ->with('settings')
+                    ->get()
+                    ->contains(fn($b) => $b->laundryEnabled());
+            },
+            'org_has_pos_branches' => function () use ($user) {
+                if (!$user) return false;
+                $orgId = $user->organization_id;
+                if (!$orgId && $user->isSuperAdmin()) {
+                    $orgId = \App\Models\Organization::first()?->id;
+                }
+                if (!$orgId) return false;
+                return \App\Models\Branch::where('organization_id', $orgId)
+                    ->with('settings')
+                    ->get()
+                    ->contains(fn($b) => $b->posEnabled());
+            },
 
             // ── POS permissions (Spatie-backed, branch-scoped) ─────────────────
             'pos_permissions' => fn() => $user

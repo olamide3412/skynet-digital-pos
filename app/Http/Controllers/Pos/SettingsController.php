@@ -103,6 +103,9 @@ class SettingsController extends Controller
                 'logo'                     => 'nullable|image|max:2048',
                 'require_till_opening'     => 'nullable|boolean',
                 'print_till_slip'          => 'nullable|boolean',
+                'operating_mode'           => 'nullable|string|in:pos_only,laundry_only,both',
+                'pos_enabled'              => 'nullable|boolean',
+                'laundry_enabled'          => 'nullable|boolean',
                 'default_interface'        => 'nullable|string|in:pos,laundry',
                 'business_sector'          => 'nullable|in:health,commerce',
             ]);
@@ -130,15 +133,83 @@ class SettingsController extends Controller
                 'require_till_opening' => !empty($data['require_till_opening']),
                 'print_till_slip'      => !empty($data['print_till_slip']),
             ];
-            if (!empty($data['default_interface'])) {
+
+            // Resolve operational mode & module flags
+            $newPos = null;
+            $newLaundry = null;
+
+            if (isset($data['operating_mode'])) {
+                if ($data['operating_mode'] === 'pos_only') {
+                    $newPos = true;
+                    $newLaundry = false;
+                } elseif ($data['operating_mode'] === 'laundry_only') {
+                    $newPos = false;
+                    $newLaundry = true;
+                } elseif ($data['operating_mode'] === 'both') {
+                    $newPos = true;
+                    $newLaundry = true;
+                }
+            } else {
+                if (array_key_exists('pos_enabled', $data)) {
+                    $newPos = (bool) $data['pos_enabled'];
+                }
+                if (array_key_exists('laundry_enabled', $data)) {
+                    $newLaundry = (bool) $data['laundry_enabled'];
+                }
+            }
+
+            if ($newPos !== null || $newLaundry !== null) {
+                $finalPos = $newPos ?? (bool) $branch?->posEnabled();
+                $finalLaundry = $newLaundry ?? (bool) $branch?->laundryEnabled();
+
+                if (!$finalPos && !$finalLaundry) {
+                    return back()->withErrors(['operating_mode' => 'At least one operational interface (POS or Laundry) must remain enabled for the branch.']);
+                }
+
+                // Turning POS off check
+                if ($branch && $branch->posEnabled() && !$finalPos) {
+                    $openTillCount = \App\Models\TillSession::where('branch_id', $branch->id)->where('status', 'open')->count();
+                    if ($openTillCount > 0) {
+                        return back()->withErrors(['operating_mode' => "Cannot switch to Laundry Only while {$openTillCount} till session(s) are currently open in this branch. Please close and reconcile all open till sessions first."]);
+                    }
+                }
+
+                // Turning Laundry off check
+                if ($branch && $branch->laundryEnabled() && !$finalLaundry) {
+                    $openOrdersCount = \App\Modules\Laundry\Models\LaundryOrder::where('branch_id', $branch->id)
+                        ->whereIn('status', ['received', 'in_progress', 'ready'])
+                        ->count();
+                    if ($openOrdersCount > 0) {
+                        return back()->withErrors(['operating_mode' => "Cannot disable Laundry module while {$openOrdersCount} laundry order(s) are active (Received, In Progress, or Ready). Complete or cancel all open orders first."]);
+                    }
+                }
+
+                $posUpdates['pos_enabled'] = $finalPos;
+                $posUpdates['laundry_enabled'] = $finalLaundry;
+
+                if ($finalPos && !$finalLaundry) {
+                    $posUpdates['default_interface'] = 'pos';
+                } elseif (!$finalPos && $finalLaundry) {
+                    $posUpdates['default_interface'] = 'laundry';
+                } elseif (!empty($data['default_interface'])) {
+                    $posUpdates['default_interface'] = $data['default_interface'];
+                }
+
+                // Ensure default laundry settings exist if laundry is active
+                if ($finalLaundry && $branch) {
+                    LaundrySetting::getForBranch($branch->id);
+                }
+            } elseif (!empty($data['default_interface'])) {
                 $posUpdates['default_interface'] = $data['default_interface'];
             }
+
             if (!empty($data['business_sector'])) {
                 $posUpdates['business_sector'] = $data['business_sector'];
             }
+
             $settings->update($posUpdates);
 
-            return back()->with('success', 'General business & shift accountability settings saved.');
+            return back()->with('success', 'General business & operating mode settings saved.');
         }
 
         // ── 2. Tab: Retail & POS Settings ──────────────────────────────────────
@@ -315,6 +386,9 @@ class SettingsController extends Controller
             'require_till_opening'     => 'nullable|boolean',
             'print_till_slip'          => 'nullable|boolean',
             'public_catalog_enabled'   => 'nullable|boolean',
+            'operating_mode'           => 'nullable|string|in:pos_only,laundry_only,both',
+            'pos_enabled'              => 'nullable|boolean',
+            'laundry_enabled'          => 'nullable|boolean',
             'default_interface'        => 'nullable|string|in:pos,laundry',
             // Optional laundry fields if provided
             'default_turnaround_hours' => 'nullable|integer|min:1|max:720',
@@ -349,8 +423,69 @@ class SettingsController extends Controller
         $settingsData = array_diff_key($data, array_flip([
             'business_name', 'business_address', 'business_contact_number', 'business_email', 'logo', '_method',
             'public_catalog_enabled', 'default_turnaround_hours', 'unclaimed_after_days', 'order_prefix',
-            'whatsapp_template', 'default_country_code', 'receipt_footer', 'allow_price_override', 'allow_unpaid_pickup', 'active_tab', 'tab'
+            'whatsapp_template', 'default_country_code', 'receipt_footer', 'allow_price_override', 'allow_unpaid_pickup', 'active_tab', 'tab', 'operating_mode'
         ]));
+
+        $newPos = null;
+        $newLaundry = null;
+
+        if (isset($data['operating_mode'])) {
+            if ($data['operating_mode'] === 'pos_only') {
+                $newPos = true;
+                $newLaundry = false;
+            } elseif ($data['operating_mode'] === 'laundry_only') {
+                $newPos = false;
+                $newLaundry = true;
+            } elseif ($data['operating_mode'] === 'both') {
+                $newPos = true;
+                $newLaundry = true;
+            }
+        } else {
+            if (array_key_exists('pos_enabled', $data)) {
+                $newPos = (bool) $data['pos_enabled'];
+            }
+            if (array_key_exists('laundry_enabled', $data)) {
+                $newLaundry = (bool) $data['laundry_enabled'];
+            }
+        }
+
+        if ($newPos !== null || $newLaundry !== null) {
+            $finalPos = $newPos ?? (bool) $branch?->posEnabled();
+            $finalLaundry = $newLaundry ?? (bool) $branch?->laundryEnabled();
+
+            if (!$finalPos && !$finalLaundry) {
+                return back()->withErrors(['operating_mode' => 'At least one operational interface (POS or Laundry) must remain enabled for the branch.']);
+            }
+
+            if ($branch && $branch->posEnabled() && !$finalPos) {
+                $openTillCount = \App\Models\TillSession::where('branch_id', $branch->id)->where('status', 'open')->count();
+                if ($openTillCount > 0) {
+                    return back()->withErrors(['operating_mode' => "Cannot switch to Laundry Only while {$openTillCount} till session(s) are currently open in this branch. Please close and reconcile all open till sessions first."]);
+                }
+            }
+
+            if ($branch && $branch->laundryEnabled() && !$finalLaundry) {
+                $openOrdersCount = \App\Modules\Laundry\Models\LaundryOrder::where('branch_id', $branch->id)
+                    ->whereIn('status', ['received', 'in_progress', 'ready'])
+                    ->count();
+                if ($openOrdersCount > 0) {
+                    return back()->withErrors(['operating_mode' => "Cannot disable Laundry module while {$openOrdersCount} laundry order(s) are active (Received, In Progress, or Ready). Complete or cancel all open orders first."]);
+                }
+            }
+
+            $settingsData['pos_enabled'] = $finalPos;
+            $settingsData['laundry_enabled'] = $finalLaundry;
+
+            if ($finalPos && !$finalLaundry) {
+                $settingsData['default_interface'] = 'pos';
+            } elseif (!$finalPos && $finalLaundry) {
+                $settingsData['default_interface'] = 'laundry';
+            }
+
+            if ($finalLaundry && $branch) {
+                LaundrySetting::getForBranch($branch->id);
+            }
+        }
 
         $settings = PosSettings::current();
         $settings->update($settingsData);

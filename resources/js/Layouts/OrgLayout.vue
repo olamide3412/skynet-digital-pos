@@ -1,5 +1,5 @@
 <script setup>
-import { ref, provide } from 'vue'
+import { ref, provide, computed } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 import FlashMessages from '@/Components/FlashMessages.vue'
@@ -16,74 +16,91 @@ provide('isMobileSidebarOpen', isMobileOpen)
 
 const page = usePage()
 
-const navLinks = [
-    {
-        label: 'Dashboard',
-        route: 'org.dashboard',
-        match: 'Org/Dashboard',
-        icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
-    },
-    {
-        label: 'My Branches',
-        route: 'org.branches',
-        match: 'Org/Branches',
-        icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
-    },
-    {
-        label: 'Staff & Users',
-        route: 'org.users.index',
-        match: 'Org/Users',
-        icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
-    },
-    {
-        label: 'Product Links',
-        route: 'org.product-links.index',
-        match: 'Org/ProductLinks',
-        icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1',
-    },
-    {
-        label: 'Analytics & Reports',
-        route: 'org.reports',
-        match: 'Org/Reports/Index',
-        icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
-    },
-    {
-        label: 'End of Day (Z-Report)',
-        route: 'org.reports.end-of-day',
-        match: 'Org/Reports/EndOfDay',
-        icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
-    },
-    {
-        label: 'Ask AI Copilot',
-        route: 'org.ai.chat',
-        match: 'Org/AI',
-        icon: 'M13 10V3L4 14h7v7l9-11h-7z',
-    },
-    {
-        label: 'AI Credits & Add-ons',
-        route: 'org.credits.index',
-        match: 'Org/Credits',
-        icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
-    },
-    {
-        label: 'Subscription & Plans',
-        route: 'org.subscription.index',
-        match: 'Org/Subscription',
-        icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
-    },
-    {
-        label: 'Ecommerce Activity',
-        route: 'org.ecommerce-activity.index',
-        match: 'Org/EcommerceActivity',
-        icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z',
-    },
-    {
-        label: 'Activity Logs',
-        route: 'org.activity-logs',
-        match: 'Org/ActivityLogs',
-        icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
-    },
-]
+const navLinks = computed(() => {
+    const links = [
+        {
+            label: 'Dashboard',
+            route: 'org.dashboard',
+            match: 'Org/Dashboard',
+            icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6',
+        },
+        {
+            label: 'End of Day (Z-Report)',
+            route: 'org.reports.end-of-day',
+            match: 'Org/Reports/EndOfDay',
+            icon: 'M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
+        },
+        {
+            label: 'My Branches',
+            route: 'org.branches',
+            match: 'Org/Branches',
+            icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5m0 0v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4',
+        },
+        {
+            label: 'Staff & Users',
+            route: 'org.users.index',
+            match: 'Org/Users',
+            icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
+        },
+        {
+            label: 'Product Links',
+            route: 'org.product-links.index',
+            match: 'Org/ProductLinks',
+            icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1',
+        },
+        {
+            label: 'Sales & POS Reports',
+            route: 'org.reports',
+            match: 'Org/Reports/Index',
+            icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z',
+        },
+    ]
+
+    // Only display Laundry Reports if the organization actually has at least one laundry branch
+    if (page.props.org_has_laundry_branches) {
+        links.push({
+            label: 'Laundry Reports',
+            route: 'org.reports.laundry',
+            match: 'Org/Reports/Laundry',
+            icon: 'M19 4h-3V2h-2v2h-4V2H8v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V8h14v12z M12 9c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm0 6c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z',
+        })
+    }
+
+    links.push(
+        {
+            label: 'Ask AI Copilot',
+            route: 'org.ai.chat',
+            match: 'Org/AI',
+            icon: 'M13 10V3L4 14h7v7l9-11h-7z',
+        },
+        {
+            label: 'AI Credits & Add-ons',
+            route: 'org.credits.index',
+            match: 'Org/Credits',
+            icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z',
+        },
+        {
+            label: 'Subscription & Plans',
+            route: 'org.subscription.index',
+            match: 'Org/Subscription',
+            icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z',
+        },
+        {
+            label: 'Ecommerce Activity',
+            route: 'org.ecommerce-activity.index',
+            match: 'Org/EcommerceActivity',
+            icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z',
+        },
+        {
+            label: 'Activity Logs',
+            route: 'org.activity-logs',
+            match: 'Org/ActivityLogs',
+            icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',
+        }
+    )
+
+    return links
+})
 
 function isActive(link) {
     return page.component.startsWith(link.match)

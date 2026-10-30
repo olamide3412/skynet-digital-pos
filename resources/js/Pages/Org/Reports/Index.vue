@@ -405,20 +405,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <Head :title="`Analytics & Reports - ${organization.name}`" />
+    <Head :title="`Sales & POS Reports - ${organization.name}`" />
 
     <div class="max-w-7xl mx-auto space-y-7">
         <!-- ── Top Header & Tab Navigation ───────────────────────────────── -->
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
             <div>
                 <div class="flex items-center gap-2">
-                    <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Organization Analytics & Reports</h1>
+                    <h1 class="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Sales & POS Reports</h1>
                     <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 dark:bg-purple-950/70 text-purple-700 dark:text-purple-300">
                         Live Data
                     </span>
                 </div>
                 <p class="text-xs text-slate-500 mt-1">
-                    Visual graphical insights, multi-branch performance metrics, and financial reporting for {{ organization.name }}.
+                    Visual sales analytics, multi-branch POS performance metrics, and inventory velocity for {{ organization.name }}.
                 </p>
             </div>
 
@@ -427,7 +427,7 @@ onBeforeUnmount(() => {
                 <!-- Tab: Performance & Analytics (Active) -->
                 <span class="px-3.5 py-2 rounded-xl text-xs font-black bg-purple-600 text-white shadow-md shadow-purple-600/20 flex items-center gap-1.5 cursor-default">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-                    <span>Analytics Dashboard</span>
+                    <span>Sales & POS Reports</span>
                 </span>
 
                 <!-- Tab: End of Day (Z-Report) -->
@@ -437,6 +437,16 @@ onBeforeUnmount(() => {
                 >
                     <svg class="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     <span>End of Day (Z-Report)</span>
+                </Link>
+
+                <!-- Tab: Laundry Reports (Conditional) -->
+                <Link
+                    v-if="$page.props.org_has_laundry_branches"
+                    :href="route('org.reports.laundry', { branch_id: selectedBranch || undefined })"
+                    class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition flex items-center gap-1.5 shadow-xs"
+                >
+                    <span>🧺</span>
+                    <span>Laundry Reports</span>
                 </Link>
 
                 <!-- Export CSV Button -->

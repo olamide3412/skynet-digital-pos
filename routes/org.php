@@ -61,6 +61,8 @@ Route::prefix('org')->name('org.')->group(function () {
         Route::get('/reports',             [\App\Http\Controllers\Org\OrgReportController::class, 'index'])->name('reports');
         Route::get('/reports/end-of-day',   [\App\Http\Controllers\Org\OrgReportController::class, 'endOfDay'])->name('reports.end-of-day');
         Route::get('/reports/export',       [\App\Http\Controllers\Org\OrgReportController::class, 'exportSales'])->name('reports.export');
+        Route::get('/reports/laundry',        [\App\Http\Controllers\Org\OrgLaundryReportController::class, 'index'])->name('reports.laundry');
+        Route::get('/reports/laundry/export', [\App\Http\Controllers\Org\OrgLaundryReportController::class, 'export'])->name('reports.laundry.export');
         Route::get('/ai/chat',   [\App\Http\Controllers\Org\OrgAiController::class, 'chat'])->name('ai.chat');
         Route::post('/ai/chat/ask', [\App\Http\Controllers\Org\OrgAiController::class, 'ask'])->name('ai.chat.ask');
         Route::delete('/ai/chat/clear', [\App\Http\Controllers\Org\OrgAiController::class, 'clear'])->name('ai.chat.clear');

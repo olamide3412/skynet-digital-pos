@@ -11,6 +11,9 @@ use App\Models\Sale;
 use App\Models\SaleOrder;
 use App\Models\SaleReturnItem;
 use App\Models\User;
+use App\Modules\Laundry\Models\LaundryOrder;
+use App\Modules\Laundry\Models\LaundryOrderItem;
+use App\Modules\Laundry\Models\LaundryPayment;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -102,7 +105,8 @@ class OrgReportController extends Controller
         // All branches belonging to this organization
         $orgBranches = Branch::where('organization_id', $org->id)
             ->orderBy('name')
-            ->get(['id', 'name', 'slug']);
+            ->get();
+
         $allBranchIds = $orgBranches->pluck('id')->all();
 
         // Optional filter: specific branch within organization
@@ -403,8 +407,9 @@ class OrgReportController extends Controller
 
         // All branches belonging to this organization
         $orgBranches = Branch::where('organization_id', $org->id)
+            ->with(['settings'])
             ->orderBy('name')
-            ->get(['id', 'name', 'slug']);
+            ->get();
         $allBranchIds = $orgBranches->pluck('id')->all();
 
         // Selected branch filter (optional)
@@ -423,20 +428,57 @@ class OrgReportController extends Controller
         $startDate  = $targetDate->copy()->startOfDay();
         $endDate    = $targetDate->copy()->endOfDay();
 
-        // ── 1. Daily Sales Summary ────────────────────────────────────────────
+        // ── 1. Daily POS Sales Summary ────────────────────────────────────────
         $daySales = Sale::whereIn('branch_id', $targetBranchIds)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->get(['id', 'branch_id', 'user_id', 'final_total', 'discount_amount', 'profit_made', 'cash', 'bank_transfer', 'is_debt', 'payment_method']);
 
-        $totalSalesCount    = $daySales->count();
-        $totalSalesRevenue  = (float) $daySales->sum('final_total');
-        $totalDiscounts     = (float) $daySales->sum('discount_amount');
-        $cashCollectedSales = (float) $daySales->sum('cash');
-        $bankTransferSales  = (float) $daySales->sum('bank_transfer');
-        $debtRecordedSales  = (float) $daySales->where('is_debt', true)->sum('final_total');
-        $totalGrossProfit   = (float) $daySales->sum('profit_made');
+        $posSalesCount       = $daySales->count();
+        $posSalesRevenue     = (float) $daySales->sum('final_total');
+        $posDiscounts        = (float) $daySales->sum('discount_amount');
+        $cashCollectedSales  = (float) $daySales->sum('cash');
+        $bankTransferSales   = (float) $daySales->sum('bank_transfer');
+        $debtRecordedSales   = (float) $daySales->where('is_debt', true)->sum('final_total');
+        $posGrossProfit      = (float) $daySales->sum('profit_made');
 
-        // ── 2. Debt Collections (Debt payments received today) ────────────────
+        // ── 2. Daily Laundry Activity Summary ─────────────────────────────────
+        $dayLaundryPayments = LaundryPayment::with(['recorder:id,name,username,branch_id', 'order:id,order_number,branch_id'])
+            ->whereIn('branch_id', $targetBranchIds)
+            ->whereBetween('paid_at', [$startDate, $endDate])
+            ->get();
+
+        $dayLaundryOrders = LaundryOrder::whereIn('branch_id', $targetBranchIds)
+            ->whereBetween('received_at', [$startDate, $endDate])
+            ->get();
+
+        $laundryOrdersCount     = $dayLaundryOrders->count();
+        $laundryDiscounts       = (float) $dayLaundryOrders->sum('discount_amount');
+        $laundryOrdersTotal     = (float) $dayLaundryOrders->sum('total');
+        $laundryDebtRecorded    = (float) $dayLaundryOrders->where('status', '!=', 'cancelled')->sum('balance');
+
+        $laundryPaymentsOnly    = $dayLaundryPayments->where('type', 'payment');
+        $laundryRefundsOnly     = $dayLaundryPayments->where('type', 'refund');
+
+        $laundryGrossCollected  = (float) $laundryPaymentsOnly->sum('amount');
+        $laundryRefundsTotal    = (float) $laundryRefundsOnly->sum('amount');
+        $laundryNetCollections  = max(0.0, round($laundryGrossCollected - $laundryRefundsTotal, 2));
+
+        $cashCollectedLaundry   = (float) $laundryPaymentsOnly->filter(function ($p) {
+            $m = strtolower($p->method ?? '');
+            return str_contains($m, 'cash');
+        })->sum('amount');
+
+        $bankTransferLaundry    = (float) $laundryPaymentsOnly->filter(function ($p) {
+            $m = strtolower($p->method ?? '');
+            return !str_contains($m, 'cash');
+        })->sum('amount');
+
+        $laundryCashRefunds     = (float) $laundryRefundsOnly->filter(function ($p) {
+            $m = strtolower($p->method ?? '');
+            return empty($m) || str_contains($m, 'cash');
+        })->sum('amount');
+
+        // ── 3. Debt Collections (Debt payments received today) ────────────────
         $debtPayments = DebtPayment::with(['customer:id,name', 'user:id,name', 'branch:id,name'])
             ->whereIn('branch_id', $targetBranchIds)
             ->whereBetween('created_at', [$startDate, $endDate])
@@ -445,16 +487,18 @@ class OrgReportController extends Controller
 
         $debtRecoveredTotal = (float) $debtPayments->sum('amount');
 
-        // ── 3. Customer Returns / Refunds Today ───────────────────────────────
+        // ── 4. Customer Returns / Refunds Today ───────────────────────────────
         $returnsToday = SaleReturnItem::with(['sale:id,receipt_id,branch_id', 'item:id,item_name', 'user:id,name'])
             ->whereHas('sale', fn($q) => $q->whereIn('branch_id', $targetBranchIds))
             ->whereBetween('created_at', [$startDate, $endDate])
             ->get();
 
-        $returnsCount = $returnsToday->count();
-        $returnsWorth = (float) $returnsToday->sum('refund_amount');
+        $posReturnsCount   = $returnsToday->count();
+        $posReturnsWorth   = (float) $returnsToday->sum('refund_amount');
+        $totalReturnsCount = $posReturnsCount + $laundryRefundsOnly->count();
+        $totalReturnsWorth = $posReturnsWorth + $laundryRefundsTotal;
 
-        // ── 4. Daily Operating Expenses ───────────────────────────────────────
+        // ── 5. Daily Operating Expenses ───────────────────────────────────────
         $expensesToday = Expense::with(['category:id,name', 'user:id,name', 'branch:id,name'])
             ->whereIn('branch_id', $targetBranchIds)
             ->whereBetween('expense_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
@@ -462,88 +506,185 @@ class OrgReportController extends Controller
 
         $expensesTotal = (float) $expensesToday->sum('amount');
 
-        // ── 5. Cash Drawer Reconciliation Calculations ────────────────────────
-        // Expected Cash in Hand = Cash Sales + Cash Debt Recovered - Refunds - Expenses
-        $totalCashInflow = $cashCollectedSales + $debtRecoveredTotal;
-        $totalCashOutflow = $returnsWorth + $expensesTotal;
-        $netCashPosition = $totalCashInflow - $totalCashOutflow;
-        $netDailyTakings = ($totalSalesRevenue + $debtRecoveredTotal) - ($returnsWorth + $expensesTotal);
+        // ── 6. Unified Cash Drawer Reconciliation Calculations ────────────────
+        $totalCashSales      = $cashCollectedSales + $cashCollectedLaundry;
+        $totalBankSales      = $bankTransferSales + $bankTransferLaundry;
+        $totalCashInflow     = $totalCashSales + $debtRecoveredTotal;
+        $totalCashOutflow    = ($posReturnsWorth + $laundryCashRefunds) + $expensesTotal;
+        $netCashPosition     = $totalCashInflow - $totalCashOutflow;
+
+        $totalRevenueTakings = $posSalesRevenue + $laundryNetCollections;
+        $totalOrdersCount    = $posSalesCount + $laundryOrdersCount;
+        $totalDiscounts      = $posDiscounts + $laundryDiscounts;
+        $totalDebtRecorded   = $debtRecordedSales + $laundryDebtRecorded;
+        $netDailyTakings     = ($totalRevenueTakings + $debtRecoveredTotal) - ($totalReturnsWorth + $expensesTotal);
 
         $reconciliation = [
-            'total_sales_revenue'   => $totalSalesRevenue,
-            'total_sales_count'     => $totalSalesCount,
-            'total_discounts'       => $totalDiscounts,
-            'cash_sales'            => $cashCollectedSales,
-            'bank_transfer_sales'   => $bankTransferSales,
-            'debt_recorded'         => $debtRecordedSales,
-            'debt_recovered'        => $debtRecoveredTotal,
-            'returns_count'         => $returnsCount,
-            'returns_worth'         => $returnsWorth,
-            'expenses_total'        => $expensesTotal,
-            'total_cash_inflow'     => $totalCashInflow,
-            'total_cash_outflow'    => $totalCashOutflow,
-            'net_cash_position'     => $netCashPosition,
-            'net_daily_takings'     => $netDailyTakings,
-            'gross_profit'          => $totalGrossProfit,
-            'net_profit'            => $totalGrossProfit - $expensesTotal,
+            'total_sales_revenue'   => round($totalRevenueTakings, 2),
+            'total_sales_count'     => $totalOrdersCount,
+            'total_discounts'       => round($totalDiscounts, 2),
+            'cash_sales'            => round($totalCashSales, 2),
+            'bank_transfer_sales'   => round($totalBankSales, 2),
+            'debt_recorded'         => round($totalDebtRecorded, 2),
+            'debt_recovered'        => round($debtRecoveredTotal, 2),
+            'returns_count'         => $totalReturnsCount,
+            'returns_worth'         => round($totalReturnsWorth, 2),
+            'expenses_total'        => round($expensesTotal, 2),
+            'total_cash_inflow'     => round($totalCashInflow, 2),
+            'total_cash_outflow'    => round($totalCashOutflow, 2),
+            'net_cash_position'     => round($netCashPosition, 2),
+            'net_daily_takings'     => round($netDailyTakings, 2),
+            'gross_profit'          => round($posGrossProfit + $laundryNetCollections, 2),
+            'net_profit'            => round(($posGrossProfit + $laundryNetCollections) - $expensesTotal, 2),
+            // Explicit sub-breakdowns for transparent UI/Print
+            'pos_revenue'           => round($posSalesRevenue, 2),
+            'laundry_revenue'       => round($laundryNetCollections, 2),
+            'pos_cash'              => round($cashCollectedSales, 2),
+            'laundry_cash'          => round($cashCollectedLaundry, 2),
+            'pos_bank'              => round($bankTransferSales, 2),
+            'laundry_bank'          => round($bankTransferLaundry, 2),
+            'pos_orders_count'      => $posSalesCount,
+            'laundry_orders_count'  => $laundryOrdersCount,
+            'pos_returns'           => round($posReturnsWorth, 2),
+            'laundry_refunds'       => round($laundryRefundsTotal, 2),
         ];
 
-        // ── 6. Branch-by-Branch Breakdown (When multiple or all branches) ────
+        // ── 7. Branch-by-Branch Breakdown (With Operating Mode Awareness) ─────
         $branchBreakdown = [];
         foreach ($orgBranches as $branch) {
+            $isPos = $branch->posEnabled();
+            $isLaundry = $branch->laundryEnabled();
+            $opMode = ($isPos && $isLaundry) ? 'both' : ($isLaundry ? 'laundry_only' : 'pos_only');
+
+            // POS for branch
             $bSales = $daySales->where('branch_id', $branch->id);
             $bDebts = $debtPayments->where('branch_id', $branch->id);
             $bRet   = $returnsToday->filter(fn($r) => $r->sale?->branch_id === $branch->id);
             $bExp   = $expensesToday->where('branch_id', $branch->id);
 
-            $bRev  = (float) $bSales->sum('final_total');
-            $bCash = (float) $bSales->sum('cash');
-            $bBank = (float) $bSales->sum('bank_transfer');
+            $bPosRev  = (float) $bSales->sum('final_total');
+            $bPosCash = (float) $bSales->sum('cash');
+            $bPosBank = (float) $bSales->sum('bank_transfer');
             $bDebtRec = (float) $bDebts->sum('amount');
-            $bRetW = (float) $bRet->sum('refund_amount');
-            $bExpW = (float) $bExp->sum('amount');
-            $bNetCash = ($bCash + $bDebtRec) - ($bRetW + $bExpW);
+            $bRetW    = (float) $bRet->sum('refund_amount');
+            $bExpW    = (float) $bExp->sum('amount');
+
+            // Laundry for branch
+            $bLdyOrders  = $dayLaundryOrders->where('branch_id', $branch->id);
+            $bLdyPay     = $dayLaundryPayments->where('branch_id', $branch->id);
+            $bLdyPayOnly = $bLdyPay->where('type', 'payment');
+            $bLdyRefOnly = $bLdyPay->where('type', 'refund');
+
+            $bLdyGross   = (float) $bLdyPayOnly->sum('amount');
+            $bLdyRef     = (float) $bLdyRefOnly->sum('amount');
+            $bLdyNet     = max(0.0, round($bLdyGross - $bLdyRef, 2));
+
+            $bLdyCash    = (float) $bLdyPayOnly->filter(fn($p) => str_contains(strtolower($p->method ?? ''), 'cash'))->sum('amount');
+            $bLdyBank    = (float) $bLdyPayOnly->filter(fn($p) => !str_contains(strtolower($p->method ?? ''), 'cash'))->sum('amount');
+            $bLdyCashRef = (float) $bLdyRefOnly->filter(fn($p) => empty($p->method) || str_contains(strtolower($p->method ?? ''), 'cash'))->sum('amount');
+
+            // Combined Branch Metrics
+            $bTotalRev     = round($bPosRev + $bLdyNet, 2);
+            $bTotalCash    = round($bPosCash + $bLdyCash, 2);
+            $bTotalBank    = round($bPosBank + $bLdyBank, 2);
+            $bTotalReturns = round($bRetW + $bLdyRef, 2);
+            $bNetCash      = round(($bTotalCash + $bDebtRec) - ($bRetW + $bLdyCashRef + $bExpW), 2);
+            $bOrdersCount  = $bSales->count() + $bLdyOrders->count();
 
             $branchBreakdown[] = [
-                'branch_id'   => $branch->id,
-                'branch_name' => $branch->name,
-                'slug'        => $branch->slug,
-                'sales_count' => $bSales->count(),
-                'revenue'     => $bRev,
-                'cash'        => $bCash,
-                'bank'        => $bBank,
-                'debt_recovered' => $bDebtRec,
-                'returns'     => $bRetW,
-                'expenses'    => $bExpW,
-                'net_cash'    => $bNetCash,
-                'is_active'   => $selectedBranchId ? ($selectedBranchId === $branch->id) : true,
+                'branch_id'            => $branch->id,
+                'branch_name'          => $branch->name,
+                'slug'                 => $branch->slug,
+                'operating_mode'       => $opMode,
+                'sales_count'          => $bOrdersCount,
+                'pos_orders_count'     => $bSales->count(),
+                'laundry_orders_count' => $bLdyOrders->count(),
+                'revenue'              => $bTotalRev,
+                'pos_revenue'          => $bPosRev,
+                'laundry_revenue'      => $bLdyNet,
+                'cash'                 => $bTotalCash,
+                'bank'                 => $bTotalBank,
+                'debt_recovered'       => $bDebtRec,
+                'returns'              => $bTotalReturns,
+                'expenses'             => $bExpW,
+                'net_cash'             => $bNetCash,
+                'is_active'            => $selectedBranchId ? ($selectedBranchId === $branch->id) : true,
             ];
         }
 
-        // ── 7. Cashier Shift Performance Breakdown ────────────────────────────
+        // ── 8. Unified Cashier & Laundry Staff Shift Performance ──────────────
+        $staffMap = [];
+
+        // Aggregate POS Cashiers
+        foreach ($daySales->groupBy('user_id') as $uId => $cSales) {
+            $uId = (int) $uId;
+            if (!isset($staffMap[$uId])) {
+                $staffMap[$uId] = [
+                    'user_id'     => $uId,
+                    'pos_orders'  => 0,
+                    'ldy_orders'  => 0,
+                    'cash'        => 0.0,
+                    'bank'        => 0.0,
+                    'total_sales' => 0.0,
+                ];
+            }
+            $staffMap[$uId]['pos_orders']  += $cSales->count();
+            $staffMap[$uId]['cash']        += (float) $cSales->sum('cash');
+            $staffMap[$uId]['bank']        += (float) $cSales->sum('bank_transfer');
+            $staffMap[$uId]['total_sales'] += (float) $cSales->sum('final_total');
+        }
+
+        // Aggregate Laundry Staff
+        foreach ($laundryPaymentsOnly->groupBy('recorded_by') as $uId => $lPays) {
+            $uId = (int) $uId;
+            if (!$uId) continue;
+            if (!isset($staffMap[$uId])) {
+                $staffMap[$uId] = [
+                    'user_id'     => $uId,
+                    'pos_orders'  => 0,
+                    'ldy_orders'  => 0,
+                    'cash'        => 0.0,
+                    'bank'        => 0.0,
+                    'total_sales' => 0.0,
+                ];
+            }
+            $lCash = (float) $lPays->filter(fn($p) => str_contains(strtolower($p->method ?? ''), 'cash'))->sum('amount');
+            $lBank = (float) $lPays->filter(fn($p) => !str_contains(strtolower($p->method ?? ''), 'cash'))->sum('amount');
+            $staffMap[$uId]['ldy_orders']  += $lPays->count();
+            $staffMap[$uId]['cash']        += $lCash;
+            $staffMap[$uId]['bank']        += $lBank;
+            $staffMap[$uId]['total_sales'] += (float) $lPays->sum('amount');
+        }
+
+        $allStaffUserIds = array_keys($staffMap);
+        $staffUsers = User::whereIn('id', $allStaffUserIds)->get(['id', 'name', 'username', 'branch_id'])->keyBy('id');
+
         $cashierStats = [];
-        $salesByCashier = $daySales->groupBy('user_id');
-
-        $userIds = $salesByCashier->keys()->all();
-        $users = User::whereIn('id', $userIds)->get(['id', 'name', 'username', 'branch_id'])->keyBy('id');
-
-        foreach ($salesByCashier as $uId => $cSales) {
-            $u = $users->get($uId);
+        foreach ($staffMap as $uId => $data) {
+            $u = $staffUsers->get($uId);
             $b = $u ? $orgBranches->firstWhere('id', $u->branch_id) : null;
+
+            $hasPos = $data['pos_orders'] > 0;
+            $hasLdy = $data['ldy_orders'] > 0;
+            $roleLabel = ($hasPos && $hasLdy) ? 'Retail & Laundry' : ($hasLdy ? 'Laundry Staff' : 'Retail Cashier');
+
             $cashierStats[] = [
                 'user_id'      => $uId,
                 'name'         => $u ? ($u->name ?: $u->username) : 'Staff #' . $uId,
                 'branch_name'  => $b ? $b->name : 'N/A',
-                'orders_count' => $cSales->count(),
-                'total_sales'  => (float) $cSales->sum('final_total'),
-                'cash'         => (float) $cSales->sum('cash'),
-                'bank'         => (float) $cSales->sum('bank_transfer'),
+                'role_label'   => $roleLabel,
+                'orders_count' => $data['pos_orders'] + $data['ldy_orders'],
+                'pos_orders'   => $data['pos_orders'],
+                'ldy_orders'   => $data['ldy_orders'],
+                'total_sales'  => round($data['total_sales'], 2),
+                'cash'         => round($data['cash'], 2),
+                'bank'         => round($data['bank'], 2),
             ];
         }
 
         usort($cashierStats, fn($a, $b) => $b['total_sales'] <=> $a['total_sales']);
 
-        // ── 8. Hourly Trading for Selected Day ────────────────────────────────
+        // ── 9. Hourly Trading for Selected Day ────────────────────────────────
         $hourlySales = Sale::whereIn('branch_id', $targetBranchIds)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->select(
@@ -554,17 +695,31 @@ class OrgReportController extends Controller
             ->groupBy(DB::raw('HOUR(created_at)'))
             ->get();
 
+        $hourlyLaundry = LaundryPayment::whereIn('branch_id', $targetBranchIds)
+            ->whereBetween('paid_at', [$startDate, $endDate])
+            ->where('type', 'payment')
+            ->select(
+                DB::raw('HOUR(paid_at) as hour'),
+                DB::raw('SUM(amount) as revenue'),
+                DB::raw('COUNT(id) as count')
+            )
+            ->groupBy(DB::raw('HOUR(paid_at)'))
+            ->get();
+
         $hourlyDistribution = [];
         for ($h = 8; $h <= 22; $h++) {
-            $match = $hourlySales->firstWhere('hour', $h);
+            $posMatch = $hourlySales->firstWhere('hour', $h);
+            $ldyMatch = $hourlyLaundry->firstWhere('hour', $h);
+            $hRev = (float) ($posMatch->revenue ?? 0) + (float) ($ldyMatch->revenue ?? 0);
+            $hCount = (int) ($posMatch->count ?? 0) + (int) ($ldyMatch->count ?? 0);
             $hourlyDistribution[] = [
                 'hour'    => sprintf('%02d:00', $h),
-                'revenue' => (float) ($match->revenue ?? 0),
-                'orders'  => (int)   ($match->count ?? 0),
+                'revenue' => round($hRev, 2),
+                'orders'  => $hCount,
             ];
         }
 
-        // ── 9. Item Sales Breakdown Today ─────────────────────────────────────
+        // ── 10. Items and Services Breakdown Today ────────────────────────────
         $itemBreakdown = SaleOrder::join('sales', 'sales.id', '=', 'sale_orders.sale_id')
             ->whereIn('sales.branch_id', $targetBranchIds)
             ->whereBetween('sales.created_at', [$startDate, $endDate])
@@ -576,24 +731,52 @@ class OrgReportController extends Controller
             )
             ->groupBy('sale_orders.item_name', 'sale_orders.unit_used')
             ->orderByDesc('total_amount')
-            ->limit(15)
+            ->limit(10)
             ->get()
             ->map(fn($item) => [
+                'type'         => 'product',
                 'name'         => $item->item_name ?: 'Unnamed Item',
                 'unit'         => $item->unit_used ?: 'unit',
                 'qty'          => (int) $item->total_qty,
                 'total_amount' => (float) $item->total_amount,
             ]);
 
-        // ── 10. Paginated Sales for End of Day Audit ──────────────────────────
-        $paginatedSales = Sale::whereIn('branch_id', $targetBranchIds)
+        $serviceBreakdown = LaundryOrderItem::join('laundry_orders', 'laundry_orders.id', '=', 'laundry_order_items.order_id')
+            ->whereIn('laundry_orders.branch_id', $targetBranchIds)
+            ->whereBetween('laundry_orders.received_at', [$startDate, $endDate])
+            ->select(
+                'laundry_order_items.service_name',
+                'laundry_order_items.pricing_type',
+                DB::raw('SUM(laundry_order_items.quantity) as total_qty'),
+                DB::raw('SUM(laundry_order_items.line_total) as total_amount')
+            )
+            ->groupBy('laundry_order_items.service_name', 'laundry_order_items.pricing_type')
+            ->orderByDesc('total_amount')
+            ->limit(10)
+            ->get()
+            ->map(fn($svc) => [
+                'type'         => 'service',
+                'name'         => $svc->service_name ?: 'Laundry Service',
+                'unit'         => ($svc->pricing_type === 'per_kg') ? 'kg' : 'pcs',
+                'qty'          => (float) $svc->total_qty,
+                'total_amount' => (float) $svc->total_amount,
+            ]);
+
+        $combinedItemBreakdown = $itemBreakdown->concat($serviceBreakdown)
+            ->sortByDesc('total_amount')
+            ->take(15)
+            ->values()
+            ->all();
+
+        // ── 11. Unified Paginated Transactions for End of Day Audit ───────────
+        $salesList = Sale::whereIn('branch_id', $targetBranchIds)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->with(['branch:id,name', 'user:id,name,username', 'customer:id,name'])
             ->latest('id')
-            ->paginate(20, ['*'], 'sales_page')
-            ->withQueryString()
-            ->through(fn(Sale $s) => [
-                'id'             => $s->id,
+            ->get()
+            ->map(fn(Sale $s) => [
+                'id'             => 'sale_' . $s->id,
+                'type'           => 'pos',
                 'receipt_number' => $s->receipt_id ?? "REC-{$s->id}",
                 'branch_name'    => $s->branch?->name ?? 'Unknown',
                 'cashier_name'   => $s->user?->name ?? ($s->user?->username ?? 'Staff'),
@@ -604,24 +787,68 @@ class OrgReportController extends Controller
                 'is_debt'        => (bool) $s->is_debt,
                 'payment_method' => $s->payment_method ?: 'Cash',
                 'created_at'     => $s->created_at?->format('h:i A'),
+                'timestamp'      => $s->created_at?->timestamp ?? 0,
             ]);
+
+        $laundryList = LaundryOrder::whereIn('branch_id', $targetBranchIds)
+            ->whereBetween('received_at', [$startDate, $endDate])
+            ->with(['branch:id,name'])
+            ->latest('received_at')
+            ->get()
+            ->map(fn(LaundryOrder $o) => [
+                'id'             => 'ldy_' . $o->id,
+                'type'           => 'laundry',
+                'receipt_number' => $o->order_number,
+                'branch_name'    => $o->branch?->name ?? 'Unknown',
+                'cashier_name'   => 'Laundry Staff',
+                'customer_name'  => $o->customer_name ?: 'Customer',
+                'final_total'    => (float) $o->total,
+                'cash'           => (float) $o->amount_paid,
+                'bank_transfer'  => 0.0,
+                'is_debt'        => ((float) $o->balance > 0),
+                'payment_method' => ((float) $o->balance <= 0) ? 'Fully Paid' : 'Deposit / Balance Due',
+                'created_at'     => $o->received_at?->format('h:i A'),
+                'timestamp'      => $o->received_at?->timestamp ?? 0,
+            ]);
+
+        $allAuditTransactions = $salesList->concat($laundryList)
+            ->sortByDesc('timestamp')
+            ->values();
+
+        $page = (int) $request->input('sales_page', 1);
+        $perPage = 20;
+        $totalItems = $allAuditTransactions->count();
+        $slice = $allAuditTransactions->slice(($page - 1) * $perPage, $perPage)->values();
+
+        $paginatedTransactions = new \Illuminate\Pagination\LengthAwarePaginator(
+            $slice,
+            $totalItems,
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query(), 'pageName' => 'sales_page']
+        );
 
         return Inertia::render('Org/Reports/EndOfDay', [
             'organization' => [
                 'id'   => $org->id,
                 'name' => $org->name,
             ],
-            'branches' => $orgBranches,
+            'branches' => $orgBranches->map(fn($b) => [
+                'id'             => $b->id,
+                'name'           => $b->name,
+                'slug'           => $b->slug,
+                'operating_mode' => ($b->posEnabled() && $b->laundryEnabled()) ? 'both' : ($b->laundryEnabled() ? 'laundry_only' : 'pos_only'),
+            ]),
             'filters'  => [
                 'branch_id' => $selectedBranchId,
                 'date'      => $targetDate->format('Y-m-d'),
             ],
-            'reconciliation'      => $reconciliation,
-            'branch_breakdown'    => $branchBreakdown,
-            'cashier_stats'       => $cashierStats,
-            'hourly_distribution'=> $hourlyDistribution,
-            'item_breakdown'      => $itemBreakdown,
-            'expenses_list'       => $expensesToday->map(fn($e) => [
+            'reconciliation'       => $reconciliation,
+            'branch_breakdown'     => $branchBreakdown,
+            'cashier_stats'        => $cashierStats,
+            'hourly_distribution' => $hourlyDistribution,
+            'item_breakdown'       => $combinedItemBreakdown,
+            'expenses_list'        => $expensesToday->map(fn($e) => [
                 'id'          => $e->id,
                 'branch_name' => $e->branch?->name ?? 'N/A',
                 'category'    => $e->category?->name ?? 'Uncategorized',
@@ -629,7 +856,7 @@ class OrgReportController extends Controller
                 'amount'      => (float) $e->amount,
                 'logged_by'   => $e->user?->name ?? 'Staff',
             ]),
-            'sales'               => $paginatedSales,
+            'sales'                => $paginatedTransactions,
         ]);
     }
 

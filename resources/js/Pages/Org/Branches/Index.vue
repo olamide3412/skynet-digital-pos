@@ -181,7 +181,27 @@ const formatCurrency = (val) => {
                             </div>
                             <div>
                                 <h3 class="text-base font-bold text-slate-900 dark:text-white">{{ branch.name }}</h3>
-                                <span class="text-xs font-mono text-purple-600 dark:text-purple-400">/{{ branch.slug }}</span>
+                                <div class="flex items-center gap-1.5 mt-0.5">
+                                    <span class="text-xs font-mono text-purple-600 dark:text-purple-400">/{{ branch.slug }}</span>
+                                    <span
+                                        v-if="branch.operating_mode === 'laundry_only'"
+                                        class="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-cyan-50 dark:bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800"
+                                    >
+                                        🧺 Laundry
+                                    </span>
+                                    <span
+                                        v-else-if="branch.operating_mode === 'pos_only'"
+                                        class="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-purple-50 dark:bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800"
+                                    >
+                                        💻 POS
+                                    </span>
+                                    <span
+                                        v-else
+                                        class="px-1.5 py-0.2 rounded-md text-[9px] font-bold bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                                    >
+                                        🏪 Mixed
+                                    </span>
+                                </div>
                             </div>
                         </div>
                         <span
@@ -200,7 +220,9 @@ const formatCurrency = (val) => {
 
                     <div class="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                         <div class="p-2.5 bg-slate-50 dark:bg-slate-950/60 rounded-xl">
-                            <div class="text-[10px] text-slate-400 uppercase font-semibold">Today's Sales</div>
+                            <div class="text-[10px] text-slate-400 uppercase font-semibold">
+                                {{ branch.operating_mode === 'laundry_only' ? "Today's Intake" : "Today's Sales" }}
+                            </div>
                             <div class="font-bold text-slate-900 dark:text-white mt-0.5">{{ formatCurrency(branch.today_revenue) }}</div>
                         </div>
                         <div class="p-2.5 bg-slate-50 dark:bg-slate-950/60 rounded-xl">
@@ -210,7 +232,8 @@ const formatCurrency = (val) => {
                     </div>
 
                     <div class="flex items-center justify-between text-xs text-slate-500 pt-1">
-                        <span>📦 Catalog: <strong>{{ branch.items_count }}</strong> items</span>
+                        <span v-if="branch.operating_mode === 'laundry_only'">🧺 Active: <strong>{{ branch.active_laundry_count ?? 0 }}</strong> orders</span>
+                        <span v-else>📦 Catalog: <strong>{{ branch.items_count }}</strong> items</span>
                         <span>👥 Staff: <strong>{{ branch.users_count }}</strong> users</span>
                     </div>
                 </div>
@@ -221,7 +244,7 @@ const formatCurrency = (val) => {
                         target="_blank"
                         class="w-full py-2.5 px-4 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-purple-600/20"
                     >
-                        <span>Open Branch POS Terminal</span>
+                        <span>{{ branch.operating_mode === 'laundry_only' ? 'Open Laundry Hub' : 'Open Branch POS Terminal' }}</span>
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                     </a>
                 </div>

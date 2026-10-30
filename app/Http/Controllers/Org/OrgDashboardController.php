@@ -10,6 +10,8 @@ use App\Models\OrganizationActivityLog;
 use App\Models\Sale;
 use App\Models\StockConflict;
 use App\Models\User;
+use App\Modules\Laundry\Models\LaundryOrder;
+use App\Modules\Laundry\Models\LaundryPayment;
 use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -51,32 +53,115 @@ class OrgDashboardController extends Controller
         }
 
         $branches = Branch::where('organization_id', $org->id)
+            ->with(['settings'])
             ->withCount(['items', 'users'])
             ->get();
 
         $branchIds = $branches->pluck('id')->all();
 
-        // ── 1. Financial & Operational KPIs (Organization Scope) ─────────────
-        $todayRevenue = (float) Sale::whereIn('branch_id', $branchIds)
+        // Detect module capabilities across all org branches
+        $hasPosBranches     = $branches->contains(fn(Branch $b) => $b->posEnabled());
+        $hasLaundryBranches = $branches->contains(fn(Branch $b) => $b->laundryEnabled());
+
+        // ── 1. Financial & Operational KPIs (Unified Scope: Retail POS + Laundry) ──
+        $todayPosRevenue = (float) Sale::whereIn('branch_id', $branchIds)
             ->whereDate('created_at', today())
             ->sum('final_total');
 
-        $todaySalesCount = Sale::whereIn('branch_id', $branchIds)
+        $todayPosCount = Sale::whereIn('branch_id', $branchIds)
             ->whereDate('created_at', today())
             ->count();
 
-        $weekRevenue = (float) Sale::whereIn('branch_id', $branchIds)
+        $weekPosRevenue = (float) Sale::whereIn('branch_id', $branchIds)
             ->where('created_at', '>=', now()->startOfWeek())
             ->sum('final_total');
 
-        $weekSalesCount = Sale::whereIn('branch_id', $branchIds)
+        $weekPosCount = Sale::whereIn('branch_id', $branchIds)
             ->where('created_at', '>=', now()->startOfWeek())
             ->count();
 
-        $monthRevenue = (float) Sale::whereIn('branch_id', $branchIds)
+        $monthPosRevenue = (float) Sale::whereIn('branch_id', $branchIds)
             ->whereMonth('created_at', now()->month)
             ->whereYear('created_at', now()->year)
             ->sum('final_total');
+
+        // Laundry Organization Financials & Operations
+        $todayLaundryRevenue  = 0.0;
+        $todayLaundryOrders   = 0;
+        $weekLaundryRevenue   = 0.0;
+        $weekLaundryOrders    = 0;
+        $monthLaundryRevenue  = 0.0;
+        $activeLaundryOrders  = 0;
+        $readyLaundryOrders   = 0;
+        $overdueLaundryOrders = 0;
+        $unpaidLaundryDebt    = 0.0;
+
+        if ($hasLaundryBranches) {
+            $todayGrossLdy = (float) LaundryPayment::whereIn('branch_id', $branchIds)
+                ->whereDate('paid_at', today())
+                ->where('type', 'payment')
+                ->sum('amount');
+            $todayRefLdy = (float) LaundryPayment::whereIn('branch_id', $branchIds)
+                ->whereDate('paid_at', today())
+                ->where('type', 'refund')
+                ->sum('amount');
+            $todayLaundryRevenue = max(0.0, round($todayGrossLdy - $todayRefLdy, 2));
+
+            $todayLaundryOrders = LaundryOrder::whereIn('branch_id', $branchIds)
+                ->whereDate('received_at', today())
+                ->count();
+
+            $weekGrossLdy = (float) LaundryPayment::whereIn('branch_id', $branchIds)
+                ->where('paid_at', '>=', now()->startOfWeek())
+                ->where('type', 'payment')
+                ->sum('amount');
+            $weekRefLdy = (float) LaundryPayment::whereIn('branch_id', $branchIds)
+                ->where('paid_at', '>=', now()->startOfWeek())
+                ->where('type', 'refund')
+                ->sum('amount');
+            $weekLaundryRevenue = max(0.0, round($weekGrossLdy - $weekRefLdy, 2));
+
+            $weekLaundryOrders = LaundryOrder::whereIn('branch_id', $branchIds)
+                ->where('received_at', '>=', now()->startOfWeek())
+                ->count();
+
+            $monthGrossLdy = (float) LaundryPayment::whereIn('branch_id', $branchIds)
+                ->whereMonth('paid_at', now()->month)
+                ->whereYear('paid_at', now()->year)
+                ->where('type', 'payment')
+                ->sum('amount');
+            $monthRefLdy = (float) LaundryPayment::whereIn('branch_id', $branchIds)
+                ->whereMonth('paid_at', now()->month)
+                ->whereYear('paid_at', now()->year)
+                ->where('type', 'refund')
+                ->sum('amount');
+            $monthLaundryRevenue = max(0.0, round($monthGrossLdy - $monthRefLdy, 2));
+
+            $activeLaundryOrders = LaundryOrder::whereIn('branch_id', $branchIds)
+                ->whereIn('status', ['received', 'in_progress'])
+                ->count();
+
+            $readyLaundryOrders = LaundryOrder::whereIn('branch_id', $branchIds)
+                ->where('status', 'ready')
+                ->count();
+
+            $overdueLaundryOrders = LaundryOrder::whereIn('branch_id', $branchIds)
+                ->whereIn('status', ['received', 'in_progress'])
+                ->where('due_at', '<', now())
+                ->count();
+
+            $unpaidLaundryDebt = (float) LaundryOrder::whereIn('branch_id', $branchIds)
+                ->where('status', '!=', 'cancelled')
+                ->where('balance', '>', 0)
+                ->sum('balance');
+        }
+
+        // Consolidated Financials
+        $todayRevenue = round($todayPosRevenue + $todayLaundryRevenue, 2);
+        $todayOrders  = $todayPosCount + $todayLaundryOrders;
+        $weekRevenue  = round($weekPosRevenue + $weekLaundryRevenue, 2);
+        $weekOrders   = $weekPosCount + $weekLaundryOrders;
+        $monthRevenue = round($monthPosRevenue + $monthLaundryRevenue, 2);
 
         $totalItemsCount = Item::whereIn('branch_id', $branchIds)->count();
 
@@ -95,53 +180,123 @@ class OrgDashboardController extends Controller
 
         // ── 2. Per-Branch Performance Cards ──────────────────────────────────
         $branchCards = $branches->map(function (Branch $b) {
-            $todayBranchRevenue = (float) Sale::where('branch_id', $b->id)
-                ->whereDate('created_at', today())
-                ->sum('final_total');
+            $isPos = $b->posEnabled();
+            $isLaundry = $b->laundryEnabled();
+            $operatingMode = ($isPos && $isLaundry) ? 'both' : ($isLaundry ? 'laundry_only' : 'pos_only');
 
-            $todayBranchOrders = Sale::where('branch_id', $b->id)
-                ->whereDate('created_at', today())
-                ->count();
+            // POS metrics
+            $todayPos = (float) Sale::where('branch_id', $b->id)->whereDate('created_at', today())->sum('final_total');
+            $todayPosCount = Sale::where('branch_id', $b->id)->whereDate('created_at', today())->count();
+            $weekPos = (float) Sale::where('branch_id', $b->id)->where('created_at', '>=', now()->startOfWeek())->sum('final_total');
+            $monthPos = (float) Sale::where('branch_id', $b->id)->whereMonth('created_at', now()->month)->whereYear('created_at', now()->year)->sum('final_total');
 
-            $weekBranchRevenue = (float) Sale::where('branch_id', $b->id)
-                ->where('created_at', '>=', now()->startOfWeek())
-                ->sum('final_total');
+            // Laundry metrics
+            $todayLdy = 0.0;
+            $todayLdyCount = 0;
+            $weekLdy = 0.0;
+            $monthLdy = 0.0;
+            $activeLdy = 0;
+
+            if ($isLaundry) {
+                $todayLdyGross = (float) LaundryPayment::where('branch_id', $b->id)->whereDate('paid_at', today())->where('type', 'payment')->sum('amount');
+                $todayLdyRef   = (float) LaundryPayment::where('branch_id', $b->id)->whereDate('paid_at', today())->where('type', 'refund')->sum('amount');
+                $todayLdy      = max(0.0, round($todayLdyGross - $todayLdyRef, 2));
+
+                $todayLdyCount = LaundryOrder::where('branch_id', $b->id)->whereDate('received_at', today())->count();
+
+                $weekLdyGross  = (float) LaundryPayment::where('branch_id', $b->id)->where('paid_at', '>=', now()->startOfWeek())->where('type', 'payment')->sum('amount');
+                $weekLdyRef    = (float) LaundryPayment::where('branch_id', $b->id)->where('paid_at', '>=', now()->startOfWeek())->where('type', 'refund')->sum('amount');
+                $weekLdy       = max(0.0, round($weekLdyGross - $weekLdyRef, 2));
+
+                $monthLdyGross = (float) LaundryPayment::where('branch_id', $b->id)->whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->where('type', 'payment')->sum('amount');
+                $monthLdyRef   = (float) LaundryPayment::where('branch_id', $b->id)->whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->where('type', 'refund')->sum('amount');
+                $monthLdy      = max(0.0, round($monthLdyGross - $monthLdyRef, 2));
+
+                $activeLdy     = LaundryOrder::where('branch_id', $b->id)->whereIn('status', ['received', 'in_progress', 'ready'])->count();
+            }
+
+            $todayTotalRevenue = round($todayPos + $todayLdy, 2);
+            $todayTotalOrders  = $todayPosCount + $todayLdyCount;
+            $weekTotalRevenue  = round($weekPos + $weekLdy, 2);
+            $monthTotalRevenue = round($monthPos + $monthLdy, 2);
+
+            $entryUrl = ($operatingMode === 'laundry_only')
+                ? url("/{$b->slug}/laundry")
+                : url("/{$b->slug}");
 
             return [
-                'id'            => $b->id,
-                'name'          => $b->name,
-                'slug'          => $b->slug,
-                'address'       => $b->address,
-                'phone'         => $b->phone,
-                'email'         => $b->email,
-                'is_active'     => (bool) $b->is_active,
-                'is_ai_enabled' => (bool) $b->is_ai_enabled,
-                'logo_url'      => $b->logo_path ? asset('storage/' . $b->logo_path) : null,
-                'items_count'   => $b->items_count,
-                'users_count'   => $b->users_count,
-                'today_revenue' => $todayBranchRevenue,
-                'today_orders'  => $todayBranchOrders,
-                'week_revenue'  => $weekBranchRevenue,
-                'pos_url'       => url("/{$b->slug}"),
+                'id'                   => $b->id,
+                'name'                 => $b->name,
+                'slug'                 => $b->slug,
+                'address'              => $b->address,
+                'phone'                => $b->phone,
+                'email'                => $b->email,
+                'is_active'            => (bool) $b->is_active,
+                'is_ai_enabled'        => (bool) $b->is_ai_enabled,
+                'logo_url'             => $b->logo_path ? asset('storage/' . $b->logo_path) : null,
+                'items_count'          => $b->items_count,
+                'users_count'          => $b->users_count,
+                'operating_mode'       => $operatingMode,
+                'pos_enabled'          => $isPos,
+                'laundry_enabled'      => $isLaundry,
+                'today_revenue'        => $todayTotalRevenue,
+                'today_orders'         => $todayTotalOrders,
+                'today_pos_revenue'    => $todayPos,
+                'today_laundry_revenue'=> $todayLdy,
+                'week_revenue'         => $weekTotalRevenue,
+                'month_revenue'        => $monthTotalRevenue,
+                'active_laundry_count' => $activeLdy,
+                'pos_url'              => $entryUrl,
             ];
         });
 
-        // ── 3. Recent Transactions Across Organization Branches ──────────────
+        // ── 3. Recent Transactions Across Organization (Sales & Laundry) ────
         $recentSales = Sale::whereIn('branch_id', $branchIds)
             ->with(['branch:id,name,slug', 'user:id,name', 'customer:id,name'])
             ->latest('id')
             ->take(10)
             ->get()
             ->map(fn(Sale $s) => [
-                'id'             => $s->id,
+                'id'             => 'sale_' . $s->id,
+                'type'           => 'pos',
                 'receipt_number' => $s->receipt_id ?? "REC-{$s->id}",
                 'branch_name'    => $s->branch?->name ?? 'Unknown',
                 'cashier_name'   => $s->user?->name ?? 'Staff',
                 'customer_name'  => $s->customer?->name ?? 'Walk-in Customer',
                 'final_total'    => (float) $s->final_total,
-                'payment_method' => $s->payment_method,
+                'payment_method' => $s->payment_method ?: 'Cash',
+                'status'         => $s->is_debt ? 'Credit Sale' : 'Completed',
                 'created_at'     => $s->created_at?->format('d M Y, h:i A'),
+                'timestamp'      => $s->created_at?->timestamp ?? 0,
             ]);
+
+        $recentLaundry = collect();
+        if ($hasLaundryBranches) {
+            $recentLaundry = LaundryOrder::whereIn('branch_id', $branchIds)
+                ->with(['branch:id,name,slug'])
+                ->latest('received_at')
+                ->take(10)
+                ->get()
+                ->map(fn(LaundryOrder $o) => [
+                    'id'             => 'laundry_' . $o->id,
+                    'type'           => 'laundry',
+                    'receipt_number' => $o->order_number,
+                    'branch_name'    => $o->branch?->name ?? 'Unknown',
+                    'cashier_name'   => 'Laundry Staff',
+                    'customer_name'  => $o->customer_name ?: 'Customer',
+                    'final_total'    => (float) $o->total,
+                    'payment_method' => ((float) $o->balance <= 0) ? 'Fully Paid' : 'Partial / Balance Due',
+                    'status'         => ucfirst(str_replace('_', ' ', $o->status)),
+                    'created_at'     => $o->received_at?->format('d M Y, h:i A'),
+                    'timestamp'      => $o->received_at?->timestamp ?? 0,
+                ]);
+        }
+
+        $recentTransactions = $recentSales->concat($recentLaundry)
+            ->sortByDesc('timestamp')
+            ->take(10)
+            ->values()
+            ->all();
 
         // For Super Admin view: list of all active organizations for quick switching
         $allOrganizations = $user->isSuperAdmin()
@@ -165,24 +320,34 @@ class OrgDashboardController extends Controller
                 'address'       => $org->address,
             ],
             'kpis' => [
-                'total_branches'       => $branches->count(),
-                'active_branches'      => $branches->where('is_active', true)->count(),
-                'today_revenue'        => $todayRevenue,
-                'today_orders'         => $todaySalesCount,
-                'week_revenue'         => $weekRevenue,
-                'week_orders'          => $weekSalesCount,
-                'month_revenue'        => $monthRevenue,
-                'total_items'          => $totalItemsCount,
-                'low_stock_count'      => $lowStockCount,
-                'expiring_count'       => $expiringCount,
-                'conflicts_count'      => $pendingConflictsCount,
-                'in_transit_transfers' => $inTransitTransfersCount,
-                'product_groups_count' => $productGroupsCount,
+                'total_branches'         => $branches->count(),
+                'active_branches'        => $branches->where('is_active', true)->count(),
+                'has_pos_branches'       => $hasPosBranches,
+                'has_laundry_branches'   => $hasLaundryBranches,
+                'today_revenue'          => $todayRevenue,
+                'today_orders'           => $todayOrders,
+                'today_pos_revenue'      => $todayPosRevenue,
+                'today_laundry_revenue'  => $todayLaundryRevenue,
+                'week_revenue'           => $weekRevenue,
+                'week_orders'            => $weekOrders,
+                'month_revenue'          => $monthRevenue,
+                // Retail POS specific
+                'total_items'            => $totalItemsCount,
+                'low_stock_count'        => $lowStockCount,
+                'expiring_count'         => $expiringCount,
+                'conflicts_count'        => $pendingConflictsCount,
+                'in_transit_transfers'   => $inTransitTransfersCount,
+                'product_groups_count'   => $productGroupsCount,
+                // Laundry specific
+                'active_laundry_orders'  => $activeLaundryOrders,
+                'ready_laundry_orders'   => $readyLaundryOrders,
+                'overdue_laundry_orders' => $overdueLaundryOrders,
+                'unpaid_laundry_debt'    => $unpaidLaundryDebt,
             ],
-            'branches'           => $branchCards,
-            'recent_sales'       => $recentSales,
-            'all_organizations'  => $allOrganizations,
-            'is_super_admin'     => $user->isSuperAdmin(),
+            'branches'            => $branchCards,
+            'recent_sales'        => $recentTransactions,
+            'all_organizations'   => $allOrganizations,
+            'is_super_admin'      => $user->isSuperAdmin(),
         ]);
     }
 
@@ -197,32 +362,60 @@ class OrgDashboardController extends Controller
         }
 
         $branches = Branch::where('organization_id', $org->id)
+            ->with(['settings'])
             ->withCount(['items', 'users'])
             ->get()
             ->map(function (Branch $b) {
-                $monthRevenue = (float) Sale::where('branch_id', $b->id)
+                $isPos = $b->posEnabled();
+                $isLaundry = $b->laundryEnabled();
+                $operatingMode = ($isPos && $isLaundry) ? 'both' : ($isLaundry ? 'laundry_only' : 'pos_only');
+
+                $monthPos = (float) Sale::where('branch_id', $b->id)
                     ->whereMonth('created_at', now()->month)
                     ->whereYear('created_at', now()->year)
                     ->sum('final_total');
 
-                $todayRevenue = (float) Sale::where('branch_id', $b->id)
+                $todayPos = (float) Sale::where('branch_id', $b->id)
                     ->whereDate('created_at', today())
                     ->sum('final_total');
 
+                $monthLdy = 0.0;
+                $todayLdy = 0.0;
+                $activeLdy = 0;
+                if ($isLaundry) {
+                    $mGross = (float) LaundryPayment::where('branch_id', $b->id)->whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->where('type', 'payment')->sum('amount');
+                    $mRef   = (float) LaundryPayment::where('branch_id', $b->id)->whereMonth('paid_at', now()->month)->whereYear('paid_at', now()->year)->where('type', 'refund')->sum('amount');
+                    $monthLdy = max(0.0, round($mGross - $mRef, 2));
+
+                    $tGross = (float) LaundryPayment::where('branch_id', $b->id)->whereDate('paid_at', today())->where('type', 'payment')->sum('amount');
+                    $tRef   = (float) LaundryPayment::where('branch_id', $b->id)->whereDate('paid_at', today())->where('type', 'refund')->sum('amount');
+                    $todayLdy = max(0.0, round($tGross - $tRef, 2));
+
+                    $activeLdy = LaundryOrder::where('branch_id', $b->id)->whereIn('status', ['received', 'in_progress', 'ready'])->count();
+                }
+
+                $entryUrl = ($operatingMode === 'laundry_only')
+                    ? url("/{$b->slug}/laundry")
+                    : url("/{$b->slug}");
+
                 return [
-                    'id'            => $b->id,
-                    'name'          => $b->name,
-                    'slug'          => $b->slug,
-                    'address'       => $b->address,
-                    'phone'         => $b->phone,
-                    'email'         => $b->email,
-                    'is_active'     => (bool) $b->is_active,
-                    'logo_url'      => $b->logo_path ? asset('storage/' . $b->logo_path) : null,
-                    'items_count'   => $b->items_count,
-                    'users_count'   => $b->users_count,
-                    'today_revenue' => $todayRevenue,
-                    'month_revenue' => $monthRevenue,
-                    'pos_url'       => url("/{$b->slug}"),
+                    'id'                   => $b->id,
+                    'name'                 => $b->name,
+                    'slug'                 => $b->slug,
+                    'address'              => $b->address,
+                    'phone'                => $b->phone,
+                    'email'                => $b->email,
+                    'is_active'            => (bool) $b->is_active,
+                    'logo_url'             => $b->logo_path ? asset('storage/' . $b->logo_path) : null,
+                    'items_count'          => $b->items_count,
+                    'users_count'          => $b->users_count,
+                    'operating_mode'       => $operatingMode,
+                    'pos_enabled'          => $isPos,
+                    'laundry_enabled'      => $isLaundry,
+                    'today_revenue'        => round($todayPos + $todayLdy, 2),
+                    'month_revenue'        => round($monthPos + $monthLdy, 2),
+                    'active_laundry_count' => $activeLdy,
+                    'pos_url'              => $entryUrl,
                 ];
             });
 

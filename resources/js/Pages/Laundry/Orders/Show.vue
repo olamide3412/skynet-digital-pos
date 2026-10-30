@@ -210,6 +210,7 @@ const cancelForm = ref({
 const paymentErrors = ref('')
 const collectErrors = ref('')
 const isSubmittingCollect = ref(false)
+const isSubmittingPayment = ref(false)
 
 const handleMarkPickedUpClick = () => {
     collectErrors.value = ''
@@ -245,6 +246,7 @@ const openPaymentModal = () => {
     }
     paymentDisplayAmount.value = formatNumberWithDecimals(bal)
     paymentErrors.value = ''
+    isSubmittingPayment.value = false
     showPaymentModal.value = true
 }
 
@@ -265,6 +267,8 @@ const setPaymentPreset = (fraction) => {
 
 const submitPayment = () => {
     paymentErrors.value = ''
+    if (isSubmittingPayment.value) return
+
     const amt = parseMoney(paymentDisplayAmount.value)
     paymentForm.value.amount = amt
     if (amt > 0) {
@@ -285,6 +289,8 @@ const submitPayment = () => {
         return
     }
 
+    isSubmittingPayment.value = true
+
     router.post(
         safeRoute('laundry.orders.record-payment', { order: props.order.id }),
         {
@@ -301,6 +307,9 @@ const submitPayment = () => {
                 if (errs.till || paymentErrors.value.toLowerCase().includes('till')) {
                     showOpenTillModal.value = true
                 }
+            },
+            onFinish: () => {
+                isSubmittingPayment.value = false
             },
         }
     )
@@ -1225,8 +1234,24 @@ const statusBadgeClass = (status) => {
                 </div>
 
                 <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-                    <button @click="showPaymentModal = false" class="px-4 py-2 rounded-xl text-slate-600 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-700 transition">Cancel</button>
-                    <button @click="submitPayment" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-sm transition">Save Payment</button>
+                    <button
+                        @click="showPaymentModal = false"
+                        :disabled="isSubmittingPayment"
+                        class="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-700 transition disabled:opacity-50"
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        @click="submitPayment"
+                        :disabled="isSubmittingPayment"
+                        class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 shadow-sm transition disabled:opacity-50 flex items-center justify-center gap-1.5 min-w-[120px]"
+                    >
+                        <svg v-if="isSubmittingPayment" class="animate-spin w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                        </svg>
+                        <span>{{ isSubmittingPayment ? 'Saving Payment...' : 'Save Payment' }}</span>
+                    </button>
                 </div>
             </div>
         </div>
