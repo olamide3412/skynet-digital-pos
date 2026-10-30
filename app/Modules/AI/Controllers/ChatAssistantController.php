@@ -61,7 +61,14 @@ class ChatAssistantController extends Controller
             : [];
 
         return Inertia::render('AI/ChatAssistant', [
-            'branch'         => $branch ? ['id' => $branch->id, 'name' => $branch->name, 'slug' => $branch->slug] : null,
+            'branch'         => $branch ? [
+                'id'                => $branch->id,
+                'name'              => $branch->name,
+                'slug'              => $branch->slug,
+                'pos_enabled'       => $branch->posEnabled(),
+                'laundry_enabled'   => $branch->laundryEnabled(),
+                'default_interface' => $branch->defaultInterface(),
+            ] : null,
             'branches'       => $branches,
             'sessionId'      => $sessionId,
             'initialLogs'    => $logs,

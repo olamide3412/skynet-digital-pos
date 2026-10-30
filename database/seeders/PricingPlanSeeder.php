@@ -52,6 +52,7 @@ class PricingPlanSeeder extends Seeder
                 'Full 100% offline checkout with automatic background cloud sync',
                 'Multi-device compatibility (PC, Mac, Android tablets, touch registers)',
                 'Receipt printing, barcode generation & barcode scanner plug-and-play',
+                'Complete Laundry & Dry Cleaning module (garment intake, workflow tracking & pickups)',
                 'Automated database backups & SSL encryption',
             ];
             foreach ($included as $index => $item) {
@@ -81,6 +82,7 @@ class PricingPlanSeeder extends Seeder
                     'Debt and customer account management',
                     'Receipt printing & daily sales reports',
                     '100% offline checkout with automatic sync',
+                    'Complete Laundry module (garment intake, workflow & pickups)',
                 ],
             ],
             [

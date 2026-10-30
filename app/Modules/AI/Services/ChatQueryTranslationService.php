@@ -21,6 +21,14 @@ use App\Models\SaleReturnItem;
 use App\Models\StockConflict;
 use App\Models\User;
 use App\Modules\AI\Models\AiConversationLog;
+use App\Modules\Laundry\Models\LaundryCategory;
+use App\Modules\Laundry\Models\LaundryDiscount;
+use App\Modules\Laundry\Models\LaundryOrder;
+use App\Modules\Laundry\Models\LaundryOrderItem;
+use App\Modules\Laundry\Models\LaundryOrderStatusHistory;
+use App\Modules\Laundry\Models\LaundryPayment;
+use App\Modules\Laundry\Models\LaundryService;
+use App\Modules\Laundry\Models\LaundrySetting;
 use App\Services\RoleService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -149,6 +157,12 @@ Core Analytical & Presentation Guidelines:
      c) Culprit Items: Rank the items responsible for the highest margin deficit.
      d) Operating Expenses vs Gross Profit: Note if operational overhead (rent, fuel, salaries) exceeds gross margin.
      e) Concrete Action Steps: Give clear immediate recommendations to correct prices in inventory and regulate cashier discounts.
+14. If asked about LAUNDRY & DRY CLEANING OPERATIONS:
+   - For Laundry Order / Ticket Lookup: State customer name, phone, order number, intake date, promised due date/time, total amount, amount paid, and collection balance due. Display a clean Markdown table of garments, services, pricing type (piece or kg), unit price, line total, and special instructions/notes. State current status (Received, Washing, Drying, Ironing, Ready, Collected, Cancelled).
+   - For Laundry Workflow & Pipeline: State the total count of active orders and garments currently in each stage (Intake, Washing, Drying, Ironing, Ready for Pickup). Highlight orders ready for collection and total outstanding balance waiting to be collected.
+   - For Overdue & Unclaimed Garments: List orders that have exceeded their promised due date and garments in 'Ready' status for over 14 days without customer collection. Clearly state customer names, phone numbers, days overdue, and outstanding balance.
+   - For Laundry Revenue & Collections: Report payments collected across Cash, Bank Transfer, and Card, minus any refunds, along with total intake order values.
+   - For Dual-Engine Stores (Both Retail POS and Laundry Enabled): When asked for total store sales or performance, present both Retail Sales and Laundry Collections separately, then provide the combined total revenue.
 SYS;
 
                     $payloadJson = json_encode($payload, JSON_PRETTY_PRINT);
@@ -225,6 +239,60 @@ USER_PROMPT;
         $receiptCandidate = self::detectReceiptNumber($q);
         if ($receiptCandidate) {
             return self::resolveReceiptLookup($receiptCandidate, $branch, $user, $scopeName);
+        }
+
+        // ── 0.1 ABSOLUTE PRIORITY: Specific Laundry Order / Ticket Lookup ─────
+        $laundryCandidate = self::detectLaundryOrderNumber($q);
+        if ($laundryCandidate) {
+            return self::resolveLaundryOrderLookup($laundryCandidate, $branch, $user, $scopeName);
+        }
+
+        // ── 0.2 Laundry Overdue & Unclaimed Garments ─────────────────────────
+        if (
+            str_contains($q, 'overdue laundry') || str_contains($q, 'delayed laundry') ||
+            str_contains($q, 'unclaimed clothes') || str_contains($q, 'unclaimed garments') ||
+            str_contains($q, 'uncollected clothes') || str_contains($q, 'unclaimed laundry') ||
+            str_contains($q, 'late laundry') ||
+            (str_contains($q, 'overdue') && (str_contains($q, 'order') || str_contains($q, 'clothes') || str_contains($q, 'laundry') || str_contains($q, 'garment') || str_contains($q, 'customer'))) ||
+            (str_contains($q, 'unclaimed') && (str_contains($q, 'order') || str_contains($q, 'clothes') || str_contains($q, 'laundry') || str_contains($q, 'garment') || str_contains($q, 'customer') || str_contains($q, 'ready')))
+        ) {
+            return self::resolveLaundryOverdueUnclaimed($q, $branch, $user, $scopeName);
+        }
+
+        // ── 0.3 Laundry Workflow Pipeline & Board Status ─────────────────────
+        if (
+            str_contains($q, 'laundry order') || str_contains($q, 'laundry orders') ||
+            str_contains($q, 'laundry board') || str_contains($q, 'workflow board') ||
+            str_contains($q, 'in washing') || str_contains($q, 'in drying') || str_contains($q, 'in ironing') ||
+            str_contains($q, 'ready for pickup') || str_contains($q, 'ready for collection') ||
+            str_contains($q, 'ready clothes') || str_contains($q, 'washing stage') ||
+            str_contains($q, 'clothes in progress') || str_contains($q, 'garments in progress') ||
+            (str_contains($q, 'laundry') && (str_contains($q, 'stage') || str_contains($q, 'status') || str_contains($q, 'progress') || str_contains($q, 'how many') || str_contains($q, 'current') || str_contains($q, 'active') || str_contains($q, 'pipeline')))
+        ) {
+            return self::resolveLaundryWorkflowPipeline($q, $branch, $user, $scopeName);
+        }
+
+        // ── 0.4 Laundry Revenue & Payment Collections ────────────────────────
+        if (
+            str_contains($q, 'laundry revenue') || str_contains($q, 'laundry sales') ||
+            str_contains($q, 'laundry money') || str_contains($q, 'laundry income') ||
+            str_contains($q, 'laundry payment') || str_contains($q, 'laundry payments') ||
+            str_contains($q, 'collected from laundry') || str_contains($q, 'collected on laundry') ||
+            str_contains($q, 'dry cleaning revenue') || str_contains($q, 'dry cleaning sales') ||
+            (str_contains($q, 'laundry') && (str_contains($q, 'made') || str_contains($q, 'earn') || str_contains($q, 'collected') || str_contains($q, 'collection') || str_contains($q, 'total') || str_contains($q, 'today') || str_contains($q, 'this week') || str_contains($q, 'this month')))
+        ) {
+            return self::resolveLaundryRevenue($q, $branch, $user, $scopeName);
+        }
+
+        // ── 0.5 Top Laundry & Dry Cleaning Services ──────────────────────────
+        if (
+            str_contains($q, 'top laundry') || str_contains($q, 'top dry cleaning') ||
+            str_contains($q, 'popular laundry') || str_contains($q, 'best laundry') ||
+            str_contains($q, 'most washed') || str_contains($q, 'most cleaned') ||
+            str_contains($q, 'top cleaning service') ||
+            (str_contains($q, 'laundry') && (str_contains($q, 'service') || str_contains($q, 'services') || str_contains($q, 'top') || str_contains($q, 'popular')))
+        ) {
+            return self::resolveLaundryTopServices($q, $branch, $user, $scopeName);
         }
 
         // ── 1. Held Sales & Carts on Hold ────────────────────────────────────
@@ -823,6 +891,10 @@ USER_PROMPT;
         }
 
         // ── 12. General Business Overview & Executive Briefing ───────────────
+        if ($branch && $branch->laundryEnabled() && !$branch->posEnabled()) {
+            return self::resolveLaundryRevenue($q, $branch, $user, $scopeName);
+        }
+
         $todaySales = Sale::when($branch, fn($query) => $query->where('branch_id', $branch->id))
             ->whereDate('created_at', today())
             ->selectRaw('COUNT(*) as count, COALESCE(SUM(final_total), 0) as revenue, COALESCE(SUM(profit_made), 0) as profit')
@@ -864,19 +936,67 @@ USER_PROMPT;
                 'time'    => $l->created_at ? $l->created_at->diffForHumans() : 'Recent',
             ])->all();
 
+        $laundryData = null;
+        if ($branch && $branch->laundryEnabled()) {
+            $lToday = (float) LaundryPayment::where('branch_id', $branch->id)
+                ->whereDate('paid_at', today())
+                ->where('type', 'payment')
+                ->sum('amount') - (float) LaundryPayment::where('branch_id', $branch->id)
+                ->whereDate('paid_at', today())
+                ->where('type', 'refund')
+                ->sum('amount');
+
+            $lMonth = (float) LaundryPayment::where('branch_id', $branch->id)
+                ->whereMonth('paid_at', now()->month)
+                ->whereYear('paid_at', now()->year)
+                ->where('type', 'payment')
+                ->sum('amount') - (float) LaundryPayment::where('branch_id', $branch->id)
+                ->whereMonth('paid_at', now()->month)
+                ->whereYear('paid_at', now()->year)
+                ->where('type', 'refund')
+                ->sum('amount');
+
+            $lOrdersToday = LaundryOrder::where('branch_id', $branch->id)
+                ->whereDate('received_at', today())
+                ->where('status', '!=', 'cancelled')
+                ->count();
+
+            $lOrdersMonth = LaundryOrder::where('branch_id', $branch->id)
+                ->whereMonth('received_at', now()->month)
+                ->whereYear('received_at', now()->year)
+                ->where('status', '!=', 'cancelled')
+                ->count();
+
+            $lActiveOrders = LaundryOrder::where('branch_id', $branch->id)
+                ->whereNotIn('status', ['collected', 'cancelled'])
+                ->count();
+
+            $laundryData = [
+                'today_collected'      => $lToday,
+                'today_orders'         => $lOrdersToday,
+                'month_collected'      => $lMonth,
+                'month_orders'         => $lOrdersMonth,
+                'active_in_facility'   => $lActiveOrders,
+            ];
+        }
+
         return [
             'intent'    => 'sales_performance',
             'grounding' => 'Queried multi-tier real-time metrics across sales orders, profits, catalog counts, and inventory health.',
             'data'      => [
-                'scope'                 => $scopeName,
-                'today'                 => ['orders' => (int)$todaySales->count, 'revenue' => (float)$todaySales->revenue, 'profit' => (float)$todaySales->profit],
-                'this_week'             => ['orders' => (int)$thisWeekSales->count, 'revenue' => (float)$thisWeekSales->revenue, 'profit' => (float)$thisWeekSales->profit],
-                'last_week'             => ['orders' => (int)$lastWeekSales->count, 'revenue' => (float)$lastWeekSales->revenue, 'profit' => (float)$lastWeekSales->profit],
-                'this_month'            => ['orders' => (int)$thisMonthSales->count, 'revenue' => (float)$thisMonthSales->revenue, 'profit' => (float)$thisMonthSales->profit],
-                'week_on_week_pct'      => $wowGrowth,
-                'total_products'        => (int)$totalItems,
-                'low_stock_count'       => (int)$lowStockCount,
-                'recent_activity_trail' => $recentActivityLogs,
+                'scope'                         => $scopeName,
+                'today'                         => ['orders' => (int)$todaySales->count, 'revenue' => (float)$todaySales->revenue, 'profit' => (float)$todaySales->profit],
+                'this_week'                     => ['orders' => (int)$thisWeekSales->count, 'revenue' => (float)$thisWeekSales->revenue, 'profit' => (float)$thisWeekSales->profit],
+                'last_week'                     => ['orders' => (int)$lastWeekSales->count, 'revenue' => (float)$lastWeekSales->revenue, 'profit' => (float)$lastWeekSales->profit],
+                'this_month'                    => ['orders' => (int)$thisMonthSales->count, 'revenue' => (float)$thisMonthSales->revenue, 'profit' => (float)$thisMonthSales->profit],
+                'week_on_week_pct'              => $wowGrowth,
+                'total_products'                => (int)$totalItems,
+                'low_stock_count'               => (int)$lowStockCount,
+                'recent_activity_trail'         => $recentActivityLogs,
+                'laundry_enabled'               => !empty($laundryData),
+                'laundry_performance'           => $laundryData,
+                'combined_total_revenue_today'  => (float)$todaySales->revenue + ($laundryData['today_collected'] ?? 0),
+                'combined_total_revenue_month'  => (float)$thisMonthSales->revenue + ($laundryData['month_collected'] ?? 0),
             ],
         ];
     }
@@ -1476,11 +1596,14 @@ USER_PROMPT;
      */
     protected static function userCan(User $user, string $permission): bool
     {
-        if ($user->isSuperAdmin() || $user->isBranchAdmin() || $user->isOrganizationAdmin()) {
+        if ($user->isSuperAdmin()) {
             return true;
         }
         if ($user->branch_id) {
             setPermissionsTeamId($user->branch_id);
+        }
+        if ($user->isBranchAdmin() || $user->isOrganizationAdmin()) {
+            return true;
         }
         try {
             if ($user->permissions->isNotEmpty() && $user->hasDirectPermission($permission)) {
@@ -1529,6 +1652,41 @@ USER_PROMPT;
         // 5. Exact match against existing receipt_id or offline_sale_id in database
         $cleaned = preg_replace('/^#/', '', $q);
         if (strlen($cleaned) >= 4 && Sale::where('receipt_id', $cleaned)->orWhere('offline_sale_id', $cleaned)->exists()) {
+            return $cleaned;
+        }
+
+        return null;
+    }
+
+    /**
+     * Detect if an input query is a laundry order / ticket identifier.
+     */
+    public static function detectLaundryOrderNumber(string $query): ?string
+    {
+        $q = trim($query);
+        $stopWords = ['are', 'is', 'the', 'open', 'closed', 'held', 'sales', 'order', 'orders', 'details', 'left', 'stock', 'today', 'yesterday', 'what', 'how', 'many', 'ready', 'unclaimed', 'overdue', 'laundry', 'status'];
+
+        // 1. Standalone laundry ticket identifier (e.g. "LDY-000001", "LND-20261028-001", "LDY00001")
+        if (preg_match('/^(?:ldy|lnd)[a-z0-9\-_]+$/i', $q, $m)) {
+            return $m[0];
+        }
+
+        // 2. Query mentioning laundry order or ticket (e.g. "laundry order LDY-000001", "laundry ticket #12", "ticket LDY-000005")
+        if (preg_match('/\b(?:laundry\s+order|laundry\s+ticket|garment\s+order|laundry\s+receipt|cleaning\s+order)\s*(?:#|no\.?|num\.?|number)?\s*([a-z0-9\-_]+)/i', $q, $m)) {
+            $candidate = trim($m[1]);
+            if (!in_array(strtolower($candidate), $stopWords) && (preg_match('/[0-9]/', $candidate) || strlen($candidate) >= 3)) {
+                return $candidate;
+            }
+        }
+
+        // 3. Embedded LDY / LND code pattern (e.g. "what is the status of LDY-000003?", "where is LDY-0001?")
+        if (preg_match('/\b((?:ldy|lnd)-[a-z0-9\-]+)\b/i', $q, $m)) {
+            return $m[1];
+        }
+
+        // 4. Exact match against existing LaundryOrder order_number
+        $cleaned = preg_replace('/^#/', '', $q);
+        if (strlen($cleaned) >= 3 && LaundryOrder::where('order_number', $cleaned)->exists()) {
             return $cleaned;
         }
 
@@ -2237,6 +2395,513 @@ USER_PROMPT;
     }
 
     /**
+     * Resolve exact laundry order lookup with full garments list, payment history, and status timeline.
+     */
+    protected static function resolveLaundryOrderLookup(string $orderCode, ?Branch $branch, User $user, string $scopeName): array
+    {
+        $canAccess = self::userCan($user, 'laundry.access') || self::userCan($user, 'canViewSales') || RoleService::canViewSales();
+        if (!$canAccess) {
+            return [
+                'intent'    => 'permission_denied',
+                'grounding' => 'Enforced RBAC permission boundary for laundry order lookup.',
+                'data'      => [
+                    'feature'             => 'Laundry Order Details',
+                    'required_permission' => 'laundry.access',
+                    'message'             => 'You do not have permission to view laundry order records or customer garment details.',
+                ],
+            ];
+        }
+
+        $cleaned = preg_replace('/^#/', '', trim($orderCode));
+        $query = LaundryOrder::query()->with([
+            'customer',
+            'items.service',
+            'payments.recorder',
+            'creator',
+            'collectedBy',
+            'statusHistory.changer',
+        ]);
+
+        if ($branch) {
+            $query->where('branch_id', $branch->id);
+        }
+
+        $order = $query->where(function ($q) use ($cleaned) {
+            $q->where('order_number', $cleaned)
+              ->orWhere('order_number', 'LIKE', "%{$cleaned}%")
+              ->orWhere('id', $cleaned);
+        })->latest('id')->first();
+
+        if (!$order) {
+            return [
+                'intent'    => 'laundry_order_lookup',
+                'grounding' => "Searched for laundry order ticket '{$orderCode}' in {$scopeName} database.",
+                'data'      => [
+                    'found'         => false,
+                    'searched_code' => $orderCode,
+                    'scope'         => $scopeName,
+                    'branch'        => $branch ? $branch->name : 'All Branches',
+                ],
+            ];
+        }
+
+        $items = $order->items->map(function ($it) {
+            return [
+                'service_name'    => $it->service_name ?: ($it->service?->name ?: 'Cleaning Service'),
+                'pricing_type'    => $it->pricing_type,
+                'quantity'        => (float) $it->quantity,
+                'unit_price'      => (float) $it->unit_price,
+                'original_price'  => (float) $it->original_price,
+                'discount_amount' => (float) $it->discount_amount,
+                'line_total'      => (float) $it->line_total,
+                'note'            => $it->note ?: null,
+            ];
+        })->toArray();
+
+        $payments = $order->payments->map(function ($pm) {
+            return [
+                'id'         => $pm->id,
+                'amount'     => (float) $pm->amount,
+                'method'     => ucfirst($pm->method),
+                'type'       => $pm->type,
+                'paid_at'    => $pm->paid_at?->format('M d, Y h:i A') ?: $pm->created_at->format('M d, Y h:i A'),
+                'reference'  => $pm->reference ?: 'N/A',
+                'cashier'    => $pm->recorder?->name ?: 'Staff',
+                'note'       => $pm->note ?: null,
+            ];
+        })->toArray();
+
+        $history = $order->statusHistory->map(function ($sh) {
+            return [
+                'from_status' => $sh->from_status,
+                'to_status'   => $sh->to_status,
+                'changed_at'  => $sh->changed_at?->format('M d, Y h:i A') ?: $sh->created_at->format('M d, Y h:i A'),
+                'staff'       => $sh->changer?->name ?: 'System',
+                'note'        => $sh->note ?: null,
+            ];
+        })->toArray();
+
+        return [
+            'intent'    => 'laundry_order_lookup',
+            'grounding' => "Retrieved complete garment tracking ledger, payments, and workflow timeline for order {$order->order_number}.",
+            'data'      => [
+                'found'               => true,
+                'scope'               => $scopeName,
+                'order_number'        => $order->order_number,
+                'order_id'            => $order->id,
+                'status'              => $order->status,
+                'customer_name'       => $order->customer_name ?: ($order->customer?->name ?: 'Walk-in Customer'),
+                'customer_phone'      => $order->customer_phone ?: ($order->customer?->phone ?: 'N/A'),
+                'created_by'          => $order->creator?->name ?: 'Staff',
+                'received_at'         => $order->received_at?->format('M d, Y h:i A') ?: $order->created_at->format('M d, Y h:i A'),
+                'due_at'              => $order->due_at?->format('M d, Y h:i A') ?: 'Not set',
+                'is_overdue'          => $order->isOverdue(),
+                'is_unclaimed'        => $order->isUnclaimed(),
+                'collected_at'        => $order->collected_at?->format('M d, Y h:i A'),
+                'collected_by'        => $order->collected_by_name ?: ($order->collectedBy?->name ?: null),
+                'subtotal'            => (float) $order->subtotal,
+                'discount_amount'     => (float) $order->discount_amount,
+                'tax_amount'          => (float) $order->tax_amount,
+                'total'               => (float) $order->total,
+                'amount_paid'         => (float) $order->amount_paid,
+                'balance'             => (float) $order->balance,
+                'note'                => $order->note ?: null,
+                'items'               => $items,
+                'items_count'         => count($items),
+                'total_pieces'        => array_sum(array_column($items, 'quantity')),
+                'payments'            => $payments,
+                'status_history'      => $history,
+            ],
+        ];
+    }
+
+    /**
+     * Resolve laundry pipeline board with breakdown by workflow stage, garments in house, and urgent tasks.
+     */
+    protected static function resolveLaundryWorkflowPipeline(string $q, ?Branch $branch, User $user, string $scopeName): array
+    {
+        $canAccess = self::userCan($user, 'laundry.access') || self::userCan($user, 'canViewSales') || RoleService::canViewSales();
+        if (!$canAccess) {
+            return [
+                'intent'    => 'permission_denied',
+                'grounding' => 'Enforced RBAC permission boundary for laundry workflow.',
+                'data'      => [
+                    'feature'             => 'Laundry Workflow Board',
+                    'required_permission' => 'laundry.access',
+                    'message'             => 'You do not have permission to access the laundry workflow board.',
+                ],
+            ];
+        }
+
+        $baseQuery = LaundryOrder::query();
+        if ($branch) {
+            $baseQuery->where('branch_id', $branch->id);
+        }
+
+        $stagesMeta = [
+            'received'  => ['label' => 'Intake / Tagged',        'icon' => '📥'],
+            'washing'   => ['label' => 'In Washing (Washers)',   'icon' => '🫧'],
+            'drying'    => ['label' => 'In Drying (Dryers)',     'icon' => '🌀'],
+            'ironing'   => ['label' => 'Ironing / Pressing',     'icon' => '👔'],
+            'ready'     => ['label' => 'Ready for Pickup',       'icon' => '✅'],
+            'collected' => ['label' => 'Collected / Handed Over', 'icon' => '📦'],
+            'cancelled' => ['label' => 'Cancelled',              'icon' => '❌'],
+        ];
+
+        $pipeline = [];
+        foreach ($stagesMeta as $status => $meta) {
+            $sq = (clone $baseQuery)->where('status', $status);
+            $count = (clone $sq)->count();
+            $totalVal = (clone $sq)->sum('total');
+            $balanceVal = (clone $sq)->sum('balance');
+            $pipeline[$status] = [
+                'label'          => $meta['label'],
+                'icon'           => $meta['icon'],
+                'count'          => $count,
+                'total_value'    => (float) $totalVal,
+                'unpaid_balance' => (float) $balanceVal,
+            ];
+        }
+
+        // Active operational stages in facility
+        $activeOrdersQuery = (clone $baseQuery)->whereIn('status', ['received', 'washing', 'drying', 'ironing', 'ready']);
+        $activeCount = (clone $activeOrdersQuery)->count();
+        $activeTotalValue = (float) (clone $activeOrdersQuery)->sum('total');
+        $activeBalanceDue = (float) (clone $activeOrdersQuery)->sum('balance');
+
+        $activeOrderIds = (clone $activeOrdersQuery)->pluck('id');
+        $totalGarmentsInFacility = (float) LaundryOrderItem::whereIn('order_id', $activeOrderIds)->sum('quantity');
+
+        // Overdue count (past due_at and not yet collected/cancelled)
+        $overdueCount = (clone $baseQuery)
+            ->whereNotIn('status', ['collected', 'cancelled'])
+            ->whereNotNull('due_at')
+            ->where('due_at', '<', now())
+            ->count();
+
+        // Unclaimed ready (> 14 days in ready status)
+        $unclaimedReadyCount = (clone $baseQuery)
+            ->where('status', 'ready')
+            ->where(function ($sq) {
+                $sq->where('due_at', '<', now()->subDays(14))
+                   ->orWhere('updated_at', '<', now()->subDays(14));
+            })
+            ->count();
+
+        // Oldest pending orders requiring immediate attention
+        $urgentPending = (clone $baseQuery)
+            ->whereIn('status', ['received', 'washing', 'drying', 'ironing'])
+            ->orderBy('due_at', 'asc')
+            ->limit(5)
+            ->get()
+            ->map(function ($o) {
+                return [
+                    'order_number'  => $o->order_number,
+                    'customer_name' => $o->customer_name ?: 'Customer',
+                    'status'        => ucfirst($o->status),
+                    'due_at'        => $o->due_at?->format('M d, Y h:i A') ?: 'No due date',
+                    'is_overdue'    => $o->due_at ? $o->due_at->isPast() : false,
+                    'total'         => (float) $o->total,
+                    'balance'       => (float) $o->balance,
+                ];
+            })->toArray();
+
+        return [
+            'intent'    => 'laundry_workflow_pipeline',
+            'grounding' => "Analyzed real-time workflow pipeline stages and garment processing queues for {$scopeName}.",
+            'data'      => [
+                'scope'                       => $scopeName,
+                'pipeline'                    => $pipeline,
+                'active_in_facility_orders'   => $activeCount,
+                'active_in_facility_garments' => $totalGarmentsInFacility,
+                'active_total_value'          => $activeTotalValue,
+                'active_balance_due'          => $activeBalanceDue,
+                'overdue_orders_count'        => $overdueCount,
+                'unclaimed_ready_count'       => $unclaimedReadyCount,
+                'urgent_orders'               => $urgentPending,
+            ],
+        ];
+    }
+
+    /**
+     * Resolve overdue laundry orders (in processing) and unclaimed ready clothes (>14 days).
+     */
+    protected static function resolveLaundryOverdueUnclaimed(string $q, ?Branch $branch, User $user, string $scopeName): array
+    {
+        $canAccess = self::userCan($user, 'laundry.access') || self::userCan($user, 'canViewSales') || RoleService::canViewSales();
+        if (!$canAccess) {
+            return [
+                'intent'    => 'permission_denied',
+                'grounding' => 'Enforced RBAC permission boundary for overdue/unclaimed laundry.',
+                'data'      => [
+                    'feature'             => 'Laundry Overdue & Unclaimed Garments',
+                    'required_permission' => 'laundry.access',
+                    'message'             => 'You do not have permission to view overdue or unclaimed garment orders.',
+                ],
+            ];
+        }
+
+        $baseQuery = LaundryOrder::query();
+        if ($branch) {
+            $baseQuery->where('branch_id', $branch->id);
+        }
+
+        // 1. Overdue orders in production (received, washing, drying, ironing)
+        $overdueProcessing = (clone $baseQuery)
+            ->whereIn('status', ['received', 'washing', 'drying', 'ironing'])
+            ->whereNotNull('due_at')
+            ->where('due_at', '<', now())
+            ->orderBy('due_at', 'asc')
+            ->limit(10)
+            ->get()
+            ->map(function ($o) {
+                $hoursOverdue = now()->diffInHours($o->due_at, true);
+                $delayHuman = $hoursOverdue >= 24 ? round($hoursOverdue / 24, 1) . ' days late' : $hoursOverdue . ' hrs late';
+                return [
+                    'order_number'   => $o->order_number,
+                    'customer_name'  => $o->customer_name ?: 'Customer',
+                    'customer_phone' => $o->customer_phone ?: 'N/A',
+                    'status'         => ucfirst($o->status),
+                    'due_at'         => $o->due_at?->format('M d, Y h:i A'),
+                    'delay'          => $delayHuman,
+                    'total'          => (float) $o->total,
+                    'balance'        => (float) $o->balance,
+                ];
+            })->toArray();
+
+        // 2. Unclaimed ready garments (in ready state > 14 days)
+        $unclaimedReady = (clone $baseQuery)
+            ->where('status', 'ready')
+            ->where(function ($sq) {
+                $sq->where('due_at', '<', now()->subDays(14))
+                   ->orWhere('updated_at', '<', now()->subDays(14));
+            })
+            ->orderBy('due_at', 'asc')
+            ->limit(10)
+            ->get()
+            ->map(function ($o) {
+                $refDate = $o->due_at ?: $o->updated_at;
+                $daysWaiting = now()->diffInDays($refDate, true);
+                return [
+                    'order_number'   => $o->order_number,
+                    'customer_name'  => $o->customer_name ?: 'Customer',
+                    'customer_phone' => $o->customer_phone ?: 'N/A',
+                    'ready_since'    => $refDate?->format('M d, Y'),
+                    'days_waiting'   => $daysWaiting . ' days waiting',
+                    'total'          => (float) $o->total,
+                    'amount_paid'    => (float) $o->amount_paid,
+                    'balance'        => (float) $o->balance,
+                ];
+            })->toArray();
+
+        $unclaimedDebt = (float) (clone $baseQuery)
+            ->where('status', 'ready')
+            ->where(function ($sq) {
+                $sq->where('due_at', '<', now()->subDays(14))
+                   ->orWhere('updated_at', '<', now()->subDays(14));
+            })
+            ->sum('balance');
+
+        return [
+            'intent'    => 'laundry_overdue_unclaimed',
+            'grounding' => "Audited delayed production orders and unclaimed completed garments across {$scopeName}.",
+            'data'      => [
+                'scope'                      => $scopeName,
+                'overdue_processing_count'  => count($overdueProcessing),
+                'overdue_processing_orders' => $overdueProcessing,
+                'unclaimed_ready_count'      => count($unclaimedReady),
+                'unclaimed_ready_orders'     => $unclaimedReady,
+                'unclaimed_tied_up_balance'  => $unclaimedDebt,
+            ],
+        ];
+    }
+
+    /**
+     * Resolve laundry revenue, payment collections by payment method, and unified inflow.
+     */
+    protected static function resolveLaundryRevenue(string $q, ?Branch $branch, User $user, string $scopeName): array
+    {
+        $canReports = self::userCan($user, 'laundry.view_reports') || self::userCan($user, 'canViewReports') || RoleService::canViewReports();
+        if (!$canReports) {
+            return [
+                'intent'    => 'permission_denied',
+                'grounding' => 'Enforced RBAC permission boundary for laundry revenue reports.',
+                'data'      => [
+                    'feature'             => 'Laundry Revenue & Financials',
+                    'required_permission' => 'laundry.view_reports',
+                    'message'             => 'You do not have permission to view laundry financial revenue summaries.',
+                ],
+            ];
+        }
+
+        // Determine timeframe
+        $timeframe = 'today';
+        $startDate = now()->startOfDay();
+        $endDate   = now()->endOfDay();
+        $label     = "Today (" . now()->format('M d, Y') . ")";
+
+        if (str_contains($q, 'yesterday')) {
+            $timeframe = 'yesterday';
+            $startDate = now()->subDay()->startOfDay();
+            $endDate   = now()->subDay()->endOfDay();
+            $label     = "Yesterday (" . now()->subDay()->format('M d, Y') . ")";
+        } elseif (str_contains($q, 'this week') || str_contains($q, 'weekly')) {
+            $timeframe = 'this_week';
+            $startDate = now()->startOfWeek();
+            $endDate   = now()->endOfWeek();
+            $label     = "This Week (since " . now()->startOfWeek()->format('M d') . ")";
+        } elseif (str_contains($q, 'this month') || str_contains($q, 'monthly')) {
+            $timeframe = 'this_month';
+            $startDate = now()->startOfMonth();
+            $endDate   = now()->endOfMonth();
+            $label     = "This Month (" . now()->format('F Y') . ")";
+        } elseif (str_contains($q, 'all time') || str_contains($q, 'overall')) {
+            $timeframe = 'all_time';
+            $startDate = Carbon::create(2020, 1, 1);
+            $endDate   = now()->endOfDay();
+            $label     = "All-Time";
+        }
+
+        $basePayQuery = LaundryPayment::query();
+        $baseOrderQuery = LaundryOrder::query();
+
+        if ($branch) {
+            $basePayQuery->where('branch_id', $branch->id);
+            $baseOrderQuery->where('branch_id', $branch->id);
+        }
+
+        // Payments in timeframe
+        $periodPayments = (clone $basePayQuery)->whereBetween('paid_at', [$startDate, $endDate]);
+        $inflowTotal = (float) (clone $periodPayments)->where('type', 'payment')->sum('amount');
+        $refundTotal = (float) (clone $periodPayments)->where('type', 'refund')->sum('amount');
+        $netCollected = max(0, $inflowTotal - $refundTotal);
+
+        // Payment methods breakdown
+        $methodBreakdown = (clone $periodPayments)
+            ->where('type', 'payment')
+            ->select('method', DB::raw('SUM(amount) as total_amount'), DB::raw('COUNT(id) as payment_count'))
+            ->groupBy('method')
+            ->get()
+            ->map(function ($m) use ($inflowTotal) {
+                $amt = (float) $m->total_amount;
+                return [
+                    'method'     => ucfirst($m->method ?: 'Cash'),
+                    'amount'     => $amt,
+                    'count'      => (int) $m->payment_count,
+                    'percentage' => $inflowTotal > 0 ? round(($amt / $inflowTotal) * 100, 1) : 0,
+                ];
+            })->toArray();
+
+        // Orders intake in timeframe
+        $periodOrders = (clone $baseOrderQuery)->whereBetween('created_at', [$startDate, $endDate]);
+        $ordersCount = (clone $periodOrders)->count();
+        $ordersBookedTotal = (float) (clone $periodOrders)->sum('total');
+
+        // Month-to-date and Today reference metrics
+        $todayCollected = (float) (clone $basePayQuery)->whereBetween('paid_at', [now()->startOfDay(), now()->endOfDay()])->where('type', 'payment')->sum('amount');
+        $monthCollected = (float) (clone $basePayQuery)->whereBetween('paid_at', [now()->startOfMonth(), now()->endOfMonth()])->where('type', 'payment')->sum('amount');
+
+        // Total outstanding debt balance
+        $totalOutstandingReceivable = (float) (clone $baseOrderQuery)->whereNotIn('status', ['cancelled'])->sum('balance');
+
+        // Retail POS Sales comparison (for dual-engine branches)
+        $dualEngine = false;
+        $posTodayRevenue = 0;
+        $posMonthRevenue = 0;
+        if ($branch && $branch->posEnabled() && $branch->laundryEnabled()) {
+            $dualEngine = true;
+            $posTodayRevenue = (float) Sale::where('branch_id', $branch->id)->whereBetween('created_at', [now()->startOfDay(), now()->endOfDay()])->sum('final_total');
+            $posMonthRevenue = (float) Sale::where('branch_id', $branch->id)->whereBetween('created_at', [now()->startOfMonth(), now()->endOfMonth()])->sum('final_total');
+        }
+
+        return [
+            'intent'    => 'laundry_revenue_summary',
+            'grounding' => "Aggregated laundry customer collections, booked ticket intake, and cashflow for {$scopeName}.",
+            'data'      => [
+                'scope'                  => $scopeName,
+                'label'                  => $label,
+                'timeframe'              => $timeframe,
+                'net_collected'          => $netCollected,
+                'refund_total'           => $refundTotal,
+                'orders_booked_count'    => $ordersCount,
+                'orders_booked_value'    => $ordersBookedTotal,
+                'payment_methods'        => $methodBreakdown,
+                'today_collected'        => $todayCollected,
+                'month_collected'        => $monthCollected,
+                'total_outstanding_debt' => $totalOutstandingReceivable,
+                'is_dual_engine'         => $dualEngine,
+                'pos_today_revenue'      => $posTodayRevenue,
+                'pos_month_revenue'      => $posMonthRevenue,
+            ],
+        ];
+    }
+
+    /**
+     * Resolve top laundry & dry cleaning services ranked by volume, revenue, and garment category.
+     */
+    protected static function resolveLaundryTopServices(string $q, ?Branch $branch, User $user, string $scopeName): array
+    {
+        $canAccess = self::userCan($user, 'laundry.access') || self::userCan($user, 'canViewSales') || RoleService::canViewSales();
+        if (!$canAccess) {
+            return [
+                'intent'    => 'permission_denied',
+                'grounding' => 'Enforced RBAC permission boundary for laundry services.',
+                'data'      => [
+                    'feature'             => 'Laundry Services Ranking',
+                    'required_permission' => 'laundry.access',
+                    'message'             => 'You do not have permission to view laundry service reports.',
+                ],
+            ];
+        }
+
+        $query = LaundryOrderItem::query()
+            ->join('laundry_orders', 'laundry_order_items.order_id', '=', 'laundry_orders.id')
+            ->where('laundry_orders.status', '!=', 'cancelled');
+
+        if ($branch) {
+            $query->where('laundry_orders.branch_id', $branch->id);
+        }
+
+        $topServices = $query->select(
+                'laundry_order_items.service_name',
+                'laundry_order_items.pricing_type',
+                DB::raw('COUNT(laundry_order_items.id) as line_count'),
+                DB::raw('SUM(laundry_order_items.quantity) as total_quantity'),
+                DB::raw('SUM(laundry_order_items.line_total) as total_revenue'),
+                DB::raw('AVG(laundry_order_items.unit_price) as avg_unit_price')
+            )
+            ->groupBy('laundry_order_items.service_name', 'laundry_order_items.pricing_type')
+            ->orderByDesc('total_revenue')
+            ->limit(10)
+            ->get();
+
+        $totalRevenueAll = $topServices->sum('total_revenue');
+
+        $servicesList = $topServices->map(function ($s) use ($totalRevenueAll) {
+            $rev = (float) $s->total_revenue;
+            return [
+                'service_name'   => $s->service_name ?: 'Standard Cleaning',
+                'pricing_type'   => $s->pricing_type,
+                'quantity'       => (float) $s->total_quantity,
+                'revenue'        => $rev,
+                'avg_unit_price' => (float) $s->avg_unit_price,
+                'order_count'    => (int) $s->line_count,
+                'revenue_share'  => $totalRevenueAll > 0 ? round(($rev / $totalRevenueAll) * 100, 1) : 0,
+            ];
+        })->toArray();
+
+        return [
+            'intent'    => 'laundry_top_services',
+            'grounding' => "Analyzed most patronized garment cleaning services and sales volume for {$scopeName}.",
+            'data'      => [
+                'scope'          => $scopeName,
+                'total_analyzed' => count($servicesList),
+                'top_services'   => $servicesList,
+            ],
+        ];
+    }
+
+    /**
      * Generate fallback rich markdown summary when external AI provider is offline or not configured.
      */
     protected static function generateRuleBasedSummary(string $intent, array $payload, string $question): string
@@ -2259,6 +2924,11 @@ USER_PROMPT;
             'top_sellers'                  => self::formatTopSellersSummary($payload),
             'inventory_status'             => self::formatInventoryStatusSummary($payload),
             'debt_and_credit_health'       => self::formatDebtHealthSummary($payload),
+            'laundry_order_lookup'         => self::formatLaundryOrderSummary($payload),
+            'laundry_workflow_pipeline'    => self::formatLaundryWorkflowSummary($payload),
+            'laundry_overdue_unclaimed'    => self::formatLaundryOverdueSummary($payload),
+            'laundry_revenue_summary'      => self::formatLaundryRevenueSummary($payload),
+            'laundry_top_services'         => self::formatLaundryTopServicesSummary($payload),
             'tax_summary'                  => "### Tax & VAT Collection Brief\n\n- **Scope**: {$payload['scope']}\n- **Month-to-Date Tax**: **₦" . number_format($payload['this_month_tax'], 2) . "**\n- **All-Time Tax Collected**: **₦" . number_format($payload['all_time_tax'], 2) . "**\n\nAll tax figures are calculated strictly from completed sales invoices.",
             'imei_lookup'                  => $payload['found']
                 ? "### Device IMEI Verification Record\n\n- **Device Item**: **{$payload['device']['item_name']}**\n- **IMEI / Serial**: `{$payload['device']['imei']}`\n- **Current Status**: **" . strtoupper($payload['device']['status']) . "**\n- **Stock Location**: {$payload['device']['location']}"
@@ -2552,7 +3222,18 @@ USER_PROMPT;
 
         $out .= "#### Operational Snapshot\n";
         $out .= "- **Week-on-Week Growth**: **" . ($p['week_on_week_pct'] >= 0 ? '+' : '') . "{$p['week_on_week_pct']}%**\n";
-        $out .= "- **Active Catalog**: Managing **{$p['total_products']} products** with **{$p['low_stock_count']} low-stock items** needing attention.";
+        $out .= "- **Active Catalog**: Managing **{$p['total_products']} products** with **{$p['low_stock_count']} low-stock items** needing attention.\n";
+
+        if (!empty($p['laundry_enabled']) && !empty($p['laundry_performance'])) {
+            $lp = $p['laundry_performance'];
+            $out .= "\n#### 🧺 Laundry & Dry Cleaning Inflow\n\n";
+            $out .= "| Metric | Today | This Month |\n";
+            $out .= "| :--- | :--- | :--- |\n";
+            $out .= "| **Orders Intake** | {$lp['today_orders']} orders | {$lp['month_orders']} orders |\n";
+            $out .= "| **Collections Received** | ₦" . number_format($lp['today_collected'], 2) . " | ₦" . number_format($lp['month_collected'], 2) . " |\n";
+            $out .= "\n- **Active Garments / Orders in Facility**: **{$lp['active_in_facility']} orders** currently in workflow\n";
+            $out .= "- **Grand Total Combined Inflow (Retail POS + Laundry)**: **₦" . number_format($p['combined_total_revenue_today'], 2) . "** today (**₦" . number_format($p['combined_total_revenue_month'], 2) . "** this month)\n";
+        }
         return $out;
     }
 
@@ -2901,6 +3582,236 @@ USER_PROMPT;
         if (empty($p['catalog_inversions']['items']) && empty($p['cashier_loss_discounts']) && !$net['is_net_negative']) {
             $out .= "- Maintain current healthy pricing margins and continue monitoring cashier discounts.\n";
         }
+
+        return $out;
+    }
+
+    private static function formatLaundryOrderSummary(array $p): string
+    {
+        if (empty($p['found'])) {
+            return "### 🧺 Laundry Order Lookup\n\nNo laundry order matching **#{$p['searched_code']}** was found in **{$p['scope']}**.\n\nPlease verify the ticket number (e.g. `LDY-000001` or `#12`).";
+        }
+
+        $statusIcons = [
+            'received'  => '📥 Intake / Tagged',
+            'washing'   => '🫧 In Washing',
+            'drying'    => '🌀 In Drying',
+            'ironing'   => '👔 Ironing / Pressing',
+            'ready'     => '✅ Ready for Pickup',
+            'collected' => '📦 Collected / Done',
+            'cancelled' => '❌ Cancelled',
+        ];
+        $statusText = $statusIcons[$p['status']] ?? ucfirst($p['status']);
+
+        $out = "### 🧺 Laundry Ticket #{$p['order_number']}\n\n";
+        $out .= "**Current Stage**: **{$statusText}**\n";
+        $out .= "- **Customer**: **{$p['customer_name']}** (📞 {$p['customer_phone']})\n";
+        $out .= "- **Intake Date**: {$p['received_at']} (Logged by: {$p['created_by']})\n";
+        $out .= "- **Due Date**: **{$p['due_at']}**";
+
+        if ($p['is_overdue']) {
+            $out .= " ⚠️ **(OVERDUE)**";
+        }
+        if ($p['is_unclaimed']) {
+            $out .= " ⚠️ **(UNCLAIMED READY >14 DAYS)**";
+        }
+        $out .= "\n";
+
+        if (!empty($p['collected_at'])) {
+            $out .= "- **Handed Over**: {$p['collected_at']} (by {$p['collected_by']})\n";
+        }
+        $out .= "\n";
+
+        // Garments List
+        $out .= "#### 👔 Garments & Cleaning Services ({$p['items_count']} items / {$p['total_pieces']} pieces)\n\n";
+        $out .= "| Garment / Service | Pricing | Qty | Unit Price (₦) | Line Total (₦) | Special Notes |\n";
+        $out .= "| :--- | :--- | :--- | :--- | :--- | :--- |\n";
+        foreach ($p['items'] as $it) {
+            $unitNote = $it['note'] ? htmlspecialchars($it['note']) : '-';
+            $out .= "| **{$it['service_name']}** | {$it['pricing_type']} | {$it['quantity']} | ₦" . number_format($it['unit_price'], 2) . " | **₦" . number_format($it['line_total'], 2) . "** | {$unitNote} |\n";
+        }
+        $out .= "\n";
+
+        // Financials
+        $out .= "#### 💰 Financial Ledger & Balance\n";
+        $out .= "- **Subtotal**: ₦" . number_format($p['subtotal'], 2) . "\n";
+        if ($p['discount_amount'] > 0) {
+            $out .= "- **Discount Granted**: -₦" . number_format($p['discount_amount'], 2) . "\n";
+        }
+        if ($p['tax_amount'] > 0) {
+            $out .= "- **Tax / VAT**: ₦" . number_format($p['tax_amount'], 2) . "\n";
+        }
+        $out .= "- **Total Order Bill**: **₦" . number_format($p['total'], 2) . "**\n";
+        $out .= "- **Amount Paid**: **₦" . number_format($p['amount_paid'], 2) . "**\n";
+        $out .= "- **Outstanding Balance Due**: **" . ($p['balance'] > 0 ? "₦" . number_format($p['balance'], 2) . " ⚠️ *(Payment Pending)*" : "₦0.00 ✅ *(Fully Settled)*") . "**\n\n";
+
+        // Payments
+        if (!empty($p['payments'])) {
+            $out .= "#### 💳 Payments Received\n\n";
+            $out .= "| Method | Type | Amount (₦) | Date & Time | Cashier | Ref |\n";
+            $out .= "| :--- | :--- | :--- | :--- | :--- | :--- |\n";
+            foreach ($p['payments'] as $pm) {
+                $out .= "| {$pm['method']} | {$pm['type']} | ₦" . number_format($pm['amount'], 2) . " | {$pm['paid_at']} | {$pm['cashier']} | `{$pm['reference']}` |\n";
+            }
+            $out .= "\n";
+        }
+
+        // Timeline
+        if (!empty($p['status_history'])) {
+            $out .= "#### 🕒 Workflow Stage Timeline\n\n";
+            $out .= "| Timestamp | Status Change | Handled By | Notes |\n";
+            $out .= "| :--- | :--- | :--- | :--- |\n";
+            foreach ($p['status_history'] as $sh) {
+                $from = $sh['from_status'] ? ucfirst($sh['from_status']) : 'Created';
+                $to = ucfirst($sh['to_status']);
+                $shNote = $sh['note'] ? htmlspecialchars($sh['note']) : '-';
+                $out .= "| {$sh['changed_at']} | **{$from} ➔ {$to}** | {$sh['staff']} | {$shNote} |\n";
+            }
+        }
+
+        return $out;
+    }
+
+    private static function formatLaundryWorkflowSummary(array $p): string
+    {
+        $out = "### 🧺 Laundry Workflow & Operations Board\n\n";
+        $out .= "**Scope**: {$p['scope']}\n\n";
+
+        // Snapshot cards
+        $out .= "#### 🏭 Facility Operations Snapshot\n";
+        $out .= "- **Active Clothes in Facility**: **{$p['active_in_facility_garments']} garments / pieces** across **{$p['active_in_facility_orders']} orders**\n";
+        $out .= "- **Active Work Value**: **₦" . number_format($p['active_total_value'], 2) . "** (Pending Collections: **₦" . number_format($p['active_balance_due'], 2) . "**)\n";
+        $out .= "- **Delayed / Overdue Orders**: **" . ($p['overdue_orders_count'] > 0 ? "⚠️ {$p['overdue_orders_count']} orders needing attention" : "✅ 0 orders overdue") . "**\n";
+        $out .= "- **Unclaimed Ready Garments (>14 days)**: **" . ($p['unclaimed_ready_count'] > 0 ? "⚠️ {$p['unclaimed_ready_count']} unclaimed tickets" : "✅ 0 unclaimed tickets") . "**\n\n";
+
+        // Pipeline stage table
+        $out .= "#### 📋 Workflow Pipeline by Stage\n\n";
+        $out .= "| Workflow Stage | Active Orders | Total Value (₦) | Unpaid Balance (₦) |\n";
+        $out .= "| :--- | :--- | :--- | :--- |\n";
+        foreach ($p['pipeline'] as $status => $st) {
+            $out .= "| {$st['icon']} **{$st['label']}** | **{$st['count']}** | ₦" . number_format($st['total_value'], 2) . " | ₦" . number_format($st['unpaid_balance'], 2) . " |\n";
+        }
+        $out .= "\n";
+
+        // Urgent queue
+        if (!empty($p['urgent_orders'])) {
+            $out .= "#### ⏰ Oldest / Urgent Orders in Progress\n\n";
+            $out .= "| Ticket # | Customer | Current Stage | Promised Due Date | Total (₦) | Balance (₦) |\n";
+            $out .= "| :--- | :--- | :--- | :--- | :--- | :--- |\n";
+            foreach ($p['urgent_orders'] as $uo) {
+                $odFlag = $uo['is_overdue'] ? ' ⚠️ *(Overdue)*' : '';
+                $out .= "| **#{$uo['order_number']}** | {$uo['customer_name']} | {$uo['status']} | {$uo['due_at']}{$odFlag} | ₦" . number_format($uo['total'], 2) . " | ₦" . number_format($uo['balance'], 2) . " |\n";
+            }
+        }
+
+        return $out;
+    }
+
+    private static function formatLaundryOverdueSummary(array $p): string
+    {
+        $out = "### ⚠️ Laundry Overdue & Unclaimed Garments Audit\n\n";
+        $out .= "**Scope**: {$p['scope']}\n\n";
+
+        // Section 1: Overdue in processing
+        $out .= "#### 🚨 1. Delayed Production Orders ({$p['overdue_processing_count']} in facility)\n";
+        $out .= "*Garments that are still in washing, drying, or ironing past their promised collection date:*\n\n";
+
+        if (!empty($p['overdue_processing_orders'])) {
+            $out .= "| Ticket # | Customer | Phone | Stage | Promised Due Date | Delay | Balance Due (₦) |\n";
+            $out .= "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n";
+            foreach ($p['overdue_processing_orders'] as $op) {
+                $out .= "| **#{$op['order_number']}** | {$op['customer_name']} | {$op['customer_phone']} | {$op['status']} | {$op['due_at']} | **{$op['delay']}** | ₦" . number_format($op['balance'], 2) . " |\n";
+            }
+            $out .= "\n";
+        } else {
+            $out .= "✅ **No processing delays!** All garments currently in facility are within their scheduled turnaround timeframe.\n\n";
+        }
+
+        // Section 2: Unclaimed in ready storage
+        $out .= "#### 📦 2. Unclaimed Cleaned Garments (>14 Days in Ready Storage)\n";
+        $out .= "*Cleaned clothes taking up shelf space with uncollected revenue:*\n\n";
+
+        if (!empty($p['unclaimed_ready_orders'])) {
+            $out .= "| Ticket # | Customer | Phone | Ready Since | Waiting Duration | Total Bill (₦) | Balance Tied Up (₦) |\n";
+            $out .= "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n";
+            foreach ($p['unclaimed_ready_orders'] as $ur) {
+                $out .= "| **#{$ur['order_number']}** | {$ur['customer_name']} | {$ur['customer_phone']} | {$ur['ready_since']} | **{$ur['days_waiting']}** | ₦" . number_format($ur['total'], 2) . " | **₦" . number_format($ur['balance'], 2) . "** |\n";
+            }
+            $out .= "\n- **Total Cashflow Tied Up in Unclaimed Garments**: **₦" . number_format($p['unclaimed_tied_up_balance'], 2) . "**\n\n";
+            $out .= "#### 💡 Recommended Actions\n";
+            $out .= "- Send automated WhatsApp / SMS ready pickup reminders to overdue customers.\n";
+            $out .= "- For orders over 30 days old, consider enacting storage fee policies or dedicated collection outreach.";
+        } else {
+            $out .= "✅ **No long-term unclaimed clothes!** Customers are picking up their cleaned garments promptly.\n";
+        }
+
+        return $out;
+    }
+
+    private static function formatLaundryRevenueSummary(array $p): string
+    {
+        $out = "### 🧺 Laundry Revenue & Cashflow Summary\n\n";
+        $out .= "**Scope**: {$p['scope']} | **Period**: **{$p['label']}**\n\n";
+
+        $out .= "#### 💵 Financial Snapshot\n";
+        $out .= "- **Net Collections Received**: **₦" . number_format($p['net_collected'], 2) . "**" . ($p['refund_total'] > 0 ? " *(Refunds deducted: ₦" . number_format($p['refund_total'], 2) . ")*" : "") . "\n";
+        $out .= "- **New Orders Booked**: **{$p['orders_booked_count']} tickets** (Booked Value: **₦" . number_format($p['orders_booked_value'], 2) . "**)\n";
+        $out .= "- **Today's Collections**: **₦" . number_format($p['today_collected'], 2) . "** | **Month-to-Date Collections**: **₦" . number_format($p['month_collected'], 2) . "**\n";
+        $out .= "- **Total Outstanding Receivable**: **₦" . number_format($p['total_outstanding_debt'], 2) . "** across uncollected/unpaid orders.\n\n";
+
+        // Payment method breakdown
+        if (!empty($p['payment_methods'])) {
+            $out .= "#### 💳 Collections by Payment Method\n\n";
+            $out .= "| Payment Channel | Transactions | Amount Collected (₦) | Share % |\n";
+            $out .= "| :--- | :--- | :--- | :--- |\n";
+            foreach ($p['payment_methods'] as $pm) {
+                $out .= "| **{$pm['method']}** | {$pm['count']} | ₦" . number_format($pm['amount'], 2) . " | **{$pm['percentage']}%** |\n";
+            }
+            $out .= "\n";
+        }
+
+        // Dual Engine Unified Inflow Table
+        if (!empty($p['is_dual_engine'])) {
+            $totalToday = $p['today_collected'] + $p['pos_today_revenue'];
+            $totalMonth = $p['month_collected'] + $p['pos_month_revenue'];
+
+            $out .= "#### 🏪 Dual-Engine Unified Business Inflow\n\n";
+            $out .= "| Business Engine | Today's Inflow (₦) | Month Inflow (₦) |\n";
+            $out .= "| :--- | :--- | :--- |\n";
+            $out .= "| 🧺 Laundry & Dry Cleaning | ₦" . number_format($p['today_collected'], 2) . " | ₦" . number_format($p['month_collected'], 2) . " |\n";
+            $out .= "| 🛒 Retail POS Supermarket | ₦" . number_format($p['pos_today_revenue'], 2) . " | ₦" . number_format($p['pos_month_revenue'], 2) . " |\n";
+            $out .= "| **Combined Total Inflow** | **₦" . number_format($totalToday, 2) . "** | **₦" . number_format($totalMonth, 2) . "** |\n";
+        }
+
+        return $out;
+    }
+
+    private static function formatLaundryTopServicesSummary(array $p): string
+    {
+        $out = "### 👔 Top Laundry & Dry Cleaning Services\n\n";
+        $out .= "**Scope**: {$p['scope']}\n\n";
+
+        if (empty($p['top_services'])) {
+            return $out . "No completed laundry service records found in this branch yet.";
+        }
+
+        $out .= "| Rank | Service & Garment Treatment | Pricing | Total Volume | Revenue Generated (₦) | Avg Unit Price (₦) | Share % |\n";
+        $out .= "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n";
+
+        foreach ($p['top_services'] as $idx => $ts) {
+            $rank = $idx + 1;
+            $badge = match ($rank) {
+                1 => '🥇',
+                2 => '🥈',
+                3 => '🥉',
+                default => "#{$rank}",
+            };
+            $unitLabel = $ts['pricing_type'] === 'kg' ? 'kg' : 'pcs';
+            $out .= "| {$badge} | **{$ts['service_name']}** | {$ts['pricing_type']} | {$ts['quantity']} {$unitLabel} | **₦" . number_format($ts['revenue'], 2) . "** | ₦" . number_format($ts['avg_unit_price'], 2) . " | {$ts['revenue_share']}% |\n";
+        }
+
+        $out .= "\n#### 💡 Revenue Optimization Tip\n";
+        $out .= "- Promote bundled care (e.g. suits dry cleaning + starch press) to maximize average transaction basket size.";
 
         return $out;
     }

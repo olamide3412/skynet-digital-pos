@@ -256,6 +256,7 @@ const targetIndustries = [
     { name: 'Supermarkets & Groceries', icon: '🛒', desc: 'High-speed barcode scanning, multi-cashier registers, held sales queues, and scale weight integration.' },
     { name: 'Pharmacies & Chemists', icon: '💊', desc: 'Expiry date tracking, dosage packs/strips conversions, and prescribed customer history.' },
     { name: 'Phones & Electronics', icon: '📱', desc: 'IMEI serial number registration, warranty receipt generation, and accessory inventories.' },
+    { name: 'Laundromats & Dry Cleaners', icon: '🧺', desc: 'Itemized garment intake, piece/kg billing, visual workflow board (intake to ready), garment tag printing, and collection tracking. Included in all plans, even Starter!' },
     { name: 'Wholesale & Distributors', icon: '📦', desc: 'Carton/Pack tiered pricing, customer credit ledgers, and multi-warehouse transfers.' },
     { name: 'Boutiques & Fashion', icon: '👗', desc: 'Color/size product matrices, custom barcode generation, and customer VIP discounts.' },
     { name: 'Bars, Lounges & Cafes', icon: '☕', desc: 'Table held sales, split bill settlements, and end-of-day register reconciliation.' },
@@ -316,6 +317,10 @@ const faqs = [
     {
         q: 'Can you assist in migrating my data from an existing POS system?',
         a: 'Yes, absolutely! We provide complimentary, end-to-end data migration assistance. Whether your inventory and customer data are currently in Excel/CSV spreadsheets, QuickBooks, Loyverse, Odoo, Vend, or any custom POS, our technical team will format, verify barcodes, and import your complete database so your store transitions smoothly with zero operational downtime.',
+    },
+    {
+        q: 'Is the Laundry Management Module included in all subscription plans?',
+        a: 'Yes, absolutely! The complete Laundry & Dry Cleaning Management suite (including garment intake, piece/kg pricing, status workflow boards, thermal garment tags, and customer collection tracking) is fully included across all subscription tiers—even the Starter plan—with zero add-on license fees. Branches can enable laundry operations at any time alongside standard retail sales.',
     },
     {
         q: 'Does the system include full double-entry accounting and financial reports?',
@@ -384,7 +389,7 @@ function toggleFaq(index) {
 
                 <!-- Persuasive Subtitle -->
                 <p class="animate-hero-subtitle text-slate-600 dark:text-slate-300 text-base sm:text-lg lg:text-xl max-w-3xl mx-auto leading-relaxed font-normal">
-                    Engineered for high-volume retail stores, supermarkets, pharmacies, electronics shops, and wholesale merchants. Ring up checkouts in under 0.4s offline or online, track IMEIs, eliminate stock shrinkage, and query your business performance in natural English, Pidgin, or native dialects.
+                    Engineered for high-volume retail stores, supermarkets, pharmacies, electronics shops, laundromats &amp; dry cleaners, and wholesale merchants. Ring up checkouts in under 0.4s offline or online, track garment workflows &amp; IMEIs, eliminate stock shrinkage, and query your business performance in natural English, Pidgin, or native dialects.
                 </p>
 
                 <!-- Primary Action Buttons -->
@@ -777,7 +782,7 @@ function toggleFaq(index) {
                         <div class="text-xl group-hover:scale-125 group-hover:rotate-6 transition-transform duration-300">🎯</div>
                         <h4 class="text-xs font-extrabold text-slate-900 dark:text-white">Multi-Industry Matrices</h4>
                         <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                            Full matrix support for Supermarkets (packs/cartons), Pharmacies (strips/boxes), and Boutiques (sizes/colors).
+                            Full matrix support for Supermarkets (packs/cartons), Pharmacies (strips/boxes), Boutiques (sizes/colors), and Laundromats (garments/piece/kg).
                         </p>
                     </div>
                 </div>
@@ -1286,6 +1291,10 @@ function toggleFaq(index) {
                             <span class="text-emerald-500 font-bold flex-shrink-0">✓</span>
                             <span>{{ item.item_text }}</span>
                         </div>
+                    </div>
+                    <div class="mt-5 pt-4 border-t border-violet-200/60 dark:border-violet-800/60 flex items-center gap-2 text-xs text-violet-800 dark:text-violet-300 font-bold">
+                        <span class="text-base">🧺</span>
+                        <span>Full Laundry Management Module is included across all plans (even Starter) with zero add-on license fees.</span>
                     </div>
                 </div>
 

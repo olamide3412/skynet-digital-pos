@@ -36,6 +36,9 @@ class HandleInertiaRequests extends Middleware
         $defaultBranch = \App\Models\Branch::orderBy('id')->first();
         $branch = $activeBranch ?? $defaultBranch;
 
+        $isBranchScope = ($urlBranch !== null) || (!in_array($segment1, $reservedPrefixes, true) && $activeBranch !== null);
+        $themeBranch = $isBranchScope ? ($urlBranch ?? $activeBranch) : null;
+
         if ($branch) {
             \Illuminate\Support\Facades\URL::defaults(['branch' => $branch->slug]);
         }
@@ -185,11 +188,51 @@ class HandleInertiaRequests extends Middleware
                 ? RoleService::allPermissions()
                 : [],
 
-            'theme_color'             => fn() => \App\Models\SystemSetting::get('primary_color_theme', 'skynet'),
-            'custom_primary_hex'      => fn() => \App\Models\SystemSetting::get('custom_primary_hex', '#7B00FF'),
-            'custom_secondary_hex'    => fn() => \App\Models\SystemSetting::get('custom_secondary_hex', '#FBA43D'),
-            'dark_mode_accent_mode'   => fn() => \App\Models\SystemSetting::get('dark_mode_accent_mode', 'white'),
-            'custom_dark_primary_hex' => fn() => \App\Models\SystemSetting::get('custom_dark_primary_hex', '#FFFFFF'),
+            'theme_color' => function () use ($themeBranch) {
+                if ($themeBranch) {
+                    $bTheme = $themeBranch->getSettings()->theme_color;
+                    if (!empty($bTheme)) {
+                        return $bTheme;
+                    }
+                }
+                return \App\Models\SystemSetting::get('primary_color_theme', 'skynet');
+            },
+            'custom_primary_hex' => function () use ($themeBranch) {
+                if ($themeBranch) {
+                    $bHex = $themeBranch->getSettings()->custom_primary_hex;
+                    if (!empty($bHex)) {
+                        return $bHex;
+                    }
+                }
+                return \App\Models\SystemSetting::get('custom_primary_hex', '#7B00FF');
+            },
+            'custom_secondary_hex' => function () use ($themeBranch) {
+                if ($themeBranch) {
+                    $bHex = $themeBranch->getSettings()->custom_secondary_hex;
+                    if (!empty($bHex)) {
+                        return $bHex;
+                    }
+                }
+                return \App\Models\SystemSetting::get('custom_secondary_hex', '#FBA43D');
+            },
+            'dark_mode_accent_mode' => function () use ($themeBranch) {
+                if ($themeBranch) {
+                    $bMode = $themeBranch->getSettings()->dark_mode_accent_mode;
+                    if (!empty($bMode)) {
+                        return $bMode;
+                    }
+                }
+                return \App\Models\SystemSetting::get('dark_mode_accent_mode', 'white');
+            },
+            'custom_dark_primary_hex' => function () use ($themeBranch) {
+                if ($themeBranch) {
+                    $bHex = $themeBranch->getSettings()->custom_dark_primary_hex;
+                    if (!empty($bHex)) {
+                        return $bHex;
+                    }
+                }
+                return \App\Models\SystemSetting::get('custom_dark_primary_hex', '#FFFFFF');
+            },
 
             // ── Branch Notifications (User Scoped) ─────────────────────────────
             'unread_notifications_count' => fn() => $branch ? \App\Services\NotificationService::getUnreadCount($branch->id, $user?->id) : 0,

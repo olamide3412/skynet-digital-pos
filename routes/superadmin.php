@@ -59,6 +59,8 @@ Route::prefix('superadmin')->name('superadmin.')->group(function () {
             ->name('branches.toggle-pos');
         Route::put('/branches/{branch}/settings', [BranchController::class, 'updateSettings'])
             ->name('branches.settings.update');
+        Route::put('/branches/{branch}/theme', [BranchController::class, 'updateTheme'])
+            ->name('branches.theme.update');
         Route::post('/branches/{branch}/logo', [BranchController::class, 'updateLogo'])
             ->name('branches.logo.update');
         Route::get('/branches/{branch}/export-items', [BranchController::class, 'exportItems'])

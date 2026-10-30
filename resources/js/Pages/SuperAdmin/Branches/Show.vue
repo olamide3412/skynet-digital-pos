@@ -28,16 +28,41 @@ const props = defineProps({
     commerce_api_base_url: String,
     ecommerce_capability_enabled: Boolean,
     new_commerce_token: String,
+    themePalettes: {
+        type: Array,
+        default: () => [],
+    },
+    globalDefaultTheme: {
+        type: Object,
+        default: () => ({}),
+    },
     filters: Object,
 })
 
 // ── Tab Management ─────────────────────────────────────────────────────────────
 const activeTab = ref(props.filters?.active_tab || 'overview')
+const tabNavRef = ref(null)
+
 const setActiveTab = (tab) => {
     activeTab.value = tab
     const url = new URL(window.location.href)
     url.searchParams.set('tab', tab)
     window.history.replaceState({}, '', url.toString())
+
+    setTimeout(() => {
+        const activeBtn = tabNavRef.value?.querySelector(`[data-tab="${tab}"]`)
+        if (activeBtn) {
+            activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+        }
+    }, 50)
+}
+
+const scrollTabs = (direction) => {
+    if (!tabNavRef.value) return
+    tabNavRef.value.scrollBy({
+        left: direction === 'left' ? -260 : 260,
+        behavior: 'smooth',
+    })
 }
 
 // ── Copied Feedback & Share Link ───────────────────────────────────────────
@@ -388,6 +413,60 @@ const submitSettings = () => {
     })
 }
 
+// ── Tab: Branch Color Theme & Branding Form ───────────────────────────────────
+const themeForm = useForm({
+    theme_color: props.settings?.theme_color || props.globalDefaultTheme?.theme_color || 'skynet',
+    custom_primary_hex: props.settings?.custom_primary_hex || props.globalDefaultTheme?.custom_primary_hex || '#7B00FF',
+    custom_secondary_hex: props.settings?.custom_secondary_hex || props.globalDefaultTheme?.custom_secondary_hex || '#FBA43D',
+    dark_mode_accent_mode: props.settings?.dark_mode_accent_mode || props.globalDefaultTheme?.dark_mode_accent_mode || 'white',
+    custom_dark_primary_hex: props.settings?.custom_dark_primary_hex || props.globalDefaultTheme?.custom_dark_primary_hex || '#FFFFFF',
+})
+
+const selectBranchPalette = (key) => {
+    themeForm.theme_color = key
+}
+
+const updateBranchCustomPrimary = (hex) => {
+    themeForm.theme_color = 'custom'
+    themeForm.custom_primary_hex = hex
+}
+
+const updateBranchCustomSecondary = (hex) => {
+    themeForm.theme_color = 'custom'
+    themeForm.custom_secondary_hex = hex
+}
+
+const setBranchDarkModeAccentMode = (mode) => {
+    themeForm.dark_mode_accent_mode = mode
+}
+
+const updateBranchCustomDarkPrimary = (hex) => {
+    themeForm.dark_mode_accent_mode = 'custom'
+    themeForm.custom_dark_primary_hex = hex
+}
+
+const resetBranchThemeToGlobal = () => {
+    themeForm.theme_color = props.globalDefaultTheme?.theme_color || 'skynet'
+    themeForm.custom_primary_hex = props.globalDefaultTheme?.custom_primary_hex || '#7B00FF'
+    themeForm.custom_secondary_hex = props.globalDefaultTheme?.custom_secondary_hex || '#FBA43D'
+    themeForm.dark_mode_accent_mode = props.globalDefaultTheme?.dark_mode_accent_mode || 'white'
+    themeForm.custom_dark_primary_hex = props.globalDefaultTheme?.custom_dark_primary_hex || '#FFFFFF'
+}
+
+const isInheritingGlobalTheme = computed(() => {
+    return themeForm.theme_color === props.globalDefaultTheme?.theme_color &&
+        (themeForm.theme_color !== 'custom' || (
+            themeForm.custom_primary_hex === props.globalDefaultTheme?.custom_primary_hex &&
+            themeForm.custom_secondary_hex === props.globalDefaultTheme?.custom_secondary_hex
+        ))
+})
+
+const submitTheme = () => {
+    themeForm.put(route('superadmin.branches.theme.update', { branch: props.branch.slug }), {
+        preserveScroll: true,
+    })
+}
+
 // ── Tab 4: Inventory & Master Import ──────────────────────────────────────────
 const itemSearch = ref(props.filters?.item_search ?? '')
 const doItemSearch = () => {
@@ -581,6 +660,12 @@ const handleGlobalClickOutside = (e) => {
 
 onMounted(() => {
     document.addEventListener('click', handleGlobalClickOutside)
+    setTimeout(() => {
+        const activeBtn = tabNavRef.value?.querySelector(`[data-tab="${activeTab.value}"]`)
+        if (activeBtn) {
+            activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+        }
+    }, 150)
 })
 
 onUnmounted(() => {
@@ -997,74 +1082,129 @@ const togglePos = () => router.post(route('superadmin.branches.toggle-pos', { br
             </div>
         </div>
 
-        <!-- ── TAB NAVIGATION BAR ────────────────────────────────────────────── -->
-        <div class="border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
-            <nav class="flex space-x-1 sm:space-x-4 min-w-max">
+        <!-- ── TAB NAVIGATION BAR (MODERN CAPSULE WITH ZERO NATIVE SCROLLBAR) ── -->
+        <div class="relative flex items-center gap-2">
+            <!-- Left Scroll Arrow (Desktop/Tablet) -->
+            <button
+                type="button"
+                @click="scrollTabs('left')"
+                class="hidden md:flex shrink-0 w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white shadow-xs items-center justify-center transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
+                aria-label="Scroll tabs left"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7" /></svg>
+            </button>
+
+            <!-- Scrollable Tabs Track -->
+            <nav
+                ref="tabNavRef"
+                class="flex-1 flex items-center gap-1.5 p-1.5 bg-slate-100/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200/90 dark:border-slate-800 overflow-x-auto scrollbar-hide scroll-smooth [&::-webkit-scrollbar]:hidden"
+                style="scrollbar-width: none; -ms-overflow-style: none;"
+            >
                 <button
+                    data-tab="overview"
                     @click="setActiveTab('overview')"
                     :class="activeTab === 'overview'
-                        ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
-                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300'"
-                    class="py-3 px-3.5 border-b-2 font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'"
+                    class="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
                 >
                     <span>📊 Overview & Profile</span>
                 </button>
+
                 <button
+                    data-tab="staff"
                     @click="setActiveTab('staff')"
                     :class="activeTab === 'staff'
-                        ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
-                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300'"
-                    class="py-3 px-3.5 border-b-2 font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'"
+                    class="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
                 >
-                    <span>👥 Staff & Permissions ({{ users.length }})</span>
+                    <span>👥 Staff & Permissions</span>
+                    <span
+                        class="px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+                        :class="activeTab === 'staff' ? 'bg-white/20 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'"
+                    >
+                        {{ users.length }}
+                    </span>
                 </button>
+
                 <button
+                    data-tab="theme"
+                    @click="setActiveTab('theme')"
+                    :class="activeTab === 'theme'
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'"
+                    class="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                    <span>🎨 Color Theme & Branding</span>
+                </button>
+
+                <button
+                    data-tab="settings"
                     @click="setActiveTab('settings')"
                     :class="activeTab === 'settings'
-                        ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
-                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300'"
-                    class="py-3 px-3.5 border-b-2 font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'"
+                    class="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
                 >
                     <span>⚙️ Settings (Tax & Printer)</span>
                 </button>
+
                 <button
+                    data-tab="inventory"
                     @click="setActiveTab('inventory')"
                     :class="activeTab === 'inventory'
-                        ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
-                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300'"
-                    class="py-3 px-3.5 border-b-2 font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'"
+                    class="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
                 >
                     <span>📦 Inventory & Import</span>
                 </button>
+
                 <button
+                    data-tab="reports"
                     @click="setActiveTab('reports')"
                     :class="activeTab === 'reports'
-                        ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
-                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300'"
-                    class="py-3 px-3.5 border-b-2 font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'"
+                    class="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
                 >
                     <span>📈 Financials & Reports</span>
                 </button>
+
                 <button
+                    data-tab="audit"
                     @click="setActiveTab('audit')"
                     :class="activeTab === 'audit'
-                        ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
-                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300'"
-                    class="py-3 px-3.5 border-b-2 font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'"
+                    class="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
                 >
                     <span>📜 Audit Log</span>
                 </button>
+
                 <button
+                    data-tab="ecommerce"
                     @click="setActiveTab('ecommerce')"
                     :class="activeTab === 'ecommerce'
-                        ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 dark:border-indigo-400'
-                        : 'border-transparent text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:border-slate-300'"
-                    class="py-3 px-3.5 border-b-2 font-bold text-xs sm:text-sm transition flex items-center gap-2 cursor-pointer"
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60'"
+                    class="px-4 py-2 rounded-xl font-bold text-xs sm:text-sm transition flex items-center gap-2 whitespace-nowrap shrink-0 cursor-pointer"
                 >
                     <span>🛒 E-Commerce</span>
                     <span v-if="commerce_integration" class="w-2 h-2 rounded-full" :class="commerce_integration.status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'"></span>
                 </button>
             </nav>
+
+            <!-- Right Scroll Arrow (Desktop/Tablet) -->
+            <button
+                type="button"
+                @click="scrollTabs('right')"
+                class="hidden md:flex shrink-0 w-8 h-8 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white shadow-xs items-center justify-center transition cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
+                aria-label="Scroll tabs right"
+            >
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7" /></svg>
+            </button>
         </div>
 
         <!-- ══════════════════════════════════════════════════════════════════════ -->
@@ -1365,6 +1505,246 @@ const togglePos = () => router.post(route('superadmin.branches.toggle-pos', { br
                     </table>
                 </div>
             </div>
+        </div>
+
+        <!-- ══════════════════════════════════════════════════════════════════════ -->
+        <!-- TAB: BRANCH COLOR THEME & BRANDING                                     -->
+        <!-- ══════════════════════════════════════════════════════════════════════ -->
+        <div v-show="activeTab === 'theme'" class="space-y-6">
+            <form @submit.prevent="submitTheme" class="space-y-6">
+                <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-xs space-y-6">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 border-b border-slate-100 dark:border-slate-800 gap-4">
+                        <div>
+                            <div class="flex items-center gap-2.5 flex-wrap">
+                                <h3 class="font-bold text-slate-900 dark:text-white text-lg">Branch Color Theme & Dual-Accent Branding</h3>
+                                <span
+                                    class="text-[11px] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border"
+                                    :class="isInheritingGlobalTheme
+                                        ? 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                                        : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800'"
+                                >
+                                    {{ isInheritingGlobalTheme ? 'Inheriting SuperAdmin Default' : 'Custom Branch Palette Active' }}
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
+                                Configure dedicated primary and secondary brand colors specifically for <strong>{{ branch.name }}</strong>. All operational interfaces (Retail POS terminal, Laundry orders board, receipts, reports, badges, and navigation) will dynamically apply this theme.
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+                            <button
+                                type="button"
+                                @click="resetBranchThemeToGlobal"
+                                class="px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 transition flex items-center gap-1.5 cursor-pointer"
+                                title="Reset branch theme to match the platform SuperAdmin default color"
+                            >
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                <span>Reset to Global Theme</span>
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="themeForm.processing"
+                                class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                            >
+                                <svg v-if="themeForm.processing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                                <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span>{{ themeForm.processing ? 'Saving...' : 'Save Theme Colors' }}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Palette Cards Grid -->
+                    <div>
+                        <div class="mb-3">
+                            <span class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Official Palette Presets & Custom Color</span>
+                            <p class="text-[11px] text-slate-400">Click a palette below to select it for this branch, or choose Custom Theme to specify exact HEX codes.</p>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            <div
+                                v-for="palette in themePalettes"
+                                :key="palette.key"
+                                @click="selectBranchPalette(palette.key)"
+                                :class="[
+                                    'relative p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3',
+                                    themeForm.theme_color === palette.key
+                                        ? 'border-slate-900 dark:border-white ring-2 ring-slate-900/20 dark:ring-white/20 bg-slate-50 dark:bg-slate-800/80 shadow-md scale-[1.02]'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 bg-white dark:bg-slate-900'
+                                ]"
+                            >
+                                <div v-if="themeForm.theme_color === palette.key" class="absolute top-3 right-3 w-5 h-5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center text-xs font-bold shadow-xs">
+                                    ✓
+                                </div>
+
+                                <div class="flex items-center gap-3">
+                                    <div class="flex items-center -space-x-2">
+                                        <div class="w-7 h-7 rounded-lg shadow-sm flex items-center justify-center text-white font-bold text-xs" :style="{ backgroundColor: palette.hex }">
+                                            P
+                                        </div>
+                                        <div class="w-7 h-7 rounded-lg shadow-sm flex items-center justify-center text-white font-bold text-xs border-2 border-white dark:border-slate-900" :style="{ backgroundColor: palette.secondaryHex }">
+                                            S
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-xs font-bold text-slate-900 dark:text-white">{{ palette.name }}</h4>
+                                        <p class="text-[10px] font-mono text-slate-400">{{ palette.hex }} • {{ palette.secondaryHex }}</p>
+                                    </div>
+                                </div>
+
+                                <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-tight">{{ palette.description }}</p>
+
+                                <div class="h-2 w-full rounded-full overflow-hidden flex gap-1">
+                                    <div class="h-full flex-1 rounded-full" :style="{ backgroundColor: palette.hex }"></div>
+                                    <div class="h-full flex-1 rounded-full" :style="{ backgroundColor: palette.secondaryHex }"></div>
+                                </div>
+                            </div>
+
+                            <!-- Custom Dual-Color Theme Card -->
+                            <div
+                                @click="selectBranchPalette('custom')"
+                                :class="[
+                                    'relative p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 flex flex-col justify-between space-y-3',
+                                    themeForm.theme_color === 'custom'
+                                        ? 'border-slate-900 dark:border-white ring-2 ring-slate-900/20 dark:ring-white/20 bg-slate-50 dark:bg-slate-800/80 shadow-md scale-[1.02]'
+                                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600 bg-white dark:bg-slate-900'
+                                ]"
+                            >
+                                <div v-if="themeForm.theme_color === 'custom'" class="absolute top-3 right-3 w-5 h-5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center text-xs font-bold shadow-xs">
+                                    ✓
+                                </div>
+
+                                <div class="flex items-center gap-3">
+                                    <div class="flex items-center -space-x-2">
+                                        <div class="relative w-7 h-7 rounded-lg shadow-sm flex items-center justify-center text-white font-bold text-xs overflow-hidden" :style="{ backgroundColor: themeForm.custom_primary_hex }">
+                                            P
+                                            <input type="color" :value="themeForm.custom_primary_hex" @input="updateBranchCustomPrimary($event.target.value)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+                                        </div>
+                                        <div class="relative w-7 h-7 rounded-lg shadow-sm flex items-center justify-center text-white font-bold text-xs border-2 border-white dark:border-slate-900 overflow-hidden" :style="{ backgroundColor: themeForm.custom_secondary_hex }">
+                                            S
+                                            <input type="color" :value="themeForm.custom_secondary_hex" @input="updateBranchCustomSecondary($event.target.value)" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 class="text-xs font-bold text-slate-900 dark:text-white">Custom Brand Colors</h4>
+                                        <p class="text-[10px] font-mono text-slate-400">{{ themeForm.custom_primary_hex }} • {{ themeForm.custom_secondary_hex }}</p>
+                                    </div>
+                                </div>
+
+                                <!-- Dual Pickers -->
+                                <div class="space-y-2" @click.stop>
+                                    <div>
+                                        <label class="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Primary Accent:</label>
+                                        <div class="flex items-center gap-1.5">
+                                            <input type="color" :value="themeForm.custom_primary_hex" @input="updateBranchCustomPrimary($event.target.value)" class="w-6 h-6 rounded border-0 cursor-pointer bg-transparent p-0" />
+                                            <input type="text" :value="themeForm.custom_primary_hex" @input="updateBranchCustomPrimary($event.target.value)" class="px-2 py-0.5 text-[11px] font-mono rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white w-full uppercase" placeholder="#7B00FF" />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label class="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Secondary Accent:</label>
+                                        <div class="flex items-center gap-1.5">
+                                            <input type="color" :value="themeForm.custom_secondary_hex" @input="updateBranchCustomSecondary($event.target.value)" class="w-6 h-6 rounded border-0 cursor-pointer bg-transparent p-0" />
+                                            <input type="text" :value="themeForm.custom_secondary_hex" @input="updateBranchCustomSecondary($event.target.value)" class="px-2 py-0.5 text-[11px] font-mono rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white w-full uppercase" placeholder="#FBA43D" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="h-2 w-full rounded-full overflow-hidden flex gap-1">
+                                    <div class="h-full flex-1 rounded-full" :style="{ backgroundColor: themeForm.custom_primary_hex }"></div>
+                                    <div class="h-full flex-1 rounded-full" :style="{ backgroundColor: themeForm.custom_secondary_hex }"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dark Mode Accent Configuration -->
+                    <div class="p-5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
+                        <div>
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">Dark Mode Accent Glow</h4>
+                            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Choose how highlighted headings, active icons, and primary text render when staff operate the terminal in dark mode.</p>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <label
+                                @click="setBranchDarkModeAccentMode('white')"
+                                :class="[
+                                    'p-3.5 rounded-xl border-2 cursor-pointer transition flex items-center justify-between',
+                                    themeForm.dark_mode_accent_mode === 'white'
+                                        ? 'border-indigo-600 bg-white dark:bg-slate-900 shadow-xs'
+                                        : 'border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50'
+                                ]"
+                            >
+                                <div class="space-y-0.5">
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Clean White</div>
+                                    <div class="text-[10px] text-slate-400">Crisp high-contrast white text in dark mode</div>
+                                </div>
+                                <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center" :class="themeForm.dark_mode_accent_mode === 'white' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300'">
+                                    <span v-if="themeForm.dark_mode_accent_mode === 'white'" class="text-[9px]">✓</span>
+                                </div>
+                            </label>
+
+                            <label
+                                @click="setBranchDarkModeAccentMode('luminous')"
+                                :class="[
+                                    'p-3.5 rounded-xl border-2 cursor-pointer transition flex items-center justify-between',
+                                    themeForm.dark_mode_accent_mode === 'luminous'
+                                        ? 'border-indigo-600 bg-white dark:bg-slate-900 shadow-xs'
+                                        : 'border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50'
+                                ]"
+                            >
+                                <div class="space-y-0.5">
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Luminous Pastel</div>
+                                    <div class="text-[10px] text-slate-400">Soft luminous tone matching the theme palette</div>
+                                </div>
+                                <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center" :class="themeForm.dark_mode_accent_mode === 'luminous' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300'">
+                                    <span v-if="themeForm.dark_mode_accent_mode === 'luminous'" class="text-[9px]">✓</span>
+                                </div>
+                            </label>
+
+                            <label
+                                @click="setBranchDarkModeAccentMode('custom')"
+                                :class="[
+                                    'p-3.5 rounded-xl border-2 cursor-pointer transition flex items-center justify-between',
+                                    themeForm.dark_mode_accent_mode === 'custom'
+                                        ? 'border-indigo-600 bg-white dark:bg-slate-900 shadow-xs'
+                                        : 'border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50'
+                                ]"
+                            >
+                                <div class="space-y-0.5">
+                                    <div class="text-xs font-bold text-slate-900 dark:text-white">Custom Accent</div>
+                                    <div class="text-[10px] text-slate-400">Specify exact dark mode primary HEX</div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <input
+                                        v-if="themeForm.dark_mode_accent_mode === 'custom'"
+                                        type="color"
+                                        :value="themeForm.custom_dark_primary_hex"
+                                        @input="updateBranchCustomDarkPrimary($event.target.value)"
+                                        @click.stop
+                                        class="w-5 h-5 rounded border-0 cursor-pointer p-0 bg-transparent"
+                                    />
+                                    <div class="w-4 h-4 rounded-full border-2 flex items-center justify-center" :class="themeForm.dark_mode_accent_mode === 'custom' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300'">
+                                        <span v-if="themeForm.dark_mode_accent_mode === 'custom'" class="text-[9px]">✓</span>
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Action Bar -->
+                    <div class="pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between flex-wrap gap-3">
+                        <div class="text-xs text-slate-400">
+                            Theme changes take effect immediately across all operational views of this branch.
+                        </div>
+                        <button
+                            type="submit"
+                            :disabled="themeForm.processing"
+                            class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                        >
+                            <svg v-if="themeForm.processing" class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>{{ themeForm.processing ? 'Saving Changes...' : 'Save Theme & Branding' }}</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
         </div>
 
         <!-- ══════════════════════════════════════════════════════════════════════ -->
@@ -3424,3 +3804,12 @@ const togglePos = () => router.post(route('superadmin.branches.toggle-pos', { br
 
     </div>
 </template>
+
+<style scoped>
+nav::-webkit-scrollbar,
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+</style>

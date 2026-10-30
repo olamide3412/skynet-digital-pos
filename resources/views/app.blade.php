@@ -28,6 +28,20 @@
         $splashLogo    = $companyLogo;
     }
 
+    // ── Pre-Hydration Initial Theme Resolution ────────────────────────────────
+    $activeThemeColor      = \App\Models\SystemSetting::get('primary_color_theme', 'skynet');
+    $activeCustomPrimary   = \App\Models\SystemSetting::get('custom_primary_hex', '#7B00FF');
+    $activeCustomSecondary = \App\Models\SystemSetting::get('custom_secondary_hex', '#FBA43D');
+
+    if ($currentBranch) {
+        $branchSettings = $currentBranch->getSettings();
+        if ($branchSettings && !empty($branchSettings->theme_color)) {
+            $activeThemeColor      = $branchSettings->theme_color;
+            $activeCustomPrimary   = $branchSettings->custom_primary_hex ?: $activeCustomPrimary;
+            $activeCustomSecondary = $branchSettings->custom_secondary_hex ?: $activeCustomSecondary;
+        }
+    }
+
     $jsonLdData = [
         '@context' => 'https://schema.org',
         '@type' => 'Organization',
@@ -49,7 +63,7 @@
     ];
 @endphp
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-theme="light">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-theme="{{ $activeThemeColor }}" @if($activeThemeColor === 'custom') style="--color-theme: {{ $activeCustomPrimary }}; --color-theme-secondary: {{ $activeCustomSecondary }};" @endif>
 
 <head>
     <meta charset="utf-8">

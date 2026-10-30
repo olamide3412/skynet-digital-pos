@@ -223,12 +223,17 @@ class Branch extends Model
         return $this->settings()->firstOrCreate(
             ['branch_id' => $this->id],
             [
-                'sell_interface'    => 'classic',
-                'business_sector'   => 'commerce',
-                'laundry_enabled'   => false,
-                'pos_enabled'       => true,
-                'default_interface' => 'pos',
-                'out_of_stock'      => 25,
+                'sell_interface'          => 'classic',
+                'business_sector'         => 'commerce',
+                'laundry_enabled'         => false,
+                'pos_enabled'             => true,
+                'default_interface'       => 'pos',
+                'out_of_stock'            => 25,
+                'theme_color'             => \App\Models\SystemSetting::get('primary_color_theme', 'skynet'),
+                'custom_primary_hex'      => \App\Models\SystemSetting::get('custom_primary_hex', '#7B00FF'),
+                'custom_secondary_hex'    => \App\Models\SystemSetting::get('custom_secondary_hex', '#FBA43D'),
+                'dark_mode_accent_mode'   => \App\Models\SystemSetting::get('dark_mode_accent_mode', 'white'),
+                'custom_dark_primary_hex' => \App\Models\SystemSetting::get('custom_dark_primary_hex', '#FFFFFF'),
             ]
         );
     }

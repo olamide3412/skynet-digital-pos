@@ -3,6 +3,7 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import { router, usePage, Link } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
+import LaundryLayout from '@/Layouts/LaundryLayout.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 
 defineOptions({ layout: null })
@@ -79,6 +80,9 @@ const layoutComponent = computed(() => {
     if (isSuperAdmin.value && !props.branch) {
         return SuperAdminLayout
     }
+    if (props.branch?.laundry_enabled && (!props.branch?.pos_enabled || props.branch?.default_interface === 'laundry')) {
+        return LaundryLayout
+    }
     return PosLayout
 })
 
@@ -90,21 +94,52 @@ const isSending = ref(false)
 const selectedBranchId = ref(props.branch?.id || '')
 const messagesContainer = ref(null)
 
-const suggestedPrompts = [
-    "Why am I on loss and which item caused that?",
-    "Check if high buy costs or discounts made me lose profit",
-    "How many held sales are currently open?",
-    "What were my expenses this month?",
-    "What's my total inventory worth right now?",
-    "Which customers owe the most right now?",
-    "Which customers haven't paid in over 30 days?",
-    "Who performed most among our cashiers and staff this month?",
-    "Check if there is any suspicious activity, high discounts, or fraud risks",
-    "Is our business growing and at what rate?",
-    "Analyze our rate of sale, peak rush hours, and payment method distribution",
-    "What are our top 8 selling items and profit margins?",
-    "Show total tax collected this month",
-]
+const suggestedPrompts = computed(() => {
+    const isLaundry = Boolean(props.branch?.laundry_enabled)
+    const isPos = Boolean(props.branch?.pos_enabled ?? true)
+
+    if (isLaundry && !isPos) {
+        return [
+            "How many laundry orders are currently in washing, drying, or ready?",
+            "Show me all overdue laundry orders past their due date",
+            "How much laundry revenue was collected today?",
+            "What are our top laundry & dry cleaning services this month?",
+            "How many unclaimed clothes have been ready over 14 days?",
+            "What were my branch expenses this month?",
+            "Who performed best among our staff this month?",
+            "Which customers have outstanding collection balances?",
+        ]
+    }
+
+    if (isLaundry && isPos) {
+        return [
+            "What is our total revenue today across retail POS and laundry?",
+            "How many laundry orders are in washing, drying, or ready?",
+            "Show me all overdue laundry orders past their due date",
+            "What was our total store sales and laundry revenue this month?",
+            "Why am I on loss and which item caused that?",
+            "How many held sales are currently open?",
+            "What are our top laundry & dry cleaning services?",
+            "What were my expenses this month?",
+        ]
+    }
+
+    return [
+        "Why am I on loss and which item caused that?",
+        "Check if high buy costs or discounts made me lose profit",
+        "How many held sales are currently open?",
+        "What were my expenses this month?",
+        "What's my total inventory worth right now?",
+        "Which customers owe the most right now?",
+        "Which customers haven't paid in over 30 days?",
+        "Who performed most among our cashiers and staff this month?",
+        "Check if there is any suspicious activity, high discounts, or fraud risks",
+        "Is our business growing and at what rate?",
+        "Analyze our rate of sale, peak rush hours, and payment method distribution",
+        "What are our top 8 selling items and profit margins?",
+        "Show total tax collected this month",
+    ]
+})
 
 const textareaRef = ref(null)
 

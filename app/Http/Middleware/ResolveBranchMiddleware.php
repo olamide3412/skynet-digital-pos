@@ -55,6 +55,11 @@ class ResolveBranchMiddleware
         // Also set on the request for controllers that prefer DI
         $request->attributes->set('current_branch', $branch);
 
+        // Crucial: Set Spatie team context for this branch so all role/permission checks are scoped correctly
+        if (function_exists('setPermissionsTeamId')) {
+            setPermissionsTeamId($branch->id);
+        }
+
         return $next($request);
     }
 

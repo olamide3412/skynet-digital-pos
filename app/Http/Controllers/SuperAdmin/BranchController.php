@@ -182,6 +182,13 @@ class BranchController extends Controller
             // Create branch POS settings with defaults
             $settings = $branch->getSettings();
             $settingsUpdates = [];
+            if (empty($settings->theme_color)) {
+                $settingsUpdates['theme_color']             = \App\Models\SystemSetting::get('primary_color_theme', 'skynet');
+                $settingsUpdates['custom_primary_hex']      = \App\Models\SystemSetting::get('custom_primary_hex', '#7B00FF');
+                $settingsUpdates['custom_secondary_hex']    = \App\Models\SystemSetting::get('custom_secondary_hex', '#FBA43D');
+                $settingsUpdates['dark_mode_accent_mode']   = \App\Models\SystemSetting::get('dark_mode_accent_mode', 'white');
+                $settingsUpdates['custom_dark_primary_hex'] = \App\Models\SystemSetting::get('custom_dark_primary_hex', '#FFFFFF');
+            }
             if (!empty($data['is_offline_enabled'])) {
                 $settingsUpdates['is_offline_enabled'] = true;
             }
@@ -405,6 +412,14 @@ class BranchController extends Controller
             ],
             'all_organizations' => Organization::where('status', 'active')->orderBy('name')->get(['id', 'name']),
             'settings' => $settings,
+            'themePalettes' => \App\Http\Controllers\SuperAdmin\SystemSettingController::THEME_PALETTES,
+            'globalDefaultTheme' => [
+                'theme_color'             => \App\Models\SystemSetting::get('primary_color_theme', 'skynet'),
+                'custom_primary_hex'      => \App\Models\SystemSetting::get('custom_primary_hex', '#7B00FF'),
+                'custom_secondary_hex'    => \App\Models\SystemSetting::get('custom_secondary_hex', '#FBA43D'),
+                'dark_mode_accent_mode'   => \App\Models\SystemSetting::get('dark_mode_accent_mode', 'white'),
+                'custom_dark_primary_hex' => \App\Models\SystemSetting::get('custom_dark_primary_hex', '#FFFFFF'),
+            ],
             'stats' => [
                 'users_count'   => $totalUsersCount,
                 'items_count'   => $totalItemsCount,
@@ -661,6 +676,11 @@ class BranchController extends Controller
             'laundry_enabled'          => 'nullable|boolean',
             'pos_enabled'              => 'nullable|boolean',
             'default_interface'        => 'nullable|string|in:pos,laundry',
+            'theme_color'              => 'nullable|string',
+            'custom_primary_hex'       => 'nullable|string|regex:/^#[0-9a-fA-F]{6}$/',
+            'custom_secondary_hex'     => 'nullable|string|regex:/^#[0-9a-fA-F]{6}$/',
+            'dark_mode_accent_mode'    => 'nullable|string|in:white,luminous,custom',
+            'custom_dark_primary_hex'  => 'nullable|string|regex:/^#[0-9a-fA-F]{6}$/',
         ]);
 
         $settings = $branch->getSettings();
@@ -701,6 +721,32 @@ class BranchController extends Controller
         );
 
         return back()->with('success', 'Branch settings, Tax & Printer configuration updated successfully.');
+    }
+
+    /**
+     * Update branch color theme and branding.
+     */
+    public function updateTheme(Request $request, Branch $branch)
+    {
+        $validated = $request->validate([
+            'theme_color'              => 'required|string',
+            'custom_primary_hex'       => 'nullable|string|regex:/^#[0-9a-fA-F]{6}$/',
+            'custom_secondary_hex'     => 'nullable|string|regex:/^#[0-9a-fA-F]{6}$/',
+            'dark_mode_accent_mode'    => 'nullable|string|in:white,luminous,custom',
+            'custom_dark_primary_hex'  => 'nullable|string|regex:/^#[0-9a-fA-F]{6}$/',
+        ]);
+
+        $settings = $branch->getSettings();
+        $settings->update($validated);
+
+        ActivityLogger::log(
+            'setting',
+            "Super Admin updated branding & color theme for branch '{$branch->name}' ({$validated['theme_color']})",
+            $branch->id,
+            ['theme' => $validated]
+        );
+
+        return back()->with('success', "Branch color theme updated successfully for '{$branch->name}'.");
     }
 
     public function destroy(Branch $branch)

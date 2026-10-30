@@ -20,6 +20,12 @@ class BranchLandingService
             return ['can_pos' => false, 'can_laundry' => false];
         }
 
+        // Ensure Spatie team permissions are scoped to the branch context
+        if (function_exists('setPermissionsTeamId')) {
+            setPermissionsTeamId($branch->id);
+            $user->unsetRelation('roles')->unsetRelation('permissions');
+        }
+
         $isFullAdmin = $user->isSuperAdmin()
             || $user->isOrganizationAdmin()
             || $user->isBranchAdmin();
@@ -55,8 +61,20 @@ class BranchLandingService
             return 'pos.index';
         }
 
-        // 3. Fallback for staff who only have administrative or back-office access
-        return 'pos.customers.index';
+        // 3. Fallback based on branch module availability (never default to customer directory)
+        if ($defaultInterface === 'laundry' && $branch->laundryEnabled()) {
+            return 'laundry.home';
+        }
+
+        if ($branch->posEnabled()) {
+            return 'pos.index';
+        }
+
+        if ($branch->laundryEnabled()) {
+            return 'laundry.home';
+        }
+
+        return 'pos.index';
     }
 
     /**

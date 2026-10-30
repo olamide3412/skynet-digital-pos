@@ -83,6 +83,10 @@ const pricingFaqs = [
         a: 'Your store continues ringing up sales without interruption! Our client-side Dexie IndexedDB engine stores transactions securely offline and automatically syncs all data to your central database once connection is restored.',
     },
     {
+        q: 'Is the Laundry Management Module included in the Starter plan?',
+        a: 'Yes, absolutely! Unlike legacy POS systems that charge hefty add-on fees or lock service modules behind enterprise subscriptions, our complete Laundry & Dry Cleaning Management suite (including garment intake, piece/kg pricing, status workflow board, garment tag printing, and customer collection tracking) is fully unlocked across all subscription tiers, even the Starter plan.',
+    },
+    {
         q: 'Which plans include Double-Entry Accounting and Financial Ledger?',
         a: 'Double-Entry Accounting is unlocked on our Silver, Gold, and Enterprise plans. It automatically activates for all your branches upon plan enrollment, seeding standard Chart of Accounts (1000 Cash, 1200 Inventory, 2100 VAT, 4000 Revenue, etc.) and auto-posting balanced general ledger lines for every sale, refund, till close, debt settlement, and expense receipt.',
     },
@@ -182,6 +186,10 @@ const pricingFaqs = [
                             <span class="text-emerald-500 font-bold flex-shrink-0">✓</span>
                             <span>{{ item.item_text }}</span>
                         </div>
+                    </div>
+                    <div class="mt-5 pt-4 border-t border-violet-200/60 dark:border-violet-800/60 flex items-center gap-2 text-xs text-violet-800 dark:text-violet-300 font-bold">
+                        <span class="text-base">🧺</span>
+                        <span>Full Laundry Management Module is included in every subscription tier (even Starter) with zero add-on license fees.</span>
                     </div>
                 </div>
             </div>

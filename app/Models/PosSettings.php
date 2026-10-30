@@ -26,6 +26,7 @@ class PosSettings extends Model
         'is_accounting_vat_enabled', 'accounting_started_at',
         'item_icon_preview', 'is_grid_separate_rows', 'is_cart_auto_scroll_highlight', 'is_auto_fullscreen_enabled', 'wholesale_profit_percent', 'consumer_profit_percent',
         'sell_interface', 'quick_access_mode', 'pinned_quick_access_items', 'quick_access_category_ids', 'business_sector',
+        'theme_color', 'custom_primary_hex', 'custom_secondary_hex', 'dark_mode_accent_mode', 'custom_dark_primary_hex',
         'laundry_enabled', 'pos_enabled', 'default_interface',
         'receipt_paper_size', 'receipt_printer_name', 'printer_type', 'printer_connection', 'printer_ip_address',
         'receipt_copies',

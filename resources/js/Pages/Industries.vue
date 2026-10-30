@@ -95,6 +95,18 @@ const verticalSolutions = [
             'Bulk Excel/CSV catalog imports and seamless legacy POS data migration',
         ],
     },
+    {
+        name: 'Laundromats & Dry Cleaning Services',
+        icon: '🧺',
+        tagline: 'Itemized garment intake, visual workflow stages, custom tagging & collection tracking',
+        badge: 'Included in All Plans (Even Starter)',
+        features: [
+            'Itemized garment intake with piece or kg pricing, starch preferences, damage notes, and garment brands',
+            'Visual workflow board: track items smoothly from Intake to Washing, Drying, Ironing, Ready, and Picked Up',
+            'Thermal garment tag and counter receipt printing with unique order tracking numbers for rapid retrieval',
+            'Customer collection tracking with optional unpaid pickup control, automated WhatsApp alerts, and partial balance settlements',
+        ],
+    },
 ]
 </script>
 
@@ -135,7 +147,7 @@ const verticalSolutions = [
                     </h1>
 
                     <p class="text-slate-600 dark:text-slate-300 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-                        Whether you manage a busy supermarket with rush-hour queues, a pharmacy requiring strip-to-packet unit conversion, or an electronics hub tracking IMEIs, our platform molds perfectly to your day-to-day requirements.
+                        Whether you manage a busy supermarket with rush-hour queues, a pharmacy requiring strip-to-packet unit conversion, an electronics hub tracking IMEIs, or a laundromat managing garment intake and pickup workflows, our platform molds perfectly to your day-to-day requirements.
                     </p>
                 </div>
             </section>
@@ -147,13 +159,19 @@ const verticalSolutions = [
                     :key="idx"
                     class="p-8 sm:p-12 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6 hover:border-emerald-500/60 transition-colors"
                 >
-                    <div class="flex items-center gap-4 border-b border-slate-100 dark:border-slate-800 pb-6">
-                        <div class="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 flex items-center justify-center text-3xl shadow-sm">
-                            {{ vert.icon }}
+                    <div class="flex items-center justify-between flex-wrap gap-4 border-b border-slate-100 dark:border-slate-800 pb-6">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/80 flex items-center justify-center text-3xl shadow-sm">
+                                {{ vert.icon }}
+                            </div>
+                            <div>
+                                <h2 class="text-2xl font-black text-slate-900 dark:text-white">{{ vert.name }}</h2>
+                                <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">{{ vert.tagline }}</p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 class="text-2xl font-black text-slate-900 dark:text-white">{{ vert.name }}</h2>
-                            <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400">{{ vert.tagline }}</p>
+                        <div v-if="vert.badge" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-violet-100 dark:bg-violet-950/80 border border-violet-300 dark:border-violet-700/60 text-violet-800 dark:text-violet-300 text-xs font-bold uppercase tracking-wider shadow-xs">
+                            <span>✨</span>
+                            <span>{{ vert.badge }}</span>
                         </div>
                     </div>
 

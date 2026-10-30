@@ -24,6 +24,10 @@ class AuthController extends Controller
         if (Auth::guard('web')->check()) {
             $user = Auth::guard('web')->user();
             if ($user->branch_id === $branch?->id || $user->isSuperAdmin()) {
+                if ($branch && function_exists('setPermissionsTeamId')) {
+                    setPermissionsTeamId($branch->id);
+                    $user->unsetRelation('roles')->unsetRelation('permissions');
+                }
                 $landingUrl = $branch ? \App\Modules\Laundry\Services\BranchLandingService::resolveLandingUrl($branch, $user) : route('pos.index', ['branch' => $branch?->slug]);
                 return redirect()->to($landingUrl);
             }
@@ -107,6 +111,11 @@ class AuthController extends Controller
             \App\Services\ActivityLogger::auth("User {$user->name} logged into branch '{$branch?->name}'", $branch?->id);
             RateLimiter::clear($key);
             $request->session()->regenerate();
+
+            if ($branch && function_exists('setPermissionsTeamId')) {
+                setPermissionsTeamId($branch->id);
+                $user->unsetRelation('roles')->unsetRelation('permissions');
+            }
 
             $landingUrl = $branch ? \App\Modules\Laundry\Services\BranchLandingService::resolveLandingUrl($branch, $user) : route('pos.index', ['branch' => $branch?->slug]);
             return redirect()->to($landingUrl);

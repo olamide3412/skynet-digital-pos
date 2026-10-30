@@ -33,6 +33,18 @@ const canAccessPos = computed(() => {
     return isFullAdmin || Boolean(perms.value?.canAccessPos)
 })
 
+const hasAiChatFeature = computed(() => {
+    const caps = page.props.plan_capabilities || {}
+    const isFullAdmin = Boolean(
+        authUser.value?.is_super_admin ||
+        perms.value?.isSuperAdmin ||
+        perms.value?.isBranchAdmin ||
+        authUser.value?.roles?.some(r => r.name === 'branch-admin' || r.name === 'organization_admin')
+    )
+    if (!isFullAdmin && caps.feature_ai_chat_assistant === false) return false
+    return isFullAdmin || Boolean(perms.value?.['laundry.view_reports'] || perms.value?.canViewReports)
+})
+
 const currentBranchSlug = computed(() => {
     if (page.props.current_branch?.slug) return page.props.current_branch.slug
     if (page.props.branch?.slug) return page.props.branch.slug
@@ -312,6 +324,27 @@ const isActive = (match) => {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
                     <span v-show="!isCollapsed" class="truncate">Laundry Reports</span>
+                </Link>
+
+                <!-- 8.5 Ask-Your-Business AI Copilot -->
+                <Link
+                    v-if="hasAiChatFeature"
+                    :href="safeRoute('pos.ai.chat')"
+                    :class="[
+                        'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition group',
+                        isActive('AI/ChatAssistant')
+                            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/20'
+                            : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/60'
+                    ]"
+                    :title="isCollapsed ? 'Ask-Your-Business AI' : undefined"
+                >
+                    <svg class="w-5 h-5 shrink-0 text-violet-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    <span v-show="!isCollapsed" class="truncate font-medium flex items-center gap-1.5">
+                        <span>Ask AI Copilot</span>
+                        <span class="text-[9px] px-1.5 py-0.5 bg-violet-100 dark:bg-violet-950/80 text-violet-700 dark:text-violet-300 font-extrabold rounded-md uppercase tracking-wider">AI</span>
+                    </span>
                 </Link>
 
                 <!-- 8. Settings -->
