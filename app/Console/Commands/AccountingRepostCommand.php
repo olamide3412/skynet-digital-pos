@@ -154,7 +154,7 @@ class AccountingRepostCommand extends Command
                 })
                 ->chunkById(50, function ($pos) use ($isDryRun, &$totalPoReposted) {
                     foreach ($pos as $po) {
-                        $receivedTotal = (float) $po->receivedItems()->sum(\Illuminate\Support\Facades\DB::raw('received_qty * cost'));
+                        $receivedTotal = (float) $po->receivedItems()->sum(\Illuminate\Support\Facades\DB::raw('qty * cost'));
                         if ($receivedTotal <= 0) {
                             $receivedTotal = (float) $po->total_amount;
                         }

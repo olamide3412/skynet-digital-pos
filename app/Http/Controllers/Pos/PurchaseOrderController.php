@@ -130,6 +130,15 @@ class PurchaseOrderController extends Controller
         ]);
 
         $branch = current_branch();
+        if (!$branch) {
+            $branchParam = $request->route('branch');
+            if ($branchParam) {
+                $branch = $branchParam instanceof \App\Models\Branch ? $branchParam : \App\Models\Branch::where('slug', (string) $branchParam)->first();
+            }
+            if (!$branch) {
+                $branch = Auth::user()?->branch;
+            }
+        }
 
         $batchPrompts = [];
         $totalReceivedCost = 0;
@@ -168,7 +177,7 @@ class PurchaseOrderController extends Controller
                     }
 
                     // Check duplicate in-stock IMEIs for this branch
-                    $duplicate = \App\Models\ItemDeviceUnit::where('branch_id', $branch->id)
+                    $duplicate = \App\Models\ItemDeviceUnit::where('branch_id', $branch?->id)
                         ->where('status', 'in_stock')
                         ->whereIn('imei_or_device_id', $enteredImeis)
                         ->value('imei_or_device_id');
@@ -183,14 +192,13 @@ class PurchaseOrderController extends Controller
                 if ($qtyToReceive > 0) {
                     // Record Item Receipt entry
                     \App\Models\ReceivedItem::create([
-                        'purchase_order_id'      => $purchase->id,
-                        'purchase_order_item_id' => $poItem->id,
-                        'item_id'                => $poItem->item_id,
-                        'branch_id'              => $branch->id,
-                        'user_id'                => Auth::id(),
-                        'received_qty'           => $qtyToReceive,
-                        'location'               => $destLocation,
-                        'cost'                   => $poItem->cost,
+                        'purchase_order_id' => $purchase->id,
+                        'item_id'           => $poItem->item_id,
+                        'user_id'           => Auth::id(),
+                        'qty'               => $qtyToReceive,
+                        'location'          => $destLocation,
+                        'cost'              => $poItem->cost,
+                        'received_date'     => now()->toDateString(),
                     ]);
 
                     $totalReceivedCost += ($qtyToReceive * (float) $poItem->cost);
@@ -201,7 +209,7 @@ class PurchaseOrderController extends Controller
                     if ($item && $item->is_imei_tracked && !empty($enteredImeis)) {
                         foreach ($enteredImeis as $imei) {
                             \App\Models\ItemDeviceUnit::create([
-                                'branch_id'         => $branch->id,
+                                'branch_id'         => $branch?->id,
                                 'item_id'           => $item->id,
                                 'imei_or_device_id' => $imei,
                                 'status'            => 'in_stock',
@@ -216,7 +224,7 @@ class PurchaseOrderController extends Controller
                     InventoryService::restock(
                         $poItem->item_id,
                         $qtyToReceive,
-                        $purchase->po_number,
+                        $purchase->po_number ?: ('PO-' . $purchase->id),
                         Auth::user(),
                         'purchase',
                         $destLocation
@@ -227,7 +235,7 @@ class PurchaseOrderController extends Controller
                     $itemsReceived++;
 
                     // Collect batch prompt payload for batch-tracked items (§5.2)
-                    if ($item && \App\Services\BatchTrackingService::isBatchTrackingActive($branch->id, $item)) {
+                    if ($item && $branch && \App\Services\BatchTrackingService::isBatchTrackingActive($branch->id, $item)) {
                         $batchPrompts[] = [
                             'item_id'     => $item->id,
                             'item_name'   => $item->item_name,
@@ -261,7 +269,10 @@ class PurchaseOrderController extends Controller
             }
         }
 
-        $redirect = redirect()->route('pos.purchases.show', $purchase)->with('success', 'Order reception processed.');
+        $redirect = redirect()->route('pos.purchases.show', [
+            'branch'   => $branch?->slug ?: ($purchase->branch?->slug ?: 'main'),
+            'purchase' => $purchase->id,
+        ])->with('success', 'Order reception processed.');
         if (!empty($batchPrompts)) {
             $redirect->with('batch_prompts', $batchPrompts);
         }

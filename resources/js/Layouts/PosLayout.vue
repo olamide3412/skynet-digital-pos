@@ -186,10 +186,9 @@ const allNavLinks = [
     {
         label: 'AI Intelligence',
         icon:  'M13 10V3L4 14h7v7l9-11h-7z',
-        perm:  'canViewReports',
         children: [
             { label: 'Ask-Your-Business AI', route: 'pos.ai.chat',    match: 'AI/ChatAssistant', feature: 'ai_chat_assistant' },
-            { label: 'Reorder Predictions',  route: 'pos.ai.reorder', match: 'AI/ReorderPredictions', feature: 'ai_reorder_prediction' },
+            { label: 'Reorder Predictions',  route: 'pos.ai.reorder', match: 'AI/ReorderPredictions', feature: 'ai_reorder_prediction', condition: () => Boolean(page.props.pos_settings?.pos_enabled !== false) },
         ],
     },
     {
@@ -215,6 +214,7 @@ const allNavLinks = [
         icon:  'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z',
         perm:  'view_ecommerce_activity',
         feature: 'feature_ecommerce_integration',
+        condition: () => Boolean(page.props.pos_settings?.pos_enabled !== false),
     },
     {
         label: 'Settings',

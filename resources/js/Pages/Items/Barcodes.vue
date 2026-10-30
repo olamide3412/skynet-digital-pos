@@ -103,16 +103,18 @@ function selectAsyncItem(item) {
 
 // ── Label Presets & Custom Sizing ──────────────────────────────────────────
 const PRESETS = [
-    { id: '25x50', label: '25mm × 50mm (Standard Small)', width: 50, height: 25 },
-    { id: '40x30', label: '40mm × 30mm (Compact Tag)',    width: 40, height: 30 },
-    { id: '50x80', label: '50mm × 80mm (Large / Shelf)',   width: 80, height: 50 },
-    { id: 'a4',    label: '📄 A4 Sheet (Grid Tiling)',     width: 40, height: 25, isA4: true },
-    { id: 'custom',label: '📐 Custom Dimensions (mm)',    width: 50, height: 25, isCustom: true },
+    { id: '25x50',      label: '50mm × 25mm (Standard XP-365B Landscape)', width: 50, height: 25, orientation: 'landscape' },
+    { id: '25x50_vert', label: '25mm × 50mm (XP-365B Portrait)',           width: 25, height: 50, orientation: 'portrait' },
+    { id: '40x30',      label: '40mm × 30mm (Compact Tag)',                 width: 40, height: 30, orientation: 'landscape' },
+    { id: '50x80',      label: '50mm × 80mm (Large / Shelf)',               width: 80, height: 50, orientation: 'landscape' },
+    { id: 'a4',         label: '📄 A4 Sheet (Grid Tiling)',                 width: 40, height: 25, isA4: true, orientation: 'portrait' },
+    { id: 'custom',     label: '📐 Custom Dimensions (mm)',                width: 50, height: 25, isCustom: true, orientation: 'landscape' },
 ]
 
-const selectedPreset = ref('25x50')
-const customWidth    = ref(50)
-const customHeight   = ref(25)
+const selectedPreset   = ref('25x50')
+const printOrientation = ref('landscape') // 'landscape' or 'portrait'
+const customWidth      = ref(50)
+const customHeight     = ref(25)
 
 const activeWidth = computed(() => {
     if (selectedPreset.value === 'custom') return customWidth.value || 50
@@ -127,6 +129,70 @@ const activeHeight = computed(() => {
 })
 
 const isA4Mode = computed(() => selectedPreset.value === 'a4')
+
+function selectPreset(preset) {
+    selectedPreset.value = preset.id
+    if (preset.orientation) {
+        printOrientation.value = preset.orientation
+    }
+}
+
+function setOrientation(orientation) {
+    printOrientation.value = orientation
+    if (selectedPreset.value === 'custom') {
+        const minDim = Math.min(customWidth.value, customHeight.value)
+        const maxDim = Math.max(customWidth.value, customHeight.value)
+        if (orientation === 'landscape') {
+            customWidth.value  = maxDim
+            customHeight.value = minDim
+        } else {
+            customWidth.value  = minDim
+            customHeight.value = maxDim
+        }
+    } else if (selectedPreset.value === '25x50' && orientation === 'portrait') {
+        selectedPreset.value = '25x50_vert'
+    } else if (selectedPreset.value === '25x50_vert' && orientation === 'landscape') {
+        selectedPreset.value = '25x50'
+    } else {
+        const p = PRESETS.find(x => x.id === selectedPreset.value)
+        if (p && !p.isA4) {
+            const minDim = Math.min(p.width, p.height)
+            const maxDim = Math.max(p.width, p.height)
+            if (orientation === 'landscape' && p.width < p.height) {
+                customWidth.value = maxDim
+                customHeight.value = minDim
+                selectedPreset.value = 'custom'
+            } else if (orientation === 'portrait' && p.width > p.height) {
+                customWidth.value = minDim
+                customHeight.value = maxDim
+                selectedPreset.value = 'custom'
+            }
+        }
+    }
+}
+
+function swapDimensions() {
+    if (selectedPreset.value === 'custom') {
+        const temp = customWidth.value
+        customWidth.value = customHeight.value
+        customHeight.value = temp
+        printOrientation.value = customWidth.value >= customHeight.value ? 'landscape' : 'portrait'
+    } else if (selectedPreset.value === '25x50') {
+        selectedPreset.value = '25x50_vert'
+        printOrientation.value = 'portrait'
+    } else if (selectedPreset.value === '25x50_vert') {
+        selectedPreset.value = '25x50'
+        printOrientation.value = 'landscape'
+    } else {
+        const p = PRESETS.find(x => x.id === selectedPreset.value)
+        if (p && !p.isA4) {
+            customWidth.value = p.height
+            customHeight.value = p.width
+            selectedPreset.value = 'custom'
+            printOrientation.value = customWidth.value >= customHeight.value ? 'landscape' : 'portrait'
+        }
+    }
+}
 
 // ── Label Content & Styling Toggles ────────────────────────────────────────
 const labelConfig = ref({
@@ -164,6 +230,7 @@ function saveCurrentTemplate() {
     const template = {
         name,
         preset:       selectedPreset.value,
+        orientation:  printOrientation.value,
         customWidth:  customWidth.value,
         customHeight: customHeight.value,
         config:       { ...labelConfig.value },
@@ -174,10 +241,11 @@ function saveCurrentTemplate() {
 }
 
 function applyTemplate(template) {
-    selectedPreset.value = template.preset
-    customWidth.value    = template.customWidth
-    customHeight.value   = template.customHeight
-    labelConfig.value    = { ...template.config }
+    selectedPreset.value   = template.preset
+    printOrientation.value = template.orientation || 'landscape'
+    customWidth.value      = template.customWidth
+    customHeight.value     = template.customHeight
+    labelConfig.value      = { ...template.config }
 }
 
 function deleteTemplate(index) {
@@ -311,7 +379,7 @@ function renderBarcodes() {
     })
 }
 
-watch([selectedPreset, customWidth, customHeight, labelConfig, selectedItems, activeTab], () => {
+watch([selectedPreset, customWidth, customHeight, printOrientation, labelConfig, selectedItems, activeTab], () => {
     renderBarcodes()
 }, { deep: true })
 
@@ -409,9 +477,11 @@ async function executePrint() {
 
     const content = clone.innerHTML
 
+    const orientation = isA4Mode.value ? 'portrait' : printOrientation.value
+
     const pageRule = isA4Mode.value
         ? `@page { size: A4 portrait; margin: 6mm; }`
-        : `@page { size: ${activeWidth.value}mm ${activeHeight.value}mm; margin: 0mm; }`
+        : `@page { size: ${activeWidth.value}mm ${activeHeight.value}mm ${orientation}; margin: 0mm; }`
 
     const containerStyle = isA4Mode.value
         ? `
@@ -421,10 +491,10 @@ async function executePrint() {
             width: 100%;
         `
         : `
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            display: block;
             width: ${activeWidth.value}mm;
+            margin: 0;
+            padding: 0;
         `
 
     const labelStyle = `
@@ -442,6 +512,7 @@ async function executePrint() {
         color: #000000;
         page-break-inside: avoid;
         break-inside: avoid;
+        ${!isA4Mode.value ? 'page-break-after: always; break-after: page;' : ''}
         overflow: hidden;
         font-family: system-ui, -apple-system, sans-serif;
     `
@@ -468,13 +539,15 @@ async function executePrint() {
     <meta charset="utf-8">
     <title>Print Barcode Labels</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; }
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         ${pageRule}
-        body {
+        html, body {
             background: #fff;
             color: #000;
-            margin: 0;
-            padding: 0;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: ${activeWidth.value}mm;
+            ${!isA4Mode.value ? `height: ${activeHeight.value}mm;` : ''}
         }
         .print-grid {
             ${containerStyle}
@@ -482,6 +555,12 @@ async function executePrint() {
         .barcode-single-label {
             ${labelStyle}
         }
+        ${!isA4Mode.value ? `
+        .barcode-single-label:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+        }
+        ` : ''}
         .label-biz {
             font-size: ${labelConfig.value.fontSize === 'small' ? '8px' : '10px'};
             font-weight: 700;
@@ -512,9 +591,18 @@ async function executePrint() {
             display: block;
             margin: 0 auto;
             max-width: 100%;
+            height: auto;
         }
         @media print {
+            ${pageRule}
             .no-print { display: none !important; }
+            html, body {
+                width: ${activeWidth.value}mm;
+                ${!isA4Mode.value ? `height: ${activeHeight.value}mm;` : ''}
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+        }
         }
     </style>
 </head>
@@ -706,7 +794,7 @@ async function executePrint() {
                     <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-5 shadow-xs space-y-4">
                         <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 border-b border-slate-100 dark:border-slate-700/60 pb-2 flex items-center justify-between">
                             <span>2. Label Sizing & Stock Selection</span>
-                            <span class="text-[11px] font-mono text-slate-500">{{ activeWidth }}mm × {{ activeHeight }}mm</span>
+                            <span class="text-[11px] font-mono text-slate-500 font-bold">{{ activeWidth }}mm × {{ activeHeight }}mm ({{ printOrientation === 'landscape' ? 'Landscape' : 'Portrait' }})</span>
                         </h2>
 
                         <!-- Preset Buttons -->
@@ -714,7 +802,7 @@ async function executePrint() {
                             <button
                                 v-for="preset in PRESETS"
                                 :key="preset.id"
-                                @click="selectedPreset = preset.id"
+                                @click="selectPreset(preset)"
                                 type="button"
                                 :class="['p-2.5 text-left rounded-xl border text-xs font-semibold transition-all cursor-pointer flex flex-col justify-between',
                                     selectedPreset === preset.id
@@ -724,6 +812,51 @@ async function executePrint() {
                                 <span class="text-[10px] text-slate-500 dark:text-slate-400 mt-1 font-normal">
                                     {{ preset.label.includes('(') ? preset.label.substring(preset.label.indexOf('(')) : '' }}
                                 </span>
+                            </button>
+                        </div>
+
+                        <!-- Print Orientation & Dimension Swap Bar -->
+                        <div class="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Orientation:</span>
+                                <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-0.5 shadow-2xs">
+                                    <button
+                                        type="button"
+                                        @click="setOrientation('landscape')"
+                                        :class="[
+                                            'px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer',
+                                            printOrientation === 'landscape'
+                                                ? 'bg-emerald-600 text-white shadow-xs'
+                                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                                        ]"
+                                    >
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 18h16M4 12h16"/></svg>
+                                        <span>Landscape (Horizontal)</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="setOrientation('portrait')"
+                                        :class="[
+                                            'px-3 py-1.5 rounded-md text-xs font-bold transition flex items-center gap-1.5 cursor-pointer',
+                                            printOrientation === 'portrait'
+                                                ? 'bg-emerald-600 text-white shadow-xs'
+                                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700/50'
+                                        ]"
+                                    >
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 4v16M18 4v16M12 4v16"/></svg>
+                                        <span>Portrait (Vertical)</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                @click="swapDimensions"
+                                class="px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-lg border border-slate-300 dark:border-slate-600 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                title="Swap width and height (e.g. 50×25mm ⇄ 25×50mm)"
+                            >
+                                <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/></svg>
+                                <span>Swap Dimensions (⇄)</span>
                             </button>
                         </div>
 
@@ -831,7 +964,7 @@ async function executePrint() {
                                 Live Label Preview
                             </h2>
                             <span class="text-[10px] px-2 py-0.5 bg-slate-100 dark:bg-slate-700 rounded-full font-mono font-bold text-slate-600 dark:text-slate-300">
-                                {{ activeWidth }}mm × {{ activeHeight }}mm
+                                {{ activeWidth }}mm × {{ activeHeight }}mm • {{ printOrientation === 'landscape' ? 'Landscape' : 'Portrait' }}
                             </span>
                         </div>
 
@@ -904,6 +1037,16 @@ async function executePrint() {
                             </svg>
                             <span>{{ isPrinting ? 'Sending to Printer...' : `Print ${totalLabelsToPrint} Barcode Labels` }}</span>
                         </button>
+
+                        <!-- Thermal Printer (XP-365B) Guidance Tip -->
+                        <div class="p-3 bg-emerald-50/70 dark:bg-emerald-950/30 rounded-xl border border-emerald-200/80 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200 text-xs space-y-1">
+                            <div class="font-bold flex items-center gap-1.5">
+                                <span>🖨️ Thermal Print Settings Tip (XP-365B):</span>
+                            </div>
+                            <p class="text-[11px] text-emerald-800 dark:text-emerald-300 leading-relaxed">
+                                Sent to printer in <strong>{{ printOrientation === 'landscape' ? 'Landscape' : 'Portrait' }}</strong> mode. In Chrome's print preview, set <strong>Margins: None</strong>, <strong>Scale: Default (100%)</strong>, and select your custom label size (<strong>{{ activeWidth }}×{{ activeHeight }}mm</strong>) for clean edge-to-edge alignment.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>

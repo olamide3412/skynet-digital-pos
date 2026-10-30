@@ -31,8 +31,10 @@ class LaundryOrderService
             $laundrySettings = LaundrySetting::forBranch($branch->id);
             $posSettings = $branch->getSettings();
 
-            // 1. Resolve Customer & Snapshots
-            $customer = PosCustomer::findOrFail($data['customer_id']);
+            // 1. Resolve Customer & Snapshots (enforce branch isolation)
+            $customer = PosCustomer::where('id', $data['customer_id'])
+                ->where('branch_id', $branch->id)
+                ->firstOrFail();
 
             // 2. Race-Safe Order Number Generation
             $prefix = $laundrySettings->order_prefix ?: 'LDY-';

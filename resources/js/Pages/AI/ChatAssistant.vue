@@ -3,7 +3,6 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import { router, usePage, Link } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import SuperAdminLayout from '@/Layouts/SuperAdminLayout.vue'
-import LaundryLayout from '@/Layouts/LaundryLayout.vue'
 import ThemeToggle from '@/Components/ThemeToggle.vue'
 
 defineOptions({ layout: null })
@@ -79,9 +78,6 @@ const creditSummary = ref(props.creditSummary || null)
 const layoutComponent = computed(() => {
     if (isSuperAdmin.value && !props.branch) {
         return SuperAdminLayout
-    }
-    if (props.branch?.laundry_enabled && (!props.branch?.pos_enabled || props.branch?.default_interface === 'laundry')) {
-        return LaundryLayout
     }
     return PosLayout
 })

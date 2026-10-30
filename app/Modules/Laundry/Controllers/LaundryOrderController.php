@@ -897,7 +897,7 @@ class LaundryOrderController extends Controller
 
     /**
      * Search existing customers by query (AJAX).
-     * Searches current branch & organization first, then gracefully checks all customers in directory.
+     * Strictly scoped to the current branch.
      */
     public function searchCustomers(Request $request)
     {
@@ -916,30 +916,16 @@ class LaundryOrderController extends Controller
             return response()->json([]);
         }
 
-        $queryBuilder = PosCustomer::query()->search($query);
-
-        // Prioritize: 0 = current branch, 1 = organization branches, 2 = all directory
-        $branchId = $branch ? $branch->id : 0;
-        $orgBranchIds = [];
-        if ($branch && $branch->organization_id) {
-            $orgBranchIds = \App\Models\Branch::where('organization_id', $branch->organization_id)
-                ->where('id', '!=', $branch->id)
-                ->pluck('id')
-                ->all();
+        if (!$branch) {
+            return response()->json([]);
         }
 
-        if (!empty($orgBranchIds)) {
-            $orgList = implode(',', array_map('intval', $orgBranchIds));
-            $orderSql = "CASE WHEN branch_id = {$branchId} THEN 0 WHEN branch_id IN ({$orgList}) THEN 1 ELSE 2 END";
-        } else {
-            $orderSql = "CASE WHEN branch_id = {$branchId} THEN 0 ELSE 1 END";
-        }
-
-        $customers = $queryBuilder
-            ->orderByRaw($orderSql)
+        $customers = PosCustomer::query()
+            ->where('branch_id', $branch->id)
+            ->search($query)
             ->orderBy('name')
             ->limit(20)
-            ->get(['id', 'name', 'phone', 'whatsapp_number', 'email', 'address', 'debt_bal', 'branch_id']);
+            ->get(['id', 'name', 'phone', 'whatsapp_number', 'email', 'address', 'debt_bal', 'watch_list', 'branch_id']);
 
         return response()->json($customers);
     }

@@ -60,9 +60,9 @@ class OfflineSyncController extends Controller
             ->select(['id', 'item_id', 'imei_or_device_id', 'location', 'status'])
             ->get();
 
-        // Customers list
+        // Customers list (strictly scoped to branch)
         $customers = PosCustomer::where('branch_id', $branch->id)
-            ->select(['id', 'name', 'phone', 'whatsapp_number', 'email', 'address', 'debt_bal'])
+            ->select(['id', 'name', 'phone', 'whatsapp_number', 'email', 'address', 'debt_bal', 'watch_list', 'branch_id'])
             ->get();
 
         // Categories list

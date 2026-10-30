@@ -413,7 +413,7 @@ Route::prefix('{branch}')
             ->name('reports.logs');
 
         // Branch Ecommerce Activity (Operational Visibility & Narrow Actions)
-        Route::prefix('ecommerce-activity')->name('ecommerce-activity.')->group(function () {
+        Route::prefix('ecommerce-activity')->name('ecommerce-activity.')->middleware(['ensure.pos.enabled'])->group(function () {
             Route::get('/', [\App\Http\Controllers\Pos\EcommerceActivityController::class, 'index'])
                 ->name('index');
             Route::get('/export', [\App\Http\Controllers\Pos\EcommerceActivityController::class, 'export'])

@@ -53,6 +53,15 @@ class SaleService
         $purchaseType = $data['purchase_type'] ?? 'Consumer';
         $customerId = $data['customer_id'] ?? null;
 
+        if ($customerId && $resolvedBranchId) {
+            $customerBelongs = PosCustomer::where('id', $customerId)
+                ->where('branch_id', $resolvedBranchId)
+                ->exists();
+            if (!$customerBelongs) {
+                throw new \InvalidArgumentException('Selected customer does not belong to the active branch.');
+            }
+        }
+
         if (empty($cartItems)) {
             throw new \InvalidArgumentException('Cart is empty.');
         }

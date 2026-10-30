@@ -21,6 +21,15 @@ class CustomerController extends Controller
     {
         $tab = $request->get('tab', 'all');
         $branch = current_branch();
+        if (!$branch) {
+            $branchParam = $request->route('branch');
+            if ($branchParam) {
+                $branch = $branchParam instanceof \App\Models\Branch ? $branchParam : \App\Models\Branch::where('slug', (string) $branchParam)->first();
+            }
+            if (!$branch) {
+                $branch = \Illuminate\Support\Facades\Auth::guard('web')->user()?->branch;
+            }
+        }
 
         $baseQuery = PosCustomer::query()
             ->when($branch, fn($q) => $q->where('branch_id', $branch->id));
@@ -188,22 +197,33 @@ class CustomerController extends Controller
         return back()->with('success', "Note for customer \"{$customer->name}\" updated.");
     }
 
-    /** API: search for POS customer selector */
+    /** API: search for POS customer selector (strictly scoped to the active branch) */
     public function search(Request $request)
     {
         $branch = current_branch();
+        if (!$branch) {
+            $branchParam = $request->route('branch');
+            if ($branchParam) {
+                $branch = $branchParam instanceof \App\Models\Branch ? $branchParam : \App\Models\Branch::where('slug', (string) $branchParam)->first();
+            }
+            if (!$branch) {
+                $branch = \Illuminate\Support\Facades\Auth::guard('web')->user()?->branch;
+            }
+        }
+
         $q = trim($request->input('q', $request->input('query', $request->input('search', ''))));
 
         if (strlen($q) < 1) {
             return response()->json([]);
         }
 
-        $query = PosCustomer::query()->search($q);
+        if (!$branch) {
+            return response()->json([]);
+        }
 
-        $branchId = $branch ? $branch->id : 0;
-
-        $results = $query
-            ->orderByRaw("CASE WHEN branch_id = ? THEN 0 ELSE 1 END", [$branchId])
+        $results = PosCustomer::query()
+            ->where('branch_id', $branch->id)
+            ->search($q)
             ->orderBy('name')
             ->limit(15)
             ->get(['id', 'name', 'phone', 'whatsapp_number', 'email', 'address', 'debt_bal', 'watch_list', 'branch_id']);

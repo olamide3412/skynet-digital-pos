@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class HeldSaleController extends Controller
 {
@@ -76,13 +77,28 @@ class HeldSaleController extends Controller
     /** API: save (hold) cart */
     public function apiStore(Request $request, $branchParam = null)
     {
+        $branch = current_branch();
+        if (!$branch && $branchParam) {
+            $branch = $branchParam instanceof \App\Models\Branch ? $branchParam : \App\Models\Branch::where('slug', (string) $branchParam)->first();
+        }
+        if (!$branch) {
+            $branch = Auth::user()?->branch;
+        }
+        $branchId = $branch?->id;
+
         $data = $request->validate([
             'held_sale_id'              => 'nullable|string|max:100',
             'held_sale_uuid'            => 'nullable|string|max:100',
             'hold_name'                 => 'nullable|string|max:255',
             'user_id'                   => 'nullable|integer',
             'cashier_name'              => 'nullable|string|max:150',
-            'customer_id'               => 'nullable|integer|exists:pos_customers,id',
+            'customer_id'               => [
+                'nullable',
+                'integer',
+                $branchId
+                    ? Rule::exists('pos_customers', 'id')->where('branch_id', $branchId)
+                    : 'exists:pos_customers,id',
+            ],
             'items'                     => 'required|array|min:1',
             'items.*.item_id'           => 'required|integer|exists:items,id',
             'items.*.qty'               => 'required|integer|min:1',
@@ -93,7 +109,6 @@ class HeldSaleController extends Controller
             'items.*.imei_or_device_id' => 'nullable|string|max:100',
         ]);
 
-        $branch = current_branch();
         $heldSaleUuid = $data['held_sale_uuid'] ?? $data['held_sale_id'] ?? (string) Str::uuid();
 
         $held = DB::transaction(function () use ($data, $branch, $heldSaleUuid) {
@@ -225,12 +240,17 @@ class HeldSaleController extends Controller
                     $cashierName = $userRecord?->full_name ?: ($userRecord?->name ?: 'Staff');
                 }
 
+                $targetCustomerId = $holdData['customer_id'] ?? null;
+                if ($targetCustomerId && $branch && !\App\Models\PosCustomer::where('id', $targetCustomerId)->where('branch_id', $branch->id)->exists()) {
+                    $targetCustomerId = null;
+                }
+
                 $heldSale = HeldSale::where('held_sale_uuid', $uuid)->first();
                 if ($heldSale) {
                     $heldSale->update([
                         'hold_name'    => $holdData['hold_name'] ?? $heldSale->hold_name,
                         'status'       => 'Held',
-                        'customer_id'  => $holdData['customer_id'] ?? $heldSale->customer_id,
+                        'customer_id'  => $targetCustomerId ?? $heldSale->customer_id,
                         'cashier_name' => $cashierName ?: $heldSale->cashier_name,
                     ]);
                     $heldSale->items()->delete();
@@ -242,7 +262,7 @@ class HeldSaleController extends Controller
                         'cashier_name'   => $cashierName ?: 'Staff',
                         'hold_name'      => $holdData['hold_name'] ?? null,
                         'status'         => 'Held',
-                        'customer_id'    => $holdData['customer_id'] ?? null,
+                        'customer_id'    => $targetCustomerId,
                         'created_at'     => !empty($holdData['created_at']) ? date('Y-m-d H:i:s', strtotime($holdData['created_at'])) : now(),
                     ]);
                 }

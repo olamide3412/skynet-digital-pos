@@ -168,6 +168,9 @@ class OfflineSyncService
         $settings     = PosSettings::forBranch($branch->id);
         $purchaseType = $data['purchase_type'] ?? 'Consumer';
         $customerId   = $data['customer_id'] ?? null;
+        if ($customerId && !PosCustomer::where('id', $customerId)->where('branch_id', $branch->id)->exists()) {
+            $customerId = null;
+        }
 
         // Load items mapped
         $itemIds  = array_column($cartItems, 'item_id');

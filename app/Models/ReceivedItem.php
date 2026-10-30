@@ -12,6 +12,7 @@ class ReceivedItem extends Model
         'item_id',
         'user_id',
         'qty',
+        'location',
         'cost',
         'received_date',
         'expiry_date',

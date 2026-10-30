@@ -108,7 +108,7 @@ class UnpostedTransactionsController extends Controller
             $entry = InventoryPostingService::postExpense($expense);
         } elseif ($type === 'purchase') {
             $po = PurchaseOrder::where('branch_id', $branch->id)->findOrFail($id);
-            $receivedTotal = (float) $po->receivedItems()->sum(\Illuminate\Support\Facades\DB::raw('received_qty * cost'));
+            $receivedTotal = (float) $po->receivedItems()->sum(\Illuminate\Support\Facades\DB::raw('qty * cost'));
             if ($receivedTotal <= 0) {
                 $receivedTotal = (float) $po->total_amount;
             }
