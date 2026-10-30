@@ -11,9 +11,17 @@ const props = defineProps({
         type: Array,
         default: () => [],
     },
+    user_role: {
+        type: String,
+        default: null,
+    },
 })
 
 const page = usePage()
+const authUser = computed(() => page.props.auth?.user ?? {})
+const userRole = computed(() => {
+    return props.user_role || authUser.value?.role_display || (authUser.value?.is_super_admin ? 'Admin' : 'Laundry Cashier')
+})
 const currencySymbol = computed(() => page.props.system_config?.currency_symbol || '₦')
 const branchSlug = computed(() => page.props.current_branch?.slug || '')
 
@@ -58,8 +66,17 @@ const statusLabel = (status) => {
         <!-- Header -->
         <div class="flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
             <div>
-                <h1 class="text-lg font-bold text-slate-900 dark:text-white">Laundry Operations Overview</h1>
-                <p class="text-xs text-slate-500 dark:text-slate-400">
+                <div class="flex items-center gap-2.5 flex-wrap">
+                    <h1 class="text-lg font-bold text-slate-900 dark:text-white">Laundry Operations Overview</h1>
+                    <span class="hidden md:inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shadow-2xs">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span class="text-slate-500 dark:text-slate-400 font-normal">Active User:</span>
+                        <span class="font-bold text-slate-800 dark:text-slate-100">{{ authUser.name || 'User' }}</span>
+                        <span class="text-indigo-300 dark:text-indigo-600">|</span>
+                        <span class="uppercase tracking-wider text-[10px] font-black text-indigo-700 dark:text-indigo-300">{{ userRole }}</span>
+                    </span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                     Branch: <span class="font-medium text-slate-700 dark:text-slate-300">{{ page.props.current_branch?.name }}</span> • Garment intake, live stages pipeline, and pickup collections
                 </p>
             </div>
@@ -95,7 +112,16 @@ const statusLabel = (status) => {
 
             <!-- Welcome / Quick Action Bar -->
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 rounded-2xl bg-gradient-to-r from-indigo-700 via-indigo-600 to-cyan-600 text-white shadow-xl shadow-indigo-600/10">
-                <div class="space-y-1">
+                <div class="space-y-1.5">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-white/20 text-white backdrop-blur-xs border border-white/30 shadow-xs">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse"></span>
+                            <span>{{ userRole }}</span>
+                        </span>
+                        <span class="text-xs text-indigo-100 font-medium">
+                            Signed in as <strong class="text-white">{{ authUser.name || 'Staff' }}</strong>
+                        </span>
+                    </div>
                     <h2 class="text-xl sm:text-2xl font-extrabold tracking-tight">
                         Laundry Operations
                     </h2>
@@ -206,7 +232,7 @@ const statusLabel = (status) => {
                     <div class="flex items-center justify-between">
                         <div>
                             <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">Cash Collected Today</span>
-                            <span class="block text-[10px] text-cyan-600 dark:text-cyan-400 font-medium">My Cash Intake</span>
+                            <span class="block text-[10px] text-cyan-600 dark:text-cyan-400 font-medium">My Cash Intake ({{ userRole }})</span>
                         </div>
                         <div class="w-8 h-8 rounded-xl bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400 flex items-center justify-center">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

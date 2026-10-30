@@ -488,6 +488,33 @@ onUnmounted(() => {
                 </template>
             </nav>
 
+            <!-- User Profile -->
+            <div class="p-2 border-t border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
+                <div v-show="!isCollapsed || isMobileOpen" class="flex items-center gap-2.5 px-1.5 py-1 min-w-0">
+                    <div class="w-8 h-8 rounded-full bg-theme text-white font-bold flex items-center justify-center text-xs shrink-0 shadow-xs">
+                        {{ $page.props.auth?.user?.name ? $page.props.auth.user.name.charAt(0).toUpperCase() : 'U' }}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-xs font-semibold text-slate-900 dark:text-white truncate">
+                            {{ $page.props.auth?.user?.name }}
+                        </p>
+                        <p class="text-[10px] font-black text-theme dark:text-purple-300 uppercase tracking-wider truncate">
+                            {{ $page.props.auth?.user?.role_display || 'Staff' }}
+                        </p>
+                    </div>
+                </div>
+
+                <div v-if="isCollapsed && !isMobileOpen" class="relative group flex justify-center py-1">
+                    <div class="w-8 h-8 rounded-full bg-theme text-white font-bold flex items-center justify-center text-xs shadow-xs cursor-default">
+                        {{ $page.props.auth?.user?.name ? $page.props.auth.user.name.charAt(0).toUpperCase() : 'U' }}
+                    </div>
+                    <div class="absolute left-full ml-3.5 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-slate-900/95 dark:bg-slate-950 text-white text-xs rounded-lg shadow-2xl whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition-all duration-150 z-50 border border-slate-700/80 backdrop-blur-sm">
+                        <div class="font-bold">{{ $page.props.auth?.user?.name }}</div>
+                        <div class="text-[10px] text-theme-light font-bold uppercase tracking-wider">{{ $page.props.auth?.user?.role_display || 'Staff' }}</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Theme Toggle & Logout Footer -->
             <div class="p-2 border-t border-slate-200 dark:border-slate-700 space-y-1">
                 <div class="relative group" :class="['flex items-center', isCollapsed ? 'justify-center p-1' : 'px-2 py-1 justify-between']">

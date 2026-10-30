@@ -420,8 +420,8 @@ const isActive = (match) => {
                             <p class="text-xs font-semibold text-slate-900 dark:text-white truncate">
                                 {{ authUser.name }}
                             </p>
-                            <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate capitalize">
-                                {{ authUser.roles?.[0]?.name || 'Attendant' }}
+                            <p class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 truncate uppercase tracking-wider">
+                                {{ authUser.role_display || authUser.roles?.[0]?.name || 'Staff' }}
                             </p>
                         </div>
                     </div>

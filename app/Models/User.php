@@ -123,6 +123,53 @@ class User extends Authenticatable
         return $this->hasRole('cashier');
     }
 
+    /**
+     * Get human-friendly role name for display, context-aware for branch/laundry.
+     */
+    public function getRoleDisplayName(?int $branchId = null, bool $isLaundryContext = true): string
+    {
+        if ($this->isSuperAdmin() || $this->isOrganizationAdmin()) {
+            return 'Admin';
+        }
+
+        $effectiveBranchId = $branchId ?: $this->branch_id;
+        if ($effectiveBranchId) {
+            setPermissionsTeamId($effectiveBranchId);
+        }
+
+        if ($this->hasRole('branch-admin')) {
+            return 'Admin';
+        }
+
+        if ($this->hasRole('manager')) {
+            return 'Manager';
+        }
+
+        if ($this->hasRole('laundry-staff') || $this->hasRole('cashier')) {
+            return $isLaundryContext ? 'Laundry Cashier' : 'Cashier';
+        }
+
+        if ($this->hasRole('inventory-manager')) {
+            return 'Inventory Manager';
+        }
+
+        $firstRole = $this->roles->first()?->name;
+        if ($firstRole) {
+            if ($firstRole === 'branch-admin') {
+                return 'Admin';
+            }
+            if ($firstRole === 'laundry-staff' || ($firstRole === 'cashier' && $isLaundryContext)) {
+                return 'Laundry Cashier';
+            }
+            if ($firstRole === 'cashier') {
+                return 'Cashier';
+            }
+            return ucwords(str_replace(['-', '_'], ' ', $firstRole));
+        }
+
+        return 'Staff';
+    }
+
     public function belongsToBranch(int|Branch $branch): bool
     {
         $branchId = $branch instanceof Branch ? $branch->id : $branch;

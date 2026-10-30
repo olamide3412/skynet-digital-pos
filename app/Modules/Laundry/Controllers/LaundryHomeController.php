@@ -34,6 +34,7 @@ class LaundryHomeController extends Controller
 
         $user = $request->user();
         $userId = $user?->id;
+        $userRole = $user ? $user->getRoleDisplayName($branch->id, true) : 'Staff';
 
         $cashCollectedToday = (float) LaundryPayment::where('branch_id', $branch->id)
             ->where('recorded_by', $userId)
@@ -87,6 +88,7 @@ class LaundryHomeController extends Controller
                 'total_paid_today' => round(max(0, $totalCollectedToday), 2),
             ],
             'recent_orders' => $recentOrders,
+            'user_role'     => $userRole,
         ]);
     }
 }

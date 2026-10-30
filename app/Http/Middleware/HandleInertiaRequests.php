@@ -56,7 +56,18 @@ class HandleInertiaRequests extends Middleware
 
             // ── Auth ──────────────────────────────────────────────────────────
             'auth' => [
-                'user' => fn() => $user,
+                'user' => function () use ($user, $branch) {
+                    if (!$user) return null;
+                    if ($branch) {
+                        setPermissionsTeamId($branch->id);
+                    }
+                    $isLaundryContext = $branch ? (bool) $branch->laundryEnabled() : false;
+                    $user->loadMissing(['roles']);
+                    $userData = $user->toArray();
+                    $userData['role_display'] = $user->getRoleDisplayName($branch?->id, $isLaundryContext);
+                    $userData['roles'] = $user->roles->map(fn($r) => ['id' => $r->id, 'name' => $r->name])->values()->all();
+                    return $userData;
+                },
                 'customer' => fn() => null,
                 'check' => fn() => Auth::guard('web')->check(),
                 'type' => fn() => Auth::guard('web')->check() ? 'staff' : null,
