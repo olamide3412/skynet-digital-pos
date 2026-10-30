@@ -72,7 +72,6 @@ const allNavLinks = [
             { label: 'Discounts & Promos', route: 'laundry.discounts.index', match: 'Laundry/Discounts/Index', perm: 'laundry.manage_discounts' },
             { label: 'End of Day',         route: 'laundry.reports.end-of-day', match: 'Laundry/Reports/EndOfDay', perm: 'canViewEndOfDay' },
             { label: 'Laundry Reports',    route: 'laundry.reports.index',  match: 'Laundry/Reports/Index', perm: 'laundry.view_reports' },
-            { label: 'Laundry Settings',   route: 'pos.settings.index',     params: { tab: 'laundry' }, match: 'Settings/Index', perm: 'laundry.manage_settings' },
         ],
     },
     {
