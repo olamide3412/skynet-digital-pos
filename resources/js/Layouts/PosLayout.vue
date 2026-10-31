@@ -576,7 +576,7 @@ onUnmounted(() => {
                             </svg>
                         </div>
                         <span class="font-bold text-theme text-xs sm:text-sm truncate">
-                            {{ $page.props.system_config?.company_name || $page.props.settings?.business_name || 'SkyNet POS' }}
+                            {{ $page.props.settings?.business_name || $page.props.current_branch?.name || $page.props.branch?.name || $page.props.system_config?.company_name || 'SkyNet POS' }}
                         </span>
                     </div>
                 </div>

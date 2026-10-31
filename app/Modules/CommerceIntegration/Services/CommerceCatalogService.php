@@ -42,7 +42,7 @@ class CommerceCatalogService
 
         $query = Item::query()
             ->where('branch_id', $branchId)
-            ->with(['units']);
+            ->with(['units', 'category:id,name,slug']);
 
         // Incremental sync filter
         if (!empty($filters['updated_after'])) {
@@ -98,6 +98,16 @@ class CommerceCatalogService
                 'standard_price' => (float) $item->price,
                 'selling_price' => (float) $item->price,
                 'wholesale_price' => $item->wholesale_price ? (float) $item->wholesale_price : null,
+                'category_id' => $item->category_id,
+                'pos_category_id' => $item->category_id,
+                'category_name' => $item->category?->name,
+                'pos_category_name' => $item->category?->name,
+                'pos_category_slug' => $item->category?->slug,
+                'category' => $item->category ? [
+                    'id' => $item->category->id,
+                    'name' => $item->category->name,
+                    'slug' => $item->category->slug,
+                ] : null,
                 'unit_label' => $item->unit_label,
                 'base_unit_name' => $item->unit_label ?: 'Piece',
                 'unit_name' => $item->unit_label ?: 'Piece',

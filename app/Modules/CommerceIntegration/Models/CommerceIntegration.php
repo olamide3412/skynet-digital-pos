@@ -33,8 +33,17 @@ class CommerceIntegration extends Model
         'created_by',
     ];
 
-    public static function generateClientId(): string
+    public static function generateClientId(?Branch $branch = null): string
     {
+        if ($branch) {
+            $slug = str_replace('-', '_', \Illuminate\Support\Str::slug($branch->slug ?: $branch->name, '_'));
+            $candidate = 'pos_cli_' . ($slug ?: 'branch') . '_' . $branch->id;
+
+            if (!self::where('client_id', $candidate)->exists()) {
+                return $candidate;
+            }
+        }
+
         do {
             $clientId = 'pos_cli_' . strtoupper(bin2hex(random_bytes(4)));
         } while (self::where('client_id', $clientId)->exists());
@@ -46,7 +55,8 @@ class CommerceIntegration extends Model
     {
         static::creating(function ($integration) {
             if (empty($integration->client_id)) {
-                $integration->client_id = self::generateClientId();
+                $branch = $integration->branch ?: ($integration->branch_id ? Branch::find($integration->branch_id) : null);
+                $integration->client_id = self::generateClientId($branch);
             }
         });
     }

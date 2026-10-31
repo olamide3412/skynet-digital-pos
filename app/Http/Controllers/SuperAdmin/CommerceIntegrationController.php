@@ -48,6 +48,7 @@ class CommerceIntegrationController extends Controller
             $integration = CommerceIntegration::create([
                 'organization_id' => $organization->id,
                 'branch_id' => $branch->id,
+                'client_id' => CommerceIntegration::generateClientId($branch),
                 'name' => $validated['name'],
                 'platform' => $validated['platform'],
                 'status' => 'active',
@@ -61,6 +62,9 @@ class CommerceIntegrationController extends Controller
             // Generate server-to-server Sanctum personal access token
             $token = $integration->createToken('commerce_api_access', ['commerce:full']);
             $plainTextToken = $token->plainTextToken;
+
+            // Automatically store secret so outbound webhooks and test pings are authenticated
+            $integration->update(['webhook_secret' => $plainTextToken]);
 
             ActivityLogger::log(
                 actionType: 'create',
@@ -88,6 +92,9 @@ class CommerceIntegrationController extends Controller
 
         // Generate new token
         $token = $integration->createToken('commerce_api_access', ['commerce:full']);
+
+        // Update webhook_secret with new token
+        $integration->update(['webhook_secret' => $token->plainTextToken]);
 
         ActivityLogger::log(
             actionType: 'update',
@@ -189,21 +196,31 @@ class CommerceIntegrationController extends Controller
         }
 
         try {
-            $response = \Illuminate\Support\Facades\Http::timeout(5)
-                ->withHeaders([
-                    'Content-Type'   => 'application/json',
-                    'Accept'         => 'application/json',
-                    'User-Agent'     => 'SkynetPOS-Webhook/1.0',
-                    'X-Skynet-Event' => 'test.ping',
-                    'X-Branch-Id'    => (string) $branch->id,
-                ])
-                ->post($integration->webhook_url, [
-                    'event'       => 'test.ping',
-                    'timestamp'   => now()->toIso8601String(),
-                    'branch_id'   => $branch->id,
-                    'branch_name' => $branch->name,
-                    'message'     => 'Webhook test notification from Skynet POS.',
-                ]);
+            $payload = [
+                'event'       => 'test.ping',
+                'timestamp'   => now()->toIso8601String(),
+                'branch_id'   => $branch->id,
+                'branch_name' => $branch->name,
+                'message'     => 'Webhook test notification from Skynet POS.',
+            ];
+
+            $headers = [
+                'Content-Type'   => 'application/json',
+                'Accept'         => 'application/json',
+                'User-Agent'     => 'SkynetPOS-Webhook/1.0',
+                'X-Skynet-Event' => 'test.ping',
+                'X-Branch-Id'    => (string) $branch->id,
+            ];
+
+            if (!empty($integration->webhook_secret)) {
+                $headers['Authorization']      = 'Bearer ' . $integration->webhook_secret;
+                $headers['X-Commerce-Key']     = $integration->webhook_secret;
+                $headers['X-Skynet-Signature'] = 'sha256=' . hash_hmac('sha256', json_encode($payload), $integration->webhook_secret);
+            }
+
+            $response = \Illuminate\Support\Facades\Http::timeout(10)
+                ->withHeaders($headers)
+                ->post($integration->webhook_url, $payload);
 
             if ($response->successful()) {
                 return back()->with('success', "Webhook test successful! Your ecommerce server responded with HTTP {$response->status()}.");

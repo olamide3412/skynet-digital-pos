@@ -153,6 +153,8 @@ class CommerceWebhookDispatcher
                         'pos_item_id' => $item->id,
                         'item_name' => $item->item_name,
                         'barcode_number' => $item->barcode_number,
+                        'pos_category_id' => $item->category_id,
+                        'pos_category_name' => $item->category?->name,
                         'price' => (float) $item->price,
                         'buy_price' => (float) ($item->buy_price ?? 0),
                         'available_qty' => $availableStock,
@@ -205,12 +207,14 @@ class CommerceWebhookDispatcher
             ];
 
             if (!empty($integration->webhook_secret)) {
+                $headers['Authorization']      = 'Bearer ' . $integration->webhook_secret;
+                $headers['X-Commerce-Key']     = $integration->webhook_secret;
                 $signature = hash_hmac('sha256', json_encode($payload), $integration->webhook_secret);
                 $headers['X-Skynet-Signature'] = 'sha256=' . $signature;
             }
 
-            // Low timeout (3s) to prevent any lingering connection delay
-            $timeout = (int) config('commerce.webhooks.timeout_seconds', 3);
+            // Timeout (5s) for outbound webhook deliveries
+            $timeout = (int) config('commerce.webhooks.timeout_seconds', 5);
 
             $response = Http::timeout($timeout)
                 ->withHeaders($headers)
