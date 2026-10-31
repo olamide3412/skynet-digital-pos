@@ -22,6 +22,10 @@ class EcommerceMappingController extends Controller
             ?: auth('sanctum')->user()?->branch_id
             ?: auth()->user()?->branch_id;
 
+        if (!$branchId && ($clientId = $request->header('X-Client-Id'))) {
+            $branchId = CommerceIntegration::where('client_id', $clientId)->value('branch_id');
+        }
+
         if (!$branchId && !empty($mappings)) {
             $firstItemId = $mappings[0]['pos_item_id'] ?? $mappings[0]['item_id'] ?? null;
             if ($firstItemId) {
