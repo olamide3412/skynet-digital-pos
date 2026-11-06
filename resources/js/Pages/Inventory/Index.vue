@@ -108,6 +108,9 @@ function formatQty(log) {
 
 function formatTypeBadge(rawType) {
     const t = String(rawType || '').toLowerCase()
+    if (t === 'ecommerce_sale' || t === 'ecommerce' || t.includes('ecommerce')) {
+        return { label: 'E-commerce Sale', class: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800/60' }
+    }
     if (t === 'sale') return { label: 'Sale Deduction', class: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-800/60' }
     if (t === 'purchase') return { label: 'Purchase In', class: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800/60' }
     if (t === 'transfer') return { label: 'Stock Transfer', class: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800/60' }
@@ -203,6 +206,7 @@ function formatTypeBadge(rawType) {
                 >
                     <option value="">All Types</option>
                     <option value="sale">Sale Deduction</option>
+                    <option value="ecommerce_sale">E-commerce Sale</option>
                     <option value="purchase">Purchase In / Restock</option>
                     <option value="transfer">Stock Transfer</option>
                     <option value="adjustment">Stock Adjustment</option>
@@ -322,7 +326,12 @@ function formatTypeBadge(rawType) {
 
                             <!-- Logged By -->
                             <td class="px-4 py-3 text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">
-                                {{ log.user?.full_name || log.user?.name || 'System' }}
+                                <span v-if="log.transaction_type === 'ecommerce_sale' || log.transaction_type === 'ecommerce'" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/60 font-semibold text-[11px]">
+                                    <span>🌐</span> E-Commerce System
+                                </span>
+                                <span v-else>
+                                    {{ log.user?.full_name || log.user?.name || 'System' }}
+                                </span>
                             </td>
                         </tr>
 

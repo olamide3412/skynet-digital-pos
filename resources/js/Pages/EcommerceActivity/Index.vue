@@ -195,10 +195,28 @@ function formatCurrency(val) {
     return '₦' + num.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-function formatDate(dateStr) {
+function formatDate(dateStr, includeSeconds = false) {
     if (!dateStr) return '—'
     const d = new Date(dateStr)
-    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+    const options = { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }
+    if (includeSeconds) {
+        options.second = '2-digit'
+    }
+    return d.toLocaleDateString('en-GB', options)
+}
+
+function getLifecycleDuration(startStr, endStr) {
+    if (!startStr || !endStr) return ''
+    const start = new Date(startStr).getTime()
+    const end = new Date(endStr).getTime()
+    const diffSec = Math.round((end - start) / 1000)
+    if (isNaN(diffSec) || diffSec < 0) return ''
+    if (diffSec < 5) return 'Instant (POD)'
+    if (diffSec < 60) return `${diffSec}s`
+    const diffMin = Math.round(diffSec / 60)
+    if (diffMin < 60) return `${diffMin}m`
+    const diffHr = (diffSec / 3600).toFixed(1)
+    return `${diffHr}h`
 }
 
 function isExpired(reservation) {
@@ -497,11 +515,11 @@ function isExpired(reservation) {
                             <tr>
                                 <th class="px-4 py-3 w-12 text-center">SN</th>
                                 <th class="px-4 py-3">Order Ref</th>
-                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Lifecycle Status</th>
                                 <th class="px-4 py-3">Reserved Items</th>
                                 <th class="px-4 py-3 text-center">Total Qty</th>
-                                <th class="px-4 py-3">Created</th>
-                                <th class="px-4 py-3">Expires / Resolved</th>
+                                <th class="px-4 py-3">Reserved (Hold)</th>
+                                <th class="px-4 py-3">Resolution & Timing</th>
                                 <th class="px-4 py-3 text-right">Actions</th>
                             </tr>
                         </thead>
@@ -522,30 +540,44 @@ function isExpired(reservation) {
                                     </button>
                                 </td>
                                 <td class="px-4 py-3">
-                                    <span
-                                        v-if="res.status === 'confirmed'"
-                                        class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 whitespace-nowrap"
-                                    >
-                                        Confirmed
-                                    </span>
-                                    <span
-                                        v-else-if="res.status === 'released'"
-                                        class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 whitespace-nowrap"
-                                    >
-                                        Released
-                                    </span>
-                                    <span
-                                        v-else-if="isExpired(res)"
-                                        class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 whitespace-nowrap"
-                                    >
-                                        Expired Pending
-                                    </span>
-                                    <span
-                                        v-else
-                                        class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30 whitespace-nowrap"
-                                    >
-                                        Pending Hold
-                                    </span>
+                                    <div class="flex flex-col gap-1">
+                                        <span
+                                            v-if="res.status === 'confirmed'"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30 whitespace-nowrap w-fit"
+                                        >
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                            Confirmed
+                                        </span>
+                                        <span
+                                            v-else-if="res.status === 'released'"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700 whitespace-nowrap w-fit"
+                                        >
+                                            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                            Released
+                                        </span>
+                                        <span
+                                            v-else-if="isExpired(res)"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/30 whitespace-nowrap w-fit"
+                                        >
+                                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                                            Expired
+                                        </span>
+                                        <span
+                                            v-else
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/30 whitespace-nowrap w-fit"
+                                        >
+                                            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                                            Pending Hold
+                                        </span>
+
+                                        <div class="text-[10px] font-mono text-slate-400 flex items-center gap-1">
+                                            <span>Hold</span>
+                                            <span>→</span>
+                                            <span :class="res.status === 'confirmed' ? 'text-emerald-600 dark:text-emerald-400 font-bold' : (res.status === 'released' ? 'text-slate-500 font-bold' : (isExpired(res) ? 'text-rose-500 font-bold' : 'text-amber-500 font-bold'))">
+                                                {{ res.status === 'confirmed' ? 'Deducted' : (res.status === 'released' ? 'Restored' : (isExpired(res) ? 'Expired' : 'Awaiting')) }}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3">
                                     <div class="space-y-1 max-w-xs">
@@ -572,18 +604,41 @@ function isExpired(reservation) {
                                     {{ res.items?.reduce((sum, i) => sum + (parseInt(i.quantity) || 0), 0) }}
                                 </td>
                                 <td class="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                                    {{ formatDate(res.created_at) }}
+                                    <div class="font-mono text-slate-700 dark:text-slate-300 font-medium">
+                                        {{ formatDate(res.created_at, true) }}
+                                    </div>
+                                    <div class="text-[10px] text-slate-400">
+                                        30m Hold Start
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                                    <span v-if="res.status === 'confirmed'" class="text-emerald-600 dark:text-emerald-400 font-medium">
-                                        Confirmed {{ formatDate(res.confirmed_at) }}
-                                    </span>
-                                    <span v-else-if="res.status === 'released'" class="text-slate-500">
-                                        Released {{ formatDate(res.released_at) }}
-                                    </span>
-                                    <span v-else :class="isExpired(res) ? 'text-rose-600 font-bold' : 'text-amber-600'">
-                                        Expires {{ formatDate(res.expires_at) }}
-                                    </span>
+                                    <div v-if="res.status === 'confirmed'" class="space-y-0.5">
+                                        <div class="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                            <span class="font-mono">{{ formatDate(res.confirmed_at, true) }}</span>
+                                        </div>
+                                        <div v-if="getLifecycleDuration(res.created_at, res.confirmed_at)" class="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                            <span>⚡</span> {{ getLifecycleDuration(res.created_at, res.confirmed_at) }}
+                                        </div>
+                                    </div>
+                                    <div v-else-if="res.status === 'released'" class="space-y-0.5">
+                                        <div class="flex items-center gap-1 text-slate-500">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>
+                                            <span class="font-mono">{{ formatDate(res.released_at, true) }}</span>
+                                        </div>
+                                        <div v-if="getLifecycleDuration(res.created_at, res.released_at)" class="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600">
+                                            <span>↩</span> {{ getLifecycleDuration(res.created_at, res.released_at) }}
+                                        </div>
+                                    </div>
+                                    <div v-else :class="isExpired(res) ? 'text-rose-600 font-bold' : 'text-amber-600'" class="space-y-0.5">
+                                        <div class="flex items-center gap-1">
+                                            <span class="w-1.5 h-1.5 rounded-full" :class="isExpired(res) ? 'bg-rose-500' : 'bg-amber-500 animate-pulse'"></span>
+                                            <span class="font-mono">{{ formatDate(res.expires_at, true) }}</span>
+                                        </div>
+                                        <div class="text-[10px] font-semibold">
+                                            {{ isExpired(res) ? 'Hold Expired' : 'Expires in ~30m' }}
+                                        </div>
+                                    </div>
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <div class="flex items-center justify-end gap-1.5">
@@ -867,11 +922,12 @@ function isExpired(reservation) {
         </div>
 
         <!-- ── MODAL: VIEW ORDER RESERVATION DETAILS ────────────────────────── -->
-        <div v-if="showOrderDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] flex flex-col">
-                <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+        <div v-if="showOrderDetailsModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-3xl w-full shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
+                <!-- Modal Header (Fixed at top) -->
+                <div class="p-5 pb-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between flex-shrink-0 bg-white dark:bg-slate-900">
                     <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-lg">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-lg flex-shrink-0">
                             🛍️
                         </div>
                         <div>
@@ -917,89 +973,232 @@ function isExpired(reservation) {
                     </button>
                 </div>
 
-                <!-- Order Reference & Metadata Card -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                    <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
-                        <span class="text-slate-400 text-[11px] block">Order Reference</span>
-                        <div class="flex items-center justify-between gap-1 mt-1">
-                            <span class="font-mono font-bold text-slate-900 dark:text-white truncate">
-                                {{ viewingReservation?.external_order_reference }}
+                <!-- Modal Body (SCROLLABLE CONTAINER) -->
+                <div class="p-5 sm:p-6 overflow-y-auto space-y-4 flex-1 min-h-0">
+                    <!-- Order Reference & Integration Info -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
+                            <span class="text-slate-400 text-[11px] block">External Order Reference</span>
+                            <div class="flex items-center justify-between gap-1 mt-1">
+                                <span class="font-mono font-bold text-slate-900 dark:text-white truncate" :title="viewingReservation?.external_order_reference">
+                                    {{ viewingReservation?.external_order_reference }}
+                                </span>
+                                <button
+                                    @click="copyOrderRef(viewingReservation?.external_order_reference)"
+                                    type="button"
+                                    class="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold flex-shrink-0 cursor-pointer"
+                                    title="Copy order reference"
+                                >
+                                    {{ copiedRef ? '✓ Copied' : '📋 Copy' }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
+                            <div>
+                                <span class="text-slate-400 text-[11px] block">Integration Channel</span>
+                                <div class="font-bold text-slate-900 dark:text-white mt-1 flex items-center gap-1.5">
+                                    <span class="capitalize">{{ viewingReservation?.integration?.name || 'Online Web Store' }}</span>
+                                    <span class="text-slate-400 font-normal">({{ viewingReservation?.integration?.platform || 'eCommerce' }})</span>
+                                </div>
+                            </div>
+                            <div v-if="viewingReservation?.status === 'confirmed' && getLifecycleDuration(viewingReservation?.created_at, viewingReservation?.confirmed_at)" class="text-right">
+                                <span class="text-slate-400 text-[11px] block">Lifecycle Speed</span>
+                                <span class="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 mt-1">
+                                    ⚡ {{ getLifecycleDuration(viewingReservation?.created_at, viewingReservation?.confirmed_at) }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ── FULL LIFECYCLE TIMELINE STEPPER ────────────────────────── -->
+                    <div class="p-4 bg-slate-50/70 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 space-y-3">
+                        <div class="flex items-center justify-between text-xs">
+                            <span class="font-bold text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                                <span>⏱️</span> POS Reservation Lifecycle Journey
                             </span>
-                            <button
-                                @click="copyOrderRef(viewingReservation?.external_order_reference)"
-                                type="button"
-                                class="text-[11px] text-indigo-600 dark:text-indigo-400 hover:underline font-semibold flex-shrink-0 cursor-pointer"
-                                title="Copy order reference"
+                            <span class="font-mono text-[11px] text-slate-400">
+                                Hold ID #{{ viewingReservation?.id }}
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 relative">
+                            <!-- Step 1: Reserved -->
+                            <div class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-indigo-200 dark:border-indigo-900/60 shadow-xs flex items-start gap-3">
+                                <div class="w-7 h-7 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5 shadow-xs">
+                                    1
+                                </div>
+                                <div class="space-y-0.5 flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-1">
+                                        <span class="text-xs font-bold text-slate-900 dark:text-white">Temporary Hold Placed</span>
+                                        <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                            Reserved
+                                        </span>
+                                    </div>
+                                    <div class="font-mono text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                                        {{ formatDate(viewingReservation?.created_at, true) }}
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 leading-tight">
+                                        Physical store inventory locked for 30 minutes to prevent counter overselling.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Step 2: Resolution -->
+                            <div
+                                v-if="viewingReservation?.status === 'confirmed'"
+                                class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-emerald-300 dark:border-emerald-800/80 shadow-xs flex items-start gap-3"
                             >
-                                {{ copiedRef ? '✓ Copied' : '📋 Copy' }}
-                            </button>
+                                <div class="w-7 h-7 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5 shadow-xs">
+                                    ✓
+                                </div>
+                                <div class="space-y-0.5 flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-1">
+                                        <span class="text-xs font-bold text-emerald-800 dark:text-emerald-300">Sale Confirmed & Stock Deducted</span>
+                                        <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                            Confirmed
+                                        </span>
+                                    </div>
+                                    <div class="font-mono text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                                        {{ formatDate(viewingReservation?.confirmed_at, true) }}
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 leading-tight">
+                                        Order verified. Stock permanently deducted from physical front store balance.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div
+                                v-else-if="viewingReservation?.status === 'released'"
+                                class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-300 dark:border-slate-700 shadow-xs flex items-start gap-3"
+                            >
+                                <div class="w-7 h-7 rounded-full bg-slate-500 text-white font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
+                                    ↩
+                                </div>
+                                <div class="space-y-0.5 flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-1">
+                                        <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Hold Released & Stock Restored</span>
+                                        <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                            Released
+                                        </span>
+                                    </div>
+                                    <div class="font-mono text-[11px] text-slate-600 dark:text-slate-300 font-medium">
+                                        {{ formatDate(viewingReservation?.released_at, true) }}
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 leading-tight">
+                                        Checkout abandoned or cancelled. Inventory hold restored to shelf.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div
+                                v-else-if="isExpired(viewingReservation)"
+                                class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-rose-300 dark:border-rose-900/60 shadow-xs flex items-start gap-3"
+                            >
+                                <div class="w-7 h-7 rounded-full bg-rose-600 text-white font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5">
+                                    ✕
+                                </div>
+                                <div class="space-y-0.5 flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-1">
+                                        <span class="text-xs font-bold text-rose-800 dark:text-rose-300">Hold Window Expired</span>
+                                        <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-rose-100 text-rose-800 dark:bg-rose-500/20 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+                                            Expired
+                                        </span>
+                                    </div>
+                                    <div class="font-mono text-[11px] text-rose-700 dark:text-rose-400 font-semibold">
+                                        {{ formatDate(viewingReservation?.expires_at, true) }}
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 leading-tight">
+                                        Payment was not completed within the 30-minute reservation window.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div
+                                v-else
+                                class="p-3 bg-white dark:bg-slate-900 rounded-xl border border-amber-300 dark:border-amber-900/60 shadow-xs flex items-start gap-3"
+                            >
+                                <div class="w-7 h-7 rounded-full bg-amber-500 text-white font-bold flex items-center justify-center text-xs flex-shrink-0 mt-0.5 animate-pulse">
+                                    2
+                                </div>
+                                <div class="space-y-0.5 flex-1 min-w-0">
+                                    <div class="flex items-center justify-between gap-1">
+                                        <span class="text-xs font-bold text-amber-800 dark:text-amber-300">Awaiting Customer Payment</span>
+                                        <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                                            Active Hold
+                                        </span>
+                                    </div>
+                                    <div class="font-mono text-[11px] text-amber-700 dark:text-amber-400 font-semibold">
+                                        Expires: {{ formatDate(viewingReservation?.expires_at, true) }}
+                                    </div>
+                                    <p class="text-[11px] text-slate-400 leading-tight">
+                                        Customer is completing checkout. Stock remains reserved in front store.
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
-                        <span class="text-slate-400 text-[11px] block">Created At</span>
-                        <div class="font-bold text-slate-800 dark:text-slate-200 mt-1">
-                            {{ formatDate(viewingReservation?.created_at) }}
+                    <!-- Reserved Items Table -->
+                    <div class="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+                        <div class="px-4 py-2 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-800 font-bold text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                            <span>🛒 Reserved Order Items ({{ viewingReservation?.items?.length || 0 }})</span>
+                            <span class="text-[11px] font-mono text-indigo-600 dark:text-indigo-400">
+                                Total Units: {{ viewingReservation?.items?.reduce((sum, i) => sum + (parseInt(i.quantity) || 0), 0) }}
+                            </span>
                         </div>
+                        <table class="w-full text-left text-xs text-slate-600 dark:text-slate-300">
+                            <thead class="bg-slate-50/50 dark:bg-slate-800/50 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
+                                <tr>
+                                    <th class="px-4 py-2 w-12 text-center">SN</th>
+                                    <th class="px-4 py-2">Item Name & SKU</th>
+                                    <th class="px-4 py-2 text-center">Qty Reserved</th>
+                                    <th class="px-4 py-2 text-right">Unit Price</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                <tr v-for="(item, iIdx) in viewingReservation?.items" :key="item.id" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                                    <td class="px-4 py-2.5 text-center font-mono text-slate-400">
+                                        {{ iIdx + 1 }}
+                                    </td>
+                                    <td class="px-4 py-2.5">
+                                        <div class="font-bold text-slate-900 dark:text-white">
+                                            {{ item.item?.item_name || item.item?.name || ('Item #' + item.item_id) }}
+                                        </div>
+                                        <div class="text-[11px] text-slate-400 font-mono">
+                                            Barcode: {{ item.item?.barcode_number || item.item?.barcode || 'N/A' }}
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-2.5 text-center font-mono font-bold text-slate-900 dark:text-white">
+                                        {{ item.quantity }}
+                                    </td>
+                                    <td class="px-4 py-2.5 text-right font-mono font-bold text-slate-800 dark:text-slate-200">
+                                        {{ formatCurrency(item.unit_price || item.item?.price) }}
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
 
-                    <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80">
-                        <span class="text-slate-400 text-[11px] block">
-                            {{ viewingReservation?.status === 'confirmed' ? 'Confirmed At' : (viewingReservation?.status === 'released' ? 'Released At' : 'Hold Expires') }}
-                        </span>
-                        <div class="font-bold mt-1" :class="viewingReservation?.status === 'confirmed' ? 'text-emerald-600 dark:text-emerald-400' : (viewingReservation?.status === 'released' ? 'text-slate-500' : (isExpired(viewingReservation) ? 'text-rose-600' : 'text-amber-600'))">
-                            {{ formatDate(viewingReservation?.status === 'confirmed' ? viewingReservation?.confirmed_at : (viewingReservation?.status === 'released' ? viewingReservation?.released_at : viewingReservation?.expires_at)) }}
+                    <!-- Stock Movements Triggered (if any) -->
+                    <div v-if="viewingReservation?.movements && viewingReservation.movements.length > 0" class="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-800 text-xs">
+                        <span class="font-bold text-slate-800 dark:text-slate-200 block mb-2">📦 Physical Stock Deductions Recorded</span>
+                        <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                            <div v-for="m in viewingReservation.movements" :key="m.id" class="flex items-center justify-between bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 text-[11px]">
+                                <span class="font-medium text-slate-900 dark:text-white truncate max-w-xs" :title="m.item?.item_name">
+                                    {{ m.item?.item_name || ('Item #' + m.item_id) }}
+                                </span>
+                                <div class="flex items-center gap-3 flex-shrink-0">
+                                    <span class="text-slate-400 font-mono">Stock: {{ m.previous_stock }} → {{ m.current_stock }}</span>
+                                    <span class="font-bold text-rose-600 dark:text-rose-400 font-mono">-{{ m.quantity }}</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Reserved Items Table -->
-                <div class="flex-1 overflow-y-auto min-h-0 border border-slate-200 dark:border-slate-800 rounded-xl">
-                    <table class="w-full text-left text-xs text-slate-600 dark:text-slate-300">
-                        <thead class="bg-slate-50 dark:bg-slate-800/90 text-slate-500 font-semibold sticky top-0 border-b border-slate-200 dark:border-slate-800">
-                            <tr>
-                                <th class="px-4 py-2.5 w-12 text-center">SN</th>
-                                <th class="px-4 py-2.5">Item Name & SKU</th>
-                                <th class="px-4 py-2.5 text-center">Qty Reserved</th>
-                                <th class="px-4 py-2.5 text-right">Unit Price</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                            <tr v-for="(item, iIdx) in viewingReservation?.items" :key="item.id" class="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
-                                <td class="px-4 py-3 text-center font-mono text-slate-400">
-                                    {{ iIdx + 1 }}
-                                </td>
-                                <td class="px-4 py-3">
-                                    <div class="font-bold text-slate-900 dark:text-white">
-                                        {{ item.item?.item_name || item.item?.name || ('Item #' + item.item_id) }}
-                                    </div>
-                                    <div class="text-[11px] text-slate-400 font-mono">
-                                        Barcode: {{ item.item?.barcode_number || item.item?.barcode || 'N/A' }}
-                                    </div>
-                                </td>
-                                <td class="px-4 py-3 text-center font-mono font-bold text-slate-900 dark:text-white">
-                                    {{ item.quantity }}
-                                </td>
-                                <td class="px-4 py-3 text-right font-mono font-bold text-slate-800 dark:text-slate-200">
-                                    {{ formatCurrency(item.unit_price || item.item?.price) }}
-                                </td>
-                            </tr>
-                        </tbody>
-                        <tfoot class="bg-slate-50/80 dark:bg-slate-800/80 border-t border-slate-200 dark:border-slate-800 font-bold">
-                            <tr>
-                                <td colspan="2" class="px-4 py-2.5 text-slate-700 dark:text-slate-300 text-right">
-                                    Total Reserved Units:
-                                </td>
-                                <td class="px-4 py-2.5 text-center font-mono text-indigo-600 dark:text-indigo-400 text-sm">
-                                    {{ viewingReservation?.items?.reduce((sum, i) => sum + (parseInt(i.quantity) || 0), 0) }}
-                                </td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-
-                <div class="flex items-center justify-between pt-2">
+                <!-- Modal Footer (Fixed at bottom) -->
+                <div class="px-6 py-3.5 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/60 flex items-center justify-between flex-shrink-0">
                     <div>
                         <button
                             v-if="viewingReservation?.status === 'pending'"
@@ -1014,7 +1213,7 @@ function isExpired(reservation) {
                     <button
                         @click="closeOrderDetailsModal"
                         type="button"
-                        class="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold transition cursor-pointer"
+                        class="px-5 py-2 bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-semibold transition cursor-pointer"
                     >
                         Close
                     </button>

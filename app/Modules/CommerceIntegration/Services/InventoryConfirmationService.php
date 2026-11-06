@@ -3,6 +3,7 @@
 namespace App\Modules\CommerceIntegration\Services;
 
 use App\Models\Item;
+use App\Models\InventoryTransaction;
 use App\Modules\CommerceIntegration\Events\CommerceStockConfirmed;
 use App\Modules\CommerceIntegration\Models\CommerceIntegration;
 use App\Modules\CommerceIntegration\Models\CommerceInventoryMovement;
@@ -97,6 +98,20 @@ class InventoryConfirmationService
                     externalReference: $externalOrderReference,
                     notes: "Stock deducted upon order confirmation {$externalOrderReference}"
                 );
+
+                // Authoritative POS inventory transaction log (with transaction_type = ecommerce_sale)
+                InventoryTransaction::create([
+                    'branch_id'        => $integration->branch_id,
+                    'item_id'          => $item->id,
+                    'transaction_type' => 'ecommerce_sale',
+                    'qty'              => $deductQty,
+                    'previous_qty'     => $previousQty,
+                    'new_qty'          => $newQty,
+                    'location'         => 'front_store',
+                    'reference_id'     => $externalOrderReference,
+                    'notes'            => "E-commerce order deduction ({$integration->name})",
+                    'user_id'          => null, // Automated online transaction (E-Commerce System)
+                ]);
             }
 
             $metadata = $reservation->metadata ?? [];

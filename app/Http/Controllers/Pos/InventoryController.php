@@ -45,7 +45,10 @@ class InventoryController extends Controller
                         ->orWhere('notes', 'like', "%{$type}%");
 
                     $lower = strtolower($type);
-                    if (str_contains($lower, 'sale')) {
+                    if (str_contains($lower, 'ecommerce')) {
+                        $sub->orWhere('transaction_type', 'ecommerce_sale')
+                            ->orWhere('notes', 'like', '%ecommerce%');
+                    } elseif (str_contains($lower, 'sale')) {
                         $sub->orWhere('transaction_type', 'sale');
                     } elseif (str_contains($lower, 'purchase') || str_contains($lower, 'receive')) {
                         $sub->orWhere('transaction_type', 'purchase');
@@ -116,9 +119,12 @@ class InventoryController extends Controller
         // Data Rows
         $rowNum = 2;
         foreach ($logs as $log) {
-            $staffName = $log->user?->full_name ?: ($log->user?->name ?: ($log->user?->username ?: 'System'));
+            $staffName = in_array(strtolower($log->transaction_type ?? ''), ['ecommerce_sale', 'ecommerce'])
+                ? 'E-Commerce System'
+                : ($log->user?->full_name ?: ($log->user?->name ?: ($log->user?->username ?: 'System')));
             $locName   = $log->location === 'back_store' ? 'Back Store' : 'Front Store';
             $typeLabel = match (strtolower($log->transaction_type ?? '')) {
+                'ecommerce_sale', 'ecommerce' => 'E-commerce Sale',
                 'sale'       => 'Sale Deduction',
                 'purchase'   => 'Purchase In / Restock',
                 'transfer'   => 'Stock Transfer',

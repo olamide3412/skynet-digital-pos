@@ -3,6 +3,7 @@
 namespace App\Modules\CommerceIntegration\Services;
 
 use App\Models\Item;
+use App\Models\InventoryTransaction;
 use App\Modules\CommerceIntegration\Events\CommerceStockReleased;
 use App\Modules\CommerceIntegration\Events\CommerceStockReserved;
 use App\Modules\CommerceIntegration\Models\CommerceIntegration;
@@ -177,40 +178,94 @@ class InventoryReservationService
                 throw new UnprocessableEntityHttpException("Reservation with reference '{$externalOrderReference}' not found.");
             }
 
-            if ($reservation->isConfirmed()) {
-                throw new ConflictHttpException("Cannot release already confirmed reservation '{$externalOrderReference}'.");
+            if ($reservation->status === 'released') {
+                return $reservation->load(['items.item', 'movements']); // Idempotent
             }
 
-            if ($reservation->status === 'released') {
-                return $reservation->load('items.item'); // Idempotent
+            $wasConfirmed = $reservation->isConfirmed();
+            $reservation->load('items.item');
+
+            // If the reservation was previously confirmed, physical stock was already deducted.
+            // Automatically restock it back to front_store and log the return!
+            if ($wasConfirmed) {
+                foreach ($reservation->items as $resItem) {
+                    $item = Item::where('id', $resItem->item_id)
+                        ->where('branch_id', $integration->branch_id)
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($item) {
+                        $previousQty = (int) $item->front_store_qty;
+                        $restoreQty = (int) $resItem->quantity;
+                        $newQty = $previousQty + $restoreQty;
+
+                        $item->front_store_qty = $newQty;
+                        $item->save();
+
+                        // Record movement audit
+                        $this->movementService->recordMovement(
+                            integrationId: $integration->id,
+                            organizationId: $integration->organization_id,
+                            branchId: $integration->branch_id,
+                            itemId: $item->id,
+                            type: CommerceInventoryMovement::TYPE_RESERVATION_RELEASE,
+                            quantity: $restoreQty,
+                            previousStock: $previousQty,
+                            currentStock: $newQty,
+                            reservationId: $reservation->id,
+                            externalReference: $externalOrderReference,
+                            notes: "Stock restored upon cancellation of {$externalOrderReference}. Reason: {$reason}"
+                        );
+
+                        // Authoritative POS inventory transaction log
+                        InventoryTransaction::create([
+                            'branch_id'        => $integration->branch_id,
+                            'item_id'          => $item->id,
+                            'transaction_type' => 'return',
+                            'qty'              => $restoreQty,
+                            'previous_qty'     => $previousQty,
+                            'new_qty'          => $newQty,
+                            'location'         => 'front_store',
+                            'reference_id'     => $externalOrderReference,
+                            'notes'            => "Restocked via E-commerce order cancellation ({$integration->name})",
+                            'user_id'          => null, // E-Commerce System
+                        ]);
+                    }
+                }
+            } else {
+                // Was pending hold: stock was never decremented, so just record release movement
+                foreach ($reservation->items as $resItem) {
+                    $this->movementService->recordMovement(
+                        integrationId: $integration->id,
+                        organizationId: $integration->organization_id,
+                        branchId: $integration->branch_id,
+                        itemId: $resItem->item_id,
+                        type: CommerceInventoryMovement::TYPE_RESERVATION_RELEASE,
+                        quantity: $resItem->quantity,
+                        previousStock: $resItem->item?->front_store_qty ?? 0,
+                        currentStock: $resItem->item?->front_store_qty ?? 0,
+                        reservationId: $reservation->id,
+                        externalReference: $externalOrderReference,
+                        notes: "Reservation released. Reason: {$reason}"
+                    );
+                }
+            }
+
+            $metadata = $reservation->metadata ?? [];
+            $metadata['cancellation_reason'] = $reason;
+            if ($wasConfirmed) {
+                $metadata['restocked_at'] = now()->toIso8601String();
             }
 
             $reservation->update([
                 'status' => 'released',
                 'released_at' => now(),
+                'metadata' => $metadata,
             ]);
-
-            // Record movement audit
-            $reservation->load('items.item');
-            foreach ($reservation->items as $resItem) {
-                $this->movementService->recordMovement(
-                    integrationId: $integration->id,
-                    organizationId: $integration->organization_id,
-                    branchId: $integration->branch_id,
-                    itemId: $resItem->item_id,
-                    type: CommerceInventoryMovement::TYPE_RESERVATION_RELEASE,
-                    quantity: $resItem->quantity,
-                    previousStock: $resItem->item->front_store_qty,
-                    currentStock: $resItem->item->front_store_qty,
-                    reservationId: $reservation->id,
-                    externalReference: $externalOrderReference,
-                    notes: "Reservation released. Reason: {$reason}"
-                );
-            }
 
             CommerceStockReleased::dispatch($reservation, $reason);
 
-            return $reservation;
+            return $reservation->load(['items.item', 'movements']);
         });
     }
 

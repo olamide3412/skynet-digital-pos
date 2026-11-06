@@ -391,7 +391,7 @@ class EcommerceActivityController extends Controller
     protected function buildReservationsQuery(Request $request, int $branchId, Carbon $now)
     {
         $q = CommerceReservation::where('branch_id', $branchId)
-            ->with(['items.item', 'integration']);
+            ->with(['items.item', 'integration', 'movements.item']);
 
         if ($search = trim((string) $request->input('search'))) {
             $q->where(function ($sub) use ($search) {

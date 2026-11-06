@@ -124,7 +124,7 @@ class ReportController extends Controller
             $hourlyTrend = (clone $salesQuery)
                 ->select(
                     DB::raw('HOUR(created_at) as hour'),
-                    DB::raw('SUM(final_total) as revenue'),
+                    DB::raw('SUM(CASE WHEN is_debt = 1 THEN COALESCE(amount_paid, cash + bank_transfer) ELSE final_total END) as revenue'),
                     DB::raw('SUM(profit_made) as profit'),
                     DB::raw('COUNT(id) as count')
                 )
@@ -147,7 +147,7 @@ class ReportController extends Controller
             $dailyTrend = (clone $salesQuery)
                 ->select(
                     DB::raw('DATE(created_at) as date'),
-                    DB::raw('SUM(final_total) as revenue'),
+                    DB::raw('SUM(CASE WHEN is_debt = 1 THEN COALESCE(amount_paid, cash + bank_transfer) ELSE final_total END) as revenue'),
                     DB::raw('SUM(profit_made) as profit'),
                     DB::raw('COUNT(id) as count')
                 )
@@ -172,7 +172,7 @@ class ReportController extends Controller
             $monthlyTrend = (clone $salesQuery)
                 ->select(
                     DB::raw("DATE_FORMAT(created_at, '%Y-%m') as month_key"),
-                    DB::raw('SUM(final_total) as revenue'),
+                    DB::raw('SUM(CASE WHEN is_debt = 1 THEN COALESCE(amount_paid, cash + bank_transfer) ELSE final_total END) as revenue'),
                     DB::raw('SUM(profit_made) as profit'),
                     DB::raw('COUNT(id) as count')
                 )
@@ -195,11 +195,14 @@ class ReportController extends Controller
         }
 
         // 2. Payment Method Breakdown in Period
-        $periodSales = (clone $salesQuery)->get(['cash', 'bank_transfer', 'is_debt', 'final_total', 'profit_made', 'discount_amount']);
+        $periodSales = (clone $salesQuery)->get(['cash', 'bank_transfer', 'is_debt', 'final_total', 'profit_made', 'discount_amount', 'amount_paid']);
 
         $cashSum = (float) $periodSales->sum('cash');
         $bankSum = (float) $periodSales->sum('bank_transfer');
-        $debtSum = (float) $periodSales->where('is_debt', true)->sum('final_total');
+        $debtSum = (float) $periodSales->where('is_debt', true)->sum(function ($s) {
+            $paid = (float) ($s->amount_paid ?? ($s->cash + $s->bank_transfer));
+            return max(0.0, (float) $s->final_total - $paid);
+        });
 
         $paymentDistribution = [
             'Cash'          => $cashSum,
@@ -232,9 +235,25 @@ class ReportController extends Controller
             'refund_worth' => (float) $periodReturns->sum('refund_amount'),
         ];
 
+        // Recovered debt collected during this period
+        $debtRecoveredInPeriod = (float) \App\Models\DebtPayment::when(!$isAllTime, fn ($q) => $q->whereBetween('created_at', [$startDate, $endDate]))
+            ->where('type', 'credit')
+            ->where('branch_id', $branch->id)
+            ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
+            ->sum('amount');
+
+        // Revenue realized from sales (excluding unpaid debt; including upfront cash/transfer deposits on partial debt)
+        $salesCollected = (float) $periodSales->sum(function ($s) {
+            return $s->is_debt
+                ? (float) ($s->amount_paid ?? ($s->cash + $s->bank_transfer))
+                : (float) $s->final_total;
+        });
+
+        $totalRealizedRevenue = $salesCollected + $debtRecoveredInPeriod;
+
         // 5. Key Period Stats
         $periodStats = [
-            'revenue'          => (float) $periodSales->sum('final_total'),
+            'revenue'          => $totalRealizedRevenue,
             'profit'           => (float) $periodSales->sum('profit_made'),
             'discount'         => (float) $periodSales->sum('discount_amount'),
             'sales_count'      => $periodSales->count(),
@@ -445,16 +464,30 @@ class ReportController extends Controller
                         ->orWhereHas('user', fn ($u) => $u->where('name', 'like', $term)->orWhere('full_name', 'like', $term));
                 });
             })
-            ->get(['final_total', 'discount_amount', 'profit_made']);
+            ->get(['final_total', 'discount_amount', 'profit_made', 'cash', 'bank_transfer', 'is_debt', 'amount_paid']);
 
         $allReturns = SaleReturnItem::whereHas('item', fn ($q) => $q->where('branch_id', $branch->id))
             ->whereBetween('created_at', [$startDate, $endDate])
             ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
             ->get(['qty', 'refund_amount']);
 
+        $salesCollected = (float) $allSales->sum(function ($s) {
+            return $s->is_debt
+                ? (float) ($s->amount_paid ?? ($s->cash + $s->bank_transfer))
+                : (float) $s->final_total;
+        });
+
+        $debtRecovered = (float) \App\Models\DebtPayment::whereBetween('created_at', [$startDate, $endDate])
+            ->where('type', 'credit')
+            ->where('branch_id', $branch->id)
+            ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
+            ->sum('amount');
+
+        $totalRevenue = $salesCollected + $debtRecovered;
+
         $summary = [
             'total_sales'        => $allSales->count(),
-            'total_revenue'      => (float) $allSales->sum('final_total'),
+            'total_revenue'      => $totalRevenue,
             'total_discount'     => (float) $allSales->sum('discount_amount'),
             'total_profit'       => (float) $allSales->sum('profit_made'),
             'total_tax'          => 0,
@@ -966,9 +999,9 @@ class ReportController extends Controller
         $allSalesToday = Sale::where('branch_id', $branch->id)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
-            ->get(['final_total', 'discount_amount', 'cash', 'bank_transfer', 'is_debt']);
+            ->get(['final_total', 'discount_amount', 'cash', 'bank_transfer', 'is_debt', 'amount_paid']);
 
-        $debtRecovered = \App\Models\DebtPayment::whereBetween('created_at', [$startDate, $endDate])
+        $debtRecovered = (float) \App\Models\DebtPayment::whereBetween('created_at', [$startDate, $endDate])
             ->where('type', 'credit')
             ->where('branch_id', $branch->id)
             ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
@@ -978,7 +1011,7 @@ class ReportController extends Controller
             })
             ->sum('amount');
 
-        $laundryDebtRecovered = \App\Models\DebtPayment::whereBetween('created_at', [$startDate, $endDate])
+        $laundryDebtRecovered = (float) \App\Models\DebtPayment::whereBetween('created_at', [$startDate, $endDate])
             ->where('type', 'credit')
             ->where('branch_id', $branch->id)
             ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
@@ -990,13 +1023,29 @@ class ReportController extends Controller
             ->when($selectedUserId, fn ($q) => $q->where('user_id', $selectedUserId))
             ->get(['qty', 'refund_amount']);
 
+        // Revenue realized from sales (excluding unpaid debt; including upfront cash/transfer deposits on partial debt)
+        $salesCollected = (float) $allSalesToday->sum(function ($s) {
+            return $s->is_debt
+                ? (float) ($s->amount_paid ?? ($s->cash + $s->bank_transfer))
+                : (float) $s->final_total;
+        });
+
+        // Actual credit/debt granted to customers today (unpaid portion)
+        $debtRecorded = (float) $allSalesToday->where('is_debt', true)->sum(function ($s) {
+            $paid = (float) ($s->amount_paid ?? ($s->cash + $s->bank_transfer));
+            return max(0.0, (float) $s->final_total - $paid);
+        });
+
+        // Total realized revenue = cash & transfers from sales + debts paid back (recovered) today
+        $totalRevenue = $salesCollected + $debtRecovered + $laundryDebtRecovered;
+
         $summary = [
             'total_sales'            => $allSalesToday->count(),
-            'total_revenue'          => (float) $allSalesToday->sum('final_total'),
+            'total_revenue'          => $totalRevenue,
             'total_discount'         => (float) $allSalesToday->sum('discount_amount'),
             'cash_collected'         => (float) $allSalesToday->sum('cash'),
             'bank_collected'         => (float) $allSalesToday->sum('bank_transfer'),
-            'debt_recorded'          => (float) $allSalesToday->where('is_debt', true)->sum('final_total'),
+            'debt_recorded'          => $debtRecorded,
             'debt_recovered'         => (float) $debtRecovered,
             'laundry_debt_recovered' => (float) $laundryDebtRecovered,
             'total_return_count'     => $allReturnsToday->count(),

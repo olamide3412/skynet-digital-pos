@@ -29,7 +29,8 @@ class InventoryService
             $previousQty = $item->{$col};
             $newQty      = $previousQty + $qty;
 
-            $item->increment($col, $qty);
+            $item->{$col} = $newQty;
+            $item->save();
 
             InventoryTransaction::create([
                 'branch_id'        => $item->branch_id,
@@ -55,7 +56,8 @@ class InventoryService
         $previousQty = $itemModel->front_store_qty;
         $newQty      = max(0, $previousQty - $qty);
 
-        $itemModel->decrement('front_store_qty', $qty);
+        $itemModel->front_store_qty = $newQty;
+        $itemModel->save();
 
         InventoryTransaction::create([
             'branch_id'        => $itemModel->branch_id,
@@ -88,12 +90,13 @@ class InventoryService
             $previousQty = $item->{$col};
 
             if ($adjustmentType === 'add') {
-                $item->increment($col, $qty);
                 $newQty = $previousQty + $qty;
             } else {
-                $item->decrement($col, $qty);
                 $newQty = max(0, $previousQty - $qty);
             }
+
+            $item->{$col} = $newQty;
+            $item->save();
 
             InventoryTransaction::create([
                 'branch_id'        => $item->branch_id,
@@ -138,8 +141,9 @@ class InventoryService
                 );
             }
 
-            $item->decrement($fromCol, $qtyBaseUnits);
-            $item->increment($toCol, $qtyBaseUnits);
+            $item->{$fromCol} = $item->{$fromCol} - $qtyBaseUnits;
+            $item->{$toCol}   = $item->{$toCol} + $qtyBaseUnits;
+            $item->save();
 
             if ($item->is_imei_tracked) {
                 \App\Models\ItemDeviceUnit::where('branch_id', $item->branch_id)

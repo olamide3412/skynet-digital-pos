@@ -20,10 +20,14 @@ class AuthController extends Controller
     {
         $branch = current_branch();
 
-        // If already logged in and belongs to this branch, redirect to POS
+        // If already logged in and belongs to this branch (or is Org/Super Admin), redirect to POS
         if (Auth::guard('web')->check()) {
             $user = Auth::guard('web')->user();
-            if ($user->branch_id === $branch?->id || $user->isSuperAdmin()) {
+            $canAccess = ($branch && $user->branch_id === $branch->id)
+                || $user->isSuperAdmin()
+                || ($branch && $user->isOrganizationAdmin() && $user->organization_id && (int) $branch->organization_id === (int) $user->organization_id);
+
+            if ($canAccess) {
                 if ($branch && function_exists('setPermissionsTeamId')) {
                     setPermissionsTeamId($branch->id);
                     $user->unsetRelation('roles')->unsetRelation('permissions');
@@ -35,9 +39,9 @@ class AuthController extends Controller
 
         return inertia('Auth/Login', [
             'branch' => $branch ? [
-                'name'                 => $branch->name,
-                'slug'                 => $branch->slug,
-                'logo_url'             => $branch->logo_path ? asset('storage/' . $branch->logo_path) : null,
+                'name' => $branch->name,
+                'slug' => $branch->slug,
+                'logo_url' => $branch->logo_path ? asset('storage/' . $branch->logo_path) : null,
                 'is_turnstile_enabled' => (bool) ($branch->getSettings()->is_turnstile_enabled ?? true),
             ] : null,
         ]);
@@ -49,7 +53,7 @@ class AuthController extends Controller
         $isTurnstileEnabled = $branch ? (bool) ($branch->getSettings()->is_turnstile_enabled ?? true) : true;
 
         $validationRules = [
-            'login'    => ['required', 'string'],
+            'login' => ['required', 'string'],
             'password' => ['required'],
         ];
 
@@ -60,7 +64,7 @@ class AuthController extends Controller
         $attributes = $request->validate($validationRules);
 
         $login = $attributes['login'];
-        $key   = 'branch-login:' . ($branch?->slug ?? 'none') . ':' . Str::lower($login) . '|' . $request->ip();
+        $key = 'branch-login:' . ($branch?->slug ?? 'none') . ':' . Str::lower($login) . '|' . $request->ip();
 
         if (RateLimiter::tooManyAttempts($key, 5)) {
             $seconds = RateLimiter::availableIn($key);
@@ -69,14 +73,14 @@ class AuthController extends Controller
             ]);
         }
 
-        $field       = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
+        $field = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
         $credentials = [$field => $login, 'password' => $attributes['password']];
 
         $attempted = Auth::guard('web')->attempt($credentials, false);
 
         if (!$attempted && $field === 'email') {
             $credentials = ['username' => $login, 'password' => $attributes['password']];
-            $attempted   = Auth::guard('web')->attempt($credentials, false);
+            $attempted = Auth::guard('web')->attempt($credentials, false);
         }
 
         if ($attempted) {
@@ -90,12 +94,25 @@ class AuthController extends Controller
                 ]);
             }
 
-            // Must belong to this branch
-            if ($branch && $user->branch_id !== $branch->id) {
+            // Must belong to this branch OR be an Organization Admin for this branch's organization
+            $isOrgAdminForThisBranch = $branch
+                && $user->isOrganizationAdmin()
+                && $user->organization_id
+                && (int) $branch->organization_id === (int) $user->organization_id;
+
+            if ($branch && $user->branch_id !== $branch->id && !$isOrgAdminForThisBranch) {
                 Auth::guard('web')->logout();
                 RateLimiter::hit($key, 7200);
                 throw ValidationException::withMessages([
                     'login' => 'You do not have access to this branch.',
+                ]);
+            }
+
+            // If logging in as Organization Admin, verify organization is not suspended
+            if ($isOrgAdminForThisBranch && $user->organization?->status === 'suspended') {
+                Auth::guard('web')->logout();
+                throw ValidationException::withMessages([
+                    'login' => 'Your organization account is currently suspended. Please contact platform support.',
                 ]);
             }
 
@@ -128,9 +145,9 @@ class AuthController extends Controller
     public function destroy(Request $request)
     {
         // Load user and branch BEFORE logout clears auth
-        $user       = Auth::guard('web')->user();
+        $user = Auth::guard('web')->user();
         $branchSlug = current_branch()?->slug
-                      ?? ($user?->branch_id ? optional($user->branch)->slug : null);
+            ?? ($user?->branch_id ? optional($user->branch)->slug : null);
 
         if ($user) {
             \App\Services\ActivityLogger::auth("User {$user->name} logged out", $user->branch_id);
@@ -150,15 +167,15 @@ class AuthController extends Controller
     protected function formatLockoutTime($seconds): string
     {
         if ($seconds >= 3600) {
-            $hours   = floor($seconds / 3600);
+            $hours = floor($seconds / 3600);
             $minutes = floor(($seconds % 3600) / 60);
             return $hours . ' hour' . ($hours > 1 ? 's' : '') .
-                   ($minutes > 0 ? " and {$minutes} minute" . ($minutes > 1 ? 's' : '') : '');
+                ($minutes > 0 ? " and {$minutes} minute" . ($minutes > 1 ? 's' : '') : '');
         } elseif ($seconds >= 60) {
-            $minutes          = floor($seconds / 60);
+            $minutes = floor($seconds / 60);
             $remainingSeconds = $seconds % 60;
             return $minutes . ' minute' . ($minutes > 1 ? 's' : '') .
-                   ($remainingSeconds > 0 ? " and {$remainingSeconds} second" . ($remainingSeconds > 1 ? 's' : '') : '');
+                ($remainingSeconds > 0 ? " and {$remainingSeconds} second" . ($remainingSeconds > 1 ? 's' : '') : '');
         }
         return $seconds . ' second' . ($seconds > 1 ? 's' : '');
     }
