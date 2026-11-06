@@ -62,12 +62,14 @@ function applyTheme(themeColor, customPrimaryHex, customSecondaryHex, darkModeAc
         const pg = parseInt(hexP.substring(2, 4), 16) || 0;
         const pb = parseInt(hexP.substring(4, 6), 16) || 255;
         const phoverHex = '#' + [Math.max(0, Math.floor(pr * 0.85)), Math.max(0, Math.floor(pg * 0.85)), Math.max(0, Math.floor(pb * 0.85))].map(x => x.toString(16).padStart(2, '0')).join('');
+        const paccentHex = '#' + [Math.min(255, Math.floor(pr + (255 - pr) * 0.35)), Math.min(255, Math.floor(pg + (255 - pg) * 0.35)), Math.min(255, Math.floor(pb + (255 - pb) * 0.35))].map(x => x.toString(16).padStart(2, '0')).join('');
 
         rootStyle.setProperty('--color-theme', customPrimaryHex);
         rootStyle.setProperty('--color-theme-hover', phoverHex);
         rootStyle.setProperty('--color-theme-light', `rgba(${pr}, ${pg}, ${pb}, 0.15)`);
         rootStyle.setProperty('--color-theme-rgb', `${pr}, ${pg}, ${pb}`);
         rootStyle.setProperty('--color-theme-text', phoverHex);
+        rootStyle.setProperty('--color-theme-accent', paccentHex);
 
         const secHex = customSecondaryHex || '#FBA43D';
         let hexS = secHex.replace('#', '');
@@ -88,6 +90,7 @@ function applyTheme(themeColor, customPrimaryHex, customSecondaryHex, darkModeAc
         rootStyle.removeProperty('--color-theme-light');
         rootStyle.removeProperty('--color-theme-rgb');
         rootStyle.removeProperty('--color-theme-text');
+        rootStyle.removeProperty('--color-theme-accent');
 
         rootStyle.removeProperty('--color-theme-secondary');
         rootStyle.removeProperty('--color-theme-secondary-hover');
@@ -290,7 +293,13 @@ createInertiaApp({
         latestPageProps = props.initialPage.props;
 
         // Initialize theme color and Ziggy defaults
-        applyTheme(props.initialPage.props.theme_color, props.initialPage.props.custom_primary_hex, props.initialPage.props.custom_secondary_hex);
+        applyTheme(
+            props.initialPage.props.theme_color,
+            props.initialPage.props.custom_primary_hex,
+            props.initialPage.props.custom_secondary_hex,
+            props.initialPage.props.dark_mode_accent_mode,
+            props.initialPage.props.custom_dark_primary_hex
+        );
 
         const initialSlug = getActiveBranchSlug(props.initialPage.props);
         syncZiggyDefaults(initialSlug);

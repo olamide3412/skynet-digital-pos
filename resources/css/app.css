@@ -51,8 +51,34 @@
     --color-indigo-100: var(--color-theme-light, #f2e6ff);
     --color-indigo-400: var(--color-theme-dark, #FFFFFF);
     --color-indigo-500: var(--color-theme, #7B00FF);
-    --color-indigo-600: var(--color-theme, #7B00FF);
+    --color-indigo-600: var(--color-theme-hover, #6200cc);
     --color-indigo-700: var(--color-theme-hover, #6200cc);
+
+    /* Global dynamic override for violet color classes (Storefront, Homepage & Pricing) */
+    --color-violet-50: var(--color-theme-light, #f2e6ff);
+    --color-violet-100: var(--color-theme-light, #f2e6ff);
+    --color-violet-200: rgba(var(--color-theme-rgb, 123, 0, 255), 0.22);
+    --color-violet-300: rgba(var(--color-theme-rgb, 123, 0, 255), 0.38);
+    --color-violet-400: var(--color-theme-accent, #a78bfa);
+    --color-violet-500: var(--color-theme, #7B00FF);
+    --color-violet-600: var(--color-theme, #7B00FF);
+    --color-violet-700: var(--color-theme-hover, #6200cc);
+    --color-violet-800: var(--color-theme-text, #5900b3);
+    --color-violet-900: var(--color-theme-text, #5900b3);
+    --color-violet-950: rgba(var(--color-theme-rgb, 123, 0, 255), 0.18);
+
+    /* Global dynamic override for purple color classes (Storefront, Homepage & Pricing) */
+    --color-purple-50: var(--color-theme-light, #f2e6ff);
+    --color-purple-100: var(--color-theme-light, #f2e6ff);
+    --color-purple-200: rgba(var(--color-theme-rgb, 123, 0, 255), 0.22);
+    --color-purple-300: rgba(var(--color-theme-rgb, 123, 0, 255), 0.38);
+    --color-purple-400: var(--color-theme-accent, #c084fc);
+    --color-purple-500: var(--color-theme, #7B00FF);
+    --color-purple-600: var(--color-theme-hover, #6200cc);
+    --color-purple-700: var(--color-theme-hover, #6200cc);
+    --color-purple-800: var(--color-theme-text, #5900b3);
+    --color-purple-900: var(--color-theme-text, #5900b3);
+    --color-purple-950: rgba(var(--color-theme-rgb, 123, 0, 255), 0.18);
 
     --color-secondary-100: #fff7ed;
     --color-secondary-200: #fdba74;
@@ -90,6 +116,7 @@
     --color-theme-text: #5900b3;
     --color-theme-dark: #ffffff;
     --color-theme-dark-rgb: 255, 255, 255;
+    --color-theme-accent: #c084fc;
 
     --color-theme-secondary: #fba43d;
     --color-theme-secondary-hover: #e08b26;
@@ -106,6 +133,7 @@ html[data-theme="emerald"] {
     --color-theme-text: #047857;
     --color-theme-dark: #34d399;
     --color-theme-dark-rgb: 52, 211, 153;
+    --color-theme-accent: #34d399;
 
     --color-theme-secondary: #f59e0b;
     --color-theme-secondary-hover: #d97706;
@@ -122,6 +150,7 @@ html[data-theme="blue"] {
     --color-theme-text: #1d4ed8;
     --color-theme-dark: #60a5fa;
     --color-theme-dark-rgb: 96, 165, 250;
+    --color-theme-accent: #60a5fa;
 
     --color-theme-secondary: #f59e0b;
     --color-theme-secondary-hover: #d97706;
@@ -138,6 +167,7 @@ html[data-theme="indigo"] {
     --color-theme-text: #4338ca;
     --color-theme-dark: #818cf8;
     --color-theme-dark-rgb: 129, 140, 248;
+    --color-theme-accent: #818cf8;
 
     --color-theme-secondary: #ec4899;
     --color-theme-secondary-hover: #db2777;
@@ -154,6 +184,7 @@ html[data-theme="violet"] {
     --color-theme-text: #6d28d9;
     --color-theme-dark: #a78bfa;
     --color-theme-dark-rgb: 167, 139, 250;
+    --color-theme-accent: #a78bfa;
 
     --color-theme-secondary: #f59e0b;
     --color-theme-secondary-hover: #d97706;
@@ -170,6 +201,7 @@ html[data-theme="teal"] {
     --color-theme-text: #0f766e;
     --color-theme-dark: #2dd4bf;
     --color-theme-dark-rgb: 45, 212, 191;
+    --color-theme-accent: #2dd4bf;
 
     --color-theme-secondary: #f97316;
     --color-theme-secondary-hover: #ea580c;
@@ -186,6 +218,7 @@ html[data-theme="cyan"] {
     --color-theme-text: #0e7490;
     --color-theme-dark: #22d3ee;
     --color-theme-dark-rgb: 34, 211, 238;
+    --color-theme-accent: #22d3ee;
 
     --color-theme-secondary: #f59e0b;
     --color-theme-secondary-hover: #d97706;
@@ -202,6 +235,7 @@ html[data-theme="amber"] {
     --color-theme-text: #b45309;
     --color-theme-dark: #fbbf24;
     --color-theme-dark-rgb: 251, 191, 36;
+    --color-theme-accent: #fbbf24;
 
     --color-theme-secondary: #6366f1;
     --color-theme-secondary-hover: #4f46e5;
@@ -218,6 +252,7 @@ html[data-theme="rose"] {
     --color-theme-text: #be123c;
     --color-theme-dark: #fb7185;
     --color-theme-dark-rgb: 251, 113, 133;
+    --color-theme-accent: #fb7185;
 
     --color-theme-secondary: #3b82f6;
     --color-theme-secondary-hover: #2563eb;

@@ -42,6 +42,30 @@
         }
     }
 
+    $customStyles = '';
+    if ($activeThemeColor === 'custom') {
+        $pClean = ltrim($activeCustomPrimary, '#');
+        if (strlen($pClean) === 3) {
+            $pClean = $pClean[0].$pClean[0].$pClean[1].$pClean[1].$pClean[2].$pClean[2];
+        }
+        $pr = hexdec(substr($pClean, 0, 2)) ?: 123;
+        $pg = hexdec(substr($pClean, 2, 2)) ?: 0;
+        $pb = hexdec(substr($pClean, 4, 2)) ?: 255;
+        $phover = sprintf('#%02x%02x%02x', max(0, (int)($pr * 0.85)), max(0, (int)($pg * 0.85)), max(0, (int)($pb * 0.85)));
+        $paccent = sprintf('#%02x%02x%02x', min(255, (int)($pr + (255 - $pr) * 0.35)), min(255, (int)($pg + (255 - $pg) * 0.35)), min(255, (int)($pb + (255 - $pb) * 0.35)));
+
+        $sClean = ltrim($activeCustomSecondary, '#');
+        if (strlen($sClean) === 3) {
+            $sClean = $sClean[0].$sClean[0].$sClean[1].$sClean[1].$sClean[2].$sClean[2];
+        }
+        $sr = hexdec(substr($sClean, 0, 2)) ?: 251;
+        $sg = hexdec(substr($sClean, 2, 2)) ?: 164;
+        $sb = hexdec(substr($sClean, 4, 2)) ?: 61;
+        $shover = sprintf('#%02x%02x%02x', max(0, (int)($sr * 0.85)), max(0, (int)($sg * 0.85)), max(0, (int)($sb * 0.85)));
+
+        $customStyles = "style=\"--color-theme: {$activeCustomPrimary}; --color-theme-hover: {$phover}; --color-theme-light: rgba({$pr}, {$pg}, {$pb}, 0.15); --color-theme-rgb: {$pr}, {$pg}, {$pb}; --color-theme-text: {$phover}; --color-theme-accent: {$paccent}; --color-theme-secondary: {$activeCustomSecondary}; --color-theme-secondary-hover: {$shover}; --color-theme-secondary-light: rgba({$sr}, {$sg}, {$sb}, 0.15); --color-theme-secondary-rgb: {$sr}, {$sg}, {$sb};\"";
+    }
+
     $jsonLdData = [
         '@context' => 'https://schema.org',
         '@type' => 'Organization',
@@ -63,7 +87,7 @@
     ];
 @endphp
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-theme="{{ $activeThemeColor }}" @if($activeThemeColor === 'custom') style="--color-theme: {{ $activeCustomPrimary }}; --color-theme-secondary: {{ $activeCustomSecondary }};" @endif>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" data-theme="{{ $activeThemeColor }}" {!! $customStyles !!}>
 
 <head>
     <meta charset="utf-8">

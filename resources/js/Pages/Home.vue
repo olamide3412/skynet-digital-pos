@@ -365,7 +365,7 @@ function toggleFaq(index) {
                 <div class="absolute -bottom-10 left-1/4 w-[450px] h-[450px] rounded-full bg-emerald-500/10 dark:bg-emerald-500/15 blur-[120px] animate-float-orb-delayed"></div>
                 <div class="absolute top-20 right-10 w-[400px] h-[400px] rounded-full bg-fuchsia-500/10 dark:bg-fuchsia-500/15 blur-[120px] animate-float-orb"></div>
                 <!-- Subtle Grid Texture -->
-                <div class="absolute inset-0 opacity-[0.03] dark:opacity-[0.04]" style="background-image: linear-gradient(rgba(139,92,246,1) 1px, transparent 1px), linear-gradient(90deg, rgba(139,92,246,1) 1px, transparent 1px); background-size: 56px 56px;"></div>
+                <div class="absolute inset-0 opacity-[0.03] dark:opacity-[0.04]" style="background-image: linear-gradient(var(--color-theme, #7B00FF) 1px, transparent 1px), linear-gradient(90deg, var(--color-theme, #7B00FF) 1px, transparent 1px); background-size: 56px 56px;"></div>
             </div>
 
             <div class="relative z-10 max-w-5xl mx-auto space-y-8">
@@ -1777,7 +1777,7 @@ function toggleFaq(index) {
     padding: 0.1rem 0.35rem;
     border-radius: 0.375rem;
     font-family: monospace;
-    color: #8b5cf6;
+    color: var(--color-theme, #7b00ff);
     font-size: 0.8em;
 }
 :deep(.pricing-markdown-content) p {
