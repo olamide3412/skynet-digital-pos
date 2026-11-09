@@ -1676,8 +1676,8 @@ const submitAddCredits = () => {
         </div>
 
         <!-- Add Organization Admin Modal -->
-        <div v-if="showCreateUserModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
+        <div v-if="showCreateUserModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
                 <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
                     <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">New Organization Admin</h2>
                     <button @click="showCreateUserModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold">&times;</button>
@@ -1776,119 +1776,121 @@ const submitAddCredits = () => {
         </div>
 
         <!-- Edit Profile Modal -->
-        <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
-                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex-shrink-0">
                     <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Edit Organization Profile</h2>
-                    <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold">&times;</button>
+                    <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold cursor-pointer">&times;</button>
                 </div>
 
-                <form @submit.prevent="submitEdit" class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Organization Name *</label>
-                        <input
-                            v-model="editForm.name"
-                            type="text"
-                            required
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        />
-                        <div v-if="editForm.errors.name" class="text-rose-500 text-xs mt-1">{{ editForm.errors.name }}</div>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Account Status *</label>
-                        <select
-                            v-model="editForm.status"
-                            required
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition cursor-pointer"
-                        >
-                            <option value="active">Active</option>
-                            <option value="suspended">Suspended</option>
-                        </select>
-                    </div>
-
-                    <!-- Branch Creation Feature Control -->
-                    <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80">
-                        <label class="flex items-center justify-between cursor-pointer">
-                            <div class="space-y-0.5 pr-4">
-                                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Allow Organization Branch Creation</span>
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                                    When checked, Org Admins can create new branches from the Org Portal within plan limits. Uncheck to disable.
-                                </p>
-                            </div>
-                            <input
-                                v-model="editForm.can_create_branches"
-                                type="checkbox"
-                                class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer"
-                            />
-                        </label>
-                    </div>
-
-                    <!-- Staff Management Delegation Control (Phase 6) -->
-                    <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80">
-                        <label class="flex items-center justify-between cursor-pointer">
-                            <div class="space-y-0.5 pr-4">
-                                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Delegate Staff Management to Org Admin</span>
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                                    When checked, Org Admins can move staff across branches and manage user accounts. When unchecked, staff directory is view-only for the organization.
-                                </p>
-                            </div>
-                            <input
-                                v-model="editForm.can_manage_staff"
-                                type="checkbox"
-                                class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 dark:border-slate-600 cursor-pointer"
-                            />
-                        </label>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <form @submit.prevent="submitEdit" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Person</label>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Organization Name *</label>
                             <input
-                                v-model="editForm.contact_name"
+                                v-model="editForm.name"
                                 type="text"
+                                required
+                                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                            />
+                            <div v-if="editForm.errors.name" class="text-rose-500 text-xs mt-1">{{ editForm.errors.name }}</div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Account Status *</label>
+                            <select
+                                v-model="editForm.status"
+                                required
+                                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition cursor-pointer"
+                            >
+                                <option value="active">Active</option>
+                                <option value="suspended">Suspended</option>
+                            </select>
+                        </div>
+
+                        <!-- Branch Creation Feature Control -->
+                        <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                            <label class="flex items-center justify-between cursor-pointer">
+                                <div class="space-y-0.5 pr-4">
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Allow Organization Branch Creation</span>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                        When checked, Org Admins can create new branches from the Org Portal within plan limits. Uncheck to disable.
+                                    </p>
+                                </div>
+                                <input
+                                    v-model="editForm.can_create_branches"
+                                    type="checkbox"
+                                    class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer"
+                                />
+                            </label>
+                        </div>
+
+                        <!-- Staff Management Delegation Control (Phase 6) -->
+                        <div class="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                            <label class="flex items-center justify-between cursor-pointer">
+                                <div class="space-y-0.5 pr-4">
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Delegate Staff Management to Org Admin</span>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                        When checked, Org Admins can move staff across branches and manage user accounts. When unchecked, staff directory is view-only for the organization.
+                                    </p>
+                                </div>
+                                <input
+                                    v-model="editForm.can_manage_staff"
+                                    type="checkbox"
+                                    class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 border-slate-300 dark:border-slate-600 cursor-pointer"
+                                />
+                            </label>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Person</label>
+                                <input
+                                    v-model="editForm.contact_name"
+                                    type="text"
+                                    class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                                />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Phone</label>
+                                <input
+                                    v-model="editForm.contact_phone"
+                                    type="text"
+                                    class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Email</label>
+                            <input
+                                v-model="editForm.contact_email"
+                                type="email"
                                 class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
                             />
                         </div>
+
                         <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Phone</label>
-                            <input
-                                v-model="editForm.contact_phone"
-                                type="text"
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Address</label>
+                            <textarea
+                                v-model="editForm.address"
+                                rows="2"
                                 class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                            />
+                            ></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Notes</label>
+                            <textarea
+                                v-model="editForm.notes"
+                                rows="2"
+                                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                            ></textarea>
                         </div>
                     </div>
 
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Email</label>
-                        <input
-                            v-model="editForm.contact_email"
-                            type="email"
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        />
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Address</label>
-                        <textarea
-                            v-model="editForm.address"
-                            rows="2"
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        ></textarea>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Notes</label>
-                        <textarea
-                            v-model="editForm.notes"
-                            rows="2"
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        ></textarea>
-                    </div>
-
-                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3">
-                        <button type="button" @click="showEditModal = false" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer">Cancel</button>
+                    <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3 flex-shrink-0 bg-slate-50/50 dark:bg-slate-900/50 rounded-b-2xl">
+                        <button type="button" @click="showEditModal = false" class="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 cursor-pointer">Cancel</button>
                         <button type="submit" :disabled="editForm.processing" class="px-5 py-2.5 bg-theme hover:bg-theme/90 text-white rounded-xl text-xs font-bold transition shadow-md shadow-theme/20 cursor-pointer disabled:opacity-50">
                             <span v-if="editForm.processing">Saving...</span>
                             <span v-else>Save Changes</span>
@@ -1899,7 +1901,7 @@ const submitAddCredits = () => {
         </div>
 
         <!-- Create Branch in this Organization Modal -->
-        <div v-if="showCreateBranchModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div v-if="showCreateBranchModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
             <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
                 <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
                     <div>
@@ -2013,8 +2015,8 @@ const submitAddCredits = () => {
         </div>
 
         <!-- Add AI Credits Modal -->
-        <div v-if="showAddCreditsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
+        <div v-if="showAddCreditsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
                 <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
                     <div>
                         <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Grant AI Credit Top-up</h2>

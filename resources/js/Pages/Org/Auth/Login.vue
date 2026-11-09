@@ -14,6 +14,7 @@ const page = usePage()
 const form = useForm({
     login: '',
     password: '',
+    remember: false,
     cf_turnstile_response: '',
 })
 
@@ -226,6 +227,18 @@ const submit = () => {
                     <div v-if="form.errors.cf_turnstile_response" class="text-rose-600 dark:text-rose-400 text-xs text-center font-medium">
                         {{ form.errors.cf_turnstile_response }}
                     </div>
+                </div>
+
+                <!-- Remember Me -->
+                <div class="flex items-center justify-between pt-1">
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-slate-300 dark:border-slate-700 rounded cursor-pointer"
+                            v-model="form.remember"
+                        />
+                        <span class="text-xs text-slate-600 dark:text-slate-300 font-medium">Remember me</span>
+                    </label>
                 </div>
 
                 <!-- Submit Button -->

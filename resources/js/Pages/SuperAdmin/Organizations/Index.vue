@@ -302,96 +302,98 @@ const deleteOrg = (org) => {
         </div>
 
         <!-- Create Organization Modal -->
-        <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
-                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex-shrink-0">
                     <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">New Client Organization</h2>
-                    <button @click="showCreateModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold">&times;</button>
+                    <button @click="showCreateModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold cursor-pointer">&times;</button>
                 </div>
 
-                <form @submit.prevent="submitCreate" class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Organization Name *</label>
-                        <input
-                            v-model="createForm.name"
-                            type="text"
-                            required
-                            placeholder="e.g. Acme Retailers Ltd"
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        />
-                        <div v-if="createForm.errors.name" class="text-rose-500 text-xs mt-1">{{ createForm.errors.name }}</div>
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <form @submit.prevent="submitCreate" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Person</label>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Organization Name *</label>
                             <input
-                                v-model="createForm.contact_name"
+                                v-model="createForm.name"
                                 type="text"
-                                placeholder="e.g. John Doe"
+                                required
+                                placeholder="e.g. Acme Retailers Ltd"
                                 class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
                             />
+                            <div v-if="createForm.errors.name" class="text-rose-500 text-xs mt-1">{{ createForm.errors.name }}</div>
                         </div>
-                        <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Phone</label>
-                            <input
-                                v-model="createForm.contact_phone"
-                                type="text"
-                                placeholder="+234..."
-                                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                            />
-                        </div>
-                    </div>
 
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Email</label>
-                        <input
-                            v-model="createForm.contact_email"
-                            type="email"
-                            placeholder="billing@client.com"
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        />
-                        <div v-if="createForm.errors.contact_email" class="text-rose-500 text-xs mt-1">{{ createForm.errors.contact_email }}</div>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Registered Address</label>
-                        <textarea
-                            v-model="createForm.address"
-                            rows="2"
-                            placeholder="Physical business or corporate address..."
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        ></textarea>
-                    </div>
-
-                    <!-- Branch Creation Feature Control -->
-                    <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80">
-                        <label class="flex items-center justify-between cursor-pointer">
-                            <div class="space-y-0.5 pr-4">
-                                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Allow Branch Creation</span>
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                                    Enabled by default. Org Admins can create branches in the Org Portal within plan limits.
-                                </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Person</label>
+                                <input
+                                    v-model="createForm.contact_name"
+                                    type="text"
+                                    placeholder="e.g. John Doe"
+                                    class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                                />
                             </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Phone</label>
+                                <input
+                                    v-model="createForm.contact_phone"
+                                    type="text"
+                                    placeholder="+234..."
+                                    class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Email</label>
                             <input
-                                v-model="createForm.can_create_branches"
-                                type="checkbox"
-                                class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer"
+                                v-model="createForm.contact_email"
+                                type="email"
+                                placeholder="billing@client.com"
+                                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
                             />
-                        </label>
+                            <div v-if="createForm.errors.contact_email" class="text-rose-500 text-xs mt-1">{{ createForm.errors.contact_email }}</div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Registered Address</label>
+                            <textarea
+                                v-model="createForm.address"
+                                rows="2"
+                                placeholder="Physical business or corporate address..."
+                                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                            ></textarea>
+                        </div>
+
+                        <!-- Branch Creation Feature Control -->
+                        <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                            <label class="flex items-center justify-between cursor-pointer">
+                                <div class="space-y-0.5 pr-4">
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Allow Branch Creation</span>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                        Enabled by default. Org Admins can create branches in the Org Portal within plan limits.
+                                    </p>
+                                </div>
+                                <input
+                                    v-model="createForm.can_create_branches"
+                                    type="checkbox"
+                                    class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer"
+                                />
+                            </label>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Administrative Notes</label>
+                            <textarea
+                                v-model="createForm.notes"
+                                rows="2"
+                                placeholder="Internal notes regarding client contract, special SLA, etc."
+                                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                            ></textarea>
+                        </div>
                     </div>
 
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Administrative Notes</label>
-                        <textarea
-                            v-model="createForm.notes"
-                            rows="2"
-                            placeholder="Internal notes regarding client contract, special SLA, etc."
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        ></textarea>
-                    </div>
-
-                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3">
+                    <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3 flex-shrink-0 bg-slate-50/50 dark:bg-slate-900/50 rounded-b-2xl">
                         <button
                             type="button"
                             @click="showCreateModal = false"
@@ -413,101 +415,103 @@ const deleteOrg = (org) => {
         </div>
 
         <!-- Edit Organization Modal -->
-        <div v-if="showEditModal && editingOrg" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150">
-                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div v-if="showEditModal && editingOrg" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+            <div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-lg w-full max-h-[85vh] flex flex-col shadow-2xl my-auto animate-in fade-in zoom-in-95 duration-150 overflow-hidden">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex-shrink-0">
                     <h2 class="font-bold text-slate-900 dark:text-slate-100 text-base">Edit Organization Profile</h2>
-                    <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold">&times;</button>
+                    <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white text-lg font-bold cursor-pointer">&times;</button>
                 </div>
 
-                <form @submit.prevent="submitEdit" class="space-y-4">
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Organization Name *</label>
-                        <input
-                            v-model="editForm.name"
-                            type="text"
-                            required
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        />
-                        <div v-if="editForm.errors.name" class="text-rose-500 text-xs mt-1">{{ editForm.errors.name }}</div>
-                    </div>
+                <form @submit.prevent="submitEdit" class="flex flex-col flex-1 min-h-0 overflow-hidden">
+                    <div class="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Organization Name *</label>
+                            <input
+                                v-model="editForm.name"
+                                type="text"
+                                required
+                                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                            />
+                            <div v-if="editForm.errors.name" class="text-rose-500 text-xs mt-1">{{ editForm.errors.name }}</div>
+                        </div>
 
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Account Status *</label>
-                        <select
-                            v-model="editForm.status"
-                            required
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition cursor-pointer"
-                        >
-                            <option value="active">Active</option>
-                            <option value="suspended">Suspended</option>
-                        </select>
-                    </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Account Status *</label>
+                            <select
+                                v-model="editForm.status"
+                                required
+                                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition cursor-pointer"
+                            >
+                                <option value="active">Active</option>
+                                <option value="suspended">Suspended</option>
+                            </select>
+                        </div>
 
-                    <!-- Branch Creation Feature Control -->
-                    <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80">
-                        <label class="flex items-center justify-between cursor-pointer">
-                            <div class="space-y-0.5 pr-4">
-                                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Allow Branch Creation</span>
-                                <p class="text-[11px] text-slate-500 dark:text-slate-400">
-                                    Permits Org Admins to create new branches from the Org Portal within plan limits.
-                                </p>
+                        <!-- Branch Creation Feature Control -->
+                        <div class="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700/80">
+                            <label class="flex items-center justify-between cursor-pointer">
+                                <div class="space-y-0.5 pr-4">
+                                    <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">Allow Branch Creation</span>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                        Permits Org Admins to create new branches from the Org Portal within plan limits.
+                                    </p>
+                                </div>
+                                <input
+                                    v-model="editForm.can_create_branches"
+                                    type="checkbox"
+                                    class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer"
+                                />
+                            </label>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Person</label>
+                                <input
+                                    v-model="editForm.contact_name"
+                                    type="text"
+                                    class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                                />
                             </div>
-                            <input
-                                v-model="editForm.can_create_branches"
-                                type="checkbox"
-                                class="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 border-slate-300 dark:border-slate-600 cursor-pointer"
-                            />
-                        </label>
-                    </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Phone</label>
+                                <input
+                                    v-model="editForm.contact_phone"
+                                    type="text"
+                                    class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                                />
+                            </div>
+                        </div>
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Person</label>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Email</label>
                             <input
-                                v-model="editForm.contact_name"
-                                type="text"
+                                v-model="editForm.contact_email"
+                                type="email"
                                 class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
                             />
                         </div>
+
                         <div>
-                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Phone</label>
-                            <input
-                                v-model="editForm.contact_phone"
-                                type="text"
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Address</label>
+                            <textarea
+                                v-model="editForm.address"
+                                rows="2"
                                 class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                            />
+                            ></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Notes</label>
+                            <textarea
+                                v-model="editForm.notes"
+                                rows="2"
+                                class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
+                            ></textarea>
                         </div>
                     </div>
 
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Contact Email</label>
-                        <input
-                            v-model="editForm.contact_email"
-                            type="email"
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        />
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Address</label>
-                        <textarea
-                            v-model="editForm.address"
-                            rows="2"
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        ></textarea>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Notes</label>
-                        <textarea
-                            v-model="editForm.notes"
-                            rows="2"
-                            class="w-full bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 outline-none focus:border-theme transition"
-                        ></textarea>
-                    </div>
-
-                    <div class="pt-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3">
+                    <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-800 flex justify-end gap-3 flex-shrink-0 bg-slate-50/50 dark:bg-slate-900/50 rounded-b-2xl">
                         <button
                             type="button"
                             @click="showEditModal = false"

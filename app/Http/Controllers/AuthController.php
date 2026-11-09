@@ -55,6 +55,7 @@ class AuthController extends Controller
         $validationRules = [
             'login' => ['required', 'string'],
             'password' => ['required'],
+            'remember' => ['nullable', 'boolean'],
         ];
 
         if ($isTurnstileEnabled && config('services.turnstile.site_key')) {
@@ -64,6 +65,7 @@ class AuthController extends Controller
         $attributes = $request->validate($validationRules);
 
         $login = $attributes['login'];
+        $remember = $request->boolean('remember');
         $key = 'branch-login:' . ($branch?->slug ?? 'none') . ':' . Str::lower($login) . '|' . $request->ip();
 
         if (RateLimiter::tooManyAttempts($key, 5)) {
@@ -76,11 +78,11 @@ class AuthController extends Controller
         $field = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
         $credentials = [$field => $login, 'password' => $attributes['password']];
 
-        $attempted = Auth::guard('web')->attempt($credentials, false);
+        $attempted = Auth::guard('web')->attempt($credentials, $remember);
 
         if (!$attempted && $field === 'email') {
             $credentials = ['username' => $login, 'password' => $attributes['password']];
-            $attempted = Auth::guard('web')->attempt($credentials, false);
+            $attempted = Auth::guard('web')->attempt($credentials, $remember);
         }
 
         if ($attempted) {

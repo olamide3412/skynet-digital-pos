@@ -28,10 +28,12 @@ class SuperAdminAuthController extends Controller
         $data = $request->validate([
             'login'                 => ['required', 'string'],
             'password'              => ['required'],
+            'remember'              => ['nullable', 'boolean'],
             'cf_turnstile_response' => [new Turnstile()],
         ]);
 
         $login = $data['login'];
+        $remember = $request->boolean('remember');
         $key   = 'superadmin-login:' . Str::lower($login) . '|' . $request->ip();
 
         if (RateLimiter::tooManyAttempts($key, 5)) {
@@ -44,11 +46,11 @@ class SuperAdminAuthController extends Controller
         $field       = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
         $credentials = [$field => $login, 'password' => $data['password']];
 
-        $attempted = Auth::guard('web')->attempt($credentials, false);
+        $attempted = Auth::guard('web')->attempt($credentials, $remember);
 
         if (!$attempted && $field === 'email') {
             $credentials = ['username' => $login, 'password' => $data['password']];
-            $attempted   = Auth::guard('web')->attempt($credentials, false);
+            $attempted   = Auth::guard('web')->attempt($credentials, $remember);
         }
 
         if ($attempted) {

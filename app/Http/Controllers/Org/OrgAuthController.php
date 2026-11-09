@@ -48,10 +48,12 @@ class OrgAuthController extends Controller
         $data = $request->validate([
             'login'                 => ['required', 'string'],
             'password'              => ['required'],
+            'remember'              => ['nullable', 'boolean'],
             'cf_turnstile_response' => [new Turnstile()],
         ]);
 
         $login = $data['login'];
+        $remember = $request->boolean('remember');
         $key   = 'org-login:' . Str::lower($login) . '|' . $request->ip();
 
         if (RateLimiter::tooManyAttempts($key, 5)) {
@@ -64,11 +66,11 @@ class OrgAuthController extends Controller
         $field       = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
         $credentials = [$field => $login, 'password' => $data['password']];
 
-        $attempted = Auth::guard('web')->attempt($credentials, false);
+        $attempted = Auth::guard('web')->attempt($credentials, $remember);
 
         if (!$attempted && $field === 'email') {
             $credentials = ['username' => $login, 'password' => $data['password']];
-            $attempted   = Auth::guard('web')->attempt($credentials, false);
+            $attempted   = Auth::guard('web')->attempt($credentials, $remember);
         }
 
         if ($attempted) {
