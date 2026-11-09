@@ -25,6 +25,7 @@ Route::middleware([CommerceApiAuthenticate::class])
 
                 // Catalog & Inventory endpoints
                 Route::get('/catalog', [CatalogApiController::class, 'index']);
+                Route::get('/brands', [CatalogApiController::class, 'brands']);
                 Route::get('/catalog/batch-stock', [CatalogApiController::class, 'batchStock']);
                 Route::post('/availability', [CatalogApiController::class, 'batchStock']);
                 Route::get('/catalog/{itemId}/stock', [CatalogApiController::class, 'stock'])->whereNumber('itemId');

@@ -16,6 +16,7 @@ class GlobalItemController extends Controller
             ->where('item_name', 'like', '%' . $request->search . '%')
             ->orWhere('barcode_number', 'like', '%' . $request->search . '%')
             ->orWhere('category_hint', 'like', '%' . $request->search . '%')
+            ->orWhere('brand_hint', 'like', '%' . $request->search . '%')
         )->latest()->paginate(25)->withQueryString();
 
         $branches = Branch::where('is_active', true)->get(['id', 'name', 'slug']);
@@ -43,6 +44,7 @@ class GlobalItemController extends Controller
             'unit_label'       => 'nullable|string|max:50',
             'item_description' => 'nullable|string|max:500',
             'category_hint'    => 'nullable|string|max:100',
+            'brand_hint'       => 'nullable|string|max:100',
         ]);
 
         if ($request->hasFile('image')) {
@@ -72,6 +74,7 @@ class GlobalItemController extends Controller
             'unit_label'       => 'nullable|string|max:50',
             'item_description' => 'nullable|string|max:500',
             'category_hint'    => 'nullable|string|max:100',
+            'brand_hint'       => 'nullable|string|max:100',
         ]);
 
         $globalItem->update($data);
@@ -93,6 +96,7 @@ class GlobalItemController extends Controller
     {
         $data = $request->validate([
             'category_id' => 'nullable|exists:categories,id',
+            'brand_id'    => 'nullable|exists:brands,id',
         ]);
 
         // Check if item already exists in branch catalog (by barcode OR item_name)
@@ -109,7 +113,21 @@ class GlobalItemController extends Controller
             return back()->with('info', "'{$globalItem->item_name}' already exists in {$branch->name} catalog.");
         }
 
-        $item = $globalItem->importToBranch($branch, $data['category_id'] ?? null);
+        $brandId = $data['brand_id'] ?? null;
+        if (!$brandId && !empty($globalItem->brand_hint)) {
+            $brand = \App\Models\Brand::firstOrCreate([
+                'name'      => $globalItem->brand_hint,
+                'branch_id' => $branch->id,
+            ], [
+                'name'      => $globalItem->brand_hint,
+                'slug'      => \Illuminate\Support\Str::slug($globalItem->brand_hint) . '-' . $branch->id . '-' . rand(100, 999),
+                'branch_id' => $branch->id,
+                'is_active' => true,
+            ]);
+            $brandId = $brand->id;
+        }
+
+        $item = $globalItem->importToBranch($branch, $data['category_id'] ?? null, $brandId);
 
         return back()->with('success', "'{$item->item_name}' imported into {$branch->name}.");
     }

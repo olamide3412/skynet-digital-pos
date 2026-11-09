@@ -273,6 +273,11 @@ Route::prefix('{branch}')
             ->except(['create', 'show', 'edit'])
             ->middleware('pos.role:canManageItems');
 
+        // Brands
+        Route::resource('brands', \App\Http\Controllers\Pos\BrandController::class)
+            ->except(['create', 'show', 'edit'])
+            ->middleware('pos.role:canManageItems');
+
         // Group / Address Storage Locations
         Route::resource('group-addresses', \App\Http\Controllers\Pos\GroupAddressController::class)
             ->except(['create', 'show', 'edit'])

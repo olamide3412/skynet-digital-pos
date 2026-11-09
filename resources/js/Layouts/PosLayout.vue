@@ -84,6 +84,7 @@ const allNavLinks = [
             { label: 'IMEI / Device Tracking', route: 'pos.items.imeis',           match: 'Items/Imeis', feature: 'imei_tracking' },
             { label: 'Print Barcodes',         route: 'pos.items.barcodes',        match: 'Items/Barcodes', perm: 'canManageBarcodes', feature: 'barcode_label_printing' },
             { label: 'Categories',             route: 'pos.categories.index',      match: 'Categories/Index' },
+            { label: 'Brands',                 route: 'pos.brands.index',          match: 'Brands/Index' },
             { label: 'Group / Address',        route: 'pos.group-addresses.index', match: 'GroupAddresses/Index' },
             { label: 'Item Grid Config',       route: 'pos.item-grids.index',      match: 'Items/Grid' },
             { label: 'Active Discounts',       route: 'pos.discounts.index',       match: 'Discounts/Index', perm: 'canApplyDiscount', feature: 'discounts' },

@@ -134,7 +134,7 @@ class CommerceWebhookDispatcher
         foreach ($pending as $branchId => $items) {
             foreach ($items as $itemId => $action) {
                 try {
-                    $item = Item::find($itemId);
+                    $item = Item::with(['category:id,name', 'brand:id,name,slug'])->find($itemId);
                     if (!$item) {
                         continue;
                     }
@@ -155,6 +155,10 @@ class CommerceWebhookDispatcher
                         'barcode_number' => $item->barcode_number,
                         'pos_category_id' => $item->category_id,
                         'pos_category_name' => $item->category?->name,
+                        'pos_brand_id' => $item->brand_id,
+                        'pos_brand_name' => $item->brand?->name,
+                        'brand_id' => $item->brand_id,
+                        'brand_name' => $item->brand?->name,
                         'price' => (float) $item->price,
                         'buy_price' => (float) ($item->buy_price ?? 0),
                         'available_qty' => $availableStock,

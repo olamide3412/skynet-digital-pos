@@ -34,6 +34,7 @@ class ItemImportService
         'item_ref'               => ['item_ref', 'item ref', 'ref', 'item_code', 'group_ref', 'reference', 'item_id'],
         'item_name'              => ['item_name', 'item name', 'name', 'product_name', 'product name', 'item', 'title', 'product'],
         'category'               => ['category', 'category_name', 'category name', 'category_hint', 'dept', 'department'],
+        'brand'                  => ['brand', 'brand_name', 'brand name', 'brand_hint', 'manufacturer', 'make'],
         'group_address'          => ['group_address_name', 'group_address', 'group address', 'group address shelf', 'group address / shelf', 'shelf group address', 'group shelf', 'shelf location', 'shelf_location', 'group', 'storage_location', 'storage location', 'shelf', 'rack', 'location'],
         'barcode'                => ['barcode', 'barcode_number', 'barcode number', 'barcode sku', 'barcode / sku', 'sku barcode', 'sku / barcode', 'barcode or sku', 'sku', 'upc', 'ean', 'code'],
         'description'            => ['description', 'item_description', 'details', 'item description', 'notes'],
@@ -177,6 +178,7 @@ class ItemImportService
                 'item_ref'               => null,
                 'item_name'              => '',
                 'category'               => null,
+                'brand'                  => null,
                 'group_address'          => null,
                 'barcode'                => null,
                 'description'            => null,
@@ -208,6 +210,7 @@ class ItemImportService
                         break;
 
                     case 'category':
+                    case 'brand':
                     case 'group_address':
                         $valStr = trim((string) $val);
                         if ($valStr === '' || in_array(strtoupper($valStr), ['-', '--', '---', 'N/A', 'NONE', 'NULL'], true)) {
@@ -342,6 +345,7 @@ class ItemImportService
             $variantRowIndices = [];
             $inheritedName = null;
             $inheritedCategory = null;
+            $inheritedBrand = null;
             $inheritedBarcode = null;
 
             foreach ($group['rows'] as $rIdx) {
@@ -356,6 +360,9 @@ class ItemImportService
                 }
                 if (!empty($rData['category']) && !$inheritedCategory) {
                     $inheritedCategory = $rData['category'];
+                }
+                if (!empty($rData['brand']) && !$inheritedBrand) {
+                    $inheritedBrand = $rData['brand'];
                 }
                 if (!empty($rData['barcode']) && !$inheritedBarcode) {
                     $inheritedBarcode = $rData['barcode'];
@@ -372,12 +379,15 @@ class ItemImportService
                 $baseIdx = $baseRowIndices[0];
                 $baseRow = &$parsedRows[$baseIdx];
 
-                // Propagate inherited name/category/barcode to base row if missing
+                // Propagate inherited name/category/brand/barcode to base row if missing
                 if (empty($baseRow['data']['item_name']) && $inheritedName) {
                     $baseRow['data']['item_name'] = $inheritedName;
                 }
                 if (empty($baseRow['data']['category']) && $inheritedCategory) {
                     $baseRow['data']['category'] = $inheritedCategory;
+                }
+                if (empty($baseRow['data']['brand']) && $inheritedBrand) {
+                    $baseRow['data']['brand'] = $inheritedBrand;
                 }
                 if (empty($baseRow['data']['barcode']) && $inheritedBarcode) {
                     $baseRow['data']['barcode'] = $inheritedBarcode;
@@ -550,6 +560,7 @@ class ItemImportService
         $importedCount = 0;
         $skippedCount  = 0;
         $categoriesCreated = 0;
+        $brandsCreated = 0;
         $groupsCreated = 0;
         $errors = [];
 
@@ -558,6 +569,13 @@ class ItemImportService
         $existingCategories = Category::where('branch_id', $branch->id)->get();
         foreach ($existingCategories as $cat) {
             $categoryCache[strtolower(trim($cat->name))] = $cat->id;
+        }
+
+        // Brand cache for fast lookup (Scoped to this target branch and global brands)
+        $brandCache = [];
+        $existingBrands = \App\Models\Brand::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))->get();
+        foreach ($existingBrands as $b) {
+            $brandCache[strtolower(trim($b->name))] = $b->id;
         }
 
         // Group Address / Storage Location cache for fast lookup (Scoped strictly to this target branch)
@@ -617,6 +635,27 @@ class ItemImportService
                         $categoryCache[$catKey] = $newCat->id;
                         $categoryId = $newCat->id;
                         $categoriesCreated++;
+                    }
+                }
+
+                // Brand Resolution (Auto-create exclusively for this branch if missing)
+                $brandId = null;
+                if (!empty($baseRow['brand'])) {
+                    $brandName = trim($baseRow['brand']);
+                    $brandKey = strtolower($brandName);
+
+                    if (isset($brandCache[$brandKey])) {
+                        $brandId = $brandCache[$brandKey];
+                    } else {
+                        $newBrand = \App\Models\Brand::create([
+                            'branch_id' => $branch->id,
+                            'name'      => $brandName,
+                            'slug'      => Str::slug($brandName) . '-' . $branch->id . '-' . rand(100, 999),
+                            'is_active' => true,
+                        ]);
+                        $brandCache[$brandKey] = $newBrand->id;
+                        $brandId = $newBrand->id;
+                        $brandsCreated++;
                     }
                 }
 
@@ -681,6 +720,7 @@ class ItemImportService
                 $newItem = Item::create([
                     'branch_id'              => $branch->id,
                     'category_id'            => $categoryId,
+                    'brand_id'               => $brandId,
                     'group_address_id'       => $groupId,
                     'item_name'              => $baseRow['item_name'],
                     'barcode_number'         => $barcode,
@@ -774,6 +814,7 @@ class ItemImportService
             'item_ref',
             'item_name',
             'category',
+            'brand',
             'group_address',
             'barcode',
             'description',
@@ -822,8 +863,8 @@ class ItemImportService
         ]);
         $sheet->getRowDimension(1)->setRowHeight(28);
 
-        // Format barcode column (E) as text so spreadsheets never show scientific notation (e.g. 6.154E+12)
-        $sheet->getStyle('E')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        // Format barcode column (F) as text so spreadsheets never show scientific notation (e.g. 6.154E+12)
+        $sheet->getStyle('F')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
 
         // Add sample rows if requested
         if ($withSampleData) {
@@ -833,6 +874,7 @@ class ItemImportService
                     'P001',
                     'Peak Milk Sachet',
                     'Dairy & Provisions',
+                    'Peak',
                     'Shelf A1',
                     '8901234567890',
                     'Instant full cream milk powder sachet',
@@ -850,6 +892,7 @@ class ItemImportService
                     'P001',
                     'Peak Milk Sachet',
                     'Dairy & Provisions',
+                    'Peak',
                     'Shelf A1',
                     '8901234567890',
                     'Instant full cream milk powder sachet',
@@ -867,6 +910,7 @@ class ItemImportService
                     'P001',
                     'Peak Milk Sachet',
                     'Dairy & Provisions',
+                    'Peak',
                     'Shelf A1',
                     '8901234567890',
                     'Instant full cream milk powder sachet',
@@ -885,6 +929,7 @@ class ItemImportService
                     'P002',
                     'Coca Cola PET 350ml',
                     'Soft Drinks & Beverages',
+                    'Coca-Cola',
                     'Cooler 1',
                     '5449000000996',
                     'Refreshing carbonated soft drink',
@@ -902,6 +947,7 @@ class ItemImportService
                     'P002',
                     'Coca Cola PET 350ml',
                     'Soft Drinks & Beverages',
+                    'Coca-Cola',
                     'Cooler 1',
                     '5449000000996',
                     'Refreshing carbonated soft drink',
@@ -920,6 +966,7 @@ class ItemImportService
                     'P003',
                     'Paracetamol 500mg',
                     'Analgesics & Pain Relief',
+                    'Emzor',
                     'Pharmacy Shelf',
                     '6001234987654',
                     'Fast acting pain reliever and antipyretic',
@@ -938,6 +985,7 @@ class ItemImportService
                     'P004',
                     'Bottled Water 75cl',
                     'Beverages',
+                    'Eva',
                     'Aisle 2',
                     null,
                     'Pure natural spring water',
@@ -958,7 +1006,7 @@ class ItemImportService
                 foreach ($rowValues as $cIdx => $val) {
                     $colNumber = $cIdx + 1;
                     $cellCoord = Coordinate::stringFromColumnIndex($colNumber) . $rowNum;
-                    if ($colNumber === 5) { // Barcode column
+                    if ($colNumber === 6) { // Barcode column
                         if ($val !== null && $val !== '') {
                             $sheet->setCellValueExplicit($cellCoord, (string) $val, DataType::TYPE_STRING);
                             $sheet->getStyle($cellCoord)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
@@ -1006,7 +1054,7 @@ class ItemImportService
     ): StreamedResponse {
         $format = strtolower($format) === 'csv' ? 'csv' : 'xlsx';
 
-        $query = Item::where('branch_id', $branch->id)->with(['category', 'groupAddress', 'units']);
+        $query = Item::where('branch_id', $branch->id)->with(['category', 'brand', 'groupAddress', 'units']);
 
         if (!empty($categoryIds)) {
             $query->whereIn('category_id', $categoryIds);
@@ -1029,6 +1077,7 @@ class ItemImportService
             'item_ref',
             'item_name',
             'category',
+            'brand',
             'group_address',
             'barcode',
             'description',
@@ -1069,8 +1118,8 @@ class ItemImportService
             $sheet->getRowDimension(1)->setRowHeight(28);
         }
 
-        // Format barcode column (E) as text so spreadsheets never show scientific notation (e.g. 6.154E+12)
-        $sheet->getStyle('E')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
+        // Format barcode column (F) as text so spreadsheets never show scientific notation (e.g. 6.154E+12)
+        $sheet->getStyle('F')->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
 
         $rowNumber = 2;
         foreach ($items as $item) {
@@ -1089,6 +1138,7 @@ class ItemImportService
                 $itemRef,
                 $item->item_name,
                 $item->category?->name ?? '',
+                $item->brand?->name ?? '',
                 $item->groupAddress?->name ?? '',
                 $item->barcode_number ?? '',
                 $item->item_description ?? '',
@@ -1106,7 +1156,7 @@ class ItemImportService
             foreach ($baseRow as $cIdx => $val) {
                 $colNumber = $cIdx + 1;
                 $cellCoord = Coordinate::stringFromColumnIndex($colNumber) . $rowNumber;
-                if ($colNumber === 5) { // Barcode column
+                if ($colNumber === 6) { // Barcode column
                     if ($val !== null && $val !== '') {
                         $sheet->setCellValueExplicit($cellCoord, (string) $val, DataType::TYPE_STRING);
                         $sheet->getStyle($cellCoord)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);
@@ -1130,6 +1180,7 @@ class ItemImportService
                         $itemRef,
                         $item->item_name,
                         $item->category?->name ?? '',
+                        $item->brand?->name ?? '',
                         '',
                         $item->barcode_number ?? '',
                         '',
@@ -1147,7 +1198,7 @@ class ItemImportService
                     foreach ($variantRow as $cIdx => $val) {
                         $colNumber = $cIdx + 1;
                         $cellCoord = Coordinate::stringFromColumnIndex($colNumber) . $rowNumber;
-                        if ($colNumber === 5) {
+                        if ($colNumber === 6) {
                             if ($val !== null && $val !== '') {
                                 $sheet->setCellValueExplicit($cellCoord, (string) $val, DataType::TYPE_STRING);
                                 $sheet->getStyle($cellCoord)->getNumberFormat()->setFormatCode(NumberFormat::FORMAT_TEXT);

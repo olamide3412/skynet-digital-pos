@@ -1,5 +1,5 @@
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, watch, ref } from 'vue'
 import { useForm, Link } from '@inertiajs/vue3'
 import PosLayout from '@/Layouts/PosLayout.vue'
 import BatchesTab from '@/Pages/Items/BatchesTab.vue'
@@ -9,6 +9,7 @@ defineOptions({ layout: PosLayout })
 const props = defineProps({
     item:           Object,
     categories:     Array,
+    brands:         Array,
     groupAddresses: Array,
     settings:       Object,
 })
@@ -28,6 +29,7 @@ const initialUnits = props.item?.units?.length
 const form = useForm({
     _method:                'PUT',
     category_id:            props.item.category_id,
+    brand_id:               props.item.brand_id ?? '',
     group_address_id:       props.item.group_address_id ?? '',
     item_name:              props.item.item_name,
     barcode_number:         props.item.barcode_number ?? '',
@@ -74,6 +76,33 @@ function removeUnit(index) {
     form.units.splice(index, 1)
 }
 
+const localBrands = ref([...(props.brands || [])])
+const showQuickBrandModal = ref(false)
+const quickBrandName = ref('')
+const isCreatingBrand = ref(false)
+
+const createQuickBrand = async () => {
+    if (!quickBrandName.value.trim()) return
+    isCreatingBrand.value = true
+    try {
+        const res = await window.axios.post(route('pos.brands.store'), {
+            name: quickBrandName.value.trim(),
+        }, {
+            headers: { 'Accept': 'application/json' }
+        })
+        if (res.data?.brand) {
+            localBrands.value.push(res.data.brand)
+            form.brand_id = res.data.brand.id
+            showQuickBrandModal.value = false
+            quickBrandName.value = ''
+        }
+    } catch (e) {
+        alert(e.response?.data?.message || 'Failed to create brand')
+    } finally {
+        isCreatingBrand.value = false
+    }
+}
+
 function submit() {
     form.post(route('pos.items.update', props.item.id))
 }
@@ -115,6 +144,25 @@ function submit() {
                                 <option v-for="cat in categories" :key="cat.id" :value="cat.id" class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white">{{ cat.name }}</option>
                             </select>
                             <p v-if="form.errors.category_id" class="text-red-500 text-xs mt-1">{{ form.errors.category_id }}</p>
+                        </div>
+
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Brand (Optional)</label>
+                                <button
+                                    type="button"
+                                    @click="showQuickBrandModal = true"
+                                    class="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold hover:underline cursor-pointer"
+                                >
+                                    + New Brand
+                                </button>
+                            </div>
+                            <select v-model="form.brand_id"
+                                class="w-full bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 focus:border-emerald-500 outline-none text-sm transition">
+                                <option value="" class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white">None / Unassigned</option>
+                                <option v-for="b in localBrands" :key="b.id" :value="b.id" class="bg-white dark:bg-slate-700 text-slate-900 dark:text-white">{{ b.name }}</option>
+                            </select>
+                            <p v-if="form.errors.brand_id" class="text-red-500 text-xs mt-1">{{ form.errors.brand_id }}</p>
                         </div>
 
                         <div>
@@ -441,6 +489,35 @@ function submit() {
                     </button>
                 </div>
             </form>
+        </div>
+
+        <!-- Quick Brand Modal -->
+        <div v-if="showQuickBrandModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl p-5 w-full max-w-sm shadow-2xl space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-2">
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-white">Quick Add Brand</h3>
+                    <button type="button" @click="showQuickBrandModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">✕</button>
+                </div>
+                <form @submit.prevent="createQuickBrand" class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">Brand Name *</label>
+                        <input
+                            v-model="quickBrandName"
+                            type="text"
+                            required
+                            placeholder="e.g. Apple, Nike, Nestle"
+                            class="w-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 focus:border-emerald-500 outline-none text-xs"
+                            autofocus
+                        />
+                    </div>
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                        <button type="button" @click="showQuickBrandModal = false" class="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-lg text-xs font-medium cursor-pointer">Cancel</button>
+                        <button type="submit" :disabled="isCreatingBrand || !quickBrandName.trim()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-50 cursor-pointer">
+                            {{ isCreatingBrand ? 'Adding...' : 'Add Brand' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 </template>

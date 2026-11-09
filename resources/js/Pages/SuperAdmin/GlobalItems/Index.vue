@@ -24,6 +24,7 @@ const form = useForm({
     item_name: '',
     barcode_number: '',
     category_hint: '',
+    brand_hint: '',
     buy_price: 0,
     price: 0,
     wholesale_price: 0,
@@ -112,7 +113,7 @@ const deleteItem = (item) => {
                         v-model="search"
                         @keydown.enter="doSearch"
                         type="text"
-                        placeholder="Search item name, barcode, or category…"
+                        placeholder="Search item name, barcode, category, or brand…"
                         class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl pl-9 pr-4 py-2 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:border-theme transition"
                     />
                     <svg class="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -165,6 +166,7 @@ const deleteItem = (item) => {
                         </th>
                         <th class="px-6 py-3">Item Name</th>
                         <th class="px-6 py-3">Category</th>
+                        <th class="px-6 py-3">Brand</th>
                         <th class="px-6 py-3">Barcode</th>
                         <th class="px-6 py-3">Cost Price</th>
                         <th class="px-6 py-3">Selling Price</th>
@@ -195,6 +197,12 @@ const deleteItem = (item) => {
                             <span class="px-2.5 py-1 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30 rounded-md font-medium">
                                 {{ item.category_hint || 'General' }}
                             </span>
+                        </td>
+                        <td class="px-6 py-4 text-xs">
+                            <span v-if="item.brand_hint" class="px-2.5 py-1 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-500/30 rounded-md font-medium">
+                                {{ item.brand_hint }}
+                            </span>
+                            <span v-else class="text-slate-400 dark:text-slate-600">-</span>
                         </td>
                         <td class="px-6 py-4 font-mono text-xs text-theme font-medium">{{ item.barcode_number || 'N/A' }}</td>
                         <td class="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">₦{{ Number(item.buy_price).toLocaleString() }}</td>
@@ -258,14 +266,18 @@ const deleteItem = (item) => {
                     <label class="block text-xs font-medium text-slate-700 dark:text-slate-400 mb-1">Item Name *</label>
                     <input v-model="form.item_name" type="text" required class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-theme transition" />
                 </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 dark:text-slate-400 mb-1">Barcode Number</label>
+                    <input v-model="form.barcode_number" type="text" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-theme transition" />
+                </div>
                 <div class="grid grid-cols-2 gap-3">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-400 mb-1">Barcode Number</label>
-                        <input v-model="form.barcode_number" type="text" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-theme transition" />
-                    </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-700 dark:text-slate-400 mb-1">Category Hint</label>
                         <input v-model="form.category_hint" type="text" placeholder="e.g. Beverages" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-theme transition" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 dark:text-slate-400 mb-1">Brand Hint</label>
+                        <input v-model="form.brand_hint" type="text" placeholder="e.g. Coca-Cola" class="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:outline-none focus:border-theme transition" />
                     </div>
                 </div>
                 <div class="grid grid-cols-2 gap-3">

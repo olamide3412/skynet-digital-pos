@@ -8,8 +8,9 @@ defineOptions({ layout: SuperAdminLayout })
 const props = defineProps({
     branch: Object,
     items: Object,          // Paginated branch items
-    globalItems: Array,     // [{ id, item_name, barcode_number, buy_price, price, category_hint, is_imported }]
+    globalItems: Array,     // [{ id, item_name, barcode_number, buy_price, price, category_hint, brand_hint, is_imported }]
     categories: Array,
+    brands: Array,
     filters: Object,
 })
 
@@ -29,7 +30,8 @@ const filteredMasterItems = computed(() => {
     return props.globalItems.filter(item =>
         item.item_name.toLowerCase().includes(q) ||
         (item.barcode_number && item.barcode_number.toLowerCase().includes(q)) ||
-        (item.category_hint && item.category_hint.toLowerCase().includes(q))
+        (item.category_hint && item.category_hint.toLowerCase().includes(q)) ||
+        (item.brand_hint && item.brand_hint.toLowerCase().includes(q))
     )
 })
 
@@ -179,6 +181,7 @@ const removeItem = (item) => {
                         <tr>
                             <th class="px-6 py-3.5">Item Name</th>
                             <th class="px-6 py-3.5">Category</th>
+                            <th class="px-6 py-3.5">Brand</th>
                             <th class="px-6 py-3.5">Barcode</th>
                             <th class="px-6 py-3.5">Cost Price</th>
                             <th class="px-6 py-3.5">Selling Price</th>
@@ -210,6 +213,12 @@ const removeItem = (item) => {
                                     {{ item.category.name }}
                                 </span>
                                 <span v-else class="text-slate-400 dark:text-slate-500 italic">General</span>
+                            </td>
+                            <td class="px-6 py-4 text-xs">
+                                <span v-if="item.brand" class="px-2 py-0.5 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 rounded border border-amber-200 dark:border-amber-500/20 font-medium">
+                                    {{ item.brand.name }}
+                                </span>
+                                <span v-else class="text-slate-400 dark:text-slate-500">-</span>
                             </td>
                             <td class="px-6 py-4 font-mono text-xs text-indigo-600 dark:text-indigo-400">{{ item.barcode_number || 'N/A' }}</td>
                             <td class="px-6 py-4 font-mono text-slate-600 dark:text-slate-300">₦{{ Number(item.buy_price).toLocaleString() }}</td>
@@ -279,7 +288,7 @@ const removeItem = (item) => {
                     <input
                         v-model="masterSearch"
                         type="text"
-                        placeholder="Filter master items by name, barcode, or category…"
+                        placeholder="Filter master items by name, barcode, category, or brand…"
                         class="w-full sm:w-72 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:border-indigo-500"
                     />
                     <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
@@ -312,7 +321,7 @@ const removeItem = (item) => {
                             <div>
                                 <div class="font-semibold text-slate-900 dark:text-slate-100">{{ gItem.item_name }}</div>
                                 <div class="text-[11px] text-slate-400 dark:text-slate-500 font-mono">
-                                    Barcode: {{ gItem.barcode_number || 'N/A' }} · Category: {{ gItem.category_hint || 'General' }}
+                                    Barcode: {{ gItem.barcode_number || 'N/A' }} · Category: {{ gItem.category_hint || 'General' }} <span v-if="gItem.brand_hint">· Brand: {{ gItem.brand_hint }}</span>
                                 </div>
                             </div>
                         </div>

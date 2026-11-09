@@ -282,6 +282,9 @@ onMounted(() => {
                                             <div v-if="showBarcodes && item.barcode_number" class="text-[10px] font-mono text-slate-500 tracking-wider">
                                                 SKU: {{ item.barcode_number }}
                                             </div>
+                                            <div v-if="item.brand?.name" class="text-[10px] text-slate-600 print:text-black font-semibold">
+                                                Brand: {{ item.brand.name }}
+                                            </div>
                                         </td>
 
                                         <!-- Base Unit of Measure -->

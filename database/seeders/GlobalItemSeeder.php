@@ -347,6 +347,7 @@ class GlobalItemSeeder extends Seeder
                         'unit_label'       => $unitLabel,
                         'item_description' => "Quality supermarket grade {$itemName} from {$brand}",
                         'category_hint'    => $cat,
+                        'brand_hint'       => $brand,
                         'image_path'       => null,
                         'created_at'       => now(),
                         'updated_at'       => now(),

@@ -24,7 +24,7 @@ class ItemController extends Controller
         $branch->ensureDefaultRoles();
 
         $itemsQuery = Item::where('branch_id', $branch->id)
-            ->with(['category:id,name', 'groupAddress:id,name', 'units', 'ecommerceLinks:id,pos_item_id,is_active'])
+            ->with(['category:id,name', 'brand:id,name', 'groupAddress:id,name', 'units', 'ecommerceLinks:id,pos_item_id,is_active'])
             ->when($request->search, function ($q) use ($request) {
                 $q->where(function ($sq) use ($request) {
                     $sq->where('item_name', 'like', '%' . $request->search . '%')
@@ -32,6 +32,7 @@ class ItemController extends Controller
                 });
             })
             ->when($request->category_id, fn($q) => $q->where('category_id', $request->category_id))
+            ->when($request->brand_id, fn($q) => $q->where('brand_id', $request->brand_id))
             ->when($request->group_address_id, fn($q) => $q->where('group_address_id', $request->group_address_id))
             ->latest();
 
@@ -57,6 +58,10 @@ class ItemController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
+        $brands = \App\Models\Brand::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
         $groupAddresses = \App\Models\GroupAddress::where('branch_id', $branch->id)
             ->orWhereNull('branch_id')
             ->orderBy('name')
@@ -65,8 +70,9 @@ class ItemController extends Controller
         return Inertia::render('Items/Index', [
             'items' => $items,
             'categories' => $categories,
+            'brands' => $brands,
             'groupAddresses' => $groupAddresses,
-            'filters' => $request->only('search', 'category_id', 'group_address_id', 'per_page'),
+            'filters' => $request->only('search', 'category_id', 'brand_id', 'group_address_id', 'per_page'),
             'totalWorth' => (float) $totalWorth,
         ]);
     }
@@ -85,6 +91,7 @@ class ItemController extends Controller
                 $clonedItem = [
                     'item_name' => $cloned->item_name . ' (Copy)',
                     'category_id' => $cloned->category_id,
+                    'brand_id' => $cloned->brand_id,
                     'group_address_id' => $cloned->group_address_id,
                     'buy_price' => $cloned->buy_price,
                     'price' => $cloned->price,
@@ -111,6 +118,8 @@ class ItemController extends Controller
             'clonedItem' => $clonedItem,
             'categories' => \App\Models\Category::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),
+            'brands' => \App\Models\Brand::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
+                ->orderBy('name')->get(['id', 'name']),
             'groupAddresses' => \App\Models\GroupAddress::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),
             'settings' => \App\Models\PosSettings::current(),
@@ -127,6 +136,7 @@ class ItemController extends Controller
             'item_name' => 'required|string|max:255',
             'barcode_number' => 'nullable|string|max:100',
             'category_id' => 'required|exists:categories,id',
+            'brand_id' => 'nullable|exists:brands,id',
             'group_address_id' => 'nullable|exists:group_addresses,id',
             'buy_price' => 'required|numeric|min:0',
             'price' => 'required|numeric|min:0',
@@ -251,6 +261,7 @@ class ItemController extends Controller
 
         $item->load([
             'category',
+            'brand',
             'units',
             'batches' => fn($q) => $q->orderBy('expiry_date', 'asc')->take(5),
         ]);
@@ -262,6 +273,8 @@ class ItemController extends Controller
                 'total_batches_count' => $totalBatchesCount,
             ]),
             'categories' => \App\Models\Category::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
+                ->orderBy('name')->get(['id', 'name']),
+            'brands' => \App\Models\Brand::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),
             'groupAddresses' => \App\Models\GroupAddress::where(fn($q) => $q->where('branch_id', $branch->id)->orWhereNull('branch_id'))
                 ->orderBy('name')->get(['id', 'name']),
@@ -281,6 +294,7 @@ class ItemController extends Controller
             'item_name' => 'required|string|max:255',
             'barcode_number' => 'nullable|string|max:100',
             'category_id' => 'required|exists:categories,id',
+            'brand_id' => 'nullable|exists:brands,id',
             'group_address_id' => 'nullable|exists:group_addresses,id',
             'buy_price' => 'required|numeric|min:0',
             'price' => 'required|numeric|min:0',
@@ -470,10 +484,11 @@ class ItemController extends Controller
         }
 
         $data = $request->validate([
-            'action' => 'required|string|in:delete,update_category,update_group,adjust_prices',
+            'action' => 'required|string|in:delete,update_category,update_brand,update_group,adjust_prices',
             'item_ids' => 'required|array|min:1',
             'item_ids.*' => 'integer|exists:items,id',
             'category_id' => 'nullable|required_if:action,update_category|exists:categories,id',
+            'brand_id' => 'nullable|required_if:action,update_brand|exists:brands,id',
             'group_address_id' => 'nullable|required_if:action,update_group|exists:group_addresses,id',
             'price_change_type' => 'nullable|in:increase_percent,decrease_percent,set_fixed',
             'price_change_value' => 'nullable|numeric|min:0',
@@ -522,6 +537,13 @@ class ItemController extends Controller
                     ->update(['category_id' => $data['category_id']]);
                 \App\Services\ActivityLogger::item("Bulk moved {$count} items to category ID {$data['category_id']}", $branch->id);
                 return back()->with('success', "Successfully updated category for {$count} item(s).");
+
+            case 'update_brand':
+                Item::where('branch_id', $branch->id)
+                    ->whereIn('id', $data['item_ids'])
+                    ->update(['brand_id' => $data['brand_id']]);
+                \App\Services\ActivityLogger::item("Bulk moved {$count} items to brand ID {$data['brand_id']}", $branch->id);
+                return back()->with('success', "Successfully updated brand for {$count} item(s).");
 
             case 'update_group':
                 Item::where('branch_id', $branch->id)
@@ -663,6 +685,7 @@ class ItemController extends Controller
             'item_ref',
             'item_name',
             'category_name',
+            'brand_name',
             'group_address_name',
             'barcode_number',
             'cost_price',
@@ -686,6 +709,7 @@ class ItemController extends Controller
                 'P001',
                 'Peak Milk Sachet',
                 'Dairy & Provisions',
+                'Peak',
                 'Shelf A1',
                 '8901234567890',
                 '200.00',
@@ -703,6 +727,7 @@ class ItemController extends Controller
                 'P001',
                 'Peak Milk Sachet',
                 'Dairy & Provisions',
+                'Peak',
                 'Shelf A1',
                 '8901234567890',
                 '',
@@ -720,6 +745,7 @@ class ItemController extends Controller
                 'P001',
                 'Peak Milk Sachet',
                 'Dairy & Provisions',
+                'Peak',
                 'Shelf A1',
                 '8901234567890',
                 '',
@@ -739,6 +765,7 @@ class ItemController extends Controller
                 'P002',
                 'Coca-Cola 50cl',
                 'Beverages',
+                'Coca-Cola',
                 'Cooler 1',
                 '5449000000996',
                 '150.00',
@@ -756,6 +783,7 @@ class ItemController extends Controller
                 'P002',
                 'Coca-Cola 50cl',
                 'Beverages',
+                'Coca-Cola',
                 'Cooler 1',
                 '5449000000996',
                 '',
@@ -834,7 +862,7 @@ class ItemController extends Controller
 
         $items = Item::where('branch_id', $branch->id)
             ->when($selectedIds, fn($q) => $q->whereIn('id', $selectedIds))
-            ->with(['category', 'groupAddress', 'units'])
+            ->with(['category', 'brand', 'groupAddress', 'units'])
             ->latest()
             ->get();
 
@@ -843,6 +871,7 @@ class ItemController extends Controller
             'item_name',
             'barcode_number',
             'category_name',
+            'brand_name',
             'group_address_name',
             'cost_price',
             'unit_name',
@@ -871,6 +900,7 @@ class ItemController extends Controller
                     $item->item_name,
                     $barcodeCsv,
                     $item->category?->name ?? '',
+                    $item->brand?->name ?? '',
                     $item->groupAddress?->name ?? '',
                     $item->buy_price,
                     $item->unit_label ?: 'Unit',
@@ -892,6 +922,7 @@ class ItemController extends Controller
                             $item->item_name,
                             $barcodeCsv,
                             $item->category?->name ?? '',
+                            $item->brand?->name ?? '',
                             '',
                             '',
                             $unit->unit_name,
@@ -940,6 +971,7 @@ class ItemController extends Controller
             })
             ->with([
                 'category:id,name',
+                'brand:id,name',
                 'groupAddress:id,name',
                 'units' => fn($q) => $q->where('status', 'active')->orderBy('sort_order'),
             ])
@@ -948,6 +980,11 @@ class ItemController extends Controller
             ->get();
 
         $categories = \App\Models\Category::where('branch_id', $branch->id)
+            ->orWhereNull('branch_id')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $brands = \App\Models\Brand::where('branch_id', $branch->id)
             ->orWhereNull('branch_id')
             ->orderBy('name')
             ->get(['id', 'name']);
@@ -964,6 +1001,7 @@ class ItemController extends Controller
             ],
             'items' => $items,
             'categories' => $categories,
+            'brands' => $brands,
             'selectedCategory' => $categoryId ? (int) $categoryId : null,
             'generatedAt' => now()->format('d M Y, h:i A'),
             'currencySymbol' => \App\Models\SystemSetting::get('currency_symbol', '₦'),
@@ -1010,6 +1048,7 @@ class ItemController extends Controller
         $nameIdx = $getColIndex(['item_name', 'name', 'title', 'product_name', 'product']);
         $barcodeIdx = $getColIndex(['barcode_number', 'barcode', 'code', 'sku', 'upc']);
         $catIdx = $getColIndex(['category_name', 'category', 'dept']);
+        $brandIdx = $getColIndex(['brand_name', 'brand', 'manufacturer', 'make']);
         $groupIdx = $getColIndex(['group_address_name', 'storage_location', 'group_address', 'shelf', 'location']);
         $buyPriceIdx = $getColIndex(['buy_price', 'cost_price', 'buying_price', 'cost']);
         $priceIdx = $getColIndex(['selling_price', 'price', 'retail_price', 'base_unit_price', 'unit_price']);
@@ -1081,6 +1120,7 @@ class ItemController extends Controller
             }
 
             $categoryName = $catIdx !== null ? trim($r[$catIdx] ?? '') : '';
+            $brandName = $brandIdx !== null ? trim($r[$brandIdx] ?? '') : '';
             $groupName = $groupIdx !== null ? trim($r[$groupIdx] ?? '') : '';
             $buyPrice = $buyPriceIdx !== null && trim($r[$buyPriceIdx] ?? '') !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$buyPriceIdx]) : 0.0;
             $price = $priceIdx !== null && trim($r[$priceIdx] ?? '') !== '' ? (float) preg_replace('/[^\d.]/', '', $r[$priceIdx]) : 0.0;
@@ -1097,6 +1137,7 @@ class ItemController extends Controller
                 'item_name' => $itemName,
                 'barcode' => $barcode,
                 'category_name' => $categoryName,
+                'brand_name' => $brandName,
                 'group_address_name' => $groupName,
                 'buy_price' => $buyPrice,
                 'price' => $price,
@@ -1127,8 +1168,22 @@ class ItemController extends Controller
 
         $successCount = 0;
         $failedItems = [];
+
+        // Preload caches for fast in-memory resolution (Scoped to branch + global)
         $categoryCache = [];
+        foreach (\App\Models\Category::where('branch_id', $branch->id)->orWhereNull('branch_id')->get() as $cat) {
+            $categoryCache[strtolower(trim($cat->name))] = $cat->id;
+        }
+
+        $brandCache = [];
+        foreach (\App\Models\Brand::where('branch_id', $branch->id)->orWhereNull('branch_id')->get() as $b) {
+            $brandCache[strtolower(trim($b->name))] = $b->id;
+        }
+
         $groupCache = [];
+        foreach (\App\Models\GroupAddress::where('branch_id', $branch->id)->get() as $grp) {
+            $groupCache[strtolower(trim($grp->name))] = $grp->id;
+        }
 
         DB::beginTransaction();
         try {
@@ -1182,6 +1237,22 @@ class ItemController extends Controller
                     $categoryId = $categoryCache[$catKey];
                 }
 
+                // Brand Resolution
+                $brandId = null;
+                if (!empty($baseRow['brand_name'])) {
+                    $brandKey = strtolower(trim($baseRow['brand_name']));
+                    if (!isset($brandCache[$brandKey])) {
+                        $brand = \App\Models\Brand::create([
+                            'name'      => trim($baseRow['brand_name']),
+                            'branch_id' => $branch->id,
+                            'slug'      => Str::slug(trim($baseRow['brand_name'])) . '-' . $branch->id . '-' . rand(100, 999),
+                            'is_active' => true,
+                        ]);
+                        $brandCache[$brandKey] = $brand->id;
+                    }
+                    $brandId = $brandCache[$brandKey];
+                }
+
                 // Group Address Resolution
                 $groupId = null;
                 if (!empty($baseRow['group_address_name'])) {
@@ -1201,6 +1272,7 @@ class ItemController extends Controller
                 $item->barcode_number = $barcode;
                 $item->item_name = $itemName;
                 $item->category_id = $categoryId;
+                $item->brand_id = $brandId;
                 $item->group_address_id = $groupId;
                 $item->buy_price = $baseRow['buy_price'];
                 $item->price = $baseRow['price'];

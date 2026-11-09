@@ -42,13 +42,17 @@ class CommerceCatalogService
 
         $query = Item::query()
             ->where('branch_id', $branchId)
-            ->with(['units', 'category:id,name,slug']);
+            ->with(['units', 'category:id,name,slug', 'brand:id,name,slug,logo,is_active']);
 
         // Incremental sync filter
         if (!empty($filters['updated_after'])) {
             try {
                 $date = Carbon::parse($filters['updated_after']);
-                $query->where('updated_at', '>=', $date);
+                $query->where(function (Builder $q) use ($date) {
+                    $q->where('updated_at', '>=', $date)
+                      ->orWhereHas('brand', fn (Builder $b) => $b->where('updated_at', '>=', $date))
+                      ->orWhereHas('category', fn (Builder $c) => $c->where('updated_at', '>=', $date));
+                });
             } catch (\Throwable) {
                 // If invalid date format, ignore
             }
@@ -107,6 +111,18 @@ class CommerceCatalogService
                     'id' => $item->category->id,
                     'name' => $item->category->name,
                     'slug' => $item->category->slug,
+                ] : null,
+                'brand_id' => $item->brand_id,
+                'pos_brand_id' => $item->brand_id,
+                'brand_name' => $item->brand?->name,
+                'pos_brand_name' => $item->brand?->name,
+                'pos_brand_slug' => $item->brand?->slug,
+                'brand' => $item->brand ? [
+                    'id' => $item->brand->id,
+                    'name' => $item->brand->name,
+                    'slug' => $item->brand->slug,
+                    'logo_url' => $item->brand->logo_url,
+                    'is_active' => (bool) $item->brand->is_active,
                 ] : null,
                 'unit_label' => $item->unit_label,
                 'base_unit_name' => $item->unit_label ?: 'Piece',

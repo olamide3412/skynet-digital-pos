@@ -15,6 +15,7 @@ class StoreItemRequest extends FormRequest
 
         return [
             'category_id'      => ['nullable', 'integer', 'exists:categories,id'],
+            'brand_id'         => ['nullable', 'integer', 'exists:brands,id'],
             'group_address_id' => ['nullable', 'integer', 'exists:group_addresses,id'],
             'item_name'        => ['required', 'string', 'max:255'],
             'barcode_number'   => ['nullable', 'string', 'max:100', Rule::unique('items','barcode_number')->ignore($itemId)],

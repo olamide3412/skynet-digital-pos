@@ -1019,7 +1019,7 @@ class BranchController extends Controller
         $search = $request->query('item_search', $request->query('search', ''));
 
         $query = Item::where('branch_id', $branch->id)
-            ->with(['category:id,name', 'groupAddress:id,name']);
+            ->with(['category:id,name', 'brand:id,name', 'groupAddress:id,name']);
 
         if (!empty($search)) {
             $term = '%' . trim($search) . '%';
@@ -1040,6 +1040,7 @@ class BranchController extends Controller
             'Barcode / SKU',
             'Item Name',
             'Category',
+            'Brand',
             'Group Address / Shelf',
         ];
 
@@ -1101,6 +1102,7 @@ class BranchController extends Controller
             }
             $sheet->setCellValue([$col++, $rowNum], $item->item_name);
             $sheet->setCellValue([$col++, $rowNum], $item->category?->name ?: 'Uncategorized');
+            $sheet->setCellValue([$col++, $rowNum], $item->brand?->name ?: '-');
             $sheet->setCellValue([$col++, $rowNum], $item->groupAddress?->name ?: '-');
 
             if ($quantityOption === 'total') {

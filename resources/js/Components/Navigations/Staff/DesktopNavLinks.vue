@@ -32,6 +32,11 @@ const liClasses = 'block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gra
                 </Link>
             </li>
             <li>
+                <Link :href="route('pos.brands.index', { branch: branchSlug })" :class="liClasses">
+                    Brands
+                </Link>
+            </li>
+            <li>
                 <Link :href="route('pos.items.index', { branch: branchSlug })" :class="liClasses">
                     Items
                 </Link>

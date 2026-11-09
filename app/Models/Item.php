@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Item extends Model
 {
     protected $fillable = [
-        'branch_id', 'category_id', 'group_address_id',
+        'branch_id', 'category_id', 'brand_id', 'group_address_id',
         'item_name', 'barcode_number',
         'buy_price', 'stock_worth', 'price', 'wholesale_price',
         'price_locked', 'is_imei_tracked', 'batch_tracking_enabled',
@@ -57,7 +57,7 @@ class Item extends Model
                 return;
             }
 
-            if ($item->wasChanged(['front_store_qty', 'price', 'buy_price', 'item_name', 'barcode_number'])) {
+            if ($item->wasChanged(['front_store_qty', 'price', 'buy_price', 'item_name', 'barcode_number', 'brand_id', 'category_id'])) {
                 try {
                     \App\Modules\CommerceIntegration\Services\CommerceWebhookDispatcher::dispatchItemUpdated($item);
                 } catch (\Throwable $e) {
@@ -245,6 +245,11 @@ class Item extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 
     public function groupAddress(): BelongsTo

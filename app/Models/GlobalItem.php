@@ -10,7 +10,7 @@ class GlobalItem extends Model
         'item_name', 'barcode_number',
         'buy_price', 'price', 'wholesale_price',
         'unit_label',
-        'item_description', 'image_path', 'category_hint',
+        'item_description', 'image_path', 'category_hint', 'brand_hint',
     ];
 
     protected $appends = ['image_url'];
@@ -34,11 +34,12 @@ class GlobalItem extends Model
      * Creates a new Item row owned by the branch.
      * The branch then fully owns its copy — no sync to global.
      */
-    public function importToBranch(Branch $branch, ?int $categoryId = null): Item
+    public function importToBranch(Branch $branch, ?int $categoryId = null, ?int $brandId = null): Item
     {
         return Item::create([
             'branch_id'              => $branch->id,
             'category_id'            => $categoryId,
+            'brand_id'               => $brandId,
             'item_name'              => $this->item_name,
             'barcode_number'         => $this->barcode_number,
             'buy_price'              => $this->buy_price,

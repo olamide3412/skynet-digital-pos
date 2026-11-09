@@ -4,6 +4,7 @@ namespace App\Http\Controllers\SuperAdmin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
+use App\Models\Brand;
 use App\Models\Category;
 use App\Models\GlobalItem;
 use App\Models\Item;
@@ -18,7 +19,7 @@ class BranchItemController extends Controller
     {
         // Branch items
         $branchItems = Item::where('branch_id', $branch->id)
-            ->with(['category', 'ecommerceLinks:id,pos_item_id,is_active'])
+            ->with(['category', 'brand:id,name', 'ecommerceLinks:id,pos_item_id,is_active'])
             ->when($request->search, function ($q) use ($request) {
                 $q->where(function ($sq) use ($request) {
                     $sq->where('item_name', 'like', '%' . $request->search . '%')
@@ -43,16 +44,19 @@ class BranchItemController extends Controller
             'buy_price'        => $gi->buy_price,
             'price'            => $gi->price,
             'category_hint'    => $gi->category_hint,
+            'brand_hint'       => $gi->brand_hint,
             'is_imported'      => in_array($gi->barcode_number, $importedBarcodes),
         ]);
 
-        $categories = Category::orderBy('name')->get(['id', 'name']);
+        $categories = Category::where('branch_id', $branch->id)->orWhereNull('branch_id')->orderBy('name')->get(['id', 'name']);
+        $brands     = Brand::where('branch_id', $branch->id)->orWhereNull('branch_id')->orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('SuperAdmin/Branches/Items', [
             'branch'       => $branch,
             'items'        => $branchItems,
             'globalItems'  => $globalItems,
             'categories'   => $categories,
+            'brands'       => $brands,
             'filters'      => $request->only('search'),
         ]);
     }
@@ -103,7 +107,22 @@ class BranchItemController extends Controller
                     $categoryId = $category->id;
                 }
 
-                $gItem->importToBranch($branch, $categoryId);
+                // Find or create matching branch brand by brand_hint (scoped strictly to target branch)
+                $brandId = null;
+                if ($gItem->brand_hint) {
+                    $brand = Brand::firstOrCreate([
+                        'name'      => $gItem->brand_hint,
+                        'branch_id' => $branch->id,
+                    ], [
+                        'name'      => $gItem->brand_hint,
+                        'slug'      => Str::slug($gItem->brand_hint) . '-' . $branch->id . '-' . rand(100, 999),
+                        'branch_id' => $branch->id,
+                        'is_active' => true,
+                    ]);
+                    $brandId = $brand->id;
+                }
+
+                $gItem->importToBranch($branch, $categoryId, $brandId);
                 $importedCount++;
             }
 
@@ -131,6 +150,8 @@ class BranchItemController extends Controller
         $globalItems = GlobalItem::all();
         $importedCount = 0;
         $skippedCount = 0;
+        $categoryCache = [];
+        $brandCache = [];
 
         DB::beginTransaction();
         try {
@@ -151,18 +172,40 @@ class BranchItemController extends Controller
 
                 $categoryId = null;
                 if ($gItem->category_hint) {
-                    $category = Category::firstOrCreate([
-                        'name'      => $gItem->category_hint,
-                        'branch_id' => $branch->id,
-                    ], [
-                        'name'      => $gItem->category_hint,
-                        'slug'      => Str::slug($gItem->category_hint) . '-' . $branch->id . '-' . rand(100, 999),
-                        'branch_id' => $branch->id,
-                    ]);
-                    $categoryId = $category->id;
+                    $cHint = trim($gItem->category_hint);
+                    if (!isset($categoryCache[$cHint])) {
+                        $category = Category::firstOrCreate([
+                            'name'      => $cHint,
+                            'branch_id' => $branch->id,
+                        ], [
+                            'name'      => $cHint,
+                            'slug'      => Str::slug($cHint) . '-' . $branch->id . '-' . rand(100, 999),
+                            'branch_id' => $branch->id,
+                        ]);
+                        $categoryCache[$cHint] = $category->id;
+                    }
+                    $categoryId = $categoryCache[$cHint];
                 }
 
-                $gItem->importToBranch($branch, $categoryId);
+                $brandId = null;
+                if ($gItem->brand_hint) {
+                    $bHint = trim($gItem->brand_hint);
+                    if (!isset($brandCache[$bHint])) {
+                        $brand = Brand::firstOrCreate([
+                            'name'      => $bHint,
+                            'branch_id' => $branch->id,
+                        ], [
+                            'name'      => $bHint,
+                            'slug'      => Str::slug($bHint) . '-' . $branch->id . '-' . rand(100, 999),
+                            'branch_id' => $branch->id,
+                            'is_active' => true,
+                        ]);
+                        $brandCache[$bHint] = $brand->id;
+                    }
+                    $brandId = $brandCache[$bHint];
+                }
+
+                $gItem->importToBranch($branch, $categoryId, $brandId);
                 $importedCount++;
             }
 

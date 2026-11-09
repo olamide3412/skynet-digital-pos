@@ -64,7 +64,7 @@ class CatalogApiController extends Controller
 
         $item = Item::where('id', $itemId)
             ->where('branch_id', $integration->branch_id)
-            ->with(['units'])
+            ->with(['units', 'category:id,name,slug', 'brand:id,name,slug,logo,is_active'])
             ->first();
 
         if (!$item) {
@@ -95,6 +95,21 @@ class CatalogApiController extends Controller
                 'price' => (float) $item->price,
                 'standard_price' => (float) $item->price,
                 'selling_price' => (float) $item->price,
+                'category_id' => $item->category_id,
+                'pos_category_id' => $item->category_id,
+                'category_name' => $item->category?->name,
+                'pos_category_name' => $item->category?->name,
+                'brand_id' => $item->brand_id,
+                'pos_brand_id' => $item->brand_id,
+                'brand_name' => $item->brand?->name,
+                'pos_brand_name' => $item->brand?->name,
+                'brand' => $item->brand ? [
+                    'id' => $item->brand->id,
+                    'name' => $item->brand->name,
+                    'slug' => $item->brand->slug,
+                    'logo_url' => $item->brand->logo_url,
+                    'is_active' => (bool) $item->brand->is_active,
+                ] : null,
                 'front_store_qty' => (int) $item->front_store_qty,
                 'reserved_qty' => $activeReserved,
                 'available_qty' => $available,
@@ -171,6 +186,55 @@ class CatalogApiController extends Controller
                 'platform' => $integration->platform,
                 'timestamp' => now()->toIso8601String(),
             ],
+        ]);
+    }
+
+    /**
+     * Retrieve paginated brands for this branch integration (V1).
+     */
+    public function brands(Request $request): JsonResponse
+    {
+        /** @var CommerceIntegration $integration */
+        $integration = $request->attributes->get('commerce_integration');
+        $branchId = $integration->branch_id;
+        $perPage = min(max(1, $request->integer('per_page', 100)), 200);
+        $since = $request->query('updated_after') ?? $request->query('since');
+
+        $query = \App\Models\Brand::query()
+            ->where(function ($q) use ($branchId) {
+                $q->where('branch_id', $branchId)->orWhereNull('branch_id');
+            });
+
+        if (!empty($since)) {
+            try {
+                $query->where('updated_at', '>=', \Carbon\Carbon::parse($since));
+            } catch (\Throwable) {}
+        }
+
+        $paginator = $query->orderBy('id', 'asc')->paginate($perPage);
+
+        $data = $paginator->getCollection()->map(fn (\App\Models\Brand $b) => [
+            'id' => $b->id,
+            'pos_brand_id' => $b->id,
+            'name' => $b->name,
+            'slug' => $b->slug,
+            'logo_url' => $b->logo_url,
+            'description' => $b->description,
+            'is_active' => (bool) $b->is_active,
+            'updated_at' => $b->updated_at?->toIso8601String(),
+        ])->values();
+
+        return response()->json([
+            'success' => true,
+            'status' => true,
+            'data' => $data,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+            ],
+            'next_page_url' => $paginator->nextPageUrl(),
         ]);
     }
 }

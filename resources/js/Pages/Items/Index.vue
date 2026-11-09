@@ -11,6 +11,7 @@ const page = usePage()
 const props = defineProps({
     items:          Object,
     categories:     Array,
+    brands:         Array,
     groupAddresses: Array,
     filters:        Object,
     totalWorth:     Number,
@@ -29,6 +30,7 @@ const branchSlug = computed(() => {
 const { format } = useCurrency()
 const search          = ref(props.filters?.search ?? '')
 const selectedCat     = ref(props.filters?.category_id ?? '')
+const selectedBrand   = ref(props.filters?.brand_id ?? '')
 const selectedGroup   = ref(props.filters?.group_address_id ?? '')
 const perPage         = ref(String(props.filters?.per_page ?? '25'))
 const showWorth       = ref(false)
@@ -39,6 +41,7 @@ const printCatalogUrl = computed(() => {
         params.ids = selectedIds.value.join(',')
     } else {
         if (selectedCat.value) params.category_id = selectedCat.value
+        if (selectedBrand.value) params.brand_id = selectedBrand.value
         if (search.value) params.search = search.value
     }
     return route('pos.items.print-catalog', params)
@@ -86,6 +89,7 @@ function clearSelection() {
 
 // ── Bulk Actions State & Modals ───────────────────────────────────────────────
 const showBulkCategoryModal = ref(false)
+const showBulkBrandModal    = ref(false)
 const showBulkGroupModal    = ref(false)
 const showBulkPriceModal    = ref(false)
 const showBulkDeleteModal   = ref(false)
@@ -94,6 +98,12 @@ const bulkCategoryForm = useForm({
     action: 'update_category',
     item_ids: [],
     category_id: '',
+})
+
+const bulkBrandForm = useForm({
+    action: 'update_brand',
+    item_ids: [],
+    brand_id: '',
 })
 
 const bulkGroupForm = useForm({
@@ -124,6 +134,21 @@ function submitBulkCategory() {
     bulkCategoryForm.post(route('pos.items.bulk-action'), {
         onSuccess: () => {
             showBulkCategoryModal.value = false
+            clearSelection()
+        }
+    })
+}
+
+function openBulkBrandModal() {
+    bulkBrandForm.item_ids = [...selectedIds.value]
+    bulkBrandForm.brand_id = props.brands?.[0]?.id || ''
+    showBulkBrandModal.value = true
+}
+
+function submitBulkBrand() {
+    bulkBrandForm.post(route('pos.items.bulk-action'), {
+        onSuccess: () => {
+            showBulkBrandModal.value = false
             clearSelection()
         }
     })
@@ -223,6 +248,7 @@ function doFilter() {
     router.get(route('pos.items.index', { branch: branchSlug.value }), {
         search: search.value || undefined,
         category_id: selectedCat.value || undefined,
+        brand_id: selectedBrand.value || undefined,
         group_address_id: selectedGroup.value || undefined,
         per_page: perPage.value !== '25' ? perPage.value : undefined,
     }, { preserveState: true, replace: true })
@@ -231,6 +257,7 @@ function doFilter() {
 function resetFilters() {
     search.value = ''
     selectedCat.value = ''
+    selectedBrand.value = ''
     selectedGroup.value = ''
     perPage.value = '25'
     doFilter()
@@ -432,6 +459,17 @@ function expiryClass(date) {
                     <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
                 </select>
 
+                <!-- Brand Filter -->
+                <select
+                    v-if="brands?.length"
+                    v-model="selectedBrand"
+                    @change="doFilter"
+                    class="bg-slate-100 dark:bg-slate-700/70 text-slate-900 dark:text-white text-xs px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-600 outline-none focus:border-emerald-500 min-w-[140px]"
+                >
+                    <option value="">All Brands</option>
+                    <option v-for="b in brands" :key="b.id" :value="b.id">{{ b.name }}</option>
+                </select>
+
                 <!-- Storage Location / Group Address Filter -->
                 <select
                     v-if="groupAddresses?.length"
@@ -545,6 +583,17 @@ function expiryClass(date) {
                         title="Change category for selected items"
                     >
                         📁 Change Category
+                    </button>
+
+                    <!-- Move Brand -->
+                    <button
+                        v-if="brands?.length"
+                        type="button"
+                        @click="openBulkBrandModal"
+                        class="px-3 py-1.5 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                        title="Change brand for selected items"
+                    >
+                        🏷️ Change Brand
                     </button>
 
                     <!-- Move Location -->
@@ -684,12 +733,17 @@ function expiryClass(date) {
                                     <span v-else class="text-slate-400 text-[11px] italic">No barcode</span>
                                 </td>
 
-                                <!-- Category -->
+                                <!-- Category & Brand -->
                                 <td class="px-4 py-3 text-slate-600 dark:text-slate-300 hidden md:table-cell">
-                                    <span v-if="item.category?.name" class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-[11px]">
-                                        {{ item.category.name }}
-                                    </span>
-                                    <span v-else class="text-slate-400">—</span>
+                                    <div class="flex flex-col gap-1 items-start">
+                                        <span v-if="item.category?.name" class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-[11px]">
+                                            {{ item.category.name }}
+                                        </span>
+                                        <span v-if="item.brand?.name" class="inline-flex items-center px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 font-medium text-[10px]" title="Brand">
+                                            🏷️ {{ item.brand.name }}
+                                        </span>
+                                        <span v-if="!item.category?.name && !item.brand?.name" class="text-slate-400">—</span>
+                                    </div>
                                 </td>
 
                                 <!-- Storage / Shelf Location -->
@@ -842,6 +896,35 @@ function expiryClass(date) {
                         <button type="button" @click="showBulkCategoryModal = false" class="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-semibold cursor-pointer">Cancel</button>
                         <button type="submit" :disabled="bulkCategoryForm.processing" class="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition disabled:opacity-50 cursor-pointer">
                             {{ bulkCategoryForm.processing ? 'Updating…' : 'Move Items' }}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Bulk Brand Modal -->
+        <div v-if="showBulkBrandModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-4">
+            <div class="bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700">
+                <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                    <h3 class="font-bold text-sm text-slate-900 dark:text-white">Change Brand for {{ selectedIds.length }} Items</h3>
+                    <button @click="showBulkBrandModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer">✕</button>
+                </div>
+                <form @submit.prevent="submitBulkBrand" class="p-5 space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Select Target Brand *</label>
+                        <select
+                            v-model="bulkBrandForm.brand_id"
+                            class="w-full bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-xl px-3 py-2 text-xs text-slate-900 dark:text-white outline-none focus:border-indigo-500"
+                            required
+                        >
+                            <option value="" disabled>Select brand</option>
+                            <option v-for="b in brands" :key="b.id" :value="b.id">{{ b.name }}</option>
+                        </select>
+                    </div>
+                    <div class="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-700">
+                        <button type="button" @click="showBulkBrandModal = false" class="flex-1 py-2 rounded-xl bg-slate-100 dark:bg-slate-700 text-xs font-semibold cursor-pointer">Cancel</button>
+                        <button type="submit" :disabled="bulkBrandForm.processing" class="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition disabled:opacity-50 cursor-pointer">
+                            {{ bulkBrandForm.processing ? 'Updating…' : 'Update Brand' }}
                         </button>
                     </div>
                 </form>
