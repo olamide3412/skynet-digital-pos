@@ -38,6 +38,7 @@ const filterOverdue = ref(Boolean(props.filters.overdue))
 const filterDueToday = ref(Boolean(props.filters.due_today))
 const filterUnclaimed = ref(Boolean(props.filters.unclaimed))
 const filterUnpaid = ref(Boolean(props.filters.unpaid))
+const filterExpress = ref(Boolean(props.filters.express))
 
 const hasActiveFilters = computed(() => {
     return Boolean(
@@ -45,7 +46,8 @@ const hasActiveFilters = computed(() => {
         filterOverdue.value ||
         filterDueToday.value ||
         filterUnclaimed.value ||
-        filterUnpaid.value
+        filterUnpaid.value ||
+        filterExpress.value
     )
 })
 
@@ -55,6 +57,7 @@ const clearAllFilters = () => {
     filterDueToday.value = false
     filterUnclaimed.value = false
     filterUnpaid.value = false
+    filterExpress.value = false
     applyFilters()
 }
 
@@ -67,6 +70,7 @@ const applyFilters = () => {
             due_today: filterDueToday.value ? 1 : undefined,
             unclaimed: filterUnclaimed.value ? 1 : undefined,
             unpaid: filterUnpaid.value ? 1 : undefined,
+            express: filterExpress.value ? 1 : undefined,
         },
         { preserveState: true, replace: true }
     )
@@ -85,6 +89,7 @@ const toggleFilter = (filterKey) => {
     if (filterKey === 'due_today') filterDueToday.value = !filterDueToday.value
     if (filterKey === 'unclaimed') filterUnclaimed.value = !filterUnclaimed.value
     if (filterKey === 'unpaid') filterUnpaid.value = !filterUnpaid.value
+    if (filterKey === 'express') filterExpress.value = !filterExpress.value
     applyFilters()
 }
 
@@ -161,6 +166,7 @@ const loadMoreColumn = async (statusKey) => {
                 due_today: filterDueToday.value ? 1 : undefined,
                 unclaimed: filterUnclaimed.value ? 1 : undefined,
                 unpaid: filterUnpaid.value ? 1 : undefined,
+                express: filterExpress.value ? 1 : undefined,
                 start_date: props.filters?.start_date || undefined,
                 end_date: props.filters?.end_date || undefined,
             }
@@ -276,6 +282,21 @@ const loadMoreColumn = async (statusKey) => {
                 <!-- Filter Chips Row -->
                 <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-700/60">
                     <span class="text-xs font-medium text-slate-500 mr-1">Quick Filters:</span>
+
+                    <button
+                        @click="toggleFilter('express')"
+                        :class="[
+                            'px-2.5 py-1 rounded-lg text-xs font-semibold border transition flex items-center gap-1.5',
+                            filterExpress
+                                ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800 shadow-xs'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-700 hover:bg-slate-100'
+                        ]"
+                    >
+                        <span>⚡ Express</span>
+                        <span v-if="board_counts.express" class="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-200 dark:bg-amber-900 text-amber-800 dark:text-amber-200">
+                            {{ board_counts.express }}
+                        </span>
+                    </button>
 
                     <button
                         @click="toggleFilter('overdue')"
@@ -419,13 +440,32 @@ const loadMoreColumn = async (statusKey) => {
                             <div
                                 v-for="order in getColumnOrders(col.key)"
                                 :key="order.id"
-                                class="p-3.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xs hover:shadow-md transition cursor-pointer group flex-shrink-0"
+                                :class="[
+                                    'p-3.5 rounded-xl bg-white dark:bg-slate-800 border shadow-xs hover:shadow-md transition cursor-pointer group flex-shrink-0 relative overflow-hidden',
+                                    order.is_express
+                                        ? 'border-amber-300 dark:border-amber-600/80 ring-1 ring-amber-400/40 dark:ring-amber-500/30'
+                                        : 'border-slate-200 dark:border-slate-700'
+                                ]"
                                 @click="router.visit(safeRoute('laundry.orders.show', { order: order.id }))"
                             >
+                                <!-- Left amber accent indicator bar for express rush orders -->
+                                <div v-if="order.is_express" class="absolute left-0 top-0 bottom-0 w-1 bg-amber-500"></div>
+
                                 <div class="flex items-start justify-between gap-2">
-                                    <span class="font-extrabold text-xs text-indigo-600 dark:text-indigo-400 group-hover:underline">
-                                        {{ order.order_number }}
-                                    </span>
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        <span class="font-extrabold text-xs text-indigo-600 dark:text-indigo-400 group-hover:underline">
+                                            {{ order.order_number }}
+                                        </span>
+                                        <!-- Flash Sign Express Badge -->
+                                        <span
+                                            v-if="order.is_express"
+                                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wide bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-2xs"
+                                            title="⚡ Express Order (Rush Priority)"
+                                        >
+                                            <span class="text-xs leading-none">⚡</span>
+                                            <span>EXPRESS</span>
+                                        </span>
+                                    </div>
                                     <span v-if="order.is_overdue" class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
                                         OVERDUE
                                     </span>

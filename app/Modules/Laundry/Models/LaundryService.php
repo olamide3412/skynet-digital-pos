@@ -17,6 +17,7 @@ class LaundryService extends Model
         'name',
         'pricing_type',
         'price',
+        'express_price',
         'is_active',
         'sort_order',
     ];
@@ -28,11 +29,25 @@ class LaundryService extends Model
     protected function casts(): array
     {
         return [
-            'category_id' => 'integer',
-            'price'       => 'decimal:2',
-            'is_active'   => 'boolean',
-            'sort_order'  => 'integer',
+            'category_id'   => 'integer',
+            'price'         => 'decimal:2',
+            'express_price' => 'decimal:2',
+            'is_active'     => 'boolean',
+            'sort_order'    => 'integer',
         ];
+    }
+
+    /**
+     * Resolve effective express price: uses custom express_price if set,
+     * otherwise falls back to standard price multiplied by default express multiplier.
+     */
+    public function resolveExpressPrice(float $fallbackMultiplier = 1.50): float
+    {
+        if ($this->express_price !== null && (float) $this->express_price > 0) {
+            return (float) $this->express_price;
+        }
+
+        return round((float) $this->price * ($fallbackMultiplier > 0 ? $fallbackMultiplier : 1.50), 2);
     }
 
     public function branch(): BelongsTo

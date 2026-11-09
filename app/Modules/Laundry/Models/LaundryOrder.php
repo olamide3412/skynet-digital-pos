@@ -20,6 +20,8 @@ class LaundryOrder extends Model
         'customer_name',
         'customer_phone',
         'status',
+        'is_express',
+        'speed_tier',
         'received_at',
         'due_at',
         'collected_at',
@@ -40,6 +42,7 @@ class LaundryOrder extends Model
     protected function casts(): array
     {
         return [
+            'is_express'      => 'boolean',
             'received_at'     => 'datetime',
             'due_at'          => 'datetime',
             'collected_at'    => 'datetime',
@@ -128,6 +131,26 @@ class LaundryOrder extends Model
         }
 
         return $this->due_at->copy()->addDays($unclaimedDays)->isPast();
+    }
+
+    /**
+     * Determine if order is an express order globally or contains express items.
+     */
+    public function hasExpress(): bool
+    {
+        if ((bool) ($this->is_express ?? false) || ($this->speed_tier ?? '') === 'express') {
+            return true;
+        }
+
+        if ($this->relationLoaded('items')) {
+            return $this->items->contains(function ($i) {
+                return (bool) ($i->is_express ?? false) || ($i->speed_tier ?? '') === 'express';
+            });
+        }
+
+        return $this->items()->where(function ($q) {
+            $q->where('is_express', true)->orWhere('speed_tier', 'express');
+        })->exists();
     }
 
     public function scopeForBranch($query, $branchId)

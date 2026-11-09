@@ -15,6 +15,9 @@ class LaundrySetting extends Model
         'order_prefix',
         'default_turnaround_days',
         'unclaimed_after_days',
+        'enable_express_service',
+        'express_turnaround_hours',
+        'default_express_multiplier',
         'whatsapp_template',
         'default_country_code',
         'receipt_footer',
@@ -25,10 +28,13 @@ class LaundrySetting extends Model
     protected function casts(): array
     {
         return [
-            'default_turnaround_days' => 'integer',
-            'unclaimed_after_days'    => 'integer',
-            'allow_price_override'    => 'boolean',
-            'allow_unpaid_pickup'     => 'boolean',
+            'default_turnaround_days'    => 'integer',
+            'unclaimed_after_days'       => 'integer',
+            'enable_express_service'     => 'boolean',
+            'express_turnaround_hours'   => 'integer',
+            'default_express_multiplier' => 'decimal:2',
+            'allow_price_override'       => 'boolean',
+            'allow_unpaid_pickup'        => 'boolean',
         ];
     }
 
@@ -55,9 +61,12 @@ class LaundrySetting extends Model
              ['branch_id' => $branchId],
              [
                  'order_prefix'            => 'LDY-',
-                 'default_turnaround_days' => 2,
-                 'unclaimed_after_days'    => 14,
-                 'whatsapp_template'       => "Hello {customer_name}, your laundry order #{order_number} is ready for pickup at {branch_name}! Total due: {balance}. Thank you for choosing us.",
+                 'default_turnaround_days'    => 2,
+                 'unclaimed_after_days'       => 14,
+                 'enable_express_service'     => true,
+                 'express_turnaround_hours'   => 24,
+                 'default_express_multiplier' => 1.50,
+                 'whatsapp_template'          => "Hello {customer_name}, your laundry order #{order_number} is ready for pickup at {branch_name}! Total due: {balance}. Thank you for choosing us.",
                  'default_country_code'    => '+234',
                  'receipt_footer'          => "Please present this ticket upon garment collection. Items unclaimed after 30 days are subject to disposal.",
                  'allow_price_override'    => false,

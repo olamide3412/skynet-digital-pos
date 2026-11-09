@@ -269,6 +269,9 @@ watch(selectedPaperSize, () => {
                             <div style="font-size: 11.5px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase; margin-top: 6px; padding: 2px 0; border-top: 1px dashed #000000; border-bottom: 1px dashed #000000;">
                                 LAUNDRY INTAKE / PICKUP TICKET
                             </div>
+                            <div v-if="order.is_express" style="background-color: #000000; color: #ffffff; text-align: center; padding: 3px 6px; font-weight: 900; font-size: 11.5px; letter-spacing: 1px; margin-top: 4px; text-transform: uppercase;">
+                                *** ⚡ EXPRESS RUSH SERVICE ⚡ ***
+                            </div>
                         </div>
 
                         <!-- ══ TICKET META ══════════════════════════════════════ -->
@@ -282,9 +285,9 @@ watch(selectedPaperSize, () => {
                                     <td style="color: #000000; padding: 2px 0;">Intake Date</td>
                                     <td style="text-align: right; color: #000000; padding: 2px 0;">{{ order.received_at || '—' }}</td>
                                 </tr>
-                                <tr style="background-color: #f3f4f6; font-weight: 800;">
-                                    <td style="color: #000000; padding: 3px 4px;">⏰ Pickup Due</td>
-                                    <td style="text-align: right; color: #000000; padding: 3px 4px; font-weight: 900;">{{ order.due_at || 'Standard Turnaround' }}</td>
+                                <tr :style="order.is_express ? 'background-color: #000000; color: #ffffff; font-weight: 900;' : 'background-color: #f3f4f6; font-weight: 800;'">
+                                    <td :style="order.is_express ? 'color: #ffffff; padding: 3px 4px;' : 'color: #000000; padding: 3px 4px;'">{{ order.is_express ? '⚡ Pickup Due (RUSH)' : '⏰ Pickup Due' }}</td>
+                                    <td :style="order.is_express ? 'text-align: right; color: #ffffff; padding: 3px 4px; font-weight: 900;' : 'text-align: right; color: #000000; padding: 3px 4px; font-weight: 900;'">{{ order.due_at || 'Standard Turnaround' }}</td>
                                 </tr>
                                 <tr>
                                     <td style="color: #000000; padding: 2px 0;">Customer</td>
@@ -329,7 +332,10 @@ watch(selectedPaperSize, () => {
                                         {{ idx + 1 }}.
                                     </td>
                                     <td style="padding: 4px 4px 4px 0; font-weight: 600; color: #000000; word-break: break-word;">
-                                        <div>{{ item.service_name }}</div>
+                                        <div>
+                                            {{ item.service_name }}
+                                            <span v-if="item.is_express" style="font-size: 8.5px; font-weight: 900; background-color: #000; color: #fff; padding: 1px 3px; border-radius: 2px; margin-left: 2px;">⚡ EXPRESS</span>
+                                        </div>
                                         <div v-if="item.pricing_type" style="font-size: 9.5px; color: #4b5563; font-weight: 500;">
                                             [{{ item.pricing_type === 'kg' ? 'Per KG' : 'Per Piece' }}]
                                         </div>

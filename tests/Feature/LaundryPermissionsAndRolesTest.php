@@ -200,4 +200,101 @@ class LaundryPermissionsAndRolesTest extends TestCase
         $allowedRes = $this->get(route('laundry.discounts.index', ['branch' => $branch->slug]));
         $allowedRes->assertOk();
     }
+
+    public function test_laundry_service_manage_permissions_and_update_destroy(): void
+    {
+        $org = Organization::create([
+            'name'   => 'Org Service Test ' . uniqid(),
+            'status' => 'active',
+        ]);
+
+        $branch = Branch::create([
+            'organization_id' => $org->id,
+            'name'            => 'Service Branch ' . uniqid(),
+            'slug'            => 'service-branch-' . uniqid(),
+            'is_active'       => true,
+        ]);
+        PosSettings::create([
+            'branch_id'       => $branch->id,
+            'laundry_enabled' => true,
+        ]);
+        $branch->ensureDefaultRoles();
+        setPermissionsTeamId($branch->id);
+
+        $superAdmin = User::factory()->create([
+            'is_super_admin' => true,
+            'is_active'      => true,
+        ]);
+
+        $manager = User::create([
+            'name'            => 'Manager User',
+            'username'        => 'mgr_' . uniqid(),
+            'password'        => bcrypt('secret'),
+            'organization_id' => $org->id,
+            'branch_id'       => $branch->id,
+            'is_active'       => true,
+        ]);
+        $manager->assignRole('manager');
+
+        $staff = User::create([
+            'name'            => 'Staff User',
+            'username'        => 'staff_' . uniqid(),
+            'password'        => bcrypt('secret'),
+            'organization_id' => $org->id,
+            'branch_id'       => $branch->id,
+            'is_active'       => true,
+        ]);
+        $staff->assignRole('laundry-staff');
+
+        // SuperAdmin can view services and can_manage is true
+        $this->actingAs($superAdmin, 'web');
+        $saRes = $this->get(route('laundry.services.index', ['branch' => $branch->slug]));
+        $saRes->assertOk();
+        $saRes->assertInertia(fn($page) => $page->where('can_manage', true));
+
+        // Manager can view services and can_manage is true
+        $this->actingAs($manager, 'web');
+        $mgrRes = $this->get(route('laundry.services.index', ['branch' => $branch->slug]));
+        $mgrRes->assertOk();
+        $mgrRes->assertInertia(fn($page) => $page->where('can_manage', true));
+
+        // Create a service
+        $service = \App\Modules\Laundry\Models\LaundryService::create([
+            'branch_id'    => $branch->id,
+            'name'         => 'Ironing Only',
+            'pricing_type' => 'per_piece',
+            'price'        => 500,
+            'is_active'    => true,
+        ]);
+
+        // Edit service
+        $updateRes = $this->put(route('laundry.services.update', [
+            'branch'  => $branch->slug,
+            'service' => $service->id,
+        ]), [
+            'name'         => 'Ironing Only (Express)',
+            'pricing_type' => 'per_piece',
+            'price'        => 800,
+            'is_active'    => true,
+        ]);
+        $updateRes->assertSessionHas('success');
+        $this->assertEquals('Ironing Only (Express)', $service->fresh()->name);
+        $this->assertEquals(800, $service->fresh()->price);
+
+        // Toggle active
+        $toggleRes = $this->patch(route('laundry.services.toggle', [
+            'branch'  => $branch->slug,
+            'service' => $service->id,
+        ]));
+        $toggleRes->assertSessionHas('success');
+        $this->assertFalse($service->fresh()->is_active);
+
+        // Delete service
+        $deleteRes = $this->delete(route('laundry.services.destroy', [
+            'branch'  => $branch->slug,
+            'service' => $service->id,
+        ]));
+        $deleteRes->assertSessionHas('success');
+        $this->assertDatabaseMissing('laundry_services', ['id' => $service->id]);
+    }
 }

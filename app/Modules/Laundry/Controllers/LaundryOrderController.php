@@ -51,8 +51,11 @@ class LaundryOrderController extends Controller
             'items_summary'  => $o->items->map(function ($i) {
                 $q = (float) $i->quantity;
                 $qty = ($q == (int) $q) ? (int) $q : $q;
-                return "{$qty}x {$i->service_name}";
+                $rush = ((bool)($i->is_express ?? false) || ($i->speed_tier ?? '') === 'express') ? '⚡ ' : '';
+                return "{$rush}{$qty}x {$i->service_name}";
             })->join(', '),
+            'is_express'     => $o->hasExpress(),
+            'speed_tier'     => $o->speed_tier ?: ($o->hasExpress() ? 'express' : 'standard'),
             'is_overdue'     => $o->isOverdue(),
             'is_unclaimed'   => $o->isUnclaimed($unclaimedAfterDays),
             'note'           => $o->note,
@@ -323,6 +326,7 @@ class LaundryOrderController extends Controller
         $filterDueToday = $request->boolean('due_today');
         $filterUnclaimed = $request->boolean('unclaimed');
         $filterUnpaid = $request->boolean('unpaid');
+        $filterExpress = $request->boolean('express');
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
 
@@ -350,6 +354,15 @@ class LaundryOrderController extends Controller
                 $q->where('status', 'ready')->where('due_at', '<=', $unclaimedThreshold);
             })
             ->when($filterUnpaid, fn($q) => $q->where('balance', '>', 0))
+            ->when($filterExpress, function ($q) {
+                $q->where(function ($sq) {
+                    $sq->where('is_express', true)
+                       ->orWhere('speed_tier', 'express')
+                       ->orWhereHas('items', function ($iq) {
+                           $iq->where('is_express', true)->orWhere('speed_tier', 'express');
+                       });
+                });
+            })
             ->when($startDate, fn($q) => $q->whereDate('received_at', '>=', $startDate))
             ->when($endDate, fn($q) => $q->whereDate('received_at', '<=', $endDate));
 
@@ -362,12 +375,20 @@ class LaundryOrderController extends Controller
             'due_today'   => LaundryOrder::where('branch_id', $branch->id)->whereNotIn('status', ['collected', 'cancelled'])->whereDate('due_at', Carbon::today())->count(),
             'unpaid'      => LaundryOrder::where('branch_id', $branch->id)->where('balance', '>', 0)->count(),
             'unclaimed'   => LaundryOrder::where('branch_id', $branch->id)->where('status', 'ready')->where('due_at', '<=', $unclaimedThreshold)->count(),
+            'express'     => LaundryOrder::where('branch_id', $branch->id)->whereNotIn('status', ['collected', 'cancelled'])->where(function ($sq) {
+                $sq->where('is_express', true)
+                   ->orWhere('speed_tier', 'express')
+                   ->orWhereHas('items', function ($iq) {
+                       $iq->where('is_express', true)->orWhere('speed_tier', 'express');
+                   });
+            })->count(),
         ];
 
         $boardOrders = [];
         $columns = ['received', 'in_progress', 'ready'];
         foreach ($columns as $colStatus) {
             $items = (clone $query)->where('status', $colStatus)
+                ->orderByDesc('is_express')
                 ->orderBy('due_at')
                 ->orderBy('id')
                 ->limit(10)
@@ -385,6 +406,7 @@ class LaundryOrderController extends Controller
                 'due_today'  => $filterDueToday,
                 'unclaimed'  => $filterUnclaimed,
                 'unpaid'     => $filterUnpaid,
+                'express'    => $filterExpress,
                 'start_date' => $startDate,
                 'end_date'   => $endDate,
             ],
@@ -406,6 +428,7 @@ class LaundryOrderController extends Controller
         $filterDueToday = $request->boolean('due_today');
         $filterUnclaimed = $request->boolean('unclaimed');
         $filterUnpaid = $request->boolean('unpaid');
+        $filterExpress = $request->boolean('express');
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
 
@@ -434,12 +457,22 @@ class LaundryOrderController extends Controller
                 $q->where('status', 'ready')->where('due_at', '<=', $threshold);
             })
             ->when($filterUnpaid, fn($q) => $q->where('balance', '>', 0))
+            ->when($filterExpress, function ($q) {
+                $q->where(function ($sq) {
+                    $sq->where('is_express', true)
+                       ->orWhere('speed_tier', 'express')
+                       ->orWhereHas('items', function ($iq) {
+                           $iq->where('is_express', true)->orWhere('speed_tier', 'express');
+                       });
+                });
+            })
             ->when($startDate, fn($q) => $q->whereDate('received_at', '>=', $startDate))
             ->when($endDate, fn($q) => $q->whereDate('received_at', '<=', $endDate));
 
         $total = (clone $query)->count();
 
-        $items = $query->orderBy('due_at')
+        $items = $query->orderByDesc('is_express')
+            ->orderBy('due_at')
             ->orderBy('id')
             ->skip(($page - 1) * $perPage)
             ->take($perPage)
@@ -471,24 +504,31 @@ class LaundryOrderController extends Controller
             ->with('category:id,name,slug')
             ->orderBy('sort_order')
             ->orderBy('name')
-            ->get(['id', 'branch_id', 'category_id', 'name', 'pricing_type', 'price'])
-            ->map(function ($s) {
+            ->get(['id', 'branch_id', 'category_id', 'name', 'pricing_type', 'price', 'express_price'])
+            ->map(function ($s) use ($laundrySettings) {
                 $discountInfo = LaundryDiscountService::resolveServiceDiscount($s);
+                $expressMultiplier = (float) ($laundrySettings->default_express_multiplier ?? 1.50);
+                $effectiveExpressPrice = $s->express_price !== null && (float) $s->express_price > 0
+                    ? (float) $s->express_price
+                    : round((float) $s->price * ($expressMultiplier > 0 ? $expressMultiplier : 1.50), 2);
+
                 return [
-                    'id'               => $s->id,
-                    'branch_id'        => $s->branch_id,
-                    'category_id'      => $s->category_id,
-                    'category_name'    => $s->category?->name,
-                    'name'             => $s->name,
-                    'pricing_type'     => $s->pricing_type,
-                    'price'            => (float) $s->price,
-                    'has_discount'     => $discountInfo['has_discount'],
-                    'discounted_price' => $discountInfo['discounted_price'],
-                    'discount_amount'  => $discountInfo['discount_amount'],
-                    'discount_type'    => $discountInfo['discount_type'],
-                    'discount_value'   => $discountInfo['discount_value'],
-                    'discount_name'    => $discountInfo['discount_name'],
-                    'discount_id'      => $discountInfo['discount_id'],
+                    'id'                      => $s->id,
+                    'branch_id'               => $s->branch_id,
+                    'category_id'             => $s->category_id,
+                    'category_name'           => $s->category?->name,
+                    'name'                    => $s->name,
+                    'pricing_type'            => $s->pricing_type,
+                    'price'                   => (float) $s->price,
+                    'express_price'           => $s->express_price !== null ? (float) $s->express_price : null,
+                    'effective_express_price' => $effectiveExpressPrice,
+                    'has_discount'            => $discountInfo['has_discount'],
+                    'discounted_price'        => $discountInfo['discounted_price'],
+                    'discount_amount'         => $discountInfo['discount_amount'],
+                    'discount_type'           => $discountInfo['discount_type'],
+                    'discount_value'          => $discountInfo['discount_value'],
+                    'discount_name'           => $discountInfo['discount_name'],
+                    'discount_id'             => $discountInfo['discount_id'],
                 ];
             });
 
@@ -528,13 +568,16 @@ class LaundryOrderController extends Controller
             'activeTillSession'         => $activeTillSession,
             'canManageTillCashMovements' => RoleService::canManageTillCashMovements() || ($user?->isBranchAdmin() ?? false) || ($user?->isSuperAdmin() ?? false),
             'settings'              => [
-                'default_turnaround_days' => $laundrySettings->default_turnaround_days ?: 2,
-                'order_prefix'            => $laundrySettings->order_prefix ?: 'LDY-',
-                'is_tax_enabled'          => (bool) $posSettings->is_tax_enabled,
-                'tax_percentage'          => (float) ($posSettings->tax_percentage ?? 0),
-                'allow_price_override'    => (bool) $laundrySettings->allow_price_override,
-                'require_till_opening'    => (bool) ($posSettings->require_till_opening ?? false),
-                'print_till_slip'         => (bool) ($posSettings->print_till_slip ?? true),
+                'default_turnaround_days'    => $laundrySettings->default_turnaround_days ?: 2,
+                'order_prefix'               => $laundrySettings->order_prefix ?: 'LDY-',
+                'enable_express_service'     => (bool) ($laundrySettings->enable_express_service ?? true),
+                'express_turnaround_hours'   => (int) ($laundrySettings->express_turnaround_hours ?? 24),
+                'default_express_multiplier' => (float) ($laundrySettings->default_express_multiplier ?? 1.50),
+                'is_tax_enabled'             => (bool) $posSettings->is_tax_enabled,
+                'tax_percentage'             => (float) ($posSettings->tax_percentage ?? 0),
+                'allow_price_override'       => (bool) $laundrySettings->allow_price_override,
+                'require_till_opening'       => (bool) ($posSettings->require_till_opening ?? false),
+                'print_till_slip'            => (bool) ($posSettings->print_till_slip ?? true),
             ],
         ]);
     }
@@ -564,6 +607,8 @@ class LaundryOrderController extends Controller
             'items.*.service_id'          => 'nullable|integer',
             'items.*.service_name'        => 'required|string|max:255',
             'items.*.pricing_type'        => 'required|string|in:per_piece,per_kg',
+            'items.*.is_express'          => 'nullable|boolean',
+            'items.*.speed_tier'          => 'nullable|string|in:standard,express',
             'items.*.original_price'      => 'nullable|numeric|min:0',
             'items.*.unit_price'          => 'required|numeric|min:0',
             'items.*.quantity'            => 'required|numeric|min:0.01',
@@ -571,6 +616,8 @@ class LaundryOrderController extends Controller
             'items.*.laundry_discount_id' => 'nullable|integer',
             'items.*.note'                => 'nullable|string|max:500',
 
+            'is_express'          => 'nullable|boolean',
+            'speed_tier'          => 'nullable|string|in:standard,express',
             'due_at'              => 'nullable|date',
             'discount_amount'     => 'nullable|numeric|min:0',
             'discount_type'       => 'nullable|string|in:percentage,fixed',
@@ -647,6 +694,8 @@ class LaundryOrderController extends Controller
                 'id'                   => $order->id,
                 'order_number'         => $order->order_number,
                 'status'               => $order->status,
+                'is_express'           => (bool) ($order->is_express ?? false),
+                'speed_tier'           => $order->speed_tier ?? 'standard',
                 'customer_id'          => $order->customer_id,
                 'customer_name'        => $order->customer_name,
                 'customer_phone'       => $order->customer_phone,
@@ -673,6 +722,8 @@ class LaundryOrderController extends Controller
                     'id'                  => $i->id,
                     'service_name'        => $i->service_name,
                     'pricing_type'        => $i->pricing_type,
+                    'is_express'          => (bool) ($i->is_express ?? false),
+                    'speed_tier'          => $i->speed_tier ?? 'standard',
                     'original_price'      => (float) ($i->original_price ?: $i->unit_price),
                     'unit_price'          => (float) $i->unit_price,
                     'quantity'            => ($q = (float) $i->quantity) == (int) $q ? (int) $q : $q,

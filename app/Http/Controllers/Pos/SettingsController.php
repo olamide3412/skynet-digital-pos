@@ -35,15 +35,18 @@ class SettingsController extends Controller
         if ($branch && $branch->laundryEnabled()) {
             $lSetting = LaundrySetting::forBranch($branch->id);
             $laundrySettingsData = [
-                'default_turnaround_hours' => $lSetting->default_turnaround_hours,
-                'default_turnaround_days'  => $lSetting->default_turnaround_days,
-                'unclaimed_after_days'     => $lSetting->unclaimed_after_days,
-                'order_prefix'             => $lSetting->order_prefix,
-                'whatsapp_template'        => $lSetting->whatsapp_template,
-                'default_country_code'     => $lSetting->default_country_code,
-                'receipt_footer'           => $lSetting->receipt_footer,
-                'allow_price_override'     => (bool) $lSetting->allow_price_override,
-                'allow_unpaid_pickup'      => (bool) $lSetting->allow_unpaid_pickup,
+                'default_turnaround_hours'   => $lSetting->default_turnaround_hours,
+                'default_turnaround_days'    => $lSetting->default_turnaround_days,
+                'unclaimed_after_days'       => $lSetting->unclaimed_after_days,
+                'enable_express_service'     => (bool) ($lSetting->enable_express_service ?? true),
+                'express_turnaround_hours'   => (int) ($lSetting->express_turnaround_hours ?? 24),
+                'default_express_multiplier' => (float) ($lSetting->default_express_multiplier ?? 1.50),
+                'order_prefix'               => $lSetting->order_prefix,
+                'whatsapp_template'          => $lSetting->whatsapp_template,
+                'default_country_code'       => $lSetting->default_country_code,
+                'receipt_footer'             => $lSetting->receipt_footer,
+                'allow_price_override'       => (bool) $lSetting->allow_price_override,
+                'allow_unpaid_pickup'        => (bool) $lSetting->allow_unpaid_pickup,
             ];
         }
 
@@ -295,27 +298,33 @@ class SettingsController extends Controller
             }
 
             $data = $request->validate([
-                'default_turnaround_hours' => ['required', 'integer', 'min:1', 'max:720'],
-                'unclaimed_after_days'     => ['required', 'integer', 'min:1', 'max:365'],
-                'order_prefix'             => ['required', 'string', 'max:10'],
-                'whatsapp_template'        => ['required', 'string', 'max:1000'],
-                'default_country_code'     => ['required', 'string', 'max:5'],
-                'receipt_footer'           => ['nullable', 'string', 'max:500'],
-                'allow_price_override'     => ['nullable', 'boolean'],
-                'allow_unpaid_pickup'      => ['nullable', 'boolean'],
+                'default_turnaround_hours'   => ['required', 'integer', 'min:1', 'max:720'],
+                'unclaimed_after_days'       => ['required', 'integer', 'min:1', 'max:365'],
+                'enable_express_service'     => ['nullable', 'boolean'],
+                'express_turnaround_hours'   => ['required', 'integer', 'min:1', 'max:720'],
+                'default_express_multiplier' => ['required', 'numeric', 'min:1.0', 'max:10.0'],
+                'order_prefix'               => ['required', 'string', 'max:10'],
+                'whatsapp_template'          => ['required', 'string', 'max:1000'],
+                'default_country_code'       => ['required', 'string', 'max:5'],
+                'receipt_footer'             => ['nullable', 'string', 'max:500'],
+                'allow_price_override'       => ['nullable', 'boolean'],
+                'allow_unpaid_pickup'        => ['nullable', 'boolean'],
             ]);
 
             if ($branch) {
                 $laundrySetting = LaundrySetting::getForBranch($branch->id);
                 $laundrySetting->update([
-                    'default_turnaround_days' => max(1, (int) round(($data['default_turnaround_hours'] ?? 48) / 24)),
-                    'unclaimed_after_days'    => $data['unclaimed_after_days'],
-                    'order_prefix'            => strtoupper(trim($data['order_prefix'])),
-                    'whatsapp_template'       => $data['whatsapp_template'],
-                    'default_country_code'    => preg_replace('/\D/', '', $data['default_country_code']),
-                    'receipt_footer'          => $data['receipt_footer'] ?? null,
-                    'allow_price_override'    => (bool) ($data['allow_price_override'] ?? false),
-                    'allow_unpaid_pickup'     => (bool) ($data['allow_unpaid_pickup'] ?? false),
+                    'default_turnaround_days'    => max(1, (int) round(($data['default_turnaround_hours'] ?? 48) / 24)),
+                    'unclaimed_after_days'       => $data['unclaimed_after_days'],
+                    'enable_express_service'     => (bool) ($data['enable_express_service'] ?? false),
+                    'express_turnaround_hours'   => (int) ($data['express_turnaround_hours'] ?? 24),
+                    'default_express_multiplier' => (float) ($data['default_express_multiplier'] ?? 1.50),
+                    'order_prefix'               => strtoupper(trim($data['order_prefix'])),
+                    'whatsapp_template'          => $data['whatsapp_template'],
+                    'default_country_code'       => preg_replace('/\D/', '', $data['default_country_code']),
+                    'receipt_footer'             => $data['receipt_footer'] ?? null,
+                    'allow_price_override'       => (bool) ($data['allow_price_override'] ?? false),
+                    'allow_unpaid_pickup'        => (bool) ($data['allow_unpaid_pickup'] ?? false),
                 ]);
             }
 

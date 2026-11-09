@@ -5,6 +5,7 @@ namespace App\Modules\Laundry\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Laundry\Models\LaundryCategory;
 use App\Modules\Laundry\Models\LaundryService;
+use App\Modules\Laundry\Models\LaundrySetting;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -52,11 +53,18 @@ class LaundryServiceController extends Controller
             ->orderBy('name')
             ->get();
 
+        $lSetting = LaundrySetting::forBranch($branch->id);
+
         return Inertia::render('Laundry/Services/Index', [
             'services'   => $services,
             'categories' => $categories,
             'filters'    => $request->only(['search', 'category', 'status']),
-            'can_manage' => auth()->user()->isBranchAdmin() || auth()->user()->hasPermissionTo('laundry.manage_services'),
+            'can_manage' => $this->canManageUser(),
+            'settings'   => [
+                'enable_express_service'     => (bool) ($lSetting->enable_express_service ?? true),
+                'express_turnaround_hours'   => (int) ($lSetting->express_turnaround_hours ?? 24),
+                'default_express_multiplier' => (float) ($lSetting->default_express_multiplier ?? 1.50),
+            ],
         ]);
     }
 
@@ -70,12 +78,13 @@ class LaundryServiceController extends Controller
         $branch = current_branch();
 
         $validated = $request->validate([
-            'name'         => ['required', 'string', 'max:255'],
-            'category_id'  => ['nullable', 'integer', 'exists:laundry_categories,id'],
-            'pricing_type' => ['required', 'string', 'in:per_piece,per_kg'],
-            'price'        => ['required', 'numeric', 'min:0'],
-            'is_active'    => ['boolean'],
-            'sort_order'   => ['nullable', 'integer', 'min:0'],
+            'name'          => ['required', 'string', 'max:255'],
+            'category_id'   => ['nullable', 'integer', 'exists:laundry_categories,id'],
+            'pricing_type'  => ['required', 'string', 'in:per_piece,per_kg'],
+            'price'         => ['required', 'numeric', 'min:0'],
+            'express_price' => ['nullable', 'numeric', 'min:0'],
+            'is_active'     => ['boolean'],
+            'sort_order'    => ['nullable', 'integer', 'min:0'],
         ]);
 
         $validated['branch_id'] = $branch->id;
@@ -90,7 +99,7 @@ class LaundryServiceController extends Controller
     /**
      * Update the specified laundry service.
      */
-    public function update(Request $request, LaundryService $service)
+    public function update(Request $request, $branchParam, LaundryService $service)
     {
         $this->authorizeManage();
 
@@ -100,12 +109,13 @@ class LaundryServiceController extends Controller
         }
 
         $validated = $request->validate([
-            'name'         => ['required', 'string', 'max:255'],
-            'category_id'  => ['nullable', 'integer', 'exists:laundry_categories,id'],
-            'pricing_type' => ['required', 'string', 'in:per_piece,per_kg'],
-            'price'        => ['required', 'numeric', 'min:0'],
-            'is_active'    => ['boolean'],
-            'sort_order'   => ['nullable', 'integer', 'min:0'],
+            'name'          => ['required', 'string', 'max:255'],
+            'category_id'   => ['nullable', 'integer', 'exists:laundry_categories,id'],
+            'pricing_type'  => ['required', 'string', 'in:per_piece,per_kg'],
+            'price'         => ['required', 'numeric', 'min:0'],
+            'express_price' => ['nullable', 'numeric', 'min:0'],
+            'is_active'     => ['boolean'],
+            'sort_order'    => ['nullable', 'integer', 'min:0'],
         ]);
 
         $service->update($validated);
@@ -116,7 +126,7 @@ class LaundryServiceController extends Controller
     /**
      * Toggle the active status of the specified service.
      */
-    public function toggleActive(LaundryService $service)
+    public function toggleActive($branchParam, LaundryService $service)
     {
         $this->authorizeManage();
 
@@ -136,7 +146,7 @@ class LaundryServiceController extends Controller
     /**
      * Delete the specified laundry service if not used in any orders.
      */
-    public function destroy(LaundryService $service)
+    public function destroy($branchParam, LaundryService $service)
     {
         $this->authorizeManage();
 
@@ -236,9 +246,23 @@ class LaundryServiceController extends Controller
 
     protected function authorizeManage(): void
     {
-        $user = auth()->user();
-        if (!$user->isBranchAdmin() && !$user->isSuperAdmin() && !$user->hasPermissionTo('laundry.manage_services')) {
+        if (!$this->canManageUser()) {
             abort(403, 'Unauthorized to manage laundry services.');
         }
+    }
+
+    protected function canManageUser(): bool
+    {
+        $user = auth()->user();
+        if (!$user) {
+            return false;
+        }
+
+        return $user->isSuperAdmin()
+            || $user->isOrganizationAdmin()
+            || $user->isBranchAdmin()
+            || $user->hasRole(['branch-admin', 'manager', 'admin'])
+            || \App\Services\RoleService::can('laundry.manage_services')
+            || $user->hasPermissionTo('laundry.manage_services');
     }
 }

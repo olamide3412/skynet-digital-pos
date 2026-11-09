@@ -14,6 +14,8 @@ class LaundryOrderItem extends Model
         'service_id',
         'service_name',
         'pricing_type',
+        'is_express',
+        'speed_tier',
         'original_price',
         'unit_price',
         'quantity',
@@ -26,6 +28,7 @@ class LaundryOrderItem extends Model
     protected function casts(): array
     {
         return [
+            'is_express'      => 'boolean',
             'original_price'  => 'decimal:2',
             'unit_price'       => 'decimal:2',
             'quantity'         => 'float',

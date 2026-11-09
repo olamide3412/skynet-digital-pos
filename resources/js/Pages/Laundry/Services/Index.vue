@@ -20,6 +20,14 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    settings: {
+        type: Object,
+        default: () => ({
+            enable_express_service: true,
+            express_turnaround_hours: 24,
+            default_express_multiplier: 1.5,
+        }),
+    },
 })
 
 const page = usePage()
@@ -30,6 +38,14 @@ const safeRoute = (name, params = {}) => route(name, { branch: branchSlug.value,
 const formatMoney = (val) => {
     const num = Number(val || 0)
     return currencySymbol.value + ' ' + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+const getExpressPrice = (srv) => {
+    if (srv.express_price !== null && srv.express_price !== undefined && srv.express_price !== '' && Number(srv.express_price) > 0) {
+        return Number(srv.express_price)
+    }
+    const mult = Number(props.settings?.default_express_multiplier || 1.5)
+    return Math.round(Number(srv.price) * mult * 100) / 100
 }
 
 const getDiscountedPrice = (srv) => {
@@ -68,12 +84,15 @@ const onSearchInput = () => {
 const showCreateModal = ref(false)
 const showEditModal   = ref(false)
 const editingService  = ref(null)
+const showDeleteModal = ref(false)
+const serviceToDelete = ref(null)
 
 const serviceForm = ref({
     name: '',
     category_id: null,
     pricing_type: 'per_piece',
     price: 0,
+    express_price: null,
     is_active: true,
     sort_order: 0,
 })
@@ -84,6 +103,7 @@ const openCreate = () => {
         category_id: props.categories.length > 0 ? props.categories[0].id : null,
         pricing_type: 'per_piece',
         price: 0,
+        express_price: null,
         is_active: true,
         sort_order: 0,
     }
@@ -97,6 +117,7 @@ const openEdit = (service) => {
         category_id: service.category_id || null,
         pricing_type: service.pricing_type,
         price: service.price,
+        express_price: service.express_price !== null && service.express_price !== undefined ? service.express_price : null,
         is_active: Boolean(service.is_active),
         sort_order: service.sort_order || 0,
     }
@@ -125,12 +146,20 @@ const toggleActive = (service) => {
     })
 }
 
-const deleteService = (service) => {
-    if (confirm(`Are you sure you want to delete or deactivate "${service.name}"?`)) {
-        router.delete(safeRoute('laundry.services.destroy', { service: service.id }), {
-            preserveScroll: true,
-        })
-    }
+const promptDeleteService = (service) => {
+    serviceToDelete.value = service
+    showDeleteModal.value = true
+}
+
+const confirmDeleteService = () => {
+    if (!serviceToDelete.value) return
+    router.delete(safeRoute('laundry.services.destroy', { service: serviceToDelete.value.id }), {
+        preserveScroll: true,
+        onFinish: () => {
+            showDeleteModal.value = false
+            serviceToDelete.value = null
+        },
+    })
 }
 
 // ── Category Management State & Actions ─────────────────────────────────────
@@ -337,6 +366,7 @@ const deleteCategory = (cat) => {
                                 <th class="px-5 py-3">Category</th>
                                 <th class="px-5 py-3 text-center">Pricing Model</th>
                                 <th class="px-5 py-3 text-right">Standard Price</th>
+                                <th v-if="settings?.enable_express_service" class="px-5 py-3 text-right text-amber-600 dark:text-amber-400">⚡ Express Price</th>
                                 <th class="px-5 py-3 text-center">Status</th>
                                 <th v-if="can_manage" class="px-5 py-3 text-right">Actions</th>
                             </tr>
@@ -381,6 +411,16 @@ const deleteCategory = (cat) => {
                                         </span>
                                     </template>
                                 </td>
+                                <td v-if="settings?.enable_express_service" class="px-5 py-3.5 text-right whitespace-nowrap font-mono">
+                                    <div class="flex flex-col items-end">
+                                        <span class="font-black text-amber-600 dark:text-amber-400 text-sm">
+                                            {{ formatMoney(getExpressPrice(srv)) }}
+                                        </span>
+                                        <span class="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">
+                                            {{ srv.express_price ? 'Custom' : `Auto (+${Math.round(((settings.default_express_multiplier || 1.5) - 1) * 100)}%)` }}
+                                        </span>
+                                    </div>
+                                </td>
                                 <td class="px-5 py-3.5 text-center whitespace-nowrap">
                                     <span :class="[
                                         'px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase border',
@@ -407,11 +447,11 @@ const deleteCategory = (cat) => {
                                             Edit
                                         </button>
                                         <button
-                                            @click="deleteService(srv)"
-                                            class="p-1 text-slate-400 hover:text-rose-600 rounded transition cursor-pointer"
-                                            title="Delete"
+                                            @click="promptDeleteService(srv)"
+                                            class="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition cursor-pointer"
+                                            title="Delete / Deactivate Service"
                                         >
-                                            ✕
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                                         </button>
                                     </div>
                                 </td>
@@ -456,26 +496,42 @@ const deleteCategory = (cat) => {
                         </div>
 
                         <!-- Price Section -->
-                        <div class="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/60 text-xs">
-                            <span class="text-slate-500 dark:text-slate-400 font-medium text-[11px]">Price:</span>
-                            <template v-if="srv.active_discount">
-                                <div class="flex items-center gap-2">
-                                    <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-800">
-                                        🏷️ {{ srv.active_discount.discount_type === 'percentage' ? `${srv.active_discount.discount_value}% OFF` : `-${formatMoney(srv.active_discount.discount_value)}` }}
-                                    </span>
-                                    <span class="line-through text-slate-400 text-[11px] font-mono">
+                        <div class="space-y-1.5 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-700/60 text-xs">
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-500 dark:text-slate-400 font-medium text-[11px]">Standard Price:</span>
+                                <template v-if="srv.active_discount">
+                                    <div class="flex items-center gap-2">
+                                        <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-400 dark:border-rose-800">
+                                            🏷️ {{ srv.active_discount.discount_type === 'percentage' ? `${srv.active_discount.discount_value}% OFF` : `-${formatMoney(srv.active_discount.discount_value)}` }}
+                                        </span>
+                                        <span class="line-through text-slate-400 text-[11px] font-mono">
+                                            {{ formatMoney(srv.price) }}
+                                        </span>
+                                        <span class="font-black text-emerald-600 dark:text-emerald-400 text-sm font-mono">
+                                            {{ formatMoney(getDiscountedPrice(srv)) }}
+                                        </span>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <span class="font-black text-indigo-600 dark:text-indigo-400 text-sm font-mono">
                                         {{ formatMoney(srv.price) }}
                                     </span>
-                                    <span class="font-black text-emerald-600 dark:text-emerald-400 text-sm font-mono">
-                                        {{ formatMoney(getDiscountedPrice(srv)) }}
+                                </template>
+                            </div>
+
+                            <div v-if="settings?.enable_express_service" class="flex items-center justify-between pt-1 border-t border-slate-200/50 dark:border-slate-700/50">
+                                <span class="text-amber-600 dark:text-amber-400 font-bold text-[11px] flex items-center gap-1">
+                                    <span>⚡ Express Price:</span>
+                                </span>
+                                <div class="flex items-center gap-1.5 font-mono">
+                                    <span class="font-black text-amber-600 dark:text-amber-400 text-sm">
+                                        {{ formatMoney(getExpressPrice(srv)) }}
+                                    </span>
+                                    <span class="text-[9px] text-slate-400 font-sans">
+                                        ({{ srv.express_price ? 'Custom' : `+${Math.round(((settings.default_express_multiplier || 1.5) - 1) * 100)}%` }})
                                     </span>
                                 </div>
-                            </template>
-                            <template v-else>
-                                <span class="font-black text-indigo-600 dark:text-indigo-400 text-sm font-mono">
-                                    {{ formatMoney(srv.price) }}
-                                </span>
-                            </template>
+                            </div>
                         </div>
 
                         <!-- Actions Row -->
@@ -495,8 +551,8 @@ const deleteCategory = (cat) => {
                                     Edit
                                 </button>
                                 <button
-                                    @click="deleteService(srv)"
-                                    class="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                    @click="promptDeleteService(srv)"
+                                    class="p-1.5 text-rose-500 hover:text-rose-700 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
                                     title="Delete Service"
                                 >
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
@@ -515,111 +571,285 @@ const deleteCategory = (cat) => {
         </div>
 
         <!-- CREATE SERVICE MODAL -->
-        <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-            <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4">
+        <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+            <div class="w-full max-w-lg bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-4 sm:p-6 space-y-4 my-auto">
                 <div class="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-700">
-                    <h3 class="font-bold text-slate-900 dark:text-white text-sm">Create Laundry Service</h3>
-                    <button @click="showCreateModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+                    <div>
+                        <h3 class="font-bold text-slate-900 dark:text-white text-base">Create Laundry Service</h3>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">Add a cleaning service with standard and express turnaround rates</p>
+                    </div>
+                    <button @click="showCreateModal = false" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition">✕</button>
                 </div>
 
-                <div class="space-y-3.5 text-xs">
+                <div class="space-y-4 text-xs">
+                    <!-- Service Name -->
                     <div>
-                        <label class="block font-semibold mb-1">Service Name *</label>
-                        <input v-model="serviceForm.name" type="text" placeholder="e.g. Suit 2-Piece Dry Clean" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-medium" />
+                        <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Service Name *</label>
+                        <input
+                            v-model="serviceForm.name"
+                            type="text"
+                            placeholder="e.g. Suit 2-Piece Dry Clean"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                        />
                     </div>
 
-                    <div>
-                        <div class="flex items-center justify-between mb-1">
-                            <label class="block font-semibold">Category</label>
-                            <button
-                                type="button"
-                                @click="openManageCategories"
-                                class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5"
-                            >
-                                <span>+ New Category</span>
-                            </button>
-                        </div>
-                        <select v-model="serviceForm.category_id" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-medium">
-                            <option :value="null">-- Select Category (or Uncategorized) --</option>
-                            <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-                                {{ cat.name }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
+                    <!-- Category & Pricing Model (2 columns) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div>
-                            <label class="block font-semibold mb-1">Pricing Model *</label>
-                            <select v-model="serviceForm.pricing_type" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-bold">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300">Category</label>
+                                <button
+                                    type="button"
+                                    @click="openManageCategories"
+                                    class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                >
+                                    <span>+ New Category</span>
+                                </button>
+                            </div>
+                            <select v-model="serviceForm.category_id" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition">
+                                <option :value="null">-- Uncategorized --</option>
+                                <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                                    {{ cat.name }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Pricing Model *</label>
+                            <select v-model="serviceForm.pricing_type" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition">
                                 <option value="per_piece">Per Piece</option>
                                 <option value="per_kg">Per Kilogram (KG)</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="block font-semibold mb-1">Price *</label>
-                            <input v-model.number="serviceForm.price" type="number" min="0" step="0.5" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-bold" />
+                    </div>
+
+                    <!-- Pricing & Rates Card (When Express Enabled) -->
+                    <div v-if="settings?.enable_express_service" class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/80 space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <!-- Standard Price -->
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                                    Standard Price ({{ currencySymbol }}) *
+                                </label>
+                                <input
+                                    v-model.number="serviceForm.price"
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    placeholder="0.00"
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono font-bold text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                                />
+                            </div>
+
+                            <!-- Express Price -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <label class="block font-bold text-amber-600 dark:text-amber-400">
+                                        ⚡ Express Price ({{ currencySymbol }})
+                                    </label>
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 shrink-0">
+                                        Optional
+                                    </span>
+                                </div>
+                                <input
+                                    v-model.number="serviceForm.express_price"
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    :placeholder="serviceForm.price ? `Auto (${formatMoney(serviceForm.price * (settings?.default_express_multiplier || 1.5))})` : 'Auto (+50%)'"
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-amber-300 dark:border-amber-700/60 bg-white dark:bg-slate-800 font-mono font-bold text-amber-600 dark:text-amber-400 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
+                                />
+                            </div>
                         </div>
+
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 flex items-start sm:items-center gap-1.5 leading-relaxed">
+                            <span class="text-amber-500 font-bold">ℹ️</span>
+                            <span>Leave Express Price empty to auto-calculate with branch default (+{{ Math.round(((settings?.default_express_multiplier || 1.5) - 1) * 100) }}%) markup.</span>
+                        </p>
+                    </div>
+
+                    <!-- Standard Price Only (When Express Disabled) -->
+                    <div v-else>
+                        <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Standard Price ({{ currencySymbol }}) *
+                        </label>
+                        <input
+                            v-model.number="serviceForm.price"
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            placeholder="0.00"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-mono font-bold text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                        />
                     </div>
                 </div>
 
-                <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-                    <button @click="showCreateModal = false" class="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 font-semibold text-xs">Cancel</button>
-                    <button @click="submitCreate" :disabled="!serviceForm.name.trim()" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 disabled:opacity-50">Create Service</button>
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-700">
+                    <button @click="showCreateModal = false" class="px-4 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 font-semibold text-xs transition cursor-pointer">
+                        Cancel
+                    </button>
+                    <button @click="submitCreate" :disabled="!serviceForm.name.trim()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs shadow-md shadow-indigo-600/20 disabled:opacity-50 transition cursor-pointer">
+                        Create Service
+                    </button>
                 </div>
             </div>
         </div>
 
         <!-- EDIT SERVICE MODAL -->
-        <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
-            <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-5 space-y-4">
+        <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
+            <div class="w-full max-w-lg bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl p-4 sm:p-6 space-y-4 my-auto">
                 <div class="flex items-center justify-between border-b pb-3 border-slate-100 dark:border-slate-700">
-                    <h3 class="font-bold text-slate-900 dark:text-white text-sm">Edit Laundry Service</h3>
-                    <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+                    <div>
+                        <h3 class="font-bold text-slate-900 dark:text-white text-base">Edit Laundry Service</h3>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">Update service details and standard or express pricing</p>
+                    </div>
+                    <button @click="showEditModal = false" class="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition">✕</button>
                 </div>
 
-                <div class="space-y-3.5 text-xs">
+                <div class="space-y-4 text-xs">
+                    <!-- Service Name -->
                     <div>
-                        <label class="block font-semibold mb-1">Service Name *</label>
-                        <input v-model="serviceForm.name" type="text" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-bold" />
+                        <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Service Name *</label>
+                        <input
+                            v-model="serviceForm.name"
+                            type="text"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                        />
                     </div>
 
-                    <div>
-                        <div class="flex items-center justify-between mb-1">
-                            <label class="block font-semibold">Category</label>
-                            <button
-                                type="button"
-                                @click="openManageCategories"
-                                class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5"
-                            >
-                                <span>+ New Category</span>
-                            </button>
-                        </div>
-                        <select v-model="serviceForm.category_id" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-medium">
-                            <option :value="null">-- Select Category (or Uncategorized) --</option>
-                            <option v-for="cat in categories" :key="cat.id" :value="cat.id">
-                                {{ cat.name }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3">
+                    <!-- Category & Pricing Model (2 columns) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                         <div>
-                            <label class="block font-semibold mb-1">Pricing Model</label>
-                            <select v-model="serviceForm.pricing_type" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-bold">
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300">Category</label>
+                                <button
+                                    type="button"
+                                    @click="openManageCategories"
+                                    class="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                >
+                                    <span>+ New Category</span>
+                                </button>
+                            </div>
+                            <select v-model="serviceForm.category_id" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition">
+                                <option :value="null">-- Uncategorized --</option>
+                                <option v-for="cat in categories" :key="cat.id" :value="cat.id">
+                                    {{ cat.name }}
+                                </option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Pricing Model</label>
+                            <select v-model="serviceForm.pricing_type" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition">
                                 <option value="per_piece">Per Piece</option>
                                 <option value="per_kg">Per Kilogram (KG)</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="block font-semibold mb-1">Price</label>
-                            <input v-model.number="serviceForm.price" type="number" min="0" step="0.5" class="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-bold" />
+                    </div>
+
+                    <!-- Pricing & Rates Card (When Express Enabled) -->
+                    <div v-if="settings?.enable_express_service" class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700/80 space-y-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                            <!-- Standard Price -->
+                            <div>
+                                <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                                    Standard Price ({{ currencySymbol }}) *
+                                </label>
+                                <input
+                                    v-model.number="serviceForm.price"
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-mono font-bold text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                                />
+                            </div>
+
+                            <!-- Express Price -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <label class="block font-bold text-amber-600 dark:text-amber-400">
+                                        ⚡ Express Price ({{ currencySymbol }})
+                                    </label>
+                                    <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 shrink-0">
+                                        Optional
+                                    </span>
+                                </div>
+                                <input
+                                    v-model.number="serviceForm.express_price"
+                                    type="number"
+                                    min="0"
+                                    step="0.5"
+                                    :placeholder="serviceForm.price ? `Auto (${formatMoney(serviceForm.price * (settings?.default_express_multiplier || 1.5))})` : 'Auto (+50%)'"
+                                    class="w-full px-3.5 py-2.5 rounded-xl border border-amber-300 dark:border-amber-700/60 bg-white dark:bg-slate-800 font-mono font-bold text-amber-600 dark:text-amber-400 placeholder:text-slate-400 dark:placeholder:text-slate-500 text-sm focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition"
+                                />
+                            </div>
                         </div>
+
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 flex items-start sm:items-center gap-1.5 leading-relaxed">
+                            <span class="text-amber-500 font-bold">ℹ️</span>
+                            <span>Leave Express Price empty to auto-calculate with branch default (+{{ Math.round(((settings?.default_express_multiplier || 1.5) - 1) * 100) }}%) markup.</span>
+                        </p>
+                    </div>
+
+                    <!-- Standard Price Only (When Express Disabled) -->
+                    <div v-else>
+                        <label class="block font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                            Standard Price ({{ currencySymbol }}) *
+                        </label>
+                        <input
+                            v-model.number="serviceForm.price"
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            class="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 font-mono font-bold text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition"
+                        />
                     </div>
                 </div>
 
-                <div class="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-                    <button @click="showEditModal = false" class="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 font-semibold text-xs">Cancel</button>
-                    <button @click="submitUpdate" class="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700">Save Changes</button>
+                <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-700">
+                    <button @click="showEditModal = false" class="px-4 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 font-semibold text-xs transition cursor-pointer">
+                        Cancel
+                    </button>
+                    <button @click="submitUpdate" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition cursor-pointer">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- DELETE / DEACTIVATE CONFIRMATION MODAL -->
+        <div v-if="showDeleteModal && serviceToDelete" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+            <div class="w-full max-w-md bg-white dark:bg-slate-800 rounded-2xl border border-rose-200 dark:border-rose-900/50 shadow-2xl p-5 space-y-4">
+                <div class="flex items-start gap-3.5">
+                    <div class="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center flex-shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <h3 class="font-bold text-slate-900 dark:text-white text-base">Delete or Deactivate Service</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            Are you sure you want to <span class="text-rose-600 dark:text-rose-400 font-bold">delete or deactivate</span> <span class="font-bold text-slate-900 dark:text-white">"{{ serviceToDelete.name }}"</span>?
+                        </p>
+                    </div>
+                    <button @click="showDeleteModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">✕</button>
+                </div>
+
+                <div class="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                    <svg class="w-4 h-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <p class="leading-relaxed">
+                        If this service has past orders, it will be safely deactivated to protect order and revenue histories. If it has no order history, it will be permanently deleted.
+                    </p>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                    <button @click="showDeleteModal = false" class="px-4 py-2 rounded-xl text-slate-600 dark:text-slate-400 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-700 transition cursor-pointer">
+                        Cancel
+                    </button>
+                    <button @click="confirmDeleteService" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition cursor-pointer flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        <span>Delete or Deactivate</span>
+                    </button>
                 </div>
             </div>
         </div>

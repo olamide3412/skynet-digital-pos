@@ -442,9 +442,14 @@ const statusLabel = (status) => {
                                     class="hover:bg-slate-50/80 dark:hover:bg-slate-700/40 transition"
                                 >
                                     <td class="px-5 py-3.5 font-bold text-slate-900 dark:text-white whitespace-nowrap">
-                                        <Link :href="safeRoute('laundry.orders.show', { order: order.id })" class="text-indigo-600 dark:text-indigo-400 hover:underline">
-                                            {{ order.order_number }}
-                                        </Link>
+                                        <div class="flex items-center gap-1.5 flex-wrap">
+                                            <Link :href="safeRoute('laundry.orders.show', { order: order.id })" class="text-indigo-600 dark:text-indigo-400 hover:underline">
+                                                {{ order.order_number }}
+                                            </Link>
+                                            <span v-if="order.is_express" class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-amber-500 text-white shadow-2xs">
+                                                ⚡ RUSH
+                                            </span>
+                                        </div>
                                     </td>
                                     <td class="px-5 py-3.5">
                                         <p class="font-bold text-slate-900 dark:text-white">{{ order.customer_name }}</p>
@@ -518,6 +523,9 @@ const statusLabel = (status) => {
                                         class="font-black text-sm text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1.5"
                                     >
                                         <span>#{{ order.order_number }}</span>
+                                        <span v-if="order.is_express" class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-amber-500 text-white shadow-2xs">
+                                            ⚡ RUSH
+                                        </span>
                                     </Link>
                                     <span class="text-[10px] text-slate-400 block mt-0.5">
                                         Received: {{ order.received_at || '—' }}

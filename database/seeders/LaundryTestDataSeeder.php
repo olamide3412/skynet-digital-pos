@@ -21,10 +21,9 @@ class LaundryTestDataSeeder extends Seeder
 {
     public function run(): void
     {
-        $branch = Branch::where('slug', 'monty-laundry')->first();
-        if (!$branch) {
-            $branch = Branch::first();
-        }
+        $branch = Branch::where('slug', 'test-branch')->first()
+            ?: Branch::where('slug', 'monty-laundry')->first()
+            ?: Branch::first();
 
         if (!$branch) {
             $this->command->error('No branch found.');
@@ -467,10 +466,10 @@ class LaundryTestDataSeeder extends Seeder
             }
 
             DB::commit();
-            $this->command->info("Successfully created " . count($orderConfigs) . " diverse test laundry orders for '{$branch->name}'!");
+            $this->command?->info("Successfully created " . count($orderConfigs) . " diverse test laundry orders for '{$branch->name}'!");
         } catch (\Exception $e) {
             DB::rollBack();
-            $this->command->error("Failed to seed orders: " . $e->getMessage());
+            $this->command?->error("Failed to seed orders: " . $e->getMessage());
             throw $e;
         }
     }

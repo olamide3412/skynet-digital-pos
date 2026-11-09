@@ -629,6 +629,31 @@ class LaundryModuleComprehensiveTest extends TestCase
         // 4. Service category_name updates dynamically without modifying the service record!
         $service->refresh();
         $this->assertEquals('Suits, Blazers & Tuxedos', $service->category_name);
+
+        // 5. Edit Service
+        $updateServiceRes = $this->put(route('laundry.services.update', [
+            'branch'  => $this->branch->slug,
+            'service' => $service->id,
+        ]), [
+            'name'         => '2-Piece Suit Steam Clean & Press',
+            'category_id'  => $category->id,
+            'pricing_type' => 'per_piece',
+            'price'        => 4000,
+            'is_active'    => true,
+            'sort_order'   => 2,
+        ]);
+        $updateServiceRes->assertSessionHas('success');
+        $service->refresh();
+        $this->assertEquals('2-Piece Suit Steam Clean & Press', $service->name);
+        $this->assertEquals(4000, $service->price);
+
+        // 6. Delete Service
+        $deleteServiceRes = $this->delete(route('laundry.services.destroy', [
+            'branch'  => $this->branch->slug,
+            'service' => $service->id,
+        ]));
+        $deleteServiceRes->assertSessionHas('success');
+        $this->assertDatabaseMissing('laundry_services', ['id' => $service->id]);
     }
 
     /**

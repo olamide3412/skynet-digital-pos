@@ -63,6 +63,8 @@ class LaundryOrderService
 
             $subtotal = 0;
             $preparedLines = [];
+            $orderIsExpress = !empty($data['is_express']) || (($data['speed_tier'] ?? '') === 'express');
+            $defaultExpressMultiplier = (float) ($laundrySettings->default_express_multiplier ?? 1.50);
 
             foreach ($itemsData as $idx => $line) {
                 $service = null;
@@ -78,8 +80,21 @@ class LaundryOrderService
                     throw ValidationException::withMessages(["items.{$idx}.quantity" => 'Quantity/Weight must be greater than zero.']);
                 }
 
-                // Resolve service discount if applicable
-                $originalPrice = $service ? (float) $service->price : (isset($line['original_price']) ? (float) $line['original_price'] : (isset($line['unit_price']) ? (float) $line['unit_price'] : 0));
+                // Check express tier for this item (line-level override takes precedence over global order flag)
+                $lineIsExpress = isset($line['is_express']) ? (bool) $line['is_express'] : $orderIsExpress;
+                $lineSpeedTier = $lineIsExpress ? 'express' : 'standard';
+
+                // Resolve service discount and base price
+                if ($service) {
+                    $baseCatalogPrice = $lineIsExpress
+                        ? $service->resolveExpressPrice($defaultExpressMultiplier)
+                        : (float) $service->price;
+                } else {
+                    $rawBase = isset($line['original_price']) ? (float) $line['original_price'] : (isset($line['unit_price']) ? (float) $line['unit_price'] : 0);
+                    $baseCatalogPrice = $lineIsExpress ? round($rawBase * $defaultExpressMultiplier, 2) : $rawBase;
+                }
+
+                $originalPrice = $baseCatalogPrice;
                 $unitPrice = isset($line['unit_price']) && $line['unit_price'] !== '' ? (float) $line['unit_price'] : $originalPrice;
                 $serviceDiscountId = $line['laundry_discount_id'] ?? null;
                 $lineDiscountAmount = isset($line['discount_amount']) ? (float) $line['discount_amount'] : 0;
@@ -96,20 +111,25 @@ class LaundryOrderService
                         // Enforce catalog price or system discount when price override is disabled or user lacks permission
                         $discountInfo = LaundryDiscountService::resolveServiceDiscount($service);
                         if ($discountInfo['has_discount']) {
-                            $unitPrice = $discountInfo['discounted_price'];
+                            // Apply discount amount from base catalogue or standard promo
+                            $discAmt = (float) $discountInfo['discount_amount'];
+                            $unitPrice = max(0, round($originalPrice - $discAmt, 2));
                             $serviceDiscountId = $discountInfo['discount_id'];
-                            $lineDiscountAmount = $discountInfo['discount_amount'];
+                            $lineDiscountAmount = $discAmt;
                         } else {
-                            $unitPrice = (float) $service->price;
+                            $unitPrice = $originalPrice;
                             $serviceDiscountId = null;
                             $lineDiscountAmount = 0;
                         }
                     } elseif (!isset($line['unit_price']) || $line['unit_price'] === '') {
                         $discountInfo = LaundryDiscountService::resolveServiceDiscount($service);
                         if ($discountInfo['has_discount']) {
-                            $unitPrice = $discountInfo['discounted_price'];
+                            $discAmt = (float) $discountInfo['discount_amount'];
+                            $unitPrice = max(0, round($originalPrice - $discAmt, 2));
                             $serviceDiscountId = $discountInfo['discount_id'];
-                            $lineDiscountAmount = $discountInfo['discount_amount'];
+                            $lineDiscountAmount = $discAmt;
+                        } else {
+                            $unitPrice = $originalPrice;
                         }
                     }
                 }
@@ -121,6 +141,8 @@ class LaundryOrderService
                     'service_id'          => $service?->id,
                     'service_name'        => $serviceName,
                     'pricing_type'        => $pricingType,
+                    'is_express'          => $lineIsExpress,
+                    'speed_tier'          => $lineSpeedTier,
                     'original_price'      => $originalPrice,
                     'unit_price'          => $unitPrice,
                     'quantity'            => $quantity,
@@ -129,6 +151,11 @@ class LaundryOrderService
                     'line_total'          => $lineTotal,
                     'note'                => $line['note'] ?? null,
                 ];
+            }
+
+            // If any individual item was set to express, elevate order to express
+            if (!$orderIsExpress && collect($preparedLines)->contains('is_express', true)) {
+                $orderIsExpress = true;
             }
 
             // 4. Calculate Order-Level Discounts & Taxes
@@ -172,9 +199,13 @@ class LaundryOrderService
             $total = round($taxableSubtotal + $taxAmount, 2);
 
             // 5. Due Date Calculation
-            $dueAt = !empty($data['due_at'])
-                ? Carbon::parse($data['due_at'])
-                : Carbon::now()->addDays($laundrySettings->default_turnaround_days ?: 2);
+            if (!empty($data['due_at'])) {
+                $dueAt = Carbon::parse($data['due_at']);
+            } elseif ($orderIsExpress) {
+                $dueAt = Carbon::now()->addHours($laundrySettings->express_turnaround_hours ?: 24);
+            } else {
+                $dueAt = Carbon::now()->addDays($laundrySettings->default_turnaround_days ?: 2);
+            }
 
             // 6. Create Order Header
             $order = LaundryOrder::create([
@@ -184,6 +215,8 @@ class LaundryOrderService
                 'customer_name'       => $customer->name,
                 'customer_phone'      => $customer->phone ?? '',
                 'status'              => 'received',
+                'is_express'          => $orderIsExpress,
+                'speed_tier'          => $orderIsExpress ? 'express' : 'standard',
                 'received_at'         => Carbon::now(),
                 'due_at'              => $dueAt,
                 'created_by'          => $user->id,

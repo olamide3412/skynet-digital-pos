@@ -115,7 +115,7 @@ class User extends Authenticatable
 
     public function isBranchAdmin(): bool
     {
-        return $this->hasRole('branch-admin');
+        return $this->hasRole(['branch-admin', 'manager', 'admin']);
     }
 
     public function isCashier(): bool

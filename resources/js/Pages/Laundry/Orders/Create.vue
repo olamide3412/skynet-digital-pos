@@ -314,13 +314,69 @@ const scrollToLine = async (key) => {
     }, 1200)
 }
 
+const isExpressOrder = ref(false)
+const expressTurnaroundHours = computed(() => Number(props.settings?.express_turnaround_hours || 24))
+const defaultStandardHours = computed(() => Number(props.settings?.default_turnaround_days || 2) * 24)
+
+const setDueTurnaround = (isExpress) => {
+    const hours = isExpress ? expressTurnaroundHours.value : defaultStandardHours.value
+    const target = new Date()
+    target.setHours(target.getHours() + hours)
+    dueDate.value = target.toISOString().slice(0, 16)
+}
+
+const updateLinePriceForSpeed = (line) => {
+    const srv = props.services.find(s => s.id === line.service_id)
+    if (!srv) return
+
+    const basePrice = line.is_express
+        ? Number(srv.effective_express_price || srv.price)
+        : Number(srv.price)
+
+    line.original_price = basePrice
+
+    if (srv.has_discount) {
+        const discAmt = Number(srv.discount_amount) || 0
+        line.discount_amount = discAmt
+        line.unit_price = Math.max(0, round(basePrice - discAmt))
+    } else {
+        line.unit_price = basePrice
+        line.discount_amount = 0
+    }
+    line.line_total = round(line.quantity * line.unit_price)
+}
+
+const toggleOrderSpeed = (express) => {
+    isExpressOrder.value = express
+    setDueTurnaround(express)
+    orderItems.value.forEach(item => {
+        item.is_express = express
+        if (!item.is_overridden) {
+            updateLinePriceForSpeed(item)
+        }
+    })
+}
+
+const toggleLineSpeed = (item) => {
+    item.is_express = !item.is_express
+    if (!item.is_overridden) {
+        updateLinePriceForSpeed(item)
+    }
+    if (orderItems.value.some(i => i.is_express)) {
+        isExpressOrder.value = true
+    } else if (orderItems.value.every(i => !i.is_express)) {
+        isExpressOrder.value = false
+    }
+}
+
 const addServiceToOrder = (service) => {
-    const existingIndex = orderItems.value.findIndex(i => i.service_id === service.id && !i.note)
+    const existingIndex = orderItems.value.findIndex(i => i.service_id === service.id && !i.note && i.is_express === isExpressOrder.value)
     let keyToHighlight = null
 
-    const unitPrice = service.has_discount ? Number(service.discounted_price) : Number(service.price)
-    const origPrice = Number(service.price)
+    const isLineExpress = isExpressOrder.value
+    const basePrice = isLineExpress ? Number(service.effective_express_price || service.price) : Number(service.price)
     const discAmt = service.has_discount ? Number(service.discount_amount) : 0
+    const unitPrice = service.has_discount ? Math.max(0, round(basePrice - discAmt)) : basePrice
     const discId = service.has_discount ? service.discount_id : null
     const discName = service.has_discount ? service.discount_name : null
 
@@ -336,7 +392,8 @@ const addServiceToOrder = (service) => {
             service_id:          service.id,
             service_name:        service.name,
             pricing_type:        service.pricing_type,
-            original_price:      origPrice,
+            is_express:          isLineExpress,
+            original_price:      basePrice,
             unit_price:          unitPrice,
             discount_amount:     discAmt,
             laundry_discount_id: discId,
@@ -397,10 +454,9 @@ const cancelEditLinePrice = (line) => {
 }
 
 const resetLinePrice = (line) => {
-    line.unit_price = line.original_price
     line.is_overridden = false
     line.is_editing_price = false
-    updateLineTotal(line)
+    updateLinePriceForSpeed(line)
 }
 
 const incrementQty = (line) => {
@@ -650,6 +706,8 @@ const submitOrder = () => {
 
     const payload = {
         customer_id:         selectedCustomer.value.id,
+        is_express:          isExpressOrder.value,
+        speed_tier:          isExpressOrder.value ? 'express' : 'standard',
         items:               orderItems.value,
         due_at:              dueDate.value || null,
         discount_amount:     discountAmount.value,
@@ -1072,7 +1130,13 @@ const submitOrder = () => {
                                 </div>
                                 <div class="mt-2.5 flex items-center justify-between">
                                     <div class="flex items-baseline gap-1.5 flex-wrap">
-                                        <template v-if="item.has_discount">
+                                        <template v-if="isExpressOrder">
+                                            <span class="font-black text-xs sm:text-sm text-amber-600 dark:text-amber-400 font-mono">
+                                                {{ formatMoney(item.effective_express_price) }}
+                                            </span>
+                                            <span class="text-[9px] font-bold text-amber-600 dark:text-amber-400">⚡ Express</span>
+                                        </template>
+                                        <template v-else-if="item.has_discount">
                                             <span class="font-black text-xs sm:text-sm text-emerald-600 dark:text-emerald-400 font-mono">
                                                 {{ formatMoney(item.discounted_price) }}
                                             </span>
@@ -1161,6 +1225,57 @@ const submitOrder = () => {
                             </div>
                         </div>
 
+                        <!-- Global Delivery Speed Selector (Standard vs Express) -->
+                        <div v-if="props.settings?.enable_express_service" class="p-3 bg-slate-50 dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-700 space-y-2">
+                            <div class="flex items-center justify-between text-xs">
+                                <span class="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                                    <span>⚡ Delivery Speed:</span>
+                                    <span :class="isExpressOrder ? 'text-amber-600 dark:text-amber-400 font-extrabold' : 'text-slate-500'">
+                                        {{ isExpressOrder ? 'Express Rush' : 'Standard Turnaround' }}
+                                    </span>
+                                </span>
+                                <span
+                                    :class="[
+                                        'px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider',
+                                        isExpressOrder
+                                            ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+                                            : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'
+                                    ]"
+                                >
+                                    {{ isExpressOrder ? `⚡ ${props.settings?.express_turnaround_hours || 24}h Deadline` : `🧺 ${props.settings?.default_turnaround_days || 2} Days` }}
+                                </span>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <button
+                                    type="button"
+                                    @click="toggleOrderSpeed(false)"
+                                    :class="[
+                                        'py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border',
+                                        !isExpressOrder
+                                            ? 'bg-white dark:bg-slate-800 border-indigo-500 text-indigo-700 dark:text-indigo-300 shadow-xs ring-2 ring-indigo-500/20'
+                                            : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                    ]"
+                                >
+                                    <span>🧺 Standard</span>
+                                    <span class="text-[10px] opacity-75">({{ (props.settings?.default_turnaround_days || 2) * 24 }}h)</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    @click="toggleOrderSpeed(true)"
+                                    :class="[
+                                        'py-2 px-3 rounded-xl font-bold transition flex items-center justify-center gap-1.5 cursor-pointer border',
+                                        isExpressOrder
+                                            ? 'bg-amber-500 border-amber-500 text-white shadow-md shadow-amber-500/25 ring-2 ring-amber-500/30'
+                                            : 'bg-transparent border-amber-200 dark:border-amber-900/50 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                                    ]"
+                                >
+                                    <span>⚡ Express Rush</span>
+                                    <span class="text-[10px] opacity-90">({{ props.settings?.express_turnaround_hours || 24 }}h)</span>
+                                </button>
+                            </div>
+                        </div>
+
                         <div v-if="orderItems.length === 0" class="py-12 text-center text-xs text-slate-400 border border-dashed border-slate-200 dark:border-slate-700 rounded-xl space-y-2">
                             <p>No items added yet. Click services on the left to add.</p>
                             <button
@@ -1199,6 +1314,20 @@ const submitOrder = () => {
                                                 <p class="font-bold text-xs text-slate-900 dark:text-white truncate">
                                                     {{ line.service_name }}
                                                 </p>
+                                                <button
+                                                    v-if="props.settings?.enable_express_service"
+                                                    type="button"
+                                                    @click="toggleLineSpeed(line)"
+                                                    :class="[
+                                                        'px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider transition cursor-pointer border',
+                                                        line.is_express
+                                                            ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-700 shadow-2xs'
+                                                            : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-600 hover:border-amber-300'
+                                                    ]"
+                                                    :title="line.is_express ? 'Express rush line. Click to switch to Standard.' : 'Standard turnaround. Click to switch to Express.'"
+                                                >
+                                                    <span>{{ line.is_express ? '⚡ Express' : '🧺 Standard' }}</span>
+                                                </button>
                                                 <span v-if="line.discount_amount > 0" class="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
                                                     🏷️ {{ line.discount_name || 'Promo' }}
                                                 </span>

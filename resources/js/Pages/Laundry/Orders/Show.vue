@@ -398,6 +398,9 @@ const statusBadgeClass = (status) => {
                         <span :class="['px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase border', statusBadgeClass(order.status)]">
                             {{ order.status }}
                         </span>
+                        <span v-if="order.is_express" class="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-500 text-white shadow-xs flex items-center gap-1">
+                            <span>⚡ Express Rush</span>
+                        </span>
                         <span v-if="order.is_overdue" class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
                             OVERDUE
                         </span>
@@ -453,6 +456,9 @@ const statusBadgeClass = (status) => {
                         </h2>
                         <span :class="['px-3 py-1 rounded-full text-xs font-extrabold uppercase border', statusBadgeClass(order.status)]">
                             {{ order.status }}
+                        </span>
+                        <span v-if="order.is_express" class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-amber-500 text-white shadow-xs flex items-center gap-1">
+                            <span>⚡ Express Rush</span>
                         </span>
                         <span v-if="order.is_overdue" class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700">
                             OVERDUE
@@ -618,6 +624,9 @@ const statusBadgeClass = (status) => {
                                                 <p class="font-bold text-slate-900 dark:text-white text-sm leading-snug">
                                                     {{ item.service_name }}
                                                 </p>
+                                                <span v-if="item.is_express" class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                                                    ⚡ Express
+                                                </span>
                                                 <span v-if="item.has_discount || item.discount_amount > 0" class="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
                                                     🏷️ {{ item.discount_name || 'Promo' }}
                                                 </span>
@@ -667,6 +676,9 @@ const statusBadgeClass = (status) => {
                                             <td class="px-4 py-3">
                                                 <div class="flex items-center gap-2 flex-wrap">
                                                     <p class="font-bold text-slate-900 dark:text-white">{{ item.service_name }}</p>
+                                                    <span v-if="item.is_express" class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                                                        ⚡ Express
+                                                    </span>
                                                     <span v-if="item.has_discount || item.discount_amount > 0" class="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
                                                         🏷️ {{ item.discount_name || 'Promo' }}
                                                     </span>

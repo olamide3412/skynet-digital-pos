@@ -158,6 +158,9 @@ const form = useForm({
     // ── Laundry Settings ──
     default_turnaround_hours:      props.laundry_settings?.default_turnaround_hours ?? 48,
     unclaimed_after_days:          props.laundry_settings?.unclaimed_after_days ?? 14,
+    enable_express_service:        props.laundry_settings?.enable_express_service !== false,
+    express_turnaround_hours:      props.laundry_settings?.express_turnaround_hours ?? 24,
+    default_express_multiplier:    Number(props.laundry_settings?.default_express_multiplier ?? 1.50),
     order_prefix:                  props.laundry_settings?.order_prefix ?? 'LDY-',
     whatsapp_template:             props.laundry_settings?.whatsapp_template ?? 'Hello {customer_name}, your laundry order #{order_number} is ready for pickup at {branch_name}! Outstanding balance: {balance}. Thank you!',
     default_country_code:          props.laundry_settings?.default_country_code ?? '234',
@@ -1235,6 +1238,72 @@ const liveWhatsAppPreview = computed(() => {
                                 />
                                 <p class="text-[11px] text-slate-400 mt-1">e.g. LDY- yields LDY-000123</p>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- ⚡ Express Rush Service & Delivery Pricing -->
+                    <div class="bg-white dark:bg-slate-800 rounded-2xl border border-amber-200 dark:border-amber-900/50 p-5 sm:p-6 space-y-5 shadow-xs">
+                        <div class="border-b border-slate-200 dark:border-slate-700 pb-3 flex items-start justify-between gap-3">
+                            <div>
+                                <h2 class="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                                    <span>⚡</span>
+                                    <span>Express Rush Service & Fast Delivery Pricing</span>
+                                </h2>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                                    Configure fast turnaround deadlines and pricing for express laundry orders.
+                                </p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                                <input v-model="form.enable_express_service" type="checkbox" class="sr-only peer" />
+                                <div class="w-11 h-6 bg-slate-200 peer-focus:outline-hidden rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-amber-600"></div>
+                            </label>
+                        </div>
+
+                        <div v-if="form.enable_express_service" class="space-y-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                        Express Turnaround Deadline (Hours) *
+                                    </label>
+                                    <input
+                                        v-model.number="form.express_turnaround_hours"
+                                        type="number"
+                                        min="1"
+                                        max="720"
+                                        class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white font-bold"
+                                    />
+                                    <p class="text-[11px] text-slate-400 mt-1">Default express turnaround (e.g. 24 hours = next day)</p>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                        Default Express Markup Multiplier *
+                                    </label>
+                                    <div class="relative">
+                                        <input
+                                            v-model.number="form.default_express_multiplier"
+                                            type="number"
+                                            step="0.05"
+                                            min="1.0"
+                                            max="5.0"
+                                            class="w-full px-3.5 py-2.5 text-xs rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-white font-bold"
+                                        />
+                                    </div>
+                                    <p class="text-[11px] text-amber-600 dark:text-amber-400 mt-1 font-medium">
+                                        {{ form.default_express_multiplier ? `+${Math.round(((form.default_express_multiplier || 1.5) - 1) * 100)}% surcharge (e.g. ₦1,000 standard becomes ₦${Math.round(1000 * (form.default_express_multiplier || 1.5)).toLocaleString()} express)` : '+50% markup' }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 rounded-xl text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                                <span class="text-base shrink-0">💡</span>
+                                <p class="leading-relaxed">
+                                    <strong>Catalog Flexibility:</strong> You can set an exact express price for any specific service in the <strong>Services Catalog</strong>. If left blank for a service, this default multiplier (e.g. {{ form.default_express_multiplier || 1.5 }}x) will be used automatically.
+                                </p>
+                            </div>
+                        </div>
+                        <div v-else class="text-xs text-slate-400 italic">
+                            Express rush delivery option is currently disabled for this branch.
                         </div>
                     </div>
 
