@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\CommerceIntegration\Controllers\Api\V1\EcommerceMappingController;
+use App\Modules\CommerceIntegration\Middleware\CommerceApiAuthenticate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -14,7 +15,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::middleware(['auth:sanctum'])->group(function () {
+Route::middleware([CommerceApiAuthenticate::class])->group(function () {
     // V1 Versioned routes only
     Route::prefix('v1')->group(function () {
         Route::post('/mappings/register', [EcommerceMappingController::class, 'register']);

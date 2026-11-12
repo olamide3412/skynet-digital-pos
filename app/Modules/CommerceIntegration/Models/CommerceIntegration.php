@@ -115,4 +115,59 @@ class CommerceIntegration extends Model
 
         return (int) config('commerce.reservation_ttl_minutes', 30);
     }
+
+    /**
+     * Extract the raw secret portion of a Sanctum plain-text token (strips "{id}|" prefix if present).
+     */
+    public static function extractRawTokenSecret(string $plainTextToken): string
+    {
+        $trimmed = trim(preg_replace('/^Bearer\s+/i', '', trim($plainTextToken)));
+
+        return str_contains($trimmed, '|')
+            ? explode('|', $trimmed, 2)[1]
+            : $trimmed;
+    }
+
+    /**
+     * Compute the SHA-256 hash of the raw token secret (matches Sanctum's storage format).
+     */
+    public static function hashTokenSecret(string $plainTextToken): string
+    {
+        return hash('sha256', self::extractRawTokenSecret($plainTextToken));
+    }
+
+    /**
+     * Ensure that if this integration has a stored token (webhook_secret / api_key_hash),
+     * its corresponding permanent PersonalAccessToken record exists and never expires.
+     */
+    public function ensureAccessToken(): void
+    {
+        $expectedHash = $this->api_key_hash;
+
+        if (empty($expectedHash) && !empty($this->webhook_secret)) {
+            $expectedHash = self::hashTokenSecret($this->webhook_secret);
+            $this->forceFill(['api_key_hash' => $expectedHash])->saveQuietly();
+        }
+
+        if (empty($expectedHash)) {
+            return;
+        }
+
+        $existingToken = $this->tokens()->where('token', $expectedHash)->first();
+
+        if ($existingToken) {
+            if ($existingToken->expires_at !== null) {
+                $existingToken->forceFill(['expires_at' => null])->saveQuietly();
+            }
+            return;
+        }
+
+        // Self-heal missing PersonalAccessToken row so tokens can never be wiped out
+        $this->tokens()->create([
+            'name'       => 'commerce_api_access',
+            'token'      => $expectedHash,
+            'abilities'  => ['commerce:full'],
+            'expires_at' => null,
+        ]);
+    }
 }

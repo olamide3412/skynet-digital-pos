@@ -59,12 +59,15 @@ class CommerceIntegrationController extends Controller
                 'created_by' => auth()->id(),
             ]);
 
-            // Generate server-to-server Sanctum personal access token
-            $token = $integration->createToken('commerce_api_access', ['commerce:full']);
+            // Generate permanent server-to-server Sanctum personal access token (never expires)
+            $token = $integration->createToken('commerce_api_access', ['commerce:full'], null);
             $plainTextToken = $token->plainTextToken;
 
-            // Automatically store secret so outbound webhooks and test pings are authenticated
-            $integration->update(['webhook_secret' => $plainTextToken]);
+            // Automatically store secret and hash so authentication and outbound webhooks are permanent
+            $integration->update([
+                'webhook_secret' => $plainTextToken,
+                'api_key_hash'   => CommerceIntegration::hashTokenSecret($plainTextToken),
+            ]);
 
             ActivityLogger::log(
                 actionType: 'create',
@@ -90,11 +93,14 @@ class CommerceIntegrationController extends Controller
         // Revoke old tokens
         $integration->tokens()->delete();
 
-        // Generate new token
-        $token = $integration->createToken('commerce_api_access', ['commerce:full']);
+        // Generate new permanent token (never expires)
+        $token = $integration->createToken('commerce_api_access', ['commerce:full'], null);
 
-        // Update webhook_secret with new token
-        $integration->update(['webhook_secret' => $token->plainTextToken]);
+        // Update webhook_secret and api_key_hash with new token
+        $integration->update([
+            'webhook_secret' => $token->plainTextToken,
+            'api_key_hash'   => CommerceIntegration::hashTokenSecret($token->plainTextToken),
+        ]);
 
         ActivityLogger::log(
             actionType: 'update',

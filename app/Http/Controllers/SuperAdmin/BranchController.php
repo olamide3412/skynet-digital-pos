@@ -386,6 +386,8 @@ class BranchController extends Controller
 
         $commerceStats = null;
         if ($commerceIntegration) {
+            $commerceIntegration->ensureAccessToken();
+
             $commerceStats = [
                 'total_reservations' => $commerceIntegration->reservations()->count(),
                 'active_reservations' => $commerceIntegration->reservations()->active()->count(),

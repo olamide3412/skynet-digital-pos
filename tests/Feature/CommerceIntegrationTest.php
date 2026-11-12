@@ -152,6 +152,10 @@ class CommerceIntegrationTest extends TestCase
 
         $token = $this->integration->createToken('test_token');
         $this->plainTextToken = $token->plainTextToken;
+        $this->integration->update([
+            'webhook_secret' => $this->plainTextToken,
+            'api_key_hash'   => CommerceIntegration::hashTokenSecret($this->plainTextToken),
+        ]);
     }
 
     /** @test */
@@ -600,5 +604,37 @@ class CommerceIntegrationTest extends TestCase
 
         $this->assertNotEmpty($otherIntegration->client_id);
         $this->assertStringStartsWith('pos_cli_', $otherIntegration->client_id);
+    }
+
+    public function test_token_never_expires_and_self_heals_if_personal_access_tokens_table_is_wiped(): void
+    {
+        // Simulate personal_access_tokens rows being wiped during server deployment or DB sync
+        $this->integration->tokens()->delete();
+        $this->app['auth']->forgetGuards();
+        $this->assertEquals(0, $this->integration->tokens()->count());
+
+        // Request with original token still succeeds and self-heals the personal_access_tokens row
+        $response = $this->withHeader('Authorization', 'Bearer ' . $this->plainTextToken)
+            ->getJson('/api/commerce/v1/ping');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.branch_id', $this->branch->id);
+
+        // Verify token row was automatically restored
+        $this->assertEquals(1, $this->integration->tokens()->count());
+    }
+
+    public function test_token_authenticates_even_if_token_id_prefix_changes(): void
+    {
+        $rawSecret = CommerceIntegration::extractRawTokenSecret($this->plainTextToken);
+        $shiftedIdToken = '999999|' . $rawSecret;
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $shiftedIdToken)
+            ->getJson('/api/commerce/v1/ping');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('data.branch_id', $this->branch->id);
     }
 }
